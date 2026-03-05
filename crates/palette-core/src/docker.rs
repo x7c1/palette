@@ -148,14 +148,16 @@ impl DockerManager {
                 ),
             );
 
-        // Write via docker exec
+        // Write via docker exec (as root to avoid permission issues, then chown)
         let output = run_docker(&[
             "exec",
+            "--user",
+            "root",
             container_id,
             "sh",
             "-c",
             &format!(
-                "mkdir -p /home/agent/.claude && cat > /home/agent/.claude/settings.json << 'PALETTE_EOF'\n{settings}\nPALETTE_EOF"
+                "mkdir -p /home/agent/.claude && cat > /home/agent/.claude/settings.json << 'PALETTE_EOF'\n{settings}\nPALETTE_EOF\nchown agent:agent /home/agent/.claude /home/agent/.claude/settings.json"
             ),
         ])?;
 
