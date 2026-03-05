@@ -18,15 +18,20 @@
 
 set -euo pipefail
 
-SESSION="palette-e2e-$$"
-PORT=$((10000 + RANDOM % 50000))
+SESSION="palette-e2e"
+PORT=7199
 BASE_URL="http://127.0.0.1:$PORT"
 CONFIG=$(mktemp)
 HOOKS_CONFIG=$(mktemp -d)
 RESULT=0
 
+# Kill any leftover process from a previous run
+lsof -ti:"$PORT" | xargs kill 2>/dev/null || true
+tmux kill-session -t "$SESSION" 2>/dev/null || true
+
 cleanup() {
     echo "--- Cleaning up ---"
+    kill "$SERVER_PID" 2>/dev/null || true
     tmux kill-session -t "$SESSION" 2>/dev/null || true
     rm -f "$CONFIG"
     rm -rf "$HOOKS_CONFIG"
@@ -174,9 +179,6 @@ else
     echo "FAIL: expected >= 3 events, got $EVENT_COUNT"
     RESULT=1
 fi
-
-# Kill server
-kill "$SERVER_PID" 2>/dev/null || true
 
 echo ""
 echo "=== E2E Test Complete ==="
