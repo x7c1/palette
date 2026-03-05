@@ -1,0 +1,4 @@
+port = 7100
+
+[tmux]
+session_name = "palette"
