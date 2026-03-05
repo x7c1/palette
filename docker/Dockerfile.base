@@ -27,7 +27,7 @@ RUN userdel -r ubuntu 2>/dev/null || true && \
 USER agent
 WORKDIR /home/agent
 
-# Skip first-run onboarding and trust dialog
-RUN echo '{"hasCompletedOnboarding":true,"projects":{"/home/agent":{"hasTrustDialogAccepted":true}}}' > /home/agent/.claude.json
+# Skip first-run onboarding, trust dialog, and bypass permissions confirmation
+RUN echo '{"hasCompletedOnboarding":true,"bypassPermissionsModeAccepted":true,"projects":{"/home/agent":{"hasTrustDialogAccepted":true}}}' > /home/agent/.claude.json
 
 CMD ["zsh"]
