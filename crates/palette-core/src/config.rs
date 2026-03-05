@@ -33,6 +33,16 @@ pub struct DockerConfig {
     pub network: String,
     #[serde(default = "default_palette_url")]
     pub palette_url: String,
+    #[serde(default = "default_leader_image")]
+    pub leader_image: String,
+    #[serde(default = "default_member_image")]
+    pub member_image: String,
+    #[serde(default = "default_settings_template")]
+    pub settings_template: String,
+    #[serde(default = "default_leader_prompt")]
+    pub leader_prompt: String,
+    #[serde(default = "default_member_prompt")]
+    pub member_prompt: String,
 }
 
 fn default_db_path() -> String {
@@ -55,6 +65,26 @@ fn default_palette_url() -> String {
     "http://host.docker.internal:7100".to_string()
 }
 
+fn default_leader_image() -> String {
+    "palette-leader:latest".to_string()
+}
+
+fn default_member_image() -> String {
+    "palette-member:latest".to_string()
+}
+
+fn default_settings_template() -> String {
+    "config/hooks/member-settings.json".to_string()
+}
+
+fn default_leader_prompt() -> String {
+    "prompts/leader.md".to_string()
+}
+
+fn default_member_prompt() -> String {
+    "prompts/member.md".to_string()
+}
+
 impl Default for RulesConfig {
     fn default() -> Self {
         Self {
@@ -68,6 +98,11 @@ impl Default for DockerConfig {
         Self {
             network: default_network(),
             palette_url: default_palette_url(),
+            leader_image: default_leader_image(),
+            member_image: default_member_image(),
+            settings_template: default_settings_template(),
+            leader_prompt: default_leader_prompt(),
+            member_prompt: default_member_prompt(),
         }
     }
 }
@@ -104,6 +139,8 @@ session_name = "palette"
             config.docker.palette_url,
             "http://host.docker.internal:7100"
         );
+        assert_eq!(config.docker.leader_image, "palette-leader:latest");
+        assert_eq!(config.docker.member_image, "palette-member:latest");
     }
 
     #[test]

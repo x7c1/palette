@@ -1,5 +1,6 @@
 use anyhow::Context as _;
 use palette_core::Config;
+use palette_core::docker::DockerManager;
 use palette_core::state::{MemberState, MemberStatus, PersistentState};
 use palette_db::{Database, RuleEngine};
 use palette_server::AppState;
@@ -35,6 +36,10 @@ async fn main() -> anyhow::Result<()> {
     // Initialize rule engine
     let rules = RuleEngine::new(config.rules.max_review_rounds);
 
+    // Initialize Docker manager
+    let docker = DockerManager::new(config.docker.palette_url.clone());
+    let session_name = &config.tmux.session_name;
+
     // Load or create infrastructure state
     let state_path = PathBuf::from(&config.state_path);
     let infra = match PersistentState::load(&state_path)? {
@@ -43,40 +48,98 @@ async fn main() -> anyhow::Result<()> {
             state
         }
         None => {
-            let mut state = PersistentState::new(config.tmux.session_name.clone());
+            let mut state = PersistentState::new(session_name.clone());
 
-            // Create leader target
+            // --- Leader ---
             let leader_target = tmux
                 .create_target("leader")
                 .context("failed to create leader tmux target")?;
+
+            let leader_container_id = docker.create_container(
+                "leader",
+                &config.docker.leader_image,
+                "leader",
+                session_name,
+            )?;
+            docker.start_container(&leader_container_id)?;
+
+            // Write settings.json into leader container
+            docker.write_settings(
+                &leader_container_id,
+                Path::new(&config.docker.settings_template),
+                "leader-1",
+            )?;
+
+            // Copy leader prompt into container
+            DockerManager::copy_file_to_container(
+                &leader_container_id,
+                Path::new(&config.docker.leader_prompt),
+                "/home/agent/prompt.md",
+            )?;
+
             state.leaders.push(MemberState {
                 id: "leader-1".to_string(),
                 role: "leader".to_string(),
                 leader_id: String::new(),
-                container_id: String::new(),
-                tmux_target: leader_target,
+                container_id: leader_container_id.clone(),
+                tmux_target: leader_target.clone(),
                 status: MemberStatus::Idle,
                 session_id: None,
                 message_queue: Vec::new(),
             });
 
-            // Create member target
+            // Launch Claude Code in leader's tmux pane
+            let leader_cmd =
+                DockerManager::claude_exec_command(&leader_container_id, "/home/agent/prompt.md");
+            tmux.send_keys(&leader_target, &leader_cmd)?;
+            tracing::info!("launched Claude Code in leader container");
+
+            // --- Member ---
             let member_target = tmux
                 .create_target("member-a")
                 .context("failed to create member tmux target")?;
+
+            let member_container_id = docker.create_container(
+                "member-a",
+                &config.docker.member_image,
+                "member",
+                session_name,
+            )?;
+            docker.start_container(&member_container_id)?;
+
+            // Write settings.json into member container
+            docker.write_settings(
+                &member_container_id,
+                Path::new(&config.docker.settings_template),
+                "member-a",
+            )?;
+
+            // Copy member prompt into container
+            DockerManager::copy_file_to_container(
+                &member_container_id,
+                Path::new(&config.docker.member_prompt),
+                "/home/agent/prompt.md",
+            )?;
+
             state.members.push(MemberState {
                 id: "member-a".to_string(),
                 role: "member".to_string(),
                 leader_id: "leader-1".to_string(),
-                container_id: String::new(),
-                tmux_target: member_target,
+                container_id: member_container_id.clone(),
+                tmux_target: member_target.clone(),
                 status: MemberStatus::Idle,
                 session_id: None,
                 message_queue: Vec::new(),
             });
 
+            // Launch Claude Code in member's tmux pane
+            let member_cmd =
+                DockerManager::claude_exec_command(&member_container_id, "/home/agent/prompt.md");
+            tmux.send_keys(&member_target, &member_cmd)?;
+            tracing::info!("launched Claude Code in member container");
+
             state.save(&state_path)?;
-            tracing::info!("created initial state");
+            tracing::info!("created initial state with containers");
             state
         }
     };
