@@ -199,7 +199,7 @@ impl DockerManager {
     /// Build the command string to launch Claude Code inside a container's tmux pane.
     pub fn claude_exec_command(container_id: &str, prompt_file: &str) -> String {
         format!(
-            "docker exec -it {container_id} claude --dangerously-skip-permissions --append-system-prompt-file {prompt_file}"
+            "docker exec -it {container_id} claude --append-system-prompt-file {prompt_file}"
         )
     }
 }
