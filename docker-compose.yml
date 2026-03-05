@@ -1,0 +1,60 @@
+services:
+  claude-code:
+    build:
+      context: .
+      args:
+        HOST_UID: ${HOST_UID:-1000}
+        HOST_GID: ${HOST_GID:-1000}
+    stdin_open: true
+    tty: true
+    working_dir: /projects/palette
+    command: /projects/palette/scripts/start-claude-code.sh
+    volumes:
+      - .:/projects/palette
+      - ./claude.local/.claude:/home/developer/.claude
+      - ./claude.local/.npm-global:/home/developer/.npm-global
+      - ./claude.local/.local:/home/developer/.local
+      # Short-form: allows auto-creation because the dir may not exist
+      # until poll-usage.sh runs for the first time.
+      - ${HOST_HOME:-~}/.claude/token-logs:/home/developer/.claude/token-logs
+      - type: bind
+        source: ./claude.local/.claude.json
+        target: /home/developer/.claude.json
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./claude.local/.bash_history
+        target: /home/developer/.bash_history
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ${HOST_HOME:-~}/.claude/CLAUDE.md
+        target: /home/developer/.claude/CLAUDE.md
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ${HOST_HOME:-~}/.claude/.credentials.json
+        target: /home/developer/.claude/.credentials.json
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ${HOST_HOME:-~}/.claude/settings.json
+        target: /home/developer/.claude/settings.json
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ${HOST_HOME:-~}/.config/git
+        target: /home/developer/.config/git
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ${HOST_HOME:-~}/.config/gh
+        target: /home/developer/.config/gh
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ${HOST_HOME:-~}/.ssh
+        target: /home/developer/.ssh
+        read_only: true
+        bind:
+          create_host_path: false
