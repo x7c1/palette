@@ -200,6 +200,7 @@ fn launch() -> Result<()> {
     let leader_cmd = palette_core::docker::DockerManager::claude_exec_command(
         &leader_id,
         "/home/agent/prompt.md",
+        "leader",
     );
     let leader_target = format!("{SESSION_NAME}:leader");
     let output = Command::new("tmux")
@@ -214,6 +215,7 @@ fn launch() -> Result<()> {
     let member_cmd = palette_core::docker::DockerManager::claude_exec_command(
         &member_id,
         "/home/agent/prompt.md",
+        "member",
     );
     let member_target = format!("{SESSION_NAME}:member-a");
     let output = Command::new("tmux")
@@ -322,6 +324,7 @@ fn claude_responds() -> Result<()> {
     let cmd = palette_core::docker::DockerManager::claude_exec_command(
         &container_id,
         "/home/agent/prompt.md",
+        "leader",
     );
     let _ = Command::new("tmux")
         .args(["send-keys", "-t", &target, "-l", &cmd])

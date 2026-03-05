@@ -89,8 +89,11 @@ async fn main() -> anyhow::Result<()> {
             });
 
             // Launch Claude Code in leader's tmux pane
-            let leader_cmd =
-                DockerManager::claude_exec_command(&leader_container_id, "/home/agent/prompt.md");
+            let leader_cmd = DockerManager::claude_exec_command(
+                &leader_container_id,
+                "/home/agent/prompt.md",
+                "leader",
+            );
             tmux.send_keys(&leader_target, &leader_cmd)?;
             tracing::info!("launched Claude Code in leader container");
 
@@ -133,8 +136,11 @@ async fn main() -> anyhow::Result<()> {
             });
 
             // Launch Claude Code in member's tmux pane
-            let member_cmd =
-                DockerManager::claude_exec_command(&member_container_id, "/home/agent/prompt.md");
+            let member_cmd = DockerManager::claude_exec_command(
+                &member_container_id,
+                "/home/agent/prompt.md",
+                "member",
+            );
             tmux.send_keys(&member_target, &member_cmd)?;
             tracing::info!("launched Claude Code in member container");
 

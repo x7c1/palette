@@ -197,10 +197,18 @@ impl DockerManager {
     }
 
     /// Build the command string to launch Claude Code inside a container's tmux pane.
-    pub fn claude_exec_command(container_id: &str, prompt_file: &str) -> String {
-        format!(
-            "docker exec -it {container_id} claude --append-system-prompt-file {prompt_file}"
-        )
+    /// Leaders bypass permissions (they run in a sandbox container).
+    /// Members keep default permissions (the leader handles their permission prompts).
+    pub fn claude_exec_command(container_id: &str, prompt_file: &str, role: &str) -> String {
+        if role == "leader" {
+            format!(
+                "docker exec -it {container_id} claude --dangerously-skip-permissions --append-system-prompt-file {prompt_file}"
+            )
+        } else {
+            format!(
+                "docker exec -it {container_id} claude --append-system-prompt-file {prompt_file}"
+            )
+        }
     }
 }
 
@@ -258,9 +266,20 @@ mod tests {
     }
 
     #[test]
-    fn claude_exec_command_format() {
-        let cmd = DockerManager::claude_exec_command("abc123", "/home/agent/prompts/leader.md");
+    fn claude_exec_command_leader_bypasses_permissions() {
+        let cmd =
+            DockerManager::claude_exec_command("abc123", "/home/agent/prompts/leader.md", "leader");
         assert!(cmd.contains("docker exec -it abc123 claude"));
+        assert!(cmd.contains("--dangerously-skip-permissions"));
         assert!(cmd.contains("--append-system-prompt-file /home/agent/prompts/leader.md"));
+    }
+
+    #[test]
+    fn claude_exec_command_member_keeps_permissions() {
+        let cmd =
+            DockerManager::claude_exec_command("abc123", "/home/agent/prompts/member.md", "member");
+        assert!(cmd.contains("docker exec -it abc123 claude"));
+        assert!(!cmd.contains("--dangerously-skip-permissions"));
+        assert!(cmd.contains("--append-system-prompt-file /home/agent/prompts/member.md"));
     }
 }
