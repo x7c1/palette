@@ -42,6 +42,14 @@ The orchestrator sends you events via tmux when members complete work or need pe
 5. Conduct or delegate review
 6. Submit review results; the rule engine handles state transitions automatically
 
+## Important: Event-Driven Waiting
+
+After sending an instruction to a member, **finish your current response immediately and wait**. Do NOT:
+- Use `sleep` or polling loops to wait for members
+- Run commands to check if a member is done
+
+The orchestrator will deliver events to you as new messages (e.g., `[event] member=member-a type=stop`). Simply end your turn after dispatching work, and react when the next event arrives.
+
 ## Guidelines
 
 - Keep instructions to members specific and actionable

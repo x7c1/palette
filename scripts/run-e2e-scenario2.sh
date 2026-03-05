@@ -56,9 +56,10 @@ echo "--- member pane ---"
 tmux capture-pane -t "$MEMBER_PANE" -p 2>&1 | grep -v '^$' | tail -5
 
 echo ""
+echo "=== Scenario 2: work -> review -> changes_requested -> work -> review -> approved -> done ==="
 echo "=== Sending test message to leader ==="
 
-MESSAGE='Execute a complete work-review cycle: (1) Create a work task titled hello-world via POST /tasks/create, (2) Create a review task titled review-hello-world with depends_on the work task, (3) Send member-a the instruction to create /home/agent/hello.txt with content Hello World, (4) When member-a completes (stop event) update the work task to in_review, (5) Submit the review as approved via POST /reviews/{review_task_id}/submit with verdict approved and summary File created correctly, (6) Update the work task to done. Use curl with $PALETTE_URL for all API calls.'
+MESSAGE='Execute a work-review cycle with rejection then approval. Create work task greeting-file and review task review-greeting-file. Send member-a to create /home/agent/greeting.txt with content Hi. After stop event, set work to in_review then submit review as changes_requested with summary Content should be Hello World. After rule engine resets work to in_progress, send member-a to overwrite greeting.txt with Hello World. After stop event, set work to in_review then submit review as approved with summary Content is now correct. Use curl with $PALETTE_URL.'
 
 curl -s -X POST http://127.0.0.1:7100/send \
   -H "Content-Type: application/json" \
@@ -89,8 +90,24 @@ for task_id in $(curl -s 'http://127.0.0.1:7100/tasks?type=review' 2>/dev/null |
     echo "--- submissions for $task_id ---"
     curl -s "http://127.0.0.1:7100/reviews/$task_id/submissions" 2>&1 | jq .
 done
-echo "--- state.json ---"
-jq . data/state.json | head -40
 
 echo ""
-echo "=== Done ==="
+echo "=== Verification ==="
+WORK_STATUS=$(curl -s http://127.0.0.1:7100/tasks | jq -r '.[] | select(.type == "work") | .status')
+REVIEW_TASK_ID=$(curl -s 'http://127.0.0.1:7100/tasks?type=review' | jq -r '[.[] | select(.id | startswith("R-"))] | sort_by(.created_at) | last | .id')
+ROUND_COUNT=$(curl -s "http://127.0.0.1:7100/reviews/$REVIEW_TASK_ID/submissions" | jq 'length')
+ROUND1_VERDICT=$(curl -s "http://127.0.0.1:7100/reviews/$REVIEW_TASK_ID/submissions" | jq -r '.[0].verdict')
+ROUND2_VERDICT=$(curl -s "http://127.0.0.1:7100/reviews/$REVIEW_TASK_ID/submissions" | jq -r '.[1].verdict')
+
+echo "Work task status: $WORK_STATUS (expected: done)"
+echo "Review submissions: $ROUND_COUNT (expected: 2)"
+echo "Round 1 verdict: $ROUND1_VERDICT (expected: changes_requested)"
+echo "Round 2 verdict: $ROUND2_VERDICT (expected: approved)"
+
+RESULT=PASSED
+if [ "$WORK_STATUS" != "done" ]; then RESULT=FAILED; fi
+if [ "$ROUND_COUNT" != "2" ]; then RESULT=FAILED; fi
+if [ "$ROUND1_VERDICT" != "changes_requested" ]; then RESULT=FAILED; fi
+if [ "$ROUND2_VERDICT" != "approved" ]; then RESULT=FAILED; fi
+
+echo "=== SCENARIO 2 $RESULT ==="
