@@ -9,7 +9,7 @@ fn test_session_name(test_name: &str) -> String {
     format!("palette-test-{}-{}", test_name, std::process::id())
 }
 
-/// Spawn the server on a random available port and return (addr, state)
+/// Spawn the server on an OS-assigned port and return (addr, state)
 async fn spawn_server(
     tmux: TmuxManagerImpl,
     target: String,
