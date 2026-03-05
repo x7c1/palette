@@ -23,7 +23,7 @@ impl TmuxManagerImpl {
         let output = Command::new("tmux")
             .args(args)
             .output()
-            .with_context(|| format!("failed to run tmux {:?}", args))?;
+            .with_context(|| format!("failed to run tmux {args:?}"))?;
         Ok(output)
     }
 }
@@ -38,7 +38,7 @@ impl TmuxManager for TmuxManagerImpl {
         let output = self.run_tmux(&["new-session", "-d", "-s", name])?;
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
-            bail!("failed to create tmux session '{}': {}", name, stderr);
+            bail!("failed to create tmux session '{name}': {stderr}");
         }
         tracing::info!(session = name, "created tmux session");
         Ok(())
@@ -60,7 +60,7 @@ impl TmuxManager for TmuxManagerImpl {
         ])?;
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
-            bail!("failed to create tmux target '{}': {}", target, stderr);
+            bail!("failed to create tmux target '{target}': {stderr}");
         }
 
         let pane_id = String::from_utf8_lossy(&output.stdout).trim().to_string();
@@ -73,14 +73,14 @@ impl TmuxManager for TmuxManagerImpl {
         let output = self.run_tmux(&["send-keys", "-t", target, "-l", text])?;
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
-            bail!("failed to send keys to '{}': {}", target, stderr);
+            bail!("failed to send keys to '{target}': {stderr}");
         }
 
         // Send Enter key separately (not in literal mode)
         let output = self.run_tmux(&["send-keys", "-t", target, "Enter"])?;
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
-            bail!("failed to send Enter to '{}': {}", target, stderr);
+            bail!("failed to send Enter to '{target}': {stderr}");
         }
 
         tracing::debug!(target = target, "sent keys");
@@ -91,7 +91,7 @@ impl TmuxManager for TmuxManagerImpl {
         let output = self.run_tmux(&["send-keys", "-t", target, key])?;
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
-            bail!("failed to send raw key to '{}': {}", target, stderr);
+            bail!("failed to send raw key to '{target}': {stderr}");
         }
         Ok(())
     }
@@ -100,7 +100,7 @@ impl TmuxManager for TmuxManagerImpl {
         let output = self.run_tmux(&["capture-pane", "-t", target, "-p"])?;
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
-            bail!("failed to capture pane '{}': {}", target, stderr);
+            bail!("failed to capture pane '{target}': {stderr}");
         }
         Ok(String::from_utf8_lossy(&output.stdout).to_string())
     }

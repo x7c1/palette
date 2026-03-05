@@ -1,11 +1,11 @@
 use crate::{AppState, EventRecord};
-use palette_tmux::TmuxManager as _;
 use axum::{
     Json, Router,
     extract::State,
     http::StatusCode,
     routing::{get, post},
 };
+use palette_tmux::TmuxManager as _;
 use std::sync::Arc;
 
 pub fn create_router(state: Arc<AppState>) -> Router {

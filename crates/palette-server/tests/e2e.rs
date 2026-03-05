@@ -10,10 +10,7 @@ fn test_session_name(test_name: &str) -> String {
 }
 
 /// Spawn the server on an OS-assigned port and return (addr, state)
-async fn spawn_server(
-    tmux: TmuxManagerImpl,
-    target: String,
-) -> (String, Arc<AppState>) {
+async fn spawn_server(tmux: TmuxManagerImpl, target: String) -> (String, Arc<AppState>) {
     let state = Arc::new(AppState {
         tmux,
         target,
@@ -120,7 +117,10 @@ async fn hooks_notification_records_event() {
 
     assert_eq!(events.len(), 1);
     assert_eq!(events[0]["event_type"], "notification");
-    assert_eq!(events[0]["payload"]["notification_type"], "permission_prompt");
+    assert_eq!(
+        events[0]["payload"]["notification_type"],
+        "permission_prompt"
+    );
 
     cleanup_session(&session);
 }
