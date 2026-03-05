@@ -1,0 +1,7 @@
+FROM palette-base:latest
+
+# Install Docker CLI so members can run builds/tests via docker compose
+USER root
+RUN curl -fsSL https://get.docker.com | sh && \
+    usermod -aG docker agent
+USER agent

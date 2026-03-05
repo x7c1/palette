@@ -12,8 +12,10 @@ path = "src/main.rs"
 anyhow.workspace = true
 axum.workspace = true
 palette-core = { path = "../palette-core" }
+palette-db = { path = "../palette-db" }
 palette-server = { path = "../palette-server" }
 palette-tmux = { path = "../palette-tmux" }
+serde_json.workspace = true
 tokio.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true

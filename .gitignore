@@ -18,6 +18,9 @@ dist-ssr
 # Rust artifacts
 target
 
+# Runtime data
+data/
+
 # Local files
 *.local
 .envrc

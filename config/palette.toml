@@ -1,4 +1,13 @@
 port = 7100
+db_path = "data/palette.db"
+state_path = "data/state.json"
 
 [tmux]
 session_name = "palette"
+
+[rules]
+max_review_rounds = 5
+
+[docker]
+network = "host"
+palette_url = "http://host.docker.internal:7100"

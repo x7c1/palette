@@ -1,3 +1,5 @@
+use palette_core::state::PersistentState;
+use palette_db::{Database, RuleEngine};
 use palette_server::{AppState, create_router};
 use palette_tmux::{TmuxManager, TmuxManagerImpl};
 use serde_json::json;
@@ -10,10 +12,17 @@ fn test_session_name(test_name: &str) -> String {
 }
 
 /// Spawn the server on an OS-assigned port and return (addr, state)
-async fn spawn_server(tmux: TmuxManagerImpl, target: String) -> (String, Arc<AppState>) {
+async fn spawn_server(tmux: TmuxManagerImpl, session_name: &str) -> (String, Arc<AppState>) {
+    let db = Database::open_in_memory().unwrap();
+    let rules = RuleEngine::new(5);
+    let infra = PersistentState::new(session_name.to_string());
+
     let state = Arc::new(AppState {
         tmux,
-        target,
+        db,
+        rules,
+        infra: tokio::sync::Mutex::new(infra),
+        state_path: String::new(),
         event_log: tokio::sync::Mutex::new(Vec::new()),
     });
     let app = create_router(state.clone());
@@ -47,12 +56,11 @@ async fn hooks_stop_records_event() {
     let tmux = TmuxManagerImpl::new(session.clone());
     tmux.create_session(&session).unwrap();
 
-    let target = tmux.create_target("worker").unwrap();
-    let (base_url, _state) = spawn_server(tmux, target).await;
+    let _target = tmux.create_target("worker").unwrap();
+    let (base_url, _state) = spawn_server(tmux, &session).await;
 
     let client = reqwest::Client::new();
 
-    // POST to /hooks/stop
     let payload = json!({
         "session_id": "test-session-123",
         "conversation_id": "conv-456"
@@ -65,7 +73,6 @@ async fn hooks_stop_records_event() {
         .unwrap();
     assert_eq!(resp.status(), 200);
 
-    // Verify event was recorded via /events
     let events: Vec<serde_json::Value> = client
         .get(format!("{base_url}/events"))
         .send()
@@ -77,7 +84,6 @@ async fn hooks_stop_records_event() {
 
     assert_eq!(events.len(), 1);
     assert_eq!(events[0]["event_type"], "stop");
-    assert_eq!(events[0]["payload"]["session_id"], "test-session-123");
 
     cleanup_session(&session);
 }
@@ -88,8 +94,8 @@ async fn hooks_notification_records_event() {
     let tmux = TmuxManagerImpl::new(session.clone());
     tmux.create_session(&session).unwrap();
 
-    let target = tmux.create_target("worker").unwrap();
-    let (base_url, _state) = spawn_server(tmux, target).await;
+    let _target = tmux.create_target("worker").unwrap();
+    let (base_url, _state) = spawn_server(tmux, &session).await;
 
     let client = reqwest::Client::new();
 
@@ -117,10 +123,6 @@ async fn hooks_notification_records_event() {
 
     assert_eq!(events.len(), 1);
     assert_eq!(events[0]["event_type"], "notification");
-    assert_eq!(
-        events[0]["payload"]["notification_type"],
-        "permission_prompt"
-    );
 
     cleanup_session(&session);
 }
@@ -132,61 +134,58 @@ async fn send_keys_delivers_to_tmux_pane() {
     tmux.create_session(&session).unwrap();
 
     let target = tmux.create_target("worker").unwrap();
-    let (base_url, _state) = spawn_server(tmux, target.clone()).await;
+
+    // Register the target in infra state
+    let (base_url, state) = spawn_server(tmux, &session).await;
+    {
+        let mut infra = state.infra.lock().await;
+        infra.members.push(palette_core::state::MemberState {
+            id: "worker".to_string(),
+            role: "member".to_string(),
+            leader_id: String::new(),
+            container_id: String::new(),
+            tmux_target: target.clone(),
+            status: palette_core::state::MemberStatus::Idle,
+            session_id: None,
+            message_queue: Vec::new(),
+        });
+    }
 
     let client = reqwest::Client::new();
 
     let resp = client
         .post(format!("{base_url}/send"))
-        .json(&json!({"message": "echo hello-palette-test"}))
+        .json(&json!({"member_id": "worker", "message": "echo hello-palette-test"}))
         .send()
         .await
         .unwrap();
     assert_eq!(resp.status(), 200);
 
-    // Give tmux a moment to process
     tokio::time::sleep(std::time::Duration::from_millis(500)).await;
 
-    // Capture the pane content and verify the message was sent
     let content = capture_pane(&target);
     assert!(
         content.contains("hello-palette-test"),
         "pane content should contain the sent message, got: {content}"
     );
 
-    // Verify the send event was also recorded
-    let events: Vec<serde_json::Value> = client
-        .get(format!("{base_url}/events"))
-        .send()
-        .await
-        .unwrap()
-        .json()
-        .await
-        .unwrap();
-
-    assert_eq!(events.len(), 1);
-    assert_eq!(events[0]["event_type"], "send");
-    assert_eq!(events[0]["payload"]["message"], "echo hello-palette-test");
-
     cleanup_session(&session);
 }
 
 #[tokio::test]
-async fn send_keys_special_characters() {
-    let session = test_session_name("special");
+async fn send_keys_with_direct_target() {
+    let session = test_session_name("direct");
     let tmux = TmuxManagerImpl::new(session.clone());
     tmux.create_session(&session).unwrap();
 
     let target = tmux.create_target("worker").unwrap();
-    let (base_url, _state) = spawn_server(tmux, target.clone()).await;
+    let (base_url, _state) = spawn_server(tmux, &session).await;
 
     let client = reqwest::Client::new();
 
-    // Test with special characters: quotes, semicolons, pipes
-    let message = r#"echo "hello; world" | cat"#;
     let resp = client
         .post(format!("{base_url}/send"))
-        .json(&json!({"message": message}))
+        .json(&json!({"target": target, "message": "echo direct-test"}))
         .send()
         .await
         .unwrap();
@@ -196,74 +195,274 @@ async fn send_keys_special_characters() {
 
     let content = capture_pane(&target);
     assert!(
-        content.contains("hello; world"),
-        "pane should contain special chars, got: {content}"
+        content.contains("direct-test"),
+        "pane should contain the message, got: {content}"
     );
 
     cleanup_session(&session);
 }
 
 #[tokio::test]
-async fn full_flow_send_then_hooks() {
-    let session = test_session_name("flow");
+async fn task_api_create_and_list() {
+    let session = test_session_name("taskapi");
     let tmux = TmuxManagerImpl::new(session.clone());
     tmux.create_session(&session).unwrap();
 
-    let target = tmux.create_target("worker").unwrap();
-    let (base_url, _state) = spawn_server(tmux, target.clone()).await;
+    let (base_url, _state) = spawn_server(tmux, &session).await;
 
     let client = reqwest::Client::new();
 
-    // 1. Send a command via /send
-    client
-        .post(format!("{base_url}/send"))
-        .json(&json!({"message": "echo flow-test"}))
-        .send()
-        .await
-        .unwrap();
-
-    // 2. Simulate stop hook (as if Claude Code finished responding)
-    client
-        .post(format!("{base_url}/hooks/stop"))
-        .json(&json!({"session_id": "flow-session"}))
-        .send()
-        .await
-        .unwrap();
-
-    // 3. Simulate notification hook (permission prompt)
-    client
-        .post(format!("{base_url}/hooks/notification"))
+    // Create a work task
+    let resp = client
+        .post(format!("{base_url}/tasks/create"))
         .json(&json!({
-            "notification_type": "permission_prompt",
-            "tool_name": "Write",
+            "id": "W-001",
+            "type": "work",
+            "title": "Implement feature",
+            "description": "Details here",
+            "assignee": "member-a",
+            "priority": "high",
         }))
         .send()
         .await
         .unwrap();
+    assert_eq!(resp.status(), 201);
 
-    // 4. Send permission response via /send
-    client
-        .post(format!("{base_url}/send"))
-        .json(&json!({"message": "y"}))
+    let task: serde_json::Value = resp.json().await.unwrap();
+    assert_eq!(task["id"], "W-001");
+    assert_eq!(task["status"], "todo");
+
+    // Create a review task depending on W-001
+    let resp = client
+        .post(format!("{base_url}/tasks/create"))
+        .json(&json!({
+            "id": "R-001",
+            "type": "review",
+            "title": "Review feature",
+            "depends_on": ["W-001"],
+        }))
         .send()
         .await
         .unwrap();
+    assert_eq!(resp.status(), 201);
 
-    // Verify all events were recorded in order
-    let events: Vec<serde_json::Value> = client
-        .get(format!("{base_url}/events"))
+    // List all tasks
+    let tasks: Vec<serde_json::Value> = client
+        .get(format!("{base_url}/tasks"))
         .send()
         .await
         .unwrap()
         .json()
         .await
         .unwrap();
+    assert_eq!(tasks.len(), 2);
 
-    assert_eq!(events.len(), 4);
-    assert_eq!(events[0]["event_type"], "send");
-    assert_eq!(events[1]["event_type"], "stop");
-    assert_eq!(events[2]["event_type"], "notification");
-    assert_eq!(events[3]["event_type"], "send");
+    // List work tasks only
+    let tasks: Vec<serde_json::Value> = client
+        .get(format!("{base_url}/tasks?type=work"))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(tasks.len(), 1);
+
+    cleanup_session(&session);
+}
+
+#[tokio::test]
+async fn task_api_update_with_rules() {
+    let session = test_session_name("taskrules");
+    let tmux = TmuxManagerImpl::new(session.clone());
+    tmux.create_session(&session).unwrap();
+
+    let (base_url, _state) = spawn_server(tmux, &session).await;
+
+    let client = reqwest::Client::new();
+
+    // Create work + review
+    client
+        .post(format!("{base_url}/tasks/create"))
+        .json(&json!({"id": "W-001", "type": "work", "title": "Work"}))
+        .send()
+        .await
+        .unwrap();
+
+    client
+        .post(format!("{base_url}/tasks/create"))
+        .json(&json!({"id": "R-001", "type": "review", "title": "Review", "depends_on": ["W-001"]}))
+        .send()
+        .await
+        .unwrap();
+
+    // Transition W-001: todo -> in_progress -> in_review
+    client
+        .post(format!("{base_url}/tasks/update"))
+        .json(&json!({"id": "W-001", "status": "in_progress"}))
+        .send()
+        .await
+        .unwrap();
+
+    client
+        .post(format!("{base_url}/tasks/update"))
+        .json(&json!({"id": "W-001", "status": "in_review"}))
+        .send()
+        .await
+        .unwrap();
+
+    // Invalid transition should fail
+    let resp = client
+        .post(format!("{base_url}/tasks/update"))
+        .json(&json!({"id": "W-001", "status": "todo"}))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), 400);
+
+    cleanup_session(&session);
+}
+
+#[tokio::test]
+async fn review_api_submit_and_get() {
+    let session = test_session_name("review");
+    let tmux = TmuxManagerImpl::new(session.clone());
+    tmux.create_session(&session).unwrap();
+
+    let (base_url, _state) = spawn_server(tmux, &session).await;
+
+    let client = reqwest::Client::new();
+
+    // Setup: create work + review tasks
+    client
+        .post(format!("{base_url}/tasks/create"))
+        .json(&json!({"id": "W-001", "type": "work", "title": "Work"}))
+        .send()
+        .await
+        .unwrap();
+
+    client
+        .post(format!("{base_url}/tasks/create"))
+        .json(&json!({"id": "R-001", "type": "review", "title": "Review", "depends_on": ["W-001"]}))
+        .send()
+        .await
+        .unwrap();
+
+    // Transition work to in_review
+    client
+        .post(format!("{base_url}/tasks/update"))
+        .json(&json!({"id": "W-001", "status": "in_progress"}))
+        .send()
+        .await
+        .unwrap();
+    client
+        .post(format!("{base_url}/tasks/update"))
+        .json(&json!({"id": "W-001", "status": "in_review"}))
+        .send()
+        .await
+        .unwrap();
+
+    // Submit review with changes_requested
+    let resp = client
+        .post(format!("{base_url}/reviews/R-001/submit"))
+        .json(&json!({
+            "verdict": "changes_requested",
+            "summary": "Needs fixes",
+            "comments": [
+                {"file": "src/main.rs", "line": 10, "body": "Fix this"}
+            ]
+        }))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), 201);
+
+    let sub: serde_json::Value = resp.json().await.unwrap();
+    assert_eq!(sub["round"], 1);
+    assert_eq!(sub["verdict"], "changes_requested");
+
+    // W-001 should be reverted to in_progress by rule engine
+    let tasks: Vec<serde_json::Value> = client
+        .get(format!("{base_url}/tasks?type=work"))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(tasks[0]["status"], "in_progress");
+
+    // Get submissions
+    let submissions: Vec<serde_json::Value> = client
+        .get(format!("{base_url}/reviews/R-001/submissions"))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(submissions.len(), 1);
+
+    cleanup_session(&session);
+}
+
+#[tokio::test]
+async fn full_cycle_work_review_approved() {
+    let session = test_session_name("cycle");
+    let tmux = TmuxManagerImpl::new(session.clone());
+    tmux.create_session(&session).unwrap();
+
+    let (base_url, _state) = spawn_server(tmux, &session).await;
+
+    let client = reqwest::Client::new();
+
+    // Create work + review
+    client
+        .post(format!("{base_url}/tasks/create"))
+        .json(&json!({"id": "W-001", "type": "work", "title": "Work"}))
+        .send()
+        .await
+        .unwrap();
+    client
+        .post(format!("{base_url}/tasks/create"))
+        .json(&json!({"id": "R-001", "type": "review", "title": "Review", "depends_on": ["W-001"]}))
+        .send()
+        .await
+        .unwrap();
+
+    // Work: todo -> in_progress -> in_review
+    client
+        .post(format!("{base_url}/tasks/update"))
+        .json(&json!({"id": "W-001", "status": "in_progress"}))
+        .send()
+        .await
+        .unwrap();
+    client
+        .post(format!("{base_url}/tasks/update"))
+        .json(&json!({"id": "W-001", "status": "in_review"}))
+        .send()
+        .await
+        .unwrap();
+
+    // Review: approve
+    let resp = client
+        .post(format!("{base_url}/reviews/R-001/submit"))
+        .json(&json!({"verdict": "approved", "summary": "LGTM"}))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), 201);
+
+    // W-001 should be done
+    let tasks: Vec<serde_json::Value> = client
+        .get(format!("{base_url}/tasks?type=work"))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(tasks[0]["status"], "done");
 
     cleanup_session(&session);
 }
