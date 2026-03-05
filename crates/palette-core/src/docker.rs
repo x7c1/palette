@@ -30,12 +30,15 @@ impl DockerManager {
             "create".to_string(),
             "--name".to_string(),
             format!("palette-{name}"),
-            "--hostname".to_string(),
-            format!("palette-{name}"),
-            // Linux: map host.docker.internal to host gateway
-            "--add-host=host.docker.internal:host-gateway".to_string(),
+            // Use host network so 127.0.0.1 reaches the palette server
+            // (Claude Code blocks HTTP hooks to private IPs but allows loopback)
+            "--network".to_string(),
+            "host".to_string(),
             // Interactive TTY for Claude Code
             "-it".to_string(),
+            // Pass Palette API URL as environment variable
+            "-e".to_string(),
+            format!("PALETTE_URL={}", self.palette_url),
         ];
 
         for label in &labels {
@@ -137,11 +140,11 @@ impl DockerManager {
         // Replace the base URL and add member_id query param
         let settings = template
             .replace(
-                "http://host.docker.internal:7100/hooks/stop",
+                "http://127.0.0.1:7100/hooks/stop",
                 &format!("{}/hooks/stop?member_id={member_id}", self.palette_url),
             )
             .replace(
-                "http://host.docker.internal:7100/hooks/notification",
+                "http://127.0.0.1:7100/hooks/notification",
                 &format!(
                     "{}/hooks/notification?member_id={member_id}",
                     self.palette_url
@@ -235,8 +238,8 @@ mod tests {
             &template_path,
             r#"{
   "hooks": {
-    "Stop": [{"hooks": [{"type": "http", "url": "http://host.docker.internal:7100/hooks/stop"}]}],
-    "Notification": [{"matcher": "permission_prompt", "hooks": [{"type": "http", "url": "http://host.docker.internal:7100/hooks/notification"}]}]
+    "Stop": [{"hooks": [{"type": "http", "url": "http://127.0.0.1:7100/hooks/stop"}]}],
+    "Notification": [{"matcher": "permission_prompt", "hooks": [{"type": "http", "url": "http://127.0.0.1:7100/hooks/notification"}]}]
   }
 }"#,
         )
@@ -248,11 +251,11 @@ mod tests {
         let template = std::fs::read_to_string(&template_path).unwrap();
         let settings = template
             .replace(
-                "http://host.docker.internal:7100/hooks/stop",
+                "http://127.0.0.1:7100/hooks/stop",
                 &format!("{}/hooks/stop?member_id=member-a", mgr.palette_url),
             )
             .replace(
-                "http://host.docker.internal:7100/hooks/notification",
+                "http://127.0.0.1:7100/hooks/notification",
                 &format!("{}/hooks/notification?member_id=member-a", mgr.palette_url),
             );
 

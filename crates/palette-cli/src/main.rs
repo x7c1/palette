@@ -98,9 +98,10 @@ async fn main() -> anyhow::Result<()> {
             tracing::info!("launched Claude Code in leader container");
 
             // --- Member ---
-            let member_target = tmux
-                .create_target("member-a")
-                .context("failed to create member tmux target")?;
+            let member_pane_id = tmux
+                .create_pane(&leader_target)
+                .context("failed to create member tmux pane")?;
+            let member_target = member_pane_id;
 
             let member_container_id = docker.create_container(
                 "member-a",
@@ -160,7 +161,7 @@ async fn main() -> anyhow::Result<()> {
     });
 
     let app = palette_server::create_router(state);
-    let addr = SocketAddr::from(([127, 0, 0, 1], config.port));
+    let addr = SocketAddr::from(([0, 0, 0, 0], config.port));
     tracing::info!(%addr, "starting server");
 
     let listener = tokio::net::TcpListener::bind(addr).await?;

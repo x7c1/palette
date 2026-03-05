@@ -5,7 +5,7 @@
         "hooks": [
           {
             "type": "http",
-            "url": "http://host.docker.internal:7100/hooks/stop"
+            "url": "http://127.0.0.1:7100/hooks/stop"
           }
         ]
       }
@@ -16,7 +16,7 @@
         "hooks": [
           {
             "type": "http",
-            "url": "http://host.docker.internal:7100/hooks/notification"
+            "url": "http://127.0.0.1:7100/hooks/notification"
           }
         ]
       }

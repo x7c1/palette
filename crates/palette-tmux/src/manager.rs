@@ -4,6 +4,7 @@ use std::process::Command;
 pub trait TmuxManager {
     fn create_session(&self, name: &str) -> anyhow::Result<()>;
     fn create_target(&self, name: &str) -> anyhow::Result<String>;
+    fn create_pane(&self, base_target: &str) -> anyhow::Result<String>;
     fn send_keys(&self, target: &str, text: &str) -> anyhow::Result<()>;
     fn send_raw_key(&self, target: &str, key: &str) -> anyhow::Result<()>;
     fn capture_pane(&self, target: &str) -> anyhow::Result<String>;
@@ -65,7 +66,29 @@ impl TmuxManager for TmuxManagerImpl {
 
         let pane_id = String::from_utf8_lossy(&output.stdout).trim().to_string();
         tracing::info!(target = %target, pane_id = %pane_id, "created tmux target");
-        Ok(target)
+        // Return pane_id for precise targeting (window name is ambiguous with multiple panes)
+        Ok(pane_id)
+    }
+
+    fn create_pane(&self, base_target: &str) -> anyhow::Result<String> {
+        // Split the base target horizontally to create a side-by-side pane
+        let output = self.run_tmux(&[
+            "split-window",
+            "-h",
+            "-t",
+            base_target,
+            "-P",
+            "-F",
+            "#{pane_id}",
+        ])?;
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            bail!("failed to split pane at '{base_target}': {stderr}");
+        }
+
+        let pane_id = String::from_utf8_lossy(&output.stdout).trim().to_string();
+        tracing::info!(base_target = %base_target, pane_id = %pane_id, "created tmux pane");
+        Ok(pane_id)
     }
 
     fn send_keys(&self, target: &str, text: &str) -> anyhow::Result<()> {
