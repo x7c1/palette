@@ -5,6 +5,8 @@ pub trait TmuxManager {
     fn create_session(&self, name: &str) -> anyhow::Result<()>;
     fn create_target(&self, name: &str) -> anyhow::Result<String>;
     fn send_keys(&self, target: &str, text: &str) -> anyhow::Result<()>;
+    fn send_raw_key(&self, target: &str, key: &str) -> anyhow::Result<()>;
+    fn capture_pane(&self, target: &str) -> anyhow::Result<String>;
     fn is_alive(&self, target: &str) -> anyhow::Result<bool>;
 }
 
@@ -83,6 +85,24 @@ impl TmuxManager for TmuxManagerImpl {
 
         tracing::debug!(target = target, "sent keys");
         Ok(())
+    }
+
+    fn send_raw_key(&self, target: &str, key: &str) -> anyhow::Result<()> {
+        let output = self.run_tmux(&["send-keys", "-t", target, key])?;
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            bail!("failed to send raw key to '{}': {}", target, stderr);
+        }
+        Ok(())
+    }
+
+    fn capture_pane(&self, target: &str) -> anyhow::Result<String> {
+        let output = self.run_tmux(&["capture-pane", "-t", target, "-p"])?;
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            bail!("failed to capture pane '{}': {}", target, stderr);
+        }
+        Ok(String::from_utf8_lossy(&output.stdout).to_string())
     }
 
     fn is_alive(&self, target: &str) -> anyhow::Result<bool> {
