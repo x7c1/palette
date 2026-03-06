@@ -1,7 +1,9 @@
 mod routes;
 
 use axum::Router;
+use palette_core::docker::DockerManager;
 use palette_core::state::PersistentState;
+use palette_core::DockerConfig;
 use palette_db::{Database, RuleEngine};
 use palette_tmux::TmuxManagerImpl;
 use std::sync::Arc;
@@ -10,6 +12,8 @@ pub struct AppState {
     pub tmux: TmuxManagerImpl,
     pub db: Database,
     pub rules: RuleEngine,
+    pub docker: DockerManager,
+    pub docker_config: DockerConfig,
     pub infra: tokio::sync::Mutex<PersistentState>,
     pub state_path: String,
     pub event_log: tokio::sync::Mutex<Vec<EventRecord>>,

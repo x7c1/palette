@@ -5,9 +5,11 @@ use axum::{
     http::StatusCode,
     routing::{get, post},
 };
+use palette_core::orchestrator;
 use palette_core::state::MemberStatus;
 use palette_db::*;
 use palette_tmux::TmuxManager as _;
+use std::path::PathBuf;
 use std::sync::Arc;
 
 pub fn create_router(state: Arc<AppState>) -> Router {
@@ -70,6 +72,17 @@ async fn handle_stop(
             None
         }
     };
+
+    // Deliver any queued messages to the now-idle member
+    {
+        let mut infra = state.infra.lock().await;
+        let _ = orchestrator::deliver_queued_messages(
+            member_id,
+            &state.db,
+            &mut infra,
+            &state.tmux,
+        );
+    }
 
     if let Some(leader_target) = leader_notification {
         let notification = format!("[event] member={member_id} type=stop");
@@ -136,47 +149,82 @@ struct SendRequest {
     message: String,
 }
 
+#[derive(serde::Serialize)]
+struct SendResponse {
+    queued: bool,
+}
+
 async fn handle_send(
     State(state): State<Arc<AppState>>,
     Json(req): Json<SendRequest>,
-) -> Result<StatusCode, (StatusCode, String)> {
-    // Resolve tmux target from member_id or use direct target
-    let tmux_target = if let Some(ref member_id) = req.member_id {
-        let infra = state.infra.lock().await;
-        let target = infra
-            .find_member(member_id)
-            .or_else(|| infra.find_leader(member_id))
-            .map(|m| m.tmux_target.clone());
-        target.ok_or_else(|| {
-            (
-                StatusCode::NOT_FOUND,
-                format!("member not found: {member_id}"),
-            )
-        })?
-    } else if let Some(ref target) = req.target {
-        target.clone()
-    } else {
+) -> Result<Json<SendResponse>, (StatusCode, String)> {
+    // If using direct target (no member_id), send immediately without queuing
+    if req.member_id.is_none() {
+        if let Some(ref target) = req.target {
+            tracing::info!(target = %target, message = %req.message, "sending keys via tmux (direct)");
+            let record = EventRecord {
+                timestamp: now(),
+                event_type: "send".to_string(),
+                payload: serde_json::json!({
+                    "target": target,
+                    "message": req.message,
+                }),
+            };
+            state.event_log.lock().await.push(record);
+
+            state
+                .tmux
+                .send_keys(target, &req.message)
+                .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+            return Ok(Json(SendResponse { queued: false }));
+        }
         return Err((
             StatusCode::BAD_REQUEST,
             "either member_id or target is required".to_string(),
         ));
+    }
+
+    let member_id = req.member_id.as_ref().unwrap();
+
+    // Check if target is idle — if so, send directly; otherwise queue
+    let is_idle = {
+        let infra = state.infra.lock().await;
+        infra
+            .find_member(member_id)
+            .or_else(|| infra.find_leader(member_id))
+            .map(|m| m.status == MemberStatus::Idle)
+            .unwrap_or(false)
     };
 
-    tracing::info!(target = %tmux_target, message = %req.message, "sending keys via tmux");
+    // Also check if there are already pending messages (maintain ordering)
+    let has_pending = state
+        .db
+        .has_pending_messages(member_id)
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
-    let record = EventRecord {
-        timestamp: now(),
-        event_type: "send".to_string(),
-        payload: serde_json::json!({
-            "target": tmux_target,
-            "member_id": req.member_id,
-            "message": req.message,
-        }),
-    };
-    state.event_log.lock().await.push(record);
+    let queued = if is_idle && !has_pending {
+        // Send directly
+        let tmux_target = {
+            let infra = state.infra.lock().await;
+            infra
+                .find_member(member_id)
+                .or_else(|| infra.find_leader(member_id))
+                .map(|m| m.tmux_target.clone())
+                .ok_or_else(|| {
+                    (
+                        StatusCode::NOT_FOUND,
+                        format!("member not found: {member_id}"),
+                    )
+                })?
+        };
 
-    // Update member status to Working
-    if let Some(ref member_id) = req.member_id {
+        tracing::info!(target = %tmux_target, message = %req.message, "sending keys via tmux");
+        state
+            .tmux
+            .send_keys(&tmux_target, &req.message)
+            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+        // Update status to Working
         let mut infra = state.infra.lock().await;
         if let Some(member) = infra.find_member_mut(member_id) {
             member.status = MemberStatus::Working;
@@ -185,14 +233,30 @@ async fn handle_send(
             leader.status = MemberStatus::Working;
             infra.touch();
         }
-    }
 
-    state
-        .tmux
-        .send_keys(&tmux_target, &req.message)
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+        false
+    } else {
+        // Queue the message
+        state
+            .db
+            .enqueue_message(member_id, &req.message)
+            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+        tracing::info!(member_id = member_id, "message queued");
+        true
+    };
 
-    Ok(StatusCode::OK)
+    let record = EventRecord {
+        timestamp: now(),
+        event_type: "send".to_string(),
+        payload: serde_json::json!({
+            "member_id": member_id,
+            "message": req.message,
+            "queued": queued,
+        }),
+    };
+    state.event_log.lock().await.push(record);
+
+    Ok(Json(SendResponse { queued }))
 }
 
 // --- Events ---
@@ -249,6 +313,32 @@ async fn handle_update_task(
         tracing::info!(?effect, "rule engine effect");
     }
 
+    // Process orchestrator effects (auto-assign, destroy members)
+    {
+        let mut infra = state.infra.lock().await;
+        let state_path = PathBuf::from(&state.state_path);
+        let deliveries = orchestrator::process_effects(
+            &effects,
+            &state.db,
+            &mut infra,
+            &state.docker,
+            &state.tmux,
+            &state.docker_config,
+            &state_path,
+        )
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+        // Attempt to deliver queued messages for newly spawned members
+        for delivery in &deliveries {
+            let _ = orchestrator::deliver_queued_messages(
+                &delivery.target_id,
+                &state.db,
+                &mut infra,
+                &state.tmux,
+            );
+        }
+    }
+
     Ok(Json(task))
 }
 
@@ -302,6 +392,31 @@ async fn handle_submit_review(
 
     for effect in &effects {
         tracing::info!(?effect, "review rule engine effect");
+    }
+
+    // Process orchestrator effects
+    {
+        let mut infra = state.infra.lock().await;
+        let state_path = PathBuf::from(&state.state_path);
+        let deliveries = orchestrator::process_effects(
+            &effects,
+            &state.db,
+            &mut infra,
+            &state.docker,
+            &state.tmux,
+            &state.docker_config,
+            &state_path,
+        )
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+        for delivery in &deliveries {
+            let _ = orchestrator::deliver_queued_messages(
+                &delivery.target_id,
+                &state.db,
+                &mut infra,
+                &state.tmux,
+            );
+        }
     }
 
     Ok((StatusCode::CREATED, Json(submission)))

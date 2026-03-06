@@ -7,6 +7,8 @@ license.workspace = true
 [dependencies]
 anyhow.workspace = true
 chrono.workspace = true
+palette-db = { path = "../palette-db" }
+palette-tmux = { path = "../palette-tmux" }
 serde.workspace = true
 serde_json.workspace = true
 toml.workspace = true

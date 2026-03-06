@@ -40,13 +40,15 @@ async fn main() -> anyhow::Result<()> {
             tracing::info!("restored previous state");
             state
         }
-        None => bootstrap_agents(&config, &tmux, &docker, &state_path)?,
+        None => bootstrap_leader(&config, &tmux, &docker, &state_path)?,
     };
 
     let state = Arc::new(AppState {
         tmux,
         db,
         rules,
+        docker,
+        docker_config: config.docker,
         infra: tokio::sync::Mutex::new(infra),
         state_path: config.state_path.clone(),
         event_log: tokio::sync::Mutex::new(Vec::new()),
@@ -105,11 +107,11 @@ fn spawn_agent(
         tmux_target: tmux_target.to_string(),
         status: MemberStatus::Idle,
         session_id: None,
-        message_queue: Vec::new(),
     })
 }
 
-fn bootstrap_agents(
+/// Bootstrap only the leader. Members are spawned on-demand by the orchestrator.
+fn bootstrap_leader(
     config: &Config,
     tmux: &TmuxManagerImpl,
     docker: &DockerManager,
@@ -140,28 +142,7 @@ fn bootstrap_agents(
     )?;
     state.leaders.push(leader);
 
-    let member_target = tmux
-        .create_pane(&leader_target)
-        .context("failed to create member tmux pane")?;
-
-    let member = spawn_agent(
-        &AgentSpec {
-            id: "member-a",
-            name: "member-a",
-            role: "member",
-            image: &config.docker.member_image,
-            prompt: &config.docker.member_prompt,
-            leader_id: "leader-1",
-        },
-        &member_target,
-        docker,
-        tmux,
-        session_name,
-        settings_template,
-    )?;
-    state.members.push(member);
-
     state.save(state_path)?;
-    tracing::info!("bootstrapped agents");
+    tracing::info!("bootstrapped leader (members spawn on-demand)");
     Ok(state)
 }

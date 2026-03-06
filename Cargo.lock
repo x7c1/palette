@@ -880,6 +880,8 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "chrono",
+ "palette-db",
+ "palette-tmux",
  "serde",
  "serde_json",
  "tempfile",

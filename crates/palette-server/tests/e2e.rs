@@ -1,4 +1,6 @@
+use palette_core::docker::DockerManager;
 use palette_core::state::PersistentState;
+use palette_core::DockerConfig;
 use palette_db::{Database, RuleEngine};
 use palette_server::{AppState, create_router};
 use palette_tmux::{TmuxManager, TmuxManagerImpl};
@@ -11,16 +13,31 @@ fn test_session_name(test_name: &str) -> String {
     format!("palette-test-{}-{}", test_name, std::process::id())
 }
 
+fn test_docker_config() -> DockerConfig {
+    DockerConfig {
+        palette_url: "http://127.0.0.1:0".to_string(),
+        leader_image: "palette-leader:latest".to_string(),
+        member_image: "palette-member:latest".to_string(),
+        settings_template: "config/hooks/member-settings.json".to_string(),
+        leader_prompt: "prompts/leader.md".to_string(),
+        member_prompt: "prompts/member.md".to_string(),
+        max_members: 3,
+    }
+}
+
 /// Spawn the server on an OS-assigned port and return (addr, state)
 async fn spawn_server(tmux: TmuxManagerImpl, session_name: &str) -> (String, Arc<AppState>) {
     let db = Database::open_in_memory().unwrap();
     let rules = RuleEngine::new(5);
+    let docker = DockerManager::new("http://127.0.0.1:0".to_string());
     let infra = PersistentState::new(session_name.to_string());
 
     let state = Arc::new(AppState {
         tmux,
         db,
         rules,
+        docker,
+        docker_config: test_docker_config(),
         infra: tokio::sync::Mutex::new(infra),
         state_path: String::new(),
         event_log: tokio::sync::Mutex::new(Vec::new()),
@@ -147,7 +164,6 @@ async fn send_keys_delivers_to_tmux_pane() {
             tmux_target: target.clone(),
             status: palette_core::state::MemberStatus::Idle,
             session_id: None,
-            message_queue: Vec::new(),
         });
     }
 
@@ -160,6 +176,9 @@ async fn send_keys_delivers_to_tmux_pane() {
         .await
         .unwrap();
     assert_eq!(resp.status(), 200);
+
+    let body: serde_json::Value = resp.json().await.unwrap();
+    assert_eq!(body["queued"], false);
 
     tokio::time::sleep(std::time::Duration::from_millis(500)).await;
 
@@ -230,7 +249,7 @@ async fn task_api_create_and_list() {
 
     let task: serde_json::Value = resp.json().await.unwrap();
     assert_eq!(task["id"], "W-001");
-    assert_eq!(task["status"], "todo");
+    assert_eq!(task["status"], "draft");
 
     // Create a review task depending on W-001
     let resp = client
@@ -245,6 +264,9 @@ async fn task_api_create_and_list() {
         .await
         .unwrap();
     assert_eq!(resp.status(), 201);
+
+    let review: serde_json::Value = resp.json().await.unwrap();
+    assert_eq!(review["status"], "todo");
 
     // List all tasks
     let tasks: Vec<serde_json::Value> = client
@@ -296,7 +318,14 @@ async fn task_api_update_with_rules() {
         .await
         .unwrap();
 
-    // Transition W-001: todo -> in_progress -> in_review
+    // Transition W-001: draft -> ready -> in_progress -> in_review
+    client
+        .post(format!("{base_url}/tasks/update"))
+        .json(&json!({"id": "W-001", "status": "ready"}))
+        .send()
+        .await
+        .unwrap();
+
     client
         .post(format!("{base_url}/tasks/update"))
         .json(&json!({"id": "W-001", "status": "in_progress"}))
@@ -311,10 +340,10 @@ async fn task_api_update_with_rules() {
         .await
         .unwrap();
 
-    // Invalid transition should fail
+    // Invalid transition should fail (in_review -> draft)
     let resp = client
         .post(format!("{base_url}/tasks/update"))
-        .json(&json!({"id": "W-001", "status": "todo"}))
+        .json(&json!({"id": "W-001", "status": "draft"}))
         .send()
         .await
         .unwrap();
@@ -349,6 +378,12 @@ async fn review_api_submit_and_get() {
         .unwrap();
 
     // Transition work to in_review
+    client
+        .post(format!("{base_url}/tasks/update"))
+        .json(&json!({"id": "W-001", "status": "ready"}))
+        .send()
+        .await
+        .unwrap();
     client
         .post(format!("{base_url}/tasks/update"))
         .json(&json!({"id": "W-001", "status": "in_progress"}))
@@ -430,7 +465,13 @@ async fn full_cycle_work_review_approved() {
         .await
         .unwrap();
 
-    // Work: todo -> in_progress -> in_review
+    // Work: draft -> ready -> in_progress -> in_review
+    client
+        .post(format!("{base_url}/tasks/update"))
+        .json(&json!({"id": "W-001", "status": "ready"}))
+        .send()
+        .await
+        .unwrap();
     client
         .post(format!("{base_url}/tasks/update"))
         .json(&json!({"id": "W-001", "status": "in_progress"}))
@@ -463,6 +504,60 @@ async fn full_cycle_work_review_approved() {
         .await
         .unwrap();
     assert_eq!(tasks[0]["status"], "done");
+
+    cleanup_session(&session);
+}
+
+#[tokio::test]
+async fn send_queues_when_member_is_working() {
+    let session = test_session_name("queue");
+    let tmux = TmuxManagerImpl::new(session.clone());
+    tmux.create_session(&session).unwrap();
+
+    let target = tmux.create_target("worker").unwrap();
+    let (base_url, state) = spawn_server(tmux, &session).await;
+    {
+        let mut infra = state.infra.lock().await;
+        infra.members.push(palette_core::state::MemberState {
+            id: "worker".to_string(),
+            role: "member".to_string(),
+            leader_id: String::new(),
+            container_id: String::new(),
+            tmux_target: target.clone(),
+            status: palette_core::state::MemberStatus::Working,
+            session_id: None,
+        });
+    }
+
+    let client = reqwest::Client::new();
+
+    // Send while Working — should be queued
+    let resp = client
+        .post(format!("{base_url}/send"))
+        .json(&json!({"member_id": "worker", "message": "queued message"}))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), 200);
+    let body: serde_json::Value = resp.json().await.unwrap();
+    assert_eq!(body["queued"], true);
+
+    // Stop hook should deliver the queued message
+    let resp = client
+        .post(format!("{base_url}/hooks/stop?member_id=worker"))
+        .json(&json!({}))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), 200);
+
+    tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+
+    let content = capture_pane(&target);
+    assert!(
+        content.contains("queued message"),
+        "pane should contain the queued message after stop, got: {content}"
+    );
 
     cleanup_session(&session);
 }

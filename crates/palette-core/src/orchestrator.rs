@@ -1,0 +1,188 @@
+use crate::config::DockerConfig;
+use crate::docker::DockerManager;
+use crate::state::{MemberState, MemberStatus, PersistentState};
+use palette_db::{Database, RuleEffect, Task};
+use palette_tmux::TmuxManager;
+
+/// Processes rule engine effects: auto-assign tasks, spawn/destroy members.
+/// Returns a list of messages that need to be sent to members via tmux.
+pub fn process_effects<T: TmuxManager>(
+    effects: &[RuleEffect],
+    db: &Database,
+    infra: &mut PersistentState,
+    docker: &DockerManager,
+    tmux: &T,
+    config: &DockerConfig,
+    state_path: &std::path::Path,
+) -> anyhow::Result<Vec<PendingDelivery>> {
+    let mut deliveries = Vec::new();
+
+    for effect in effects {
+        match effect {
+            RuleEffect::AutoAssign { task_id } => {
+                let task = match db.get_task(task_id)? {
+                    Some(t) => t,
+                    None => continue,
+                };
+                // Only assign if still ready
+                if task.status != palette_db::TaskStatus::Ready {
+                    continue;
+                }
+                let active = db.count_active_members()?;
+                if active >= config.max_members {
+                    tracing::info!(
+                        task_id = task_id,
+                        active = active,
+                        max = config.max_members,
+                        "max members reached, task waits"
+                    );
+                    continue;
+                }
+                // Spawn a new member
+                let member_id = infra.next_member_id();
+                let member = spawn_member(
+                    &member_id,
+                    infra,
+                    docker,
+                    tmux,
+                    config,
+                )?;
+                let tmux_target = member.tmux_target.clone();
+                infra.members.push(member);
+
+                // Assign task
+                db.assign_task(task_id, &member_id)?;
+                tracing::info!(task_id = task_id, member_id = member_id, "auto-assigned task");
+
+                // Build task instruction message
+                let instruction = format_task_instruction(&task);
+                db.enqueue_message(&member_id, &instruction)?;
+
+                deliveries.push(PendingDelivery {
+                    target_id: member_id,
+                    tmux_target,
+                });
+
+                infra.touch();
+                infra.save(state_path)?;
+            }
+            RuleEffect::DestroyMember { member_id } => {
+                if let Some(member) = infra.remove_member(member_id) {
+                    tracing::info!(member_id = member_id, "destroying member container");
+                    let _ = docker.stop_container(&member.container_id);
+                    let _ = docker.remove_container(&member.container_id);
+                    infra.touch();
+                    infra.save(state_path)?;
+                }
+            }
+            _ => {}
+        }
+    }
+
+    Ok(deliveries)
+}
+
+/// Delivers queued messages to idle targets.
+pub fn deliver_queued_messages<T: TmuxManager>(
+    target_id: &str,
+    db: &Database,
+    infra: &mut PersistentState,
+    tmux: &T,
+) -> anyhow::Result<bool> {
+    let member = infra
+        .find_member(target_id)
+        .or_else(|| infra.find_leader(target_id));
+
+    let tmux_target = match member {
+        Some(m) if m.status == MemberStatus::Idle => m.tmux_target.clone(),
+        _ => return Ok(false),
+    };
+
+    if let Some(msg) = db.dequeue_message(target_id)? {
+        tmux.send_keys(&tmux_target, &msg.message)?;
+        // Update status to Working
+        if let Some(m) = infra.find_member_mut(target_id) {
+            m.status = MemberStatus::Working;
+        } else if let Some(l) = infra.find_leader_mut(target_id) {
+            l.status = MemberStatus::Working;
+        }
+        infra.touch();
+        tracing::info!(target_id = target_id, "delivered queued message");
+        Ok(true)
+    } else {
+        Ok(false)
+    }
+}
+
+/// A pending delivery that needs to be attempted.
+#[derive(Debug, Clone)]
+pub struct PendingDelivery {
+    pub target_id: String,
+    pub tmux_target: String,
+}
+
+/// Format a task into an instruction message for a member.
+fn format_task_instruction(task: &Task) -> String {
+    let mut msg = format!("## Task: {}\n\nID: {}\n", task.title, task.id);
+    if let Some(ref desc) = task.description {
+        msg.push_str(&format!("\n{desc}\n"));
+    }
+    if let Some(ref repos) = task.repositories {
+        msg.push_str(&format!("\nRepositories: {}\n", repos.join(", ")));
+    }
+    if let Some(ref branch) = task.branch {
+        msg.push_str(&format!("Branch: {branch}\n"));
+    }
+    msg.push_str("\nPlease begin working on this task.");
+    msg
+}
+
+fn spawn_member<T: TmuxManager>(
+    member_id: &str,
+    infra: &PersistentState,
+    docker: &DockerManager,
+    tmux: &T,
+    config: &DockerConfig,
+) -> anyhow::Result<MemberState> {
+    let session_name = &infra.session_name;
+
+    // Create a new tmux window for the member
+    let tmux_target = tmux.create_target(member_id)?;
+
+    let container_id = docker.create_container(
+        member_id,
+        &config.member_image,
+        "member",
+        session_name,
+    )?;
+    docker.start_container(&container_id)?;
+    docker.write_settings(
+        &container_id,
+        std::path::Path::new(&config.settings_template),
+        member_id,
+    )?;
+    DockerManager::copy_file_to_container(
+        &container_id,
+        std::path::Path::new(&config.member_prompt),
+        "/home/agent/prompt.md",
+    )?;
+    DockerManager::copy_dir_to_container(
+        &container_id,
+        std::path::Path::new("claude-code-plugin"),
+        "/home/agent/claude-code-plugin",
+    )?;
+
+    let cmd = DockerManager::claude_exec_command(&container_id, "/home/agent/prompt.md", "member");
+    tmux.send_keys(&tmux_target, &cmd)?;
+    tracing::info!(member_id = member_id, "spawned member");
+
+    Ok(MemberState {
+        id: member_id.to_string(),
+        role: "member".to_string(),
+        leader_id: "leader-1".to_string(),
+        container_id,
+        tmux_target,
+        status: MemberStatus::Idle,
+        session_id: None,
+    })
+}

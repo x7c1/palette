@@ -14,9 +14,14 @@ Get the API base URL by running `echo $PALETTE_URL`.
 ## Available Endpoints
 
 ### Task Management
-- **Create task**: `POST $PALETTE_URL/tasks/create` — Body: `{"type": "work"|"review", "title": "...", "depends_on": [...]}`
-- **Update task**: `POST $PALETTE_URL/tasks/update` — Body: `{"id": "...", "status": "todo"|"in_progress"|"in_review"|"done"}`
-- **List tasks**: `GET $PALETTE_URL/tasks` — Optional query params: `type=work&status=todo&assignee=member-a`
+- **Create task**: `POST $PALETTE_URL/tasks/create` — Body: `{"type": "work"|"review", "title": "...", "description": "...", "priority": "high"|"medium"|"low", "depends_on": [...]}`
+  - Work tasks are created with status `draft`
+  - Review tasks are created with status `todo`
+- **Update task**: `POST $PALETTE_URL/tasks/update` — Body: `{"id": "...", "status": "draft"|"ready"|"in_progress"|"in_review"|"done"}`
+  - Work task flow: `draft` → `ready` → `in_progress` → `in_review` → `done`
+  - `ready` → `in_progress` is set automatically by the orchestrator (do not call manually)
+  - `in_review` → `done` is set automatically by the rule engine when reviews are approved
+- **List tasks**: `GET $PALETTE_URL/tasks` — Optional query params: `type=work&status=draft&assignee=member-a`
 
 ### Review
 - **Submit review**: `POST $PALETTE_URL/reviews/{id}/submit` — Body: `{"verdict": "approved"|"changes_requested", "summary": "...", "comments": [...]}`
@@ -24,6 +29,7 @@ Get the API base URL by running `echo $PALETTE_URL`.
 
 ### Communication
 - **Send message**: `POST $PALETTE_URL/send` — Body: `{"member_id": "...", "message": "..."}`
+  - If the member is busy (Working), the message is queued and delivered when the member becomes idle
 
 ## Instructions
 
