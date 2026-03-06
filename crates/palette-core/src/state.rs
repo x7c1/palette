@@ -5,6 +5,7 @@ use std::path::Path;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum MemberStatus {
+    Booting,
     Working,
     Idle,
     WaitingPermission,

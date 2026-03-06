@@ -8,7 +8,7 @@ use axum::{
 use palette_core::orchestrator;
 use palette_core::state::MemberStatus;
 use palette_db::*;
-use palette_tmux::TmuxManager as _;
+use palette_tmux::{TmuxManager as _, TmuxManagerImpl};
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -147,6 +147,10 @@ struct SendRequest {
     #[serde(default)]
     target: Option<String>,
     message: String,
+    /// If true, send the message without appending Enter key.
+    /// Use for permission prompt responses (e.g., "2" to approve).
+    #[serde(default)]
+    no_enter: bool,
 }
 
 #[derive(serde::Serialize)]
@@ -172,9 +176,7 @@ async fn handle_send(
             };
             state.event_log.lock().await.push(record);
 
-            state
-                .tmux
-                .send_keys(target, &req.message)
+            send_tmux_keys(&state.tmux, target, &req.message, req.no_enter)
                 .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
             return Ok(Json(SendResponse { queued: false }));
         }
@@ -186,13 +188,13 @@ async fn handle_send(
 
     let member_id = req.member_id.as_ref().unwrap();
 
-    // Check if target is idle — if so, send directly; otherwise queue
+    // Check if target can receive input — idle or waiting for permission
     let is_idle = {
         let infra = state.infra.lock().await;
         infra
             .find_member(member_id)
             .or_else(|| infra.find_leader(member_id))
-            .map(|m| m.status == MemberStatus::Idle)
+            .map(|m| m.status == MemberStatus::Idle || m.status == MemberStatus::WaitingPermission)
             .unwrap_or(false)
     };
 
@@ -219,9 +221,7 @@ async fn handle_send(
         };
 
         tracing::info!(target = %tmux_target, message = %req.message, "sending keys via tmux");
-        state
-            .tmux
-            .send_keys(&tmux_target, &req.message)
+        send_tmux_keys(&state.tmux, &tmux_target, &req.message, req.no_enter)
             .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
         // Update status to Working
@@ -314,7 +314,7 @@ async fn handle_update_task(
     }
 
     // Process orchestrator effects (auto-assign, destroy members)
-    {
+    let deliveries = {
         let mut infra = state.infra.lock().await;
         let state_path = PathBuf::from(&state.state_path);
         let deliveries = orchestrator::process_effects(
@@ -328,7 +328,7 @@ async fn handle_update_task(
         )
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
-        // Attempt to deliver queued messages for newly spawned members
+        // Deliver queued messages for non-booting members
         for delivery in &deliveries {
             let _ = orchestrator::deliver_queued_messages(
                 &delivery.target_id,
@@ -337,6 +337,13 @@ async fn handle_update_task(
                 &state.tmux,
             );
         }
+
+        deliveries
+    };
+
+    // Spawn background readiness watchers for booting members
+    for delivery in deliveries {
+        spawn_readiness_watcher(delivery, Arc::clone(&state));
     }
 
     Ok(Json(task))
@@ -395,7 +402,7 @@ async fn handle_submit_review(
     }
 
     // Process orchestrator effects
-    {
+    let deliveries = {
         let mut infra = state.infra.lock().await;
         let state_path = PathBuf::from(&state.state_path);
         let deliveries = orchestrator::process_effects(
@@ -417,6 +424,13 @@ async fn handle_submit_review(
                 &state.tmux,
             );
         }
+
+        deliveries
+    };
+
+    // Spawn background readiness watchers for booting members
+    for delivery in deliveries {
+        spawn_readiness_watcher(delivery, Arc::clone(&state));
     }
 
     Ok((StatusCode::CREATED, Json(submission)))
@@ -431,6 +445,75 @@ async fn handle_get_submissions(
         .get_review_submissions(&review_task_id)
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
     Ok(Json(submissions))
+}
+
+/// Spawn a background task that polls a member's tmux pane for Claude Code readiness,
+/// then delivers the queued message.
+fn spawn_readiness_watcher(delivery: orchestrator::PendingDelivery, state: Arc<AppState>) {
+    use palette_core::state::MemberStatus;
+
+    tokio::spawn(async move {
+        let target_id = &delivery.target_id;
+        let tmux_target = &delivery.tmux_target;
+
+        // Poll every 3 seconds for up to 120 seconds
+        for _ in 0..40 {
+            tokio::time::sleep(std::time::Duration::from_secs(3)).await;
+
+            // Check if the tmux pane shows the Claude Code input prompt
+            let pane_content = match state.tmux.capture_pane(tmux_target) {
+                Ok(content) => content,
+                Err(e) => {
+                    tracing::warn!(target_id, error = %e, "failed to capture pane");
+                    continue;
+                }
+            };
+
+            // Claude Code shows "❯" when ready for input
+            if !pane_content.contains('❯') {
+                continue;
+            }
+
+            tracing::info!(target_id, "Claude Code is ready, delivering queued message");
+
+            // Transition from Booting to Idle, then deliver
+            {
+                let mut infra = state.infra.lock().await;
+                if let Some(member) = infra.find_member_mut(target_id) {
+                    if member.status == MemberStatus::Booting {
+                        member.status = MemberStatus::Idle;
+                        infra.touch();
+                    }
+                }
+                let _ = orchestrator::deliver_queued_messages(
+                    target_id,
+                    &state.db,
+                    &mut infra,
+                    &state.tmux,
+                );
+                let state_path = std::path::PathBuf::from(&state.state_path);
+                if let Err(e) = infra.save(&state_path) {
+                    tracing::error!(error = %e, "failed to save state after delivery");
+                }
+            }
+            return;
+        }
+
+        tracing::error!(target_id, "timed out waiting for Claude Code readiness");
+    });
+}
+
+fn send_tmux_keys(
+    tmux: &TmuxManagerImpl,
+    target: &str,
+    message: &str,
+    no_enter: bool,
+) -> anyhow::Result<()> {
+    if no_enter {
+        tmux.send_keys_literal(target, message)
+    } else {
+        tmux.send_keys(target, message)
+    }
 }
 
 fn now() -> String {

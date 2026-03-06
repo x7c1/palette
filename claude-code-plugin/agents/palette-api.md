@@ -30,6 +30,7 @@ Get the API base URL by running `echo $PALETTE_URL`.
 ### Communication
 - **Send message**: `POST $PALETTE_URL/send` — Body: `{"member_id": "...", "message": "..."}`
   - If the member is busy (Working), the message is queued and delivered when the member becomes idle
+  - If the member is waiting for permission, the message is sent immediately (use `"message": "2", "no_enter": true` to approve all edits for the session)
 
 ## Instructions
 

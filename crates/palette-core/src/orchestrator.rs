@@ -146,8 +146,13 @@ fn spawn_member<T: TmuxManager>(
 ) -> anyhow::Result<MemberState> {
     let session_name = &infra.session_name;
 
-    // Create a new tmux window for the member
-    let tmux_target = tmux.create_target(member_id)?;
+    // Create a new tmux pane by splitting from the leader's pane
+    let leader_target = infra
+        .leaders
+        .first()
+        .map(|l| l.tmux_target.as_str())
+        .unwrap_or("0");
+    let tmux_target = tmux.create_pane(leader_target)?;
 
     let container_id = docker.create_container(
         member_id,
@@ -182,7 +187,7 @@ fn spawn_member<T: TmuxManager>(
         leader_id: "leader-1".to_string(),
         container_id,
         tmux_target,
-        status: MemberStatus::Idle,
+        status: MemberStatus::Booting,
         session_id: None,
     })
 }

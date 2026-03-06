@@ -83,6 +83,6 @@ You have read-only access to member transcripts at `~/.claude/projects/`. Use th
 
 - Keep instructions to members specific and actionable
 - Update task status promptly after member events
-- For permission prompts: send the member the **exact** message `Yes, allow all edits during this session` — this is the literal text that must be sent, not a paraphrase. Do not send "yes", "yes_all", or any other variation. Deny only destructive operations.
+- For permission prompts: the member's Claude Code shows a numbered selection UI (1=Yes, 2=Yes allow all this session, 3=No). Send `{"member_id": "member-X", "message": "2", "no_enter": true}` via palette-api to approve all edits for the session. The `no_enter` flag is critical — without it, an extra Enter key will be sent. If the member seems stuck, check whether a permission prompt is blocking it and send `2` to unblock.
 - Escalate to the user when a decision could cause significant rework
 - Use task priorities (high, medium, low) to influence execution order
