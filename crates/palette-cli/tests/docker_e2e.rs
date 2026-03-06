@@ -153,8 +153,14 @@ fn launch() -> Result<()> {
         &format!("palette-{}", "test-leader"),
         "cat /home/agent/.claude/settings.json",
     )?;
-    let expected_leader_stop = format!("{}/hooks/stop?member_id=leader-1", config.docker.palette_url);
-    let expected_leader_notif = format!("{}/hooks/notification?member_id=leader-1", config.docker.palette_url);
+    let expected_leader_stop = format!(
+        "{}/hooks/stop?member_id=leader-1",
+        config.docker.palette_url
+    );
+    let expected_leader_notif = format!(
+        "{}/hooks/notification?member_id=leader-1",
+        config.docker.palette_url
+    );
     assert!(
         leader_settings.contains(&expected_leader_stop),
         "leader settings should contain stop hook with member_id.\nActual:\n{leader_settings}"
@@ -168,7 +174,10 @@ fn launch() -> Result<()> {
         &format!("palette-{}", "test-member-a"),
         "cat /home/agent/.claude/settings.json",
     )?;
-    let expected_member_stop = format!("{}/hooks/stop?member_id=member-a", config.docker.palette_url);
+    let expected_member_stop = format!(
+        "{}/hooks/stop?member_id=member-a",
+        config.docker.palette_url
+    );
     assert!(
         member_settings.contains(&expected_member_stop),
         "member settings should contain stop hook with member_id"

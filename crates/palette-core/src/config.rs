@@ -81,7 +81,6 @@ impl Default for RulesConfig {
     }
 }
 
-
 impl Config {
     pub fn load(path: &Path) -> anyhow::Result<Self> {
         let content = std::fs::read_to_string(path)
@@ -127,7 +126,10 @@ port = 7100
 session_name = "palette"
 "#;
         let result: Result<Config, _> = toml::from_str(toml);
-        assert!(result.is_err(), "missing [docker] section should be an error");
+        assert!(
+            result.is_err(),
+            "missing [docker] section should be an error"
+        );
     }
 
     #[test]

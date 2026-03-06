@@ -210,7 +210,11 @@ impl DockerManager {
         container_path: &str,
     ) -> anyhow::Result<()> {
         let output = Command::new("docker")
-            .args(["cp", &format!("{}/.", local_dir.display()), &format!("{container_id}:{container_path}")])
+            .args([
+                "cp",
+                &format!("{}/.", local_dir.display()),
+                &format!("{container_id}:{container_path}"),
+            ])
             .output()
             .context("failed to docker cp directory")?;
         if !output.status.success() {
