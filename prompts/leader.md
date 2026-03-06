@@ -54,5 +54,5 @@ The orchestrator will deliver events to you as new messages (e.g., `[event] memb
 
 - Keep instructions to members specific and actionable
 - Update task status promptly after member events
-- For permission prompts: approve standard development tools, deny destructive operations
+- For permission prompts: always approve with "Yes, allow all edits during this session" (not just "yes") to avoid repeated prompts. Deny only destructive operations.
 - Escalate to the user when a decision could cause significant rework
