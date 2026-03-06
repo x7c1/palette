@@ -40,19 +40,17 @@ pub fn process_effects<T: TmuxManager>(
                 }
                 // Spawn a new member
                 let member_id = infra.next_member_id();
-                let member = spawn_member(
-                    &member_id,
-                    infra,
-                    docker,
-                    tmux,
-                    config,
-                )?;
+                let member = spawn_member(&member_id, infra, docker, tmux, config)?;
                 let tmux_target = member.tmux_target.clone();
                 infra.members.push(member);
 
                 // Assign task
                 db.assign_task(task_id, &member_id)?;
-                tracing::info!(task_id = task_id, member_id = member_id, "auto-assigned task");
+                tracing::info!(
+                    task_id = task_id,
+                    member_id = member_id,
+                    "auto-assigned task"
+                );
 
                 // Build task instruction message
                 let instruction = format_task_instruction(&task);
@@ -154,12 +152,8 @@ fn spawn_member<T: TmuxManager>(
         .unwrap_or("0");
     let tmux_target = tmux.create_pane(leader_target)?;
 
-    let container_id = docker.create_container(
-        member_id,
-        &config.member_image,
-        "member",
-        session_name,
-    )?;
+    let container_id =
+        docker.create_container(member_id, &config.member_image, "member", session_name)?;
     docker.start_container(&container_id)?;
     docker.write_settings(
         &container_id,

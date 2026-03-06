@@ -1,6 +1,6 @@
+use palette_core::DockerConfig;
 use palette_core::docker::DockerManager;
 use palette_core::state::PersistentState;
-use palette_core::DockerConfig;
 use palette_db::{Database, RuleEngine};
 use palette_server::{AppState, create_router};
 use palette_tmux::{TmuxManager, TmuxManagerImpl};

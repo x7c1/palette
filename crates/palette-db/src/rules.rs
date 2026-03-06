@@ -350,12 +350,8 @@ mod tests {
     #[test]
     fn valid_transitions() {
         assert!(
-            RuleEngine::validate_transition(
-                TaskType::Work,
-                TaskStatus::Draft,
-                TaskStatus::Ready
-            )
-            .is_ok()
+            RuleEngine::validate_transition(TaskType::Work, TaskStatus::Draft, TaskStatus::Ready)
+                .is_ok()
         );
         assert!(
             RuleEngine::validate_transition(

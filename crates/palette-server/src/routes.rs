@@ -76,12 +76,8 @@ async fn handle_stop(
     // Deliver any queued messages to the now-idle member
     {
         let mut infra = state.infra.lock().await;
-        let _ = orchestrator::deliver_queued_messages(
-            member_id,
-            &state.db,
-            &mut infra,
-            &state.tmux,
-        );
+        let _ =
+            orchestrator::deliver_queued_messages(member_id, &state.db, &mut infra, &state.tmux);
     }
 
     if let Some(leader_target) = leader_notification {

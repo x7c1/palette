@@ -83,9 +83,7 @@ impl DockerManager {
         let transcript_volume = format!("palette-transcripts-{session_name}");
         if role == "member" {
             args.push("-v".to_string());
-            args.push(format!(
-                "{transcript_volume}:/home/agent/.claude/projects"
-            ));
+            args.push(format!("{transcript_volume}:/home/agent/.claude/projects"));
         } else if role == "leader" {
             args.push("-v".to_string());
             args.push(format!(
