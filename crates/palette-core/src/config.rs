@@ -12,7 +12,6 @@ pub struct Config {
     pub tmux: TmuxConfig,
     #[serde(default)]
     pub rules: RulesConfig,
-    #[serde(default)]
     pub docker: DockerConfig,
 }
 
@@ -29,7 +28,6 @@ pub struct RulesConfig {
 
 #[derive(Debug, Deserialize)]
 pub struct DockerConfig {
-    #[serde(default = "default_palette_url")]
     pub palette_url: String,
     #[serde(default = "default_leader_image")]
     pub leader_image: String,
@@ -53,10 +51,6 @@ fn default_state_path() -> String {
 
 fn default_max_review_rounds() -> u32 {
     5
-}
-
-fn default_palette_url() -> String {
-    "http://127.0.0.1:7100".to_string()
 }
 
 fn default_leader_image() -> String {
@@ -87,18 +81,6 @@ impl Default for RulesConfig {
     }
 }
 
-impl Default for DockerConfig {
-    fn default() -> Self {
-        Self {
-            palette_url: default_palette_url(),
-            leader_image: default_leader_image(),
-            member_image: default_member_image(),
-            settings_template: default_settings_template(),
-            leader_prompt: default_leader_prompt(),
-            member_prompt: default_member_prompt(),
-        }
-    }
-}
 
 impl Config {
     pub fn load(path: &Path) -> anyhow::Result<Self> {
@@ -121,6 +103,9 @@ port = 7100
 
 [tmux]
 session_name = "palette"
+
+[docker]
+palette_url = "http://127.0.0.1:7100"
 "#;
         let config: Config = toml::from_str(toml).unwrap();
         assert_eq!(config.port, 7100);
@@ -128,12 +113,36 @@ session_name = "palette"
         assert_eq!(config.db_path, "data/palette.db");
         assert_eq!(config.state_path, "data/state.json");
         assert_eq!(config.rules.max_review_rounds, 5);
-        assert_eq!(
-            config.docker.palette_url,
-            "http://127.0.0.1:7100"
-        );
+        assert_eq!(config.docker.palette_url, "http://127.0.0.1:7100");
         assert_eq!(config.docker.leader_image, "palette-leader:latest");
         assert_eq!(config.docker.member_image, "palette-member:latest");
+    }
+
+    #[test]
+    fn missing_docker_section_is_error() {
+        let toml = r#"
+port = 7100
+
+[tmux]
+session_name = "palette"
+"#;
+        let result: Result<Config, _> = toml::from_str(toml);
+        assert!(result.is_err(), "missing [docker] section should be an error");
+    }
+
+    #[test]
+    fn missing_palette_url_is_error() {
+        let toml = r#"
+port = 7100
+
+[tmux]
+session_name = "palette"
+
+[docker]
+leader_image = "custom:latest"
+"#;
+        let result: Result<Config, _> = toml::from_str(toml);
+        assert!(result.is_err(), "missing palette_url should be an error");
     }
 
     #[test]
