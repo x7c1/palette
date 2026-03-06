@@ -283,12 +283,10 @@ mod tests {
                 &format!("{}/hooks/notification?member_id=member-a", mgr.palette_url),
             );
 
-        assert!(
-            settings.contains(&format!("{palette_url}/hooks/stop?member_id=member-a"))
-        );
-        assert!(
-            settings.contains(&format!("{palette_url}/hooks/notification?member_id=member-a"))
-        );
+        assert!(settings.contains(&format!("{palette_url}/hooks/stop?member_id=member-a")));
+        assert!(settings.contains(&format!(
+            "{palette_url}/hooks/notification?member_id=member-a"
+        )));
     }
 
     #[test]
