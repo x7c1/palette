@@ -9,5 +9,4 @@ session_name = "palette"
 max_review_rounds = 5
 
 [docker]
-network = "host"
 palette_url = "http://127.0.0.1:7100"

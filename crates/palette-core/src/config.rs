@@ -29,8 +29,6 @@ pub struct RulesConfig {
 
 #[derive(Debug, Deserialize)]
 pub struct DockerConfig {
-    #[serde(default = "default_network")]
-    pub network: String,
     #[serde(default = "default_palette_url")]
     pub palette_url: String,
     #[serde(default = "default_leader_image")]
@@ -55,10 +53,6 @@ fn default_state_path() -> String {
 
 fn default_max_review_rounds() -> u32 {
     5
-}
-
-fn default_network() -> String {
-    "host".to_string()
 }
 
 fn default_palette_url() -> String {
@@ -96,7 +90,6 @@ impl Default for RulesConfig {
 impl Default for DockerConfig {
     fn default() -> Self {
         Self {
-            network: default_network(),
             palette_url: default_palette_url(),
             leader_image: default_leader_image(),
             member_image: default_member_image(),
@@ -157,13 +150,11 @@ session_name = "palette"
 max_review_rounds = 3
 
 [docker]
-network = "bridge"
 palette_url = "http://localhost:8080"
 "#;
         let config: Config = toml::from_str(toml).unwrap();
         assert_eq!(config.db_path, "custom/path.db");
         assert_eq!(config.rules.max_review_rounds, 3);
-        assert_eq!(config.docker.network, "bridge");
         assert_eq!(config.docker.palette_url, "http://localhost:8080");
     }
 }
