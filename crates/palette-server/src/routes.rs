@@ -479,11 +479,11 @@ fn spawn_readiness_watcher(delivery: orchestrator::PendingDelivery, state: Arc<A
             // Transition from Booting to Idle, then deliver
             {
                 let mut infra = state.infra.lock().await;
-                if let Some(member) = infra.find_member_mut(target_id) {
-                    if member.status == MemberStatus::Booting {
-                        member.status = MemberStatus::Idle;
-                        infra.touch();
-                    }
+                if let Some(member) = infra.find_member_mut(target_id)
+                    && member.status == MemberStatus::Booting
+                {
+                    member.status = MemberStatus::Idle;
+                    infra.touch();
                 }
                 let _ = orchestrator::deliver_queued_messages(
                     target_id,
