@@ -8,9 +8,6 @@ RUN apt-get update && apt-get install -y \
     zsh \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Claude Code
-RUN curl -fsSL https://claude.ai/install.sh | bash
-
 # Create non-root user
 ARG HOST_UID=1000
 ARG HOST_GID=1000
@@ -21,6 +18,10 @@ RUN userdel -r ubuntu 2>/dev/null || true && \
 
 USER agent
 WORKDIR /home/agent
+
+# Install Claude Code as agent user
+RUN curl -fsSL https://claude.ai/install.sh | bash
+ENV PATH="/home/agent/.local/bin:$PATH"
 
 # Skip first-run onboarding, trust dialog, and bypass permissions confirmation
 RUN echo '{"hasCompletedOnboarding":true,"bypassPermissionsModeAccepted":true,"projects":{"/home/agent":{"hasTrustDialogAccepted":true}}}' > /home/agent/.claude.json
