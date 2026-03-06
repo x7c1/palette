@@ -63,7 +63,7 @@ echo ""
 echo "=== Scenario 2: work -> review -> changes_requested -> work -> review -> approved -> done ==="
 echo "=== Sending test message to leader ==="
 
-MESSAGE='Execute a work-review cycle with rejection then approval. Create work task greeting-file and review task review-greeting-file. Send member-a to create /home/agent/greeting.txt with content Hi. After stop event, set work to in_review then submit review as changes_requested with summary Content should be Hello World. After rule engine resets work to in_progress, send member-a to overwrite greeting.txt with Hello World. After stop event, set work to in_review then submit review as approved with summary Content is now correct. Use the palette-api agent for all API calls.'
+MESSAGE='Execute a work-review cycle with rejection then approval. Create work task greeting-file and review task review-greeting-file. Send member-a to create /home/agent/greeting.txt with content Hi. After stop event, set work to in_review then submit review as changes_requested with summary Content should be Hello World. After rule engine resets work to in_progress, send member-a to overwrite greeting.txt with Hello World. After stop event, set work to in_review then submit review as approved with summary Content is now correct. Use the palette:palette-api agent for all API calls.'
 
 curl -s -X POST http://127.0.0.1:7100/send \
   -H "Content-Type: application/json" \

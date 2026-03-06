@@ -62,7 +62,7 @@ tmux capture-pane -t "$MEMBER_PANE" -p 2>&1 | grep -v '^$' | tail -5
 echo ""
 echo "=== Sending test message to leader ==="
 
-MESSAGE='Execute a complete work-review cycle: (1) Create a work task titled hello-world, (2) Create a review task titled review-hello-world with depends_on the work task, (3) Send member-a the instruction to create /home/agent/hello.txt with content Hello World, (4) When member-a completes (stop event) update the work task to in_review, (5) Submit the review as approved with verdict approved and summary File created correctly, (6) Update the work task to done. Use the palette-api agent for all API calls.'
+MESSAGE='Execute a complete work-review cycle: (1) Create a work task titled hello-world, (2) Create a review task titled review-hello-world with depends_on the work task, (3) Send member-a the instruction to create /home/agent/hello.txt with content Hello World, (4) When member-a completes (stop event) update the work task to in_review, (5) Submit the review as approved with verdict approved and summary File created correctly, (6) Update the work task to done. Use the palette:palette-api agent for all API calls.'
 
 curl -s -X POST http://127.0.0.1:7100/send \
   -H "Content-Type: application/json" \
