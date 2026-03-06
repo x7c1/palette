@@ -1,5 +1,5 @@
 [package]
-name = "palette-core"
+name = "palette-db"
 version = "0.1.0"
 edition.workspace = true
 license.workspace = true
@@ -7,10 +7,7 @@ license.workspace = true
 [dependencies]
 anyhow.workspace = true
 chrono.workspace = true
+rusqlite.workspace = true
 serde.workspace = true
 serde_json.workspace = true
-toml.workspace = true
-tracing.workspace = true
-
-[dev-dependencies]
-tempfile = "3"
+uuid.workspace = true
