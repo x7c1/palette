@@ -1,0 +1,5 @@
+{
+  "name": "palette",
+  "description": "Skills for interacting with the Palette orchestrator API",
+  "version": "0.1.0"
+}

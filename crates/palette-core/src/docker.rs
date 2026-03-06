@@ -1,4 +1,5 @@
 use anyhow::{Context as _, bail};
+use std::path::Path;
 use std::process::Command;
 
 pub struct DockerManager {
@@ -202,14 +203,32 @@ impl DockerManager {
     /// Build the command string to launch Claude Code inside a container's tmux pane.
     /// Leaders bypass permissions (they run in a sandbox container).
     /// Members keep default permissions (the leader handles their permission prompts).
+    /// Copy a directory tree into a container.
+    pub fn copy_dir_to_container(
+        container_id: &str,
+        local_dir: &Path,
+        container_path: &str,
+    ) -> anyhow::Result<()> {
+        let output = Command::new("docker")
+            .args(["cp", &format!("{}/.", local_dir.display()), &format!("{container_id}:{container_path}")])
+            .output()
+            .context("failed to docker cp directory")?;
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            bail!("failed to copy directory to container: {stderr}");
+        }
+        Ok(())
+    }
+
     pub fn claude_exec_command(container_id: &str, prompt_file: &str, role: &str) -> String {
+        let plugin_flag = " --plugin-dir /home/agent/claude-code-plugin";
         if role == "leader" {
             format!(
-                "docker exec -it {container_id} claude --dangerously-skip-permissions --append-system-prompt-file {prompt_file}"
+                "docker exec -it {container_id} claude --dangerously-skip-permissions --append-system-prompt-file {prompt_file}{plugin_flag}"
             )
         } else {
             format!(
-                "docker exec -it {container_id} claude --append-system-prompt-file {prompt_file}"
+                "docker exec -it {container_id} claude --append-system-prompt-file {prompt_file}{plugin_flag}"
             )
         }
     }
@@ -275,6 +294,7 @@ mod tests {
         assert!(cmd.contains("docker exec -it abc123 claude"));
         assert!(cmd.contains("--dangerously-skip-permissions"));
         assert!(cmd.contains("--append-system-prompt-file /home/agent/prompts/leader.md"));
+        assert!(cmd.contains("--plugin-dir /home/agent/claude-code-plugin"));
     }
 
     #[test]
@@ -284,5 +304,6 @@ mod tests {
         assert!(cmd.contains("docker exec -it abc123 claude"));
         assert!(!cmd.contains("--dangerously-skip-permissions"));
         assert!(cmd.contains("--append-system-prompt-file /home/agent/prompts/member.md"));
+        assert!(cmd.contains("--plugin-dir /home/agent/claude-code-plugin"));
     }
 }

@@ -9,7 +9,7 @@ MEMBER_PANE=$(jq -r '.members[0].tmux_target' data/state.json)
 echo "Leader pane: $LEADER_PANE"
 echo "Member pane: $MEMBER_PANE"
 
-MESSAGE='Execute a complete work-review cycle: (1) Create a work task titled hello-world via POST /tasks/create, (2) Create a review task titled review-hello-world with depends_on the work task, (3) Send member-a the instruction to create /home/agent/hello.txt with content Hello World, (4) When member-a completes (stop event) update the work task to in_review, (5) Submit the review as approved via POST /reviews/{review_task_id}/submit with verdict approved and summary File created correctly, (6) Update the work task to done. Use curl with $PALETTE_URL for all API calls.'
+MESSAGE='Execute a complete work-review cycle: (1) Create a work task titled hello-world, (2) Create a review task titled review-hello-world with depends_on the work task, (3) Send member-a the instruction to create /home/agent/hello.txt with content Hello World, (4) When member-a completes (stop event) update the work task to in_review, (5) Submit the review as approved with verdict approved and summary File created correctly, (6) Update the work task to done. Use the palette-api agent for all API calls.'
 
 echo "=== Sending test message to leader ==="
 curl -s -X POST http://127.0.0.1:7100/send \

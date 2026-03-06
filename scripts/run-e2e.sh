@@ -5,6 +5,7 @@ cd "$(dirname "$0")/.."
 
 # Clean up previous state
 echo "=== Cleanup ==="
+lsof -ti:7100 | xargs -r kill 2>/dev/null || true
 docker rm -f palette-leader palette-member-a 2>/dev/null || true
 tmux kill-session -t palette 2>/dev/null || true
 rm -f data/state.json data/palette.db data/palette.db-shm data/palette.db-wal
@@ -58,7 +59,7 @@ tmux capture-pane -t "$MEMBER_PANE" -p 2>&1 | grep -v '^$' | tail -5
 echo ""
 echo "=== Sending test message to leader ==="
 
-MESSAGE='Execute a complete work-review cycle: (1) Create a work task titled hello-world via POST /tasks/create, (2) Create a review task titled review-hello-world with depends_on the work task, (3) Send member-a the instruction to create /home/agent/hello.txt with content Hello World, (4) When member-a completes (stop event) update the work task to in_review, (5) Submit the review as approved via POST /reviews/{review_task_id}/submit with verdict approved and summary File created correctly, (6) Update the work task to done. Use curl with $PALETTE_URL for all API calls.'
+MESSAGE='Execute a complete work-review cycle: (1) Create a work task titled hello-world, (2) Create a review task titled review-hello-world with depends_on the work task, (3) Send member-a the instruction to create /home/agent/hello.txt with content Hello World, (4) When member-a completes (stop event) update the work task to in_review, (5) Submit the review as approved with verdict approved and summary File created correctly, (6) Update the work task to done. Use the palette-api agent for all API calls.'
 
 curl -s -X POST http://127.0.0.1:7100/send \
   -H "Content-Type: application/json" \
@@ -80,6 +81,9 @@ for i in $(seq 1 60); do
     fi
     echo ""
 done
+
+echo "=== Leader pane full capture ==="
+tmux capture-pane -t "$LEADER_PANE" -p -S -500 2>&1
 
 echo "=== Final state ==="
 echo "--- tasks ---"

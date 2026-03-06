@@ -87,6 +87,11 @@ fn spawn_agent(
         Path::new(spec.prompt),
         "/home/agent/prompt.md",
     )?;
+    DockerManager::copy_dir_to_container(
+        &container_id,
+        Path::new("claude-code-plugin"),
+        "/home/agent/claude-code-plugin",
+    )?;
 
     let cmd = DockerManager::claude_exec_command(&container_id, "/home/agent/prompt.md", spec.role);
     tmux.send_keys(tmux_target, &cmd)?;
