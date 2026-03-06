@@ -13,6 +13,7 @@
 //!   inspection.
 
 use anyhow::{Context as _, Result};
+use palette_core::Config;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -102,12 +103,12 @@ fn launch() -> Result<()> {
         .output()?;
 
     // --- Setup Docker containers ---
-    let docker =
-        palette_core::docker::DockerManager::new("http://host.docker.internal:7100".to_string());
+    let config = Config::load(&workspace_path("config/palette.toml"))?;
+    let docker = palette_core::docker::DockerManager::new(config.docker.palette_url.clone());
 
     let leader_id = docker.create_container(
         "test-leader",
-        "palette-leader:latest",
+        &config.docker.leader_image,
         "leader",
         SESSION_NAME,
     )?;
@@ -116,7 +117,7 @@ fn launch() -> Result<()> {
 
     let member_id = docker.create_container(
         "test-member-a",
-        "palette-member:latest",
+        &config.docker.member_image,
         "member",
         SESSION_NAME,
     )?;
@@ -143,7 +144,7 @@ fn launch() -> Result<()> {
     );
 
     // --- Write settings.json ---
-    let template_path = workspace_path("config/hooks/member-settings.json");
+    let template_path = workspace_path(&config.docker.settings_template);
     docker.write_settings(&leader_id, &template_path, "leader-1")?;
     docker.write_settings(&member_id, &template_path, "member-a")?;
 
@@ -152,13 +153,14 @@ fn launch() -> Result<()> {
         &format!("palette-{}", "test-leader"),
         "cat /home/agent/.claude/settings.json",
     )?;
+    let expected_leader_stop = format!("{}/hooks/stop?member_id=leader-1", config.docker.palette_url);
+    let expected_leader_notif = format!("{}/hooks/notification?member_id=leader-1", config.docker.palette_url);
     assert!(
-        leader_settings.contains("http://host.docker.internal:7100/hooks/stop?member_id=leader-1"),
+        leader_settings.contains(&expected_leader_stop),
         "leader settings should contain stop hook with member_id.\nActual:\n{leader_settings}"
     );
     assert!(
-        leader_settings
-            .contains("http://host.docker.internal:7100/hooks/notification?member_id=leader-1"),
+        leader_settings.contains(&expected_leader_notif),
         "leader settings should contain notification hook with member_id"
     );
 
@@ -166,20 +168,21 @@ fn launch() -> Result<()> {
         &format!("palette-{}", "test-member-a"),
         "cat /home/agent/.claude/settings.json",
     )?;
+    let expected_member_stop = format!("{}/hooks/stop?member_id=member-a", config.docker.palette_url);
     assert!(
-        member_settings.contains("http://host.docker.internal:7100/hooks/stop?member_id=member-a"),
+        member_settings.contains(&expected_member_stop),
         "member settings should contain stop hook with member_id"
     );
 
     // --- Copy prompt files ---
     palette_core::docker::DockerManager::copy_file_to_container(
         &leader_id,
-        &workspace_path("prompts/leader.md"),
+        &workspace_path(&config.docker.leader_prompt),
         "/home/agent/prompt.md",
     )?;
     palette_core::docker::DockerManager::copy_file_to_container(
         &member_id,
-        &workspace_path("prompts/member.md"),
+        &workspace_path(&config.docker.member_prompt),
         "/home/agent/prompt.md",
     )?;
 
@@ -295,12 +298,12 @@ fn claude_responds() -> Result<()> {
         .output()?;
 
     // --- Setup container ---
-    let docker =
-        palette_core::docker::DockerManager::new("http://host.docker.internal:7100".to_string());
+    let config = Config::load(&workspace_path("config/palette.toml"))?;
+    let docker = palette_core::docker::DockerManager::new(config.docker.palette_url.clone());
 
     let container_id = docker.create_container(
         "test-claude",
-        "palette-leader:latest",
+        &config.docker.leader_image,
         "leader",
         SESSION_NAME,
     )?;
@@ -310,12 +313,12 @@ fn claude_responds() -> Result<()> {
     // Inject settings and prompt
     docker.write_settings(
         &container_id,
-        &workspace_path("config/hooks/member-settings.json"),
+        &workspace_path(&config.docker.settings_template),
         "test-claude",
     )?;
     palette_core::docker::DockerManager::copy_file_to_container(
         &container_id,
-        &workspace_path("prompts/leader.md"),
+        &workspace_path(&config.docker.leader_prompt),
         "/home/agent/prompt.md",
     )?;
 

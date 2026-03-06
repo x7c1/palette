@@ -56,7 +56,7 @@ fn default_max_review_rounds() -> u32 {
 }
 
 fn default_palette_url() -> String {
-    "http://host.docker.internal:7100".to_string()
+    "http://127.0.0.1:7100".to_string()
 }
 
 fn default_leader_image() -> String {
@@ -130,7 +130,7 @@ session_name = "palette"
         assert_eq!(config.rules.max_review_rounds, 5);
         assert_eq!(
             config.docker.palette_url,
-            "http://host.docker.internal:7100"
+            "http://127.0.0.1:7100"
         );
         assert_eq!(config.docker.leader_image, "palette-leader:latest");
         assert_eq!(config.docker.member_image, "palette-member:latest");
