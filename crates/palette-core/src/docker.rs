@@ -138,14 +138,14 @@ impl DockerManager {
             )
         })?;
 
-        // Replace the base URL and add member_id query param
+        // Replace template placeholders with actual URLs
         let settings = template
             .replace(
-                "http://127.0.0.1:7100/hooks/stop",
+                "{{PALETTE_STOP_URL}}",
                 &format!("{}/hooks/stop?member_id={member_id}", self.palette_url),
             )
             .replace(
-                "http://127.0.0.1:7100/hooks/notification",
+                "{{PALETTE_NOTIFICATION_URL}}",
                 &format!(
                     "{}/hooks/notification?member_id={member_id}",
                     self.palette_url
@@ -261,33 +261,33 @@ mod tests {
             &template_path,
             r#"{
   "hooks": {
-    "Stop": [{"hooks": [{"type": "http", "url": "http://127.0.0.1:7100/hooks/stop"}]}],
-    "Notification": [{"matcher": "permission_prompt", "hooks": [{"type": "http", "url": "http://127.0.0.1:7100/hooks/notification"}]}]
+    "Stop": [{"hooks": [{"type": "http", "url": "{{PALETTE_STOP_URL}}"}]}],
+    "Notification": [{"matcher": "permission_prompt", "hooks": [{"type": "http", "url": "{{PALETTE_NOTIFICATION_URL}}"}]}]
   }
 }"#,
         )
         .unwrap();
 
-        let mgr = DockerManager::new("http://host.docker.internal:9000".to_string());
+        let palette_url = "http://localhost:9000";
+        let mgr = DockerManager::new(palette_url.to_string());
 
         // We can't test docker exec, but we can test the template expansion logic
         let template = std::fs::read_to_string(&template_path).unwrap();
         let settings = template
             .replace(
-                "http://127.0.0.1:7100/hooks/stop",
+                "{{PALETTE_STOP_URL}}",
                 &format!("{}/hooks/stop?member_id=member-a", mgr.palette_url),
             )
             .replace(
-                "http://127.0.0.1:7100/hooks/notification",
+                "{{PALETTE_NOTIFICATION_URL}}",
                 &format!("{}/hooks/notification?member_id=member-a", mgr.palette_url),
             );
 
         assert!(
-            settings.contains("http://host.docker.internal:9000/hooks/stop?member_id=member-a")
+            settings.contains(&format!("{palette_url}/hooks/stop?member_id=member-a"))
         );
         assert!(
-            settings
-                .contains("http://host.docker.internal:9000/hooks/notification?member_id=member-a")
+            settings.contains(&format!("{palette_url}/hooks/notification?member_id=member-a"))
         );
     }
 

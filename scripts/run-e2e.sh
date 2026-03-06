@@ -1,4 +1,7 @@
 #!/bin/bash
+# E2E Scenario 1: Single work-review cycle (happy path)
+#   Leader creates work + review tasks, sends member-a an instruction,
+#   handles permission prompt, then approves the review → work task becomes done.
 set -euo pipefail
 
 cd "$(dirname "$0")/.."

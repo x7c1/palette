@@ -1,4 +1,7 @@
 #!/bin/bash
+# E2E Scenario 2: Work-review cycle with rejection then approval
+#   Leader creates work + review tasks, member-a creates a file with wrong content,
+#   leader reviews and requests changes, member-a fixes it, leader approves → done.
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
