@@ -32,12 +32,17 @@ cleanup() {
 trap cleanup EXIT
 
 echo "Waiting for server to start..."
-sleep 10
-
-if ! kill -0 $PALETTE_PID 2>/dev/null; then
-    echo "ERROR: palette exited unexpectedly"
-    exit 1
-fi
+for i in $(seq 1 60); do
+    if curl -sf http://127.0.0.1:7100/tasks >/dev/null 2>&1; then
+        echo "  server ready (${i}s)"
+        break
+    fi
+    if ! kill -0 $PALETTE_PID 2>/dev/null; then
+        echo "ERROR: palette exited unexpectedly"
+        exit 1
+    fi
+    sleep 1
+done
 
 echo ""
 echo "=== Palette running (PID=$PALETTE_PID) ==="
