@@ -20,14 +20,12 @@ pub fn process_effects<T: TmuxManager>(
     for effect in effects {
         match effect {
             RuleEffect::AutoAssign { task_id } => {
-                let task = match db.get_task(task_id)? {
-                    Some(t) => t,
+                // Only assign if the task is truly assignable (ready + all deps done)
+                let assignable = db.find_assignable_tasks()?;
+                let task = match assignable.iter().find(|t| t.id == *task_id) {
+                    Some(t) => t.clone(),
                     None => continue,
                 };
-                // Only assign if still ready
-                if task.status != palette_db::TaskStatus::Ready {
-                    continue;
-                }
                 let active = db.count_active_members()?;
                 if active >= config.max_members {
                     tracing::info!(
