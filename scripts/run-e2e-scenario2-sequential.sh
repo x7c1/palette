@@ -7,6 +7,9 @@ set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
+PALETTE_PORT=7100
+BASE_URL="http://127.0.0.1:${PALETTE_PORT}"
+
 # Log output to timestamped file
 LOG_DIR="data/logs"
 mkdir -p "$LOG_DIR"
@@ -16,7 +19,7 @@ echo "Logging to $LOG_FILE"
 
 # Clean up previous state
 echo "=== Cleanup ==="
-lsof -ti:7100 | xargs -r kill 2>/dev/null || true
+lsof -ti:${PALETTE_PORT} | xargs -r kill 2>/dev/null || true
 docker ps -q --filter label=palette.managed=true | xargs -r docker rm -f 2>/dev/null || true
 tmux kill-session -t palette 2>/dev/null || true
 rm -f data/state.json data/palette.db data/palette.db-shm data/palette.db-wal
@@ -40,7 +43,7 @@ trap cleanup EXIT
 
 echo "Waiting for server to start..."
 for i in $(seq 1 60); do
-    if curl -sf http://127.0.0.1:7100/tasks >/dev/null 2>&1; then
+    if curl -sf ${BASE_URL}/tasks >/dev/null 2>&1; then
         echo "  server ready (${i}s)"
         break
     fi
@@ -62,7 +65,7 @@ docker ps --filter label=palette.managed=true --format '{{.Names}} {{.Status}}' 
 
 echo ""
 echo "=== Loading tasks from YAML (W-B depends on W-A) ==="
-LOAD_RESP=$(curl -s -X POST http://127.0.0.1:7100/tasks/load \
+LOAD_RESP=$(curl -s -X POST ${BASE_URL}/tasks/load \
   -H "Content-Type: text/plain" \
   --data-binary @tests/fixtures/scenario2-sequential.yaml)
 echo "$LOAD_RESP" | jq -r '.[] | "\(.id) \(.status)"'
@@ -80,7 +83,7 @@ for i in $(seq 1 120); do
     sleep 5
 
     # Collect current state snapshot for stall detection
-    TASKS_JSON=$(curl -s http://127.0.0.1:7100/tasks 2>/dev/null || echo "[]")
+    TASKS_JSON=$(curl -s ${BASE_URL}/tasks 2>/dev/null || echo "[]")
     STATE_JSON=$(cat data/state.json 2>/dev/null || echo "{}")
     TASK_SNAPSHOT=$(echo "$TASKS_JSON" | jq -r '[.[] | "\(.id):\(.status):\(.assignee // "")"] | sort | join(",")' 2>/dev/null || echo "")
     MEMBER_SNAPSHOT=$(echo "$STATE_JSON" | jq -r '[(.leaders + .members)[] | "\(.id):\(.status)"] | sort | join(",")' 2>/dev/null || echo "")
@@ -154,21 +157,21 @@ tmux capture-pane -t "$LEADER_PANE" -p -S -500 2>&1
 
 echo "=== Final state ==="
 echo "--- tasks ---"
-curl -s http://127.0.0.1:7100/tasks 2>&1 | jq .
+curl -s ${BASE_URL}/tasks 2>&1 | jq .
 echo "--- review submissions ---"
-for task_id in $(curl -s 'http://127.0.0.1:7100/tasks?type=review' 2>/dev/null | jq -r '.[].id' 2>/dev/null); do
+for task_id in $(curl -s '${BASE_URL}/tasks?type=review' 2>/dev/null | jq -r '.[].id' 2>/dev/null); do
     echo "--- submissions for $task_id ---"
-    curl -s "http://127.0.0.1:7100/reviews/$task_id/submissions" 2>&1 | jq .
+    curl -s "${BASE_URL}/reviews/$task_id/submissions" 2>&1 | jq .
 done
 echo "--- state.json ---"
 jq . data/state.json | head -40
 
 echo ""
 echo "=== Verification ==="
-WA_DONE_AT=$(curl -s http://127.0.0.1:7100/tasks | jq -r '.[] | select(.id == "W-A") | .updated_at')
-WB_ASSIGNED_AT=$(curl -s http://127.0.0.1:7100/tasks | jq -r '.[] | select(.id == "W-B") | .assigned_at')
-WA_STATUS=$(curl -s http://127.0.0.1:7100/tasks | jq -r '.[] | select(.id == "W-A") | .status')
-WB_STATUS=$(curl -s http://127.0.0.1:7100/tasks | jq -r '.[] | select(.id == "W-B") | .status')
+WA_DONE_AT=$(curl -s ${BASE_URL}/tasks | jq -r '.[] | select(.id == "W-A") | .updated_at')
+WB_ASSIGNED_AT=$(curl -s ${BASE_URL}/tasks | jq -r '.[] | select(.id == "W-B") | .assigned_at')
+WA_STATUS=$(curl -s ${BASE_URL}/tasks | jq -r '.[] | select(.id == "W-A") | .status')
+WB_STATUS=$(curl -s ${BASE_URL}/tasks | jq -r '.[] | select(.id == "W-B") | .status')
 
 echo "Task A status: $WA_STATUS (expected: done)"
 echo "Task B status: $WB_STATUS (expected: done)"
