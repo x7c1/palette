@@ -57,14 +57,14 @@ async fn handle_stop(
     };
     state.event_log.lock().await.push(record);
 
-    // Update member status to Idle and resolve leader target
-    let leader_notification = {
+    // Update member status to Idle and resolve leader ID
+    let leader_id = {
         let mut infra = state.infra.lock().await;
         if let Some(member) = infra.find_member_mut(member_id) {
             member.status = MemberStatus::Idle;
             let leader_id = member.leader_id.clone();
             infra.touch();
-            infra.find_leader(&leader_id).map(|l| l.tmux_target.clone())
+            Some(leader_id)
         } else {
             if let Some(leader) = infra.find_leader_mut(member_id) {
                 leader.status = MemberStatus::Idle;
@@ -74,17 +74,22 @@ async fn handle_stop(
         }
     };
 
-    // Deliver any queued messages to the now-idle member
+    // Enqueue event notification to leader
+    if let Some(ref leader_id) = leader_id {
+        let notification = format!("[event] member={member_id} type=stop");
+        if let Err(e) = state.db.enqueue_message(leader_id, &notification) {
+            tracing::error!(error = %e, "failed to enqueue stop notification for leader");
+        }
+    }
+
+    // Deliver any queued messages to the now-idle member and leader
     {
         let mut infra = state.infra.lock().await;
         let _ =
             orchestrator::deliver_queued_messages(member_id, &state.db, &mut infra, &state.tmux);
-    }
-
-    if let Some(leader_target) = leader_notification {
-        let notification = format!("[event] member={member_id} type=stop");
-        if let Err(e) = state.tmux.send_keys(&leader_target, &notification) {
-            tracing::error!(error = %e, "failed to notify leader");
+        if let Some(ref leader_id) = leader_id {
+            let _ =
+                orchestrator::deliver_queued_messages(leader_id, &state.db, &mut infra, &state.tmux);
         }
     }
 
@@ -109,28 +114,36 @@ async fn handle_notification(
     };
     state.event_log.lock().await.push(record);
 
-    // Update member status to WaitingPermission and resolve leader target
-    let leader_forward = {
+    // Update member status to WaitingPermission and resolve leader ID
+    let leader_id = {
         let mut infra = state.infra.lock().await;
         if let Some(member) = infra.find_member_mut(member_id) {
             member.status = MemberStatus::WaitingPermission;
             let leader_id = member.leader_id.clone();
             infra.touch();
-            infra.find_leader(&leader_id).map(|l| l.tmux_target.clone())
+            Some(leader_id)
         } else {
             None
         }
     };
 
-    if let Some(leader_target) = leader_forward {
+    // Enqueue event notification to leader
+    if let Some(ref leader_id) = leader_id {
         let notification = format!(
             "[event] member={} type=permission_prompt payload={}",
             member_id,
             serde_json::to_string(&payload).unwrap_or_default()
         );
-        if let Err(e) = state.tmux.send_keys(&leader_target, &notification) {
-            tracing::error!(error = %e, "failed to forward notification to leader");
+        if let Err(e) = state.db.enqueue_message(leader_id, &notification) {
+            tracing::error!(error = %e, "failed to enqueue notification for leader");
         }
+    }
+
+    // Deliver queued messages to leader if idle
+    if let Some(ref leader_id) = leader_id {
+        let mut infra = state.infra.lock().await;
+        let _ =
+            orchestrator::deliver_queued_messages(leader_id, &state.db, &mut infra, &state.tmux);
     }
 
     StatusCode::OK

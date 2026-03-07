@@ -561,3 +561,152 @@ async fn send_queues_when_member_is_working() {
 
     cleanup_session(&session);
 }
+
+/// Scenario 3: Multiple members stop while leader is working.
+/// Event notifications are queued and delivered one at a time on each leader stop.
+#[tokio::test]
+async fn scenario3_message_queuing_to_leader() {
+    let session = test_session_name("scenario3");
+    let tmux = TmuxManagerImpl::new(session.clone());
+    tmux.create_session(&session).unwrap();
+
+    let leader_pane = tmux.create_target("leader").unwrap();
+    let _member_a_pane = tmux.create_target("member-a").unwrap();
+    let _member_b_pane = tmux.create_target("member-b").unwrap();
+
+    let (base_url, state) = spawn_server(tmux, &session).await;
+    {
+        let mut infra = state.infra.lock().await;
+        infra.leaders.push(palette_core::state::MemberState {
+            id: "leader-1".to_string(),
+            role: "leader".to_string(),
+            leader_id: String::new(),
+            container_id: String::new(),
+            tmux_target: leader_pane.clone(),
+            status: palette_core::state::MemberStatus::Working,
+            session_id: None,
+        });
+        infra.members.push(palette_core::state::MemberState {
+            id: "member-a".to_string(),
+            role: "member".to_string(),
+            leader_id: "leader-1".to_string(),
+            container_id: String::new(),
+            tmux_target: _member_a_pane.clone(),
+            status: palette_core::state::MemberStatus::Working,
+            session_id: None,
+        });
+        infra.members.push(palette_core::state::MemberState {
+            id: "member-b".to_string(),
+            role: "member".to_string(),
+            leader_id: "leader-1".to_string(),
+            container_id: String::new(),
+            tmux_target: _member_b_pane.clone(),
+            status: palette_core::state::MemberStatus::Working,
+            session_id: None,
+        });
+    }
+
+    let client = reqwest::Client::new();
+
+    // Create tasks and assign them (simulating auto-assign)
+    client
+        .post(format!("{base_url}/tasks/create"))
+        .json(&json!({"id": "W-A", "type": "work", "title": "Task A"}))
+        .send()
+        .await
+        .unwrap();
+    client
+        .post(format!("{base_url}/tasks/create"))
+        .json(&json!({"id": "W-B", "type": "work", "title": "Task B"}))
+        .send()
+        .await
+        .unwrap();
+
+    // Manually assign tasks (simulating what auto-assign does)
+    state.db.update_task_status("W-A", palette_db::TaskStatus::Ready).unwrap();
+    state.db.assign_task("W-A", "member-a").unwrap();
+    state.db.update_task_status("W-B", palette_db::TaskStatus::Ready).unwrap();
+    state.db.assign_task("W-B", "member-b").unwrap();
+
+    // --- Both members stop while leader is Working ---
+
+    // member-a stops
+    let resp = client
+        .post(format!("{base_url}/hooks/stop?member_id=member-a"))
+        .json(&json!({}))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), 200);
+
+    // member-b stops
+    let resp = client
+        .post(format!("{base_url}/hooks/stop?member_id=member-b"))
+        .json(&json!({}))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), 200);
+
+    // Leader is Working, so both notifications should be queued
+    assert!(
+        state.db.has_pending_messages("leader-1").unwrap(),
+        "leader should have pending messages"
+    );
+
+    // Leader pane should NOT contain any event yet (leader is Working)
+    tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+    let content = capture_pane(&leader_pane);
+    assert!(
+        !content.contains("[event]"),
+        "leader pane should not have events while Working, got: {content}"
+    );
+
+    // --- Leader stops (first time) → first queued message delivered ---
+    let resp = client
+        .post(format!("{base_url}/hooks/stop?member_id=leader-1"))
+        .json(&json!({}))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), 200);
+
+    tokio::time::sleep(std::time::Duration::from_millis(300)).await;
+
+    let content = capture_pane(&leader_pane);
+    assert!(
+        content.contains("[event] member=member-a type=stop"),
+        "first stop should deliver member-a event, got: {content}"
+    );
+
+    // Leader should still have pending messages (member-b event)
+    assert!(
+        state.db.has_pending_messages("leader-1").unwrap(),
+        "leader should still have pending message for member-b"
+    );
+
+    // --- Leader stops (second time) → second queued message delivered ---
+    let resp = client
+        .post(format!("{base_url}/hooks/stop?member_id=leader-1"))
+        .json(&json!({}))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), 200);
+
+    tokio::time::sleep(std::time::Duration::from_millis(300)).await;
+
+    let content = capture_pane(&leader_pane);
+    assert!(
+        content.contains("[event] member=member-b type=stop"),
+        "second stop should deliver member-b event, got: {content}"
+    );
+
+    // Queue should now be empty
+    assert!(
+        !state.db.has_pending_messages("leader-1").unwrap(),
+        "leader queue should be empty after all deliveries"
+    );
+
+    cleanup_session(&session);
+}
