@@ -7,6 +7,13 @@ set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
+# Log output to timestamped file
+LOG_DIR="data/logs"
+mkdir -p "$LOG_DIR"
+LOG_FILE="$LOG_DIR/scenario2-$(date +%Y%m%d-%H%M%S).log"
+exec > >(tee "$LOG_FILE") 2>&1
+echo "Logging to $LOG_FILE"
+
 # Clean up previous state
 echo "=== Cleanup ==="
 lsof -ti:7100 | xargs -r kill 2>/dev/null || true
