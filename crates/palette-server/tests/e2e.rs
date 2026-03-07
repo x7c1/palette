@@ -120,7 +120,6 @@ async fn hooks_stop_records_event() {
 
     assert_eq!(events.len(), 1);
     assert_eq!(events[0]["event_type"], "stop");
-
 }
 
 #[tokio::test]
@@ -158,7 +157,6 @@ async fn hooks_notification_records_event() {
 
     assert_eq!(events.len(), 1);
     assert_eq!(events[0]["event_type"], "notification");
-
 }
 
 #[tokio::test]
@@ -204,7 +202,6 @@ async fn send_keys_delivers_to_tmux_pane() {
         content.contains("hello-palette-test"),
         "pane content should contain the sent message, got: {content}"
     );
-
 }
 
 #[tokio::test]
@@ -233,7 +230,6 @@ async fn send_keys_with_direct_target() {
         content.contains("direct-test"),
         "pane should contain the message, got: {content}"
     );
-
 }
 
 #[tokio::test]
@@ -304,7 +300,6 @@ async fn task_api_create_and_list() {
         .await
         .unwrap();
     assert_eq!(tasks.len(), 1);
-
 }
 
 #[tokio::test]
@@ -362,7 +357,6 @@ async fn task_api_update_with_rules() {
         .await
         .unwrap();
     assert_eq!(resp.status(), 400);
-
 }
 
 #[tokio::test]
@@ -450,7 +444,6 @@ async fn review_api_submit_and_get() {
         .await
         .unwrap();
     assert_eq!(submissions.len(), 1);
-
 }
 
 #[tokio::test]
@@ -516,7 +509,6 @@ async fn full_cycle_work_review_approved() {
         .await
         .unwrap();
     assert_eq!(tasks[0]["status"], "done");
-
 }
 
 #[tokio::test]
@@ -569,7 +561,6 @@ async fn send_queues_when_member_is_working() {
         content.contains("queued message"),
         "pane should contain the queued message after stop, got: {content}"
     );
-
 }
 
 /// Scenario 3: Multiple members stop while leader is working.
@@ -633,9 +624,15 @@ async fn scenario3_message_queuing_to_leader() {
         .unwrap();
 
     // Manually assign tasks (simulating what auto-assign does)
-    state.db.update_task_status("W-A", palette_db::TaskStatus::Ready).unwrap();
+    state
+        .db
+        .update_task_status("W-A", palette_db::TaskStatus::Ready)
+        .unwrap();
     state.db.assign_task("W-A", "member-a").unwrap();
-    state.db.update_task_status("W-B", palette_db::TaskStatus::Ready).unwrap();
+    state
+        .db
+        .update_task_status("W-B", palette_db::TaskStatus::Ready)
+        .unwrap();
     state.db.assign_task("W-B", "member-b").unwrap();
 
     // --- Both members stop while leader is Working ---
@@ -717,5 +714,4 @@ async fn scenario3_message_queuing_to_leader() {
         !state.db.has_pending_messages("leader-1").unwrap(),
         "leader queue should be empty after all deliveries"
     );
-
 }

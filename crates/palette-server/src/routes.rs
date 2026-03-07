@@ -86,10 +86,7 @@ async fn handle_stop(
             .unwrap_or_default();
 
         for task in &member_tasks {
-            if let Err(e) = state
-                .db
-                .update_task_status(&task.id, TaskStatus::InReview)
-            {
+            if let Err(e) = state.db.update_task_status(&task.id, TaskStatus::InReview) {
                 tracing::error!(task_id = %task.id, error = %e, "failed to transition task to in_review");
                 continue;
             }
@@ -388,7 +385,11 @@ async fn handle_load_tasks(
         };
 
         for delivery in deliveries {
-            crate::spawn_readiness_watcher(delivery.target_id, delivery.tmux_target, Arc::clone(&state));
+            crate::spawn_readiness_watcher(
+                delivery.target_id,
+                delivery.tmux_target,
+                Arc::clone(&state),
+            );
         }
     }
 
@@ -476,7 +477,11 @@ async fn handle_update_task(
 
     // Spawn background readiness watchers for booting members
     for delivery in deliveries {
-        crate::spawn_readiness_watcher(delivery.target_id, delivery.tmux_target, Arc::clone(&state));
+        crate::spawn_readiness_watcher(
+            delivery.target_id,
+            delivery.tmux_target,
+            Arc::clone(&state),
+        );
     }
 
     Ok(Json(task))
@@ -545,10 +550,7 @@ async fn handle_submit_review(
                 let feedback = format!(
                     "[review-feedback] task={} verdict=changes_requested summary: {}",
                     work.id,
-                    submission
-                        .summary
-                        .as_deref()
-                        .unwrap_or("(no summary)")
+                    submission.summary.as_deref().unwrap_or("(no summary)")
                 );
                 let _ = state.db.enqueue_message(assignee, &feedback);
                 tracing::info!(
@@ -592,7 +594,11 @@ async fn handle_submit_review(
 
     // Spawn background readiness watchers for booting members
     for delivery in deliveries {
-        crate::spawn_readiness_watcher(delivery.target_id, delivery.tmux_target, Arc::clone(&state));
+        crate::spawn_readiness_watcher(
+            delivery.target_id,
+            delivery.tmux_target,
+            Arc::clone(&state),
+        );
     }
 
     Ok((StatusCode::CREATED, Json(submission)))

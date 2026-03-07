@@ -56,15 +56,18 @@ impl TaskFile {
         self.tasks
             .into_iter()
             .map(|entry| {
-                let repositories = entry.repositories.map(|repos| {
-                    repos
-                        .into_iter()
-                        .map(|r| Repository {
-                            name: r.name,
-                            branch: r.branch,
-                        })
-                        .collect()
-                }).or_else(|| default_repos.clone());
+                let repositories = entry
+                    .repositories
+                    .map(|repos| {
+                        repos
+                            .into_iter()
+                            .map(|r| Repository {
+                                name: r.name,
+                                branch: r.branch,
+                            })
+                            .collect()
+                    })
+                    .or_else(|| default_repos.clone());
 
                 CreateTaskRequest {
                     id: Some(entry.id),

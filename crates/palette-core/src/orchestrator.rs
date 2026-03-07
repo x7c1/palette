@@ -164,7 +164,9 @@ fn spawn_member<T: TmuxManager>(
         .leaders
         .first()
         .map(|l| l.tmux_target.as_str())
-        .ok_or_else(|| anyhow::anyhow!("no leader found; cannot spawn member without a leader pane"))?;
+        .ok_or_else(|| {
+            anyhow::anyhow!("no leader found; cannot spawn member without a leader pane")
+        })?;
     let tmux_target = tmux.create_pane(leader_target)?;
 
     let container_id =

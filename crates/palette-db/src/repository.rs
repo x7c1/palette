@@ -689,7 +689,8 @@ mod tests {
             priority,
             repositories: None,
             depends_on: deps,
-        }).unwrap();
+        })
+        .unwrap();
     }
 
     #[test]
