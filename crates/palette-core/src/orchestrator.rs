@@ -1,7 +1,7 @@
 use crate::config::DockerConfig;
 use crate::docker::DockerManager;
 use crate::state::{MemberState, MemberStatus, PersistentState};
-use palette_db::{Database, RuleEffect, Task};
+use palette_db::{Database, RuleEffect, RuleEngine, Task};
 use palette_tmux::TmuxManager;
 
 /// Processes rule engine effects: auto-assign tasks, spawn/destroy members.
@@ -16,9 +16,10 @@ pub fn process_effects<T: TmuxManager>(
     state_path: &std::path::Path,
 ) -> anyhow::Result<Vec<PendingDelivery>> {
     let mut deliveries = Vec::new();
+    let mut pending: Vec<RuleEffect> = effects.to_vec();
 
-    for effect in effects {
-        match effect {
+    while let Some(effect) = pending.pop() {
+        match &effect {
             RuleEffect::AutoAssign { task_id } => {
                 // Only assign if the task is truly assignable (ready + all deps done)
                 let assignable = db.find_assignable_tasks()?;
@@ -70,6 +71,18 @@ pub fn process_effects<T: TmuxManager>(
                     infra.touch();
                     infra.save(state_path)?;
                 }
+            }
+            RuleEffect::StatusChanged {
+                task_id,
+                new_status,
+            } => {
+                // Chain: re-evaluate rules for the new status
+                let rules = RuleEngine::new(0); // max_review_rounds unused for status changes
+                let chained = rules.on_status_change(db, task_id, *new_status)?;
+                for e in &chained {
+                    tracing::info!(?e, "chained rule engine effect");
+                }
+                pending.extend(chained);
             }
             _ => {}
         }
