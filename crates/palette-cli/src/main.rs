@@ -57,6 +57,20 @@ async fn main() -> anyhow::Result<()> {
 
     palette_server::spawn_delivery_loop(Arc::clone(&state));
 
+    // Spawn readiness watchers for leaders that are still Booting
+    {
+        let infra = state.infra.lock().await;
+        for leader in &infra.leaders {
+            if leader.status == palette_core::state::MemberStatus::Booting {
+                palette_server::spawn_readiness_watcher(
+                    leader.id.clone(),
+                    leader.tmux_target.clone(),
+                    Arc::clone(&state),
+                );
+            }
+        }
+    }
+
     let app = palette_server::create_router(state);
     let addr = SocketAddr::from(([0, 0, 0, 0], config.port));
     tracing::info!(%addr, "starting server");
@@ -108,7 +122,7 @@ fn spawn_agent(
         leader_id: spec.leader_id.to_string(),
         container_id,
         tmux_target: tmux_target.to_string(),
-        status: MemberStatus::Idle,
+        status: MemberStatus::Booting,
         session_id: None,
     })
 }

@@ -49,13 +49,6 @@ echo "--- containers ---"
 docker ps --filter label=palette.managed=true --format '{{.Names}} {{.Status}}' 2>&1
 
 echo ""
-echo "=== Waiting for Claude Code to initialize (10s) ==="
-sleep 10
-
-echo "--- leader pane ---"
-tmux capture-pane -t "$LEADER_PANE" -p 2>&1 | grep -v '^$' | tail -5
-
-echo ""
 echo "=== Loading tasks from YAML (W-B depends on W-A) ==="
 LOAD_RESP=$(curl -s -X POST http://127.0.0.1:7100/tasks/load \
   -H "Content-Type: text/plain" \

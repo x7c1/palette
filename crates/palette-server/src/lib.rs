@@ -33,6 +33,62 @@ pub fn create_router(state: Arc<AppState>) -> Router {
     routes::create_router(state)
 }
 
+/// Spawn a background task that polls a tmux pane for Claude Code readiness (`❯` prompt),
+/// then transitions the target from Booting to Idle and delivers queued messages.
+pub fn spawn_readiness_watcher(target_id: String, tmux_target: String, state: Arc<AppState>) {
+    use palette_core::state::MemberStatus;
+
+    tokio::spawn(async move {
+        // Poll every 3 seconds for up to 120 seconds
+        for _ in 0..40 {
+            tokio::time::sleep(std::time::Duration::from_secs(3)).await;
+
+            let pane_content = match state.tmux.capture_pane(&tmux_target) {
+                Ok(content) => content,
+                Err(e) => {
+                    tracing::warn!(target_id, error = %e, "failed to capture pane");
+                    continue;
+                }
+            };
+
+            if !pane_content.contains('❯') {
+                continue;
+            }
+
+            tracing::info!(target_id, "Claude Code is ready, delivering queued message");
+
+            {
+                let mut infra = state.infra.lock().await;
+                let is_booting = infra
+                    .find_member(&target_id)
+                    .or_else(|| infra.find_leader(&target_id))
+                    .is_some_and(|m| m.status == MemberStatus::Booting);
+                if is_booting {
+                    if let Some(m) = infra.find_member_mut(&target_id) {
+                        m.status = MemberStatus::Idle;
+                    } else if let Some(m) = infra.find_leader_mut(&target_id) {
+                        m.status = MemberStatus::Idle;
+                    }
+                    infra.touch();
+                }
+                let _ = orchestrator::deliver_queued_messages(
+                    &target_id,
+                    &state.db,
+                    &mut infra,
+                    &state.tmux,
+                );
+                let state_path = std::path::PathBuf::from(&state.state_path);
+                if let Err(e) = infra.save(&state_path) {
+                    tracing::error!(error = %e, "failed to save state after delivery");
+                }
+            }
+            return;
+        }
+
+        tracing::error!(target_id, "timed out waiting for Claude Code readiness");
+    });
+}
+
 /// Spawn a background loop that delivers queued messages to Idle workers.
 pub fn spawn_delivery_loop(state: Arc<AppState>) {
     tokio::spawn(async move {

@@ -388,7 +388,7 @@ async fn handle_load_tasks(
         };
 
         for delivery in deliveries {
-            spawn_readiness_watcher(delivery, Arc::clone(&state));
+            crate::spawn_readiness_watcher(delivery.target_id, delivery.tmux_target, Arc::clone(&state));
         }
     }
 
@@ -476,7 +476,7 @@ async fn handle_update_task(
 
     // Spawn background readiness watchers for booting members
     for delivery in deliveries {
-        spawn_readiness_watcher(delivery, Arc::clone(&state));
+        crate::spawn_readiness_watcher(delivery.target_id, delivery.tmux_target, Arc::clone(&state));
     }
 
     Ok(Json(task))
@@ -592,7 +592,7 @@ async fn handle_submit_review(
 
     // Spawn background readiness watchers for booting members
     for delivery in deliveries {
-        spawn_readiness_watcher(delivery, Arc::clone(&state));
+        crate::spawn_readiness_watcher(delivery.target_id, delivery.tmux_target, Arc::clone(&state));
     }
 
     Ok((StatusCode::CREATED, Json(submission)))
@@ -611,60 +611,6 @@ async fn handle_get_submissions(
 
 /// Spawn a background task that polls a member's tmux pane for Claude Code readiness,
 /// then delivers the queued message.
-fn spawn_readiness_watcher(delivery: orchestrator::PendingDelivery, state: Arc<AppState>) {
-    use palette_core::state::MemberStatus;
-
-    tokio::spawn(async move {
-        let target_id = &delivery.target_id;
-        let tmux_target = &delivery.tmux_target;
-
-        // Poll every 3 seconds for up to 120 seconds
-        for _ in 0..40 {
-            tokio::time::sleep(std::time::Duration::from_secs(3)).await;
-
-            // Check if the tmux pane shows the Claude Code input prompt
-            let pane_content = match state.tmux.capture_pane(tmux_target) {
-                Ok(content) => content,
-                Err(e) => {
-                    tracing::warn!(target_id, error = %e, "failed to capture pane");
-                    continue;
-                }
-            };
-
-            // Claude Code shows "❯" when ready for input
-            if !pane_content.contains('❯') {
-                continue;
-            }
-
-            tracing::info!(target_id, "Claude Code is ready, delivering queued message");
-
-            // Transition from Booting to Idle, then deliver
-            {
-                let mut infra = state.infra.lock().await;
-                if let Some(member) = infra.find_member_mut(target_id)
-                    && member.status == MemberStatus::Booting
-                {
-                    member.status = MemberStatus::Idle;
-                    infra.touch();
-                }
-                let _ = orchestrator::deliver_queued_messages(
-                    target_id,
-                    &state.db,
-                    &mut infra,
-                    &state.tmux,
-                );
-                let state_path = std::path::PathBuf::from(&state.state_path);
-                if let Err(e) = infra.save(&state_path) {
-                    tracing::error!(error = %e, "failed to save state after delivery");
-                }
-            }
-            return;
-        }
-
-        tracing::error!(target_id, "timed out waiting for Claude Code readiness");
-    });
-}
-
 fn send_tmux_keys(
     tmux: &TmuxManagerImpl,
     target: &str,
