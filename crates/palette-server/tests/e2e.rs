@@ -13,6 +13,13 @@ fn test_session_name(test_name: &str) -> String {
     format!("palette-test-{}-{}", test_name, std::process::id())
 }
 
+/// Create a session name and a guard that cleans up the tmux session on drop.
+fn test_session_name_with_guard(test_name: &str) -> (String, SessionGuard) {
+    let name = test_session_name(test_name);
+    let guard = SessionGuard::new(name.clone());
+    (name, guard)
+}
+
 fn test_docker_config() -> DockerConfig {
     DockerConfig {
         palette_url: "http://127.0.0.1:0".to_string(),
@@ -53,11 +60,21 @@ async fn spawn_server(tmux: TmuxManagerImpl, session_name: &str) -> (String, Arc
     (format!("http://{addr}"), state)
 }
 
-/// Clean up a tmux session
-fn cleanup_session(session: &str) {
-    let _ = Command::new("tmux")
-        .args(["kill-session", "-t", session])
-        .output();
+/// RAII guard that kills the tmux session on drop (including panic).
+struct SessionGuard(String);
+
+impl SessionGuard {
+    fn new(session: String) -> Self {
+        Self(session)
+    }
+}
+
+impl Drop for SessionGuard {
+    fn drop(&mut self) {
+        let _ = Command::new("tmux")
+            .args(["kill-session", "-t", &self.0])
+            .output();
+    }
 }
 
 /// Capture the content of a tmux pane
@@ -71,7 +88,7 @@ fn capture_pane(target: &str) -> String {
 
 #[tokio::test]
 async fn hooks_stop_records_event() {
-    let session = test_session_name("stop");
+    let (session, _guard) = test_session_name_with_guard("stop");
     let tmux = TmuxManagerImpl::new(session.clone());
     tmux.create_session(&session).unwrap();
 
@@ -104,12 +121,11 @@ async fn hooks_stop_records_event() {
     assert_eq!(events.len(), 1);
     assert_eq!(events[0]["event_type"], "stop");
 
-    cleanup_session(&session);
 }
 
 #[tokio::test]
 async fn hooks_notification_records_event() {
-    let session = test_session_name("notif");
+    let (session, _guard) = test_session_name_with_guard("notif");
     let tmux = TmuxManagerImpl::new(session.clone());
     tmux.create_session(&session).unwrap();
 
@@ -143,12 +159,11 @@ async fn hooks_notification_records_event() {
     assert_eq!(events.len(), 1);
     assert_eq!(events[0]["event_type"], "notification");
 
-    cleanup_session(&session);
 }
 
 #[tokio::test]
 async fn send_keys_delivers_to_tmux_pane() {
-    let session = test_session_name("send");
+    let (session, _guard) = test_session_name_with_guard("send");
     let tmux = TmuxManagerImpl::new(session.clone());
     tmux.create_session(&session).unwrap();
 
@@ -190,12 +205,11 @@ async fn send_keys_delivers_to_tmux_pane() {
         "pane content should contain the sent message, got: {content}"
     );
 
-    cleanup_session(&session);
 }
 
 #[tokio::test]
 async fn send_keys_with_direct_target() {
-    let session = test_session_name("direct");
+    let (session, _guard) = test_session_name_with_guard("direct");
     let tmux = TmuxManagerImpl::new(session.clone());
     tmux.create_session(&session).unwrap();
 
@@ -220,12 +234,11 @@ async fn send_keys_with_direct_target() {
         "pane should contain the message, got: {content}"
     );
 
-    cleanup_session(&session);
 }
 
 #[tokio::test]
 async fn task_api_create_and_list() {
-    let session = test_session_name("taskapi");
+    let (session, _guard) = test_session_name_with_guard("taskapi");
     let tmux = TmuxManagerImpl::new(session.clone());
     tmux.create_session(&session).unwrap();
 
@@ -292,12 +305,11 @@ async fn task_api_create_and_list() {
         .unwrap();
     assert_eq!(tasks.len(), 1);
 
-    cleanup_session(&session);
 }
 
 #[tokio::test]
 async fn task_api_update_with_rules() {
-    let session = test_session_name("taskrules");
+    let (session, _guard) = test_session_name_with_guard("taskrules");
     let tmux = TmuxManagerImpl::new(session.clone());
     tmux.create_session(&session).unwrap();
 
@@ -351,12 +363,11 @@ async fn task_api_update_with_rules() {
         .unwrap();
     assert_eq!(resp.status(), 400);
 
-    cleanup_session(&session);
 }
 
 #[tokio::test]
 async fn review_api_submit_and_get() {
-    let session = test_session_name("review");
+    let (session, _guard) = test_session_name_with_guard("review");
     let tmux = TmuxManagerImpl::new(session.clone());
     tmux.create_session(&session).unwrap();
 
@@ -440,12 +451,11 @@ async fn review_api_submit_and_get() {
         .unwrap();
     assert_eq!(submissions.len(), 1);
 
-    cleanup_session(&session);
 }
 
 #[tokio::test]
 async fn full_cycle_work_review_approved() {
-    let session = test_session_name("cycle");
+    let (session, _guard) = test_session_name_with_guard("cycle");
     let tmux = TmuxManagerImpl::new(session.clone());
     tmux.create_session(&session).unwrap();
 
@@ -507,12 +517,11 @@ async fn full_cycle_work_review_approved() {
         .unwrap();
     assert_eq!(tasks[0]["status"], "done");
 
-    cleanup_session(&session);
 }
 
 #[tokio::test]
 async fn send_queues_when_member_is_working() {
-    let session = test_session_name("queue");
+    let (session, _guard) = test_session_name_with_guard("queue");
     let tmux = TmuxManagerImpl::new(session.clone());
     tmux.create_session(&session).unwrap();
 
@@ -561,14 +570,13 @@ async fn send_queues_when_member_is_working() {
         "pane should contain the queued message after stop, got: {content}"
     );
 
-    cleanup_session(&session);
 }
 
 /// Scenario 3: Multiple members stop while leader is working.
 /// Event notifications are queued and delivered one at a time on each leader stop.
 #[tokio::test]
 async fn scenario3_message_queuing_to_leader() {
-    let session = test_session_name("scenario3");
+    let (session, _guard) = test_session_name_with_guard("scenario3");
     let tmux = TmuxManagerImpl::new(session.clone());
     tmux.create_session(&session).unwrap();
 
@@ -710,5 +718,4 @@ async fn scenario3_message_queuing_to_leader() {
         "leader queue should be empty after all deliveries"
     );
 
-    cleanup_session(&session);
 }
