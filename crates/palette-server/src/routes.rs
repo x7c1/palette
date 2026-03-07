@@ -534,6 +534,32 @@ async fn handle_submit_review(
         tracing::info!(?effect, "review rule engine effect");
     }
 
+    // If changes_requested, enqueue feedback to the assignee member
+    if submission.verdict == Verdict::ChangesRequested {
+        let work_tasks = state
+            .db
+            .find_works_for_review(&review_task_id)
+            .unwrap_or_default();
+        for work in &work_tasks {
+            if let Some(ref assignee) = work.assignee {
+                let feedback = format!(
+                    "[review-feedback] task={} verdict=changes_requested summary: {}",
+                    work.id,
+                    submission
+                        .summary
+                        .as_deref()
+                        .unwrap_or("(no summary)")
+                );
+                let _ = state.db.enqueue_message(assignee, &feedback);
+                tracing::info!(
+                    task_id = %work.id,
+                    assignee = assignee,
+                    "enqueued review feedback to member"
+                );
+            }
+        }
+    }
+
     // Process orchestrator effects
     let deliveries = {
         let mut infra = state.infra.lock().await;
@@ -560,6 +586,9 @@ async fn handle_submit_review(
 
         deliveries
     };
+
+    // Notify delivery loop (member may be Idle and have pending feedback)
+    state.delivery_notify.notify_one();
 
     // Spawn background readiness watchers for booting members
     for delivery in deliveries {
