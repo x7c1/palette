@@ -52,7 +52,10 @@ async fn main() -> anyhow::Result<()> {
         infra: tokio::sync::Mutex::new(infra),
         state_path: config.state_path.clone(),
         event_log: tokio::sync::Mutex::new(Vec::new()),
+        delivery_notify: tokio::sync::Notify::new(),
     });
+
+    palette_server::spawn_delivery_loop(Arc::clone(&state));
 
     let app = palette_server::create_router(state);
     let addr = SocketAddr::from(([0, 0, 0, 0], config.port));

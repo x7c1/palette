@@ -41,7 +41,9 @@ async fn spawn_server(tmux: TmuxManagerImpl, session_name: &str) -> (String, Arc
         infra: tokio::sync::Mutex::new(infra),
         state_path: String::new(),
         event_log: tokio::sync::Mutex::new(Vec::new()),
+        delivery_notify: tokio::sync::Notify::new(),
     });
+    palette_server::spawn_delivery_loop(Arc::clone(&state));
     let app = create_router(state.clone());
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let addr = listener.local_addr().unwrap();

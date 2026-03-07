@@ -82,16 +82,15 @@ async fn handle_stop(
         }
     }
 
-    // Deliver any queued messages to the now-idle member and leader
+    // Deliver any queued messages to the now-idle member (own queue only)
     {
         let mut infra = state.infra.lock().await;
         let _ =
             orchestrator::deliver_queued_messages(member_id, &state.db, &mut infra, &state.tmux);
-        if let Some(ref leader_id) = leader_id {
-            let _ =
-                orchestrator::deliver_queued_messages(leader_id, &state.db, &mut infra, &state.tmux);
-        }
     }
+
+    // Notify background delivery loop (leader may have pending messages)
+    state.delivery_notify.notify_one();
 
     StatusCode::OK
 }
@@ -139,12 +138,8 @@ async fn handle_notification(
         }
     }
 
-    // Deliver queued messages to leader if idle
-    if let Some(ref leader_id) = leader_id {
-        let mut infra = state.infra.lock().await;
-        let _ =
-            orchestrator::deliver_queued_messages(leader_id, &state.db, &mut infra, &state.tmux);
-    }
+    // Notify background delivery loop (leader may have pending messages)
+    state.delivery_notify.notify_one();
 
     StatusCode::OK
 }
