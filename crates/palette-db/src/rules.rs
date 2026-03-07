@@ -24,18 +24,42 @@ impl RuleEngine {
 
         let mut effects = Vec::new();
 
-        // work -> in_review: enable related reviews
-        if let (TaskType::Work, TaskStatus::InReview) = (task.task_type, new_status) {
-            let reviews = db.find_reviews_for_work(task_id)?;
-            for review in reviews {
-                if review.status == TaskStatus::Todo || review.status == TaskStatus::Blocked {
-                    db.update_task_status(&review.id, TaskStatus::Todo)?;
-                    effects.push(RuleEffect::StatusChanged {
-                        task_id: review.id,
-                        new_status: TaskStatus::Todo,
+        match (task.task_type, new_status) {
+            // work -> ready: trigger auto-assign evaluation
+            (TaskType::Work, TaskStatus::Ready) => {
+                effects.push(RuleEffect::AutoAssign {
+                    task_id: task_id.to_string(),
+                });
+            }
+            // work -> in_review: enable related reviews
+            (TaskType::Work, TaskStatus::InReview) => {
+                let reviews = db.find_reviews_for_work(task_id)?;
+                for review in reviews {
+                    if review.status == TaskStatus::Todo || review.status == TaskStatus::Blocked {
+                        db.update_task_status(&review.id, TaskStatus::Todo)?;
+                        effects.push(RuleEffect::StatusChanged {
+                            task_id: review.id,
+                            new_status: TaskStatus::Todo,
+                        });
+                    }
+                }
+            }
+            // work -> done: destroy member container, trigger auto-assign for waiting tasks
+            (TaskType::Work, TaskStatus::Done) => {
+                if let Some(ref assignee) = task.assignee {
+                    effects.push(RuleEffect::DestroyMember {
+                        member_id: assignee.clone(),
+                    });
+                }
+                // Check if any blocked tasks can now proceed
+                let assignable = db.find_assignable_tasks()?;
+                for t in assignable {
+                    effects.push(RuleEffect::AutoAssign {
+                        task_id: t.id.clone(),
                     });
                 }
             }
+            _ => {}
         }
 
         Ok(effects)
@@ -107,7 +131,8 @@ impl RuleEngine {
     ) -> anyhow::Result<()> {
         let valid = match (task_type, from, to) {
             // Work transitions
-            (TaskType::Work, TaskStatus::Todo, TaskStatus::InProgress) => true,
+            (TaskType::Work, TaskStatus::Draft, TaskStatus::Ready) => true,
+            (TaskType::Work, TaskStatus::Ready, TaskStatus::InProgress) => true,
             (TaskType::Work, TaskStatus::InProgress, TaskStatus::InReview) => true,
             (TaskType::Work, TaskStatus::InReview, TaskStatus::Done) => true,
             (TaskType::Work, TaskStatus::InReview, TaskStatus::InProgress) => true, // changes_requested
@@ -155,7 +180,6 @@ mod tests {
             assignee: Some("member-a".to_string()),
             priority: None,
             repositories: None,
-            branch: None,
             depends_on: vec![],
         })
         .unwrap();
@@ -168,7 +192,6 @@ mod tests {
             assignee: None,
             priority: None,
             repositories: None,
-            branch: None,
             depends_on: vec!["W-001".to_string()],
         })
         .unwrap();
@@ -179,6 +202,7 @@ mod tests {
         let (db, engine) = setup();
         create_work_review_pair(&db);
 
+        db.update_task_status("W-001", TaskStatus::Ready).unwrap();
         db.update_task_status("W-001", TaskStatus::InProgress)
             .unwrap();
         db.update_task_status("W-001", TaskStatus::InReview)
@@ -203,6 +227,7 @@ mod tests {
         let (db, engine) = setup();
         create_work_review_pair(&db);
 
+        db.update_task_status("W-001", TaskStatus::Ready).unwrap();
         db.update_task_status("W-001", TaskStatus::InProgress)
             .unwrap();
         db.update_task_status("W-001", TaskStatus::InReview)
@@ -241,6 +266,7 @@ mod tests {
         let (db, engine) = setup();
         create_work_review_pair(&db);
 
+        db.update_task_status("W-001", TaskStatus::Ready).unwrap();
         db.update_task_status("W-001", TaskStatus::InProgress)
             .unwrap();
         db.update_task_status("W-001", TaskStatus::InReview)
@@ -277,6 +303,7 @@ mod tests {
         let engine = RuleEngine::new(2); // Low threshold for testing
         create_work_review_pair(&db);
 
+        db.update_task_status("W-001", TaskStatus::Ready).unwrap();
         db.update_task_status("W-001", TaskStatus::InProgress)
             .unwrap();
         db.update_task_status("W-001", TaskStatus::InReview)
@@ -321,9 +348,13 @@ mod tests {
     #[test]
     fn valid_transitions() {
         assert!(
+            RuleEngine::validate_transition(TaskType::Work, TaskStatus::Draft, TaskStatus::Ready)
+                .is_ok()
+        );
+        assert!(
             RuleEngine::validate_transition(
                 TaskType::Work,
-                TaskStatus::Todo,
+                TaskStatus::Ready,
                 TaskStatus::InProgress
             )
             .is_ok()
@@ -353,11 +384,19 @@ mod tests {
     #[test]
     fn invalid_transitions() {
         assert!(
-            RuleEngine::validate_transition(TaskType::Work, TaskStatus::Todo, TaskStatus::Done)
+            RuleEngine::validate_transition(TaskType::Work, TaskStatus::Draft, TaskStatus::Done)
                 .is_err()
         );
         assert!(
-            RuleEngine::validate_transition(TaskType::Work, TaskStatus::Done, TaskStatus::Todo)
+            RuleEngine::validate_transition(
+                TaskType::Work,
+                TaskStatus::Draft,
+                TaskStatus::InProgress
+            )
+            .is_err()
+        );
+        assert!(
+            RuleEngine::validate_transition(TaskType::Work, TaskStatus::Done, TaskStatus::Draft)
                 .is_err()
         );
         assert!(

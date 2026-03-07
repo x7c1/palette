@@ -10,11 +10,11 @@ CREATE TABLE IF NOT EXISTS tasks (
     status TEXT NOT NULL,
     priority TEXT CHECK(priority IN ('high', 'medium', 'low') OR priority IS NULL),
     repositories TEXT,
-    branch TEXT,
     pr_url TEXT,
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL,
-    notes TEXT
+    notes TEXT,
+    assigned_at TEXT
 );
 
 CREATE TABLE IF NOT EXISTS dependencies (
@@ -44,14 +44,28 @@ CREATE TABLE IF NOT EXISTS review_comments (
     FOREIGN KEY (submission_id) REFERENCES review_submissions(id)
 );
 
+CREATE TABLE IF NOT EXISTS message_queue (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    target_id TEXT NOT NULL,
+    message TEXT NOT NULL,
+    created_at TEXT NOT NULL
+);
+
 CREATE INDEX IF NOT EXISTS idx_tasks_type_status ON tasks(type, status);
 CREATE INDEX IF NOT EXISTS idx_review_submissions_task ON review_submissions(review_task_id);
 CREATE INDEX IF NOT EXISTS idx_review_comments_submission ON review_comments(submission_id);
+CREATE INDEX IF NOT EXISTS idx_message_queue_target ON message_queue(target_id, id);
 "#;
 
 pub fn initialize(conn: &Connection) -> rusqlite::Result<()> {
     conn.execute_batch("PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON;")?;
     conn.execute_batch(SCHEMA)?;
+    migrate(conn)?;
+    Ok(())
+}
+
+/// Apply migrations for existing databases that lack new columns/tables.
+fn migrate(_conn: &Connection) -> rusqlite::Result<()> {
     Ok(())
 }
 
@@ -76,6 +90,7 @@ mod tests {
         assert!(tables.contains(&"dependencies".to_string()));
         assert!(tables.contains(&"review_submissions".to_string()));
         assert!(tables.contains(&"review_comments".to_string()));
+        assert!(tables.contains(&"message_queue".to_string()));
     }
 
     #[test]

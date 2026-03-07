@@ -10,3 +10,4 @@ max_review_rounds = 5
 
 [docker]
 palette_url = "http://127.0.0.1:7100"
+max_members = 3

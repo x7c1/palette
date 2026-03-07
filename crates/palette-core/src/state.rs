@@ -5,17 +5,11 @@ use std::path::Path;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum MemberStatus {
+    Booting,
     Working,
     Idle,
     WaitingPermission,
     Crashed,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Message {
-    pub id: String,
-    pub content: String,
-    pub created_at: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -27,7 +21,6 @@ pub struct MemberState {
     pub tmux_target: String,
     pub status: MemberStatus,
     pub session_id: Option<String>,
-    pub message_queue: Vec<Message>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -103,9 +96,38 @@ impl PersistentState {
             .find(|m| m.container_id == container_id)
     }
 
+    /// Remove a member by ID, returning the removed state.
+    pub fn remove_member(&mut self, id: &str) -> Option<MemberState> {
+        if let Some(pos) = self.members.iter().position(|m| m.id == id) {
+            Some(self.members.remove(pos))
+        } else {
+            None
+        }
+    }
+
+    /// Generate the next member ID (member-a, member-b, ..., member-z, member-aa, ...).
+    pub fn next_member_id(&self) -> String {
+        let existing_count = self.members.len();
+        let suffix = member_id_suffix(existing_count);
+        format!("member-{suffix}")
+    }
+
     pub fn touch(&mut self) {
         self.updated_at = chrono::Utc::now().to_rfc3339();
     }
+}
+
+fn member_id_suffix(n: usize) -> String {
+    let mut n = n;
+    let mut result = String::new();
+    loop {
+        result.insert(0, (b'a' + (n % 26) as u8) as char);
+        if n < 26 {
+            break;
+        }
+        n = n / 26 - 1;
+    }
+    result
 }
 
 #[cfg(test)]
@@ -126,7 +148,6 @@ mod tests {
             tmux_target: "test-session:member-a".to_string(),
             status: MemberStatus::Idle,
             session_id: None,
-            message_queue: Vec::new(),
         });
 
         state.save(&path).unwrap();
@@ -167,7 +188,6 @@ mod tests {
             tmux_target: "test:member-a".to_string(),
             status: MemberStatus::Idle,
             session_id: None,
-            message_queue: Vec::new(),
         });
 
         assert!(state.find_member("member-a").is_some());

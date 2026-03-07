@@ -26,7 +26,7 @@ pub struct RulesConfig {
     pub max_review_rounds: u32,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 pub struct DockerConfig {
     pub palette_url: String,
     #[serde(default = "default_leader_image")]
@@ -39,6 +39,12 @@ pub struct DockerConfig {
     pub leader_prompt: String,
     #[serde(default = "default_member_prompt")]
     pub member_prompt: String,
+    #[serde(default = "default_max_members")]
+    pub max_members: usize,
+}
+
+fn default_max_members() -> usize {
+    3
 }
 
 fn default_db_path() -> String {
