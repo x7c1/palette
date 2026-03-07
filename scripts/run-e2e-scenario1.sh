@@ -66,34 +66,77 @@ echo ""
 echo "=== Monitoring agents (max 8 minutes) ==="
 echo "    Watch live: tmux attach -t palette"
 echo ""
+
+STALL_THRESHOLD=12  # 12 iterations x 5s = 60s without progress
+STALL_COUNT=0
+PREV_SNAPSHOT=""
+
 for i in $(seq 1 96); do
     sleep 5
-    echo "--- ${i}x5s ---"
 
-    echo "  [leader]"
-    tmux capture-pane -t "$LEADER_PANE" -p 2>&1 | grep -v '^$' | tail -3
+    # Collect current state snapshot for stall detection
+    TASKS_JSON=$(curl -s http://127.0.0.1:7100/tasks 2>/dev/null || echo "[]")
+    STATE_JSON=$(cat data/state.json 2>/dev/null || echo "{}")
+    TASK_SNAPSHOT=$(echo "$TASKS_JSON" | jq -r '[.[] | "\(.id):\(.status):\(.assignee // "")"] | sort | join(",")' 2>/dev/null || echo "")
+    MEMBER_SNAPSHOT=$(echo "$STATE_JSON" | jq -r '[(.leaders + .members)[] | "\(.id):\(.status)"] | sort | join(",")' 2>/dev/null || echo "")
+    CURRENT_SNAPSHOT="${TASK_SNAPSHOT}|${MEMBER_SNAPSHOT}"
+
+    if [ "$CURRENT_SNAPSHOT" = "$PREV_SNAPSHOT" ]; then
+        STALL_COUNT=$((STALL_COUNT + 1))
+    else
+        STALL_COUNT=0
+        PREV_SNAPSHOT="$CURRENT_SNAPSHOT"
+    fi
+
+    ELAPSED=$((i * 5))
+    echo "--- ${ELAPSED}s (stall: ${STALL_COUNT}/${STALL_THRESHOLD}) ---"
+
+    # Show task statuses
+    echo "  [tasks]"
+    echo "$TASKS_JSON" | jq -r '.[] | "    \(.id) \(.status) \(.assignee // "")"' 2>/dev/null
+
+    # Show agent statuses
+    echo "  [agents]"
+    echo "$STATE_JSON" | jq -r '(.leaders + .members)[] | "    \(.id) \(.status)"' 2>/dev/null
+
+    echo "  [leader pane]"
+    tmux capture-pane -t "$LEADER_PANE" -p 2>&1 | grep -v '^$' | tail -2
 
     # Show dynamically spawned member panes
-    MEMBER_COUNT=$(jq -r '.members | length' data/state.json 2>/dev/null || echo 0)
+    MEMBER_COUNT=$(echo "$STATE_JSON" | jq -r '.members | length' 2>/dev/null || echo 0)
     if [ "$MEMBER_COUNT" -gt 0 ]; then
         for j in $(seq 0 $((MEMBER_COUNT - 1))); do
-            MID=$(jq -r ".members[$j].id" data/state.json 2>/dev/null)
-            MPANE=$(jq -r ".members[$j].tmux_target" data/state.json 2>/dev/null)
-            MSTATUS=$(jq -r ".members[$j].status" data/state.json 2>/dev/null)
-            echo "  [$MID ($MSTATUS)]"
-            tmux capture-pane -t "$MPANE" -p 2>&1 | grep -v '^$' | tail -3
+            MID=$(echo "$STATE_JSON" | jq -r ".members[$j].id" 2>/dev/null)
+            MPANE=$(echo "$STATE_JSON" | jq -r ".members[$j].tmux_target" 2>/dev/null)
+            echo "  [$MID pane]"
+            tmux capture-pane -t "$MPANE" -p 2>&1 | grep -v '^$' | tail -2
         done
     fi
 
-    echo "  [containers]"
-    docker ps --filter label=palette.managed=true --format '  {{.Names}} ({{.Status}})' 2>&1
-
-    # Check if both work tasks reached "done"
-    DONE_COUNT=$(curl -s http://127.0.0.1:7100/tasks 2>/dev/null | jq '[.[] | select(.type == "work" and .status == "done")] | length' 2>/dev/null || echo 0)
+    # Check completion
+    DONE_COUNT=$(echo "$TASKS_JSON" | jq '[.[] | select(.type == "work" and .status == "done")] | length' 2>/dev/null || echo 0)
     echo "  [work done: $DONE_COUNT/2]"
     if [ "$DONE_COUNT" = "2" ]; then
         echo ""
         echo "=== Both work tasks done! ==="
+        break
+    fi
+
+    # Stall detection
+    if [ "$STALL_COUNT" -ge "$STALL_THRESHOLD" ]; then
+        echo ""
+        echo "=== STALL DETECTED: no state change for ${STALL_THRESHOLD}x5s ==="
+        echo "  Snapshot: $CURRENT_SNAPSHOT"
+
+        IDLE_AGENTS=$(echo "$STATE_JSON" | jq -r '[(.leaders + .members)[] | select(.status == "Idle")] | length' 2>/dev/null || echo 0)
+        READY_TASKS=$(echo "$TASKS_JSON" | jq '[.[] | select(.status == "ready")] | length' 2>/dev/null || echo 0)
+        echo "  Idle agents: $IDLE_AGENTS, Ready tasks: $READY_TASKS"
+
+        if [ "$IDLE_AGENTS" -gt 0 ] && [ "$READY_TASKS" -gt 0 ]; then
+            echo "  HINT: Idle agents exist but ready tasks are not being assigned"
+        fi
+        echo "  Aborting. Inspect with: tmux attach -t palette"
+        STALL_ABORT=1
         break
     fi
     echo ""
@@ -130,6 +173,7 @@ echo "Task B assigned_at: $WB_ASSIGNED"
 echo "Parallel check: A assigned before B done, B assigned before A done"
 
 RESULT=PASSED
+if [ "${STALL_ABORT:-0}" = "1" ]; then RESULT="FAILED (stall)"; fi
 if [ "$WA_STATUS" != "done" ]; then RESULT=FAILED; fi
 if [ "$WB_STATUS" != "done" ]; then RESULT=FAILED; fi
 
