@@ -59,8 +59,8 @@ impl Database {
         };
 
         conn.execute(
-            "INSERT INTO tasks (id, type, title, description, assignee, status, priority, repositories, branch, pr_url, created_at, updated_at, notes, assigned_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, NULL, ?10, ?11, NULL, NULL)",
+            "INSERT INTO tasks (id, type, title, description, assignee, status, priority, repositories, pr_url, created_at, updated_at, notes, assigned_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, NULL, ?9, ?10, NULL, NULL)",
             params![
                 id,
                 req.task_type.as_str(),
@@ -70,7 +70,6 @@ impl Database {
                 initial_status.as_str(),
                 req.priority.map(|p| p.as_str()),
                 repos_json,
-                req.branch,
                 now,
                 now,
             ],
@@ -93,7 +92,7 @@ impl Database {
     pub fn get_task(&self, id: &str) -> anyhow::Result<Option<Task>> {
         let conn = self.conn.lock().unwrap();
         let mut stmt = conn.prepare(
-            "SELECT id, type, title, description, assignee, status, priority, repositories, branch, pr_url, created_at, updated_at, notes, assigned_at
+            "SELECT id, type, title, description, assignee, status, priority, repositories, pr_url, created_at, updated_at, notes, assigned_at
              FROM tasks WHERE id = ?1",
         )?;
         let mut rows = stmt.query_map(params![id], |row| Ok(row_to_task(row)))?;
@@ -106,7 +105,7 @@ impl Database {
 
     pub fn list_tasks(&self, filter: &TaskFilter) -> anyhow::Result<Vec<Task>> {
         let conn = self.conn.lock().unwrap();
-        let mut sql = "SELECT id, type, title, description, assignee, status, priority, repositories, branch, pr_url, created_at, updated_at, notes, assigned_at FROM tasks WHERE 1=1".to_string();
+        let mut sql = "SELECT id, type, title, description, assignee, status, priority, repositories, pr_url, created_at, updated_at, notes, assigned_at FROM tasks WHERE 1=1".to_string();
         let mut param_values: Vec<Box<dyn rusqlite::types::ToSql>> = Vec::new();
 
         if let Some(ref t) = filter.task_type {
@@ -176,7 +175,7 @@ impl Database {
     pub fn find_reviews_for_work(&self, work_id: &str) -> anyhow::Result<Vec<Task>> {
         let conn = self.conn.lock().unwrap();
         let mut stmt = conn.prepare(
-            "SELECT t.id, t.type, t.title, t.description, t.assignee, t.status, t.priority, t.repositories, t.branch, t.pr_url, t.created_at, t.updated_at, t.notes, t.assigned_at
+            "SELECT t.id, t.type, t.title, t.description, t.assignee, t.status, t.priority, t.repositories, t.pr_url, t.created_at, t.updated_at, t.notes, t.assigned_at
              FROM tasks t
              JOIN dependencies d ON d.task_id = t.id
              WHERE d.depends_on = ?1 AND t.type = 'review'",
@@ -193,7 +192,7 @@ impl Database {
     pub fn find_works_for_review(&self, review_id: &str) -> anyhow::Result<Vec<Task>> {
         let conn = self.conn.lock().unwrap();
         let mut stmt = conn.prepare(
-            "SELECT t.id, t.type, t.title, t.description, t.assignee, t.status, t.priority, t.repositories, t.branch, t.pr_url, t.created_at, t.updated_at, t.notes, t.assigned_at
+            "SELECT t.id, t.type, t.title, t.description, t.assignee, t.status, t.priority, t.repositories, t.pr_url, t.created_at, t.updated_at, t.notes, t.assigned_at
              FROM tasks t
              JOIN dependencies d ON d.depends_on = t.id
              WHERE d.task_id = ?1 AND t.type = 'work'",
@@ -306,7 +305,7 @@ impl Database {
     pub fn find_assignable_tasks(&self) -> anyhow::Result<Vec<Task>> {
         let conn = self.conn.lock().unwrap();
         let mut stmt = conn.prepare(
-            "SELECT t.id, t.type, t.title, t.description, t.assignee, t.status, t.priority, t.repositories, t.branch, t.pr_url, t.created_at, t.updated_at, t.notes, t.assigned_at
+            "SELECT t.id, t.type, t.title, t.description, t.assignee, t.status, t.priority, t.repositories, t.pr_url, t.created_at, t.updated_at, t.notes, t.assigned_at
              FROM tasks t
              WHERE t.type = 'work'
              AND t.status = 'ready'
@@ -419,7 +418,8 @@ impl Database {
 
 fn row_to_task(row: &rusqlite::Row) -> Task {
     let repos_str: Option<String> = row.get(7).unwrap();
-    let repositories: Option<Vec<String>> = repos_str.and_then(|s| serde_json::from_str(&s).ok());
+    let repositories: Option<Vec<Repository>> =
+        repos_str.and_then(|s| serde_json::from_str(&s).ok());
 
     Task {
         id: row.get(0).unwrap(),
@@ -433,12 +433,11 @@ fn row_to_task(row: &rusqlite::Row) -> Task {
             .unwrap()
             .and_then(|s| s.parse().ok()),
         repositories,
-        branch: row.get(8).unwrap(),
-        pr_url: row.get(9).unwrap(),
-        created_at: row.get(10).unwrap(),
-        updated_at: row.get(11).unwrap(),
-        notes: row.get(12).unwrap(),
-        assigned_at: row.get(13).unwrap(),
+        pr_url: row.get(8).unwrap(),
+        created_at: row.get(9).unwrap(),
+        updated_at: row.get(10).unwrap(),
+        notes: row.get(11).unwrap(),
+        assigned_at: row.get(12).unwrap(),
     }
 }
 
@@ -461,8 +460,10 @@ mod tests {
                 description: Some("Details".to_string()),
                 assignee: Some("member-a".to_string()),
                 priority: Some(Priority::High),
-                repositories: Some(vec!["palette".to_string()]),
-                branch: Some("feature/test".to_string()),
+                repositories: Some(vec![Repository {
+                    name: "x7c1/palette".to_string(),
+                    branch: Some("feature/test".to_string()),
+                }]),
                 depends_on: vec![],
             })
             .unwrap();
@@ -487,7 +488,6 @@ mod tests {
             assignee: None,
             priority: None,
             repositories: None,
-            branch: None,
             depends_on: vec![],
         })
         .unwrap();
@@ -500,7 +500,6 @@ mod tests {
             assignee: None,
             priority: None,
             repositories: None,
-            branch: None,
             depends_on: vec!["W-001".to_string()],
         })
         .unwrap();
@@ -523,7 +522,6 @@ mod tests {
             assignee: None,
             priority: None,
             repositories: None,
-            branch: None,
             depends_on: vec![],
         })
         .unwrap();
@@ -536,7 +534,6 @@ mod tests {
             assignee: None,
             priority: None,
             repositories: None,
-            branch: None,
             depends_on: vec![],
         })
         .unwrap();
@@ -572,7 +569,6 @@ mod tests {
             assignee: None,
             priority: None,
             repositories: None,
-            branch: None,
             depends_on: vec![],
         })
         .unwrap();
@@ -594,7 +590,6 @@ mod tests {
             assignee: None,
             priority: None,
             repositories: None,
-            branch: None,
             depends_on: vec![],
         })
         .unwrap();
@@ -607,7 +602,6 @@ mod tests {
             assignee: None,
             priority: None,
             repositories: None,
-            branch: None,
             depends_on: vec!["W-001".to_string()],
         })
         .unwrap();
@@ -660,7 +654,6 @@ mod tests {
             assignee: None,
             priority: None,
             repositories: None,
-            branch: None,
             depends_on: vec![],
         })
         .unwrap();
@@ -673,7 +666,6 @@ mod tests {
             assignee: None,
             priority: None,
             repositories: None,
-            branch: None,
             depends_on: vec!["W-001".to_string()],
         })
         .unwrap();
@@ -696,10 +688,8 @@ mod tests {
             assignee: None,
             priority,
             repositories: None,
-            branch: None,
             depends_on: deps,
-        })
-        .unwrap();
+        }).unwrap();
     }
 
     #[test]

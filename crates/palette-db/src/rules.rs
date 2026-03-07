@@ -180,7 +180,6 @@ mod tests {
             assignee: Some("member-a".to_string()),
             priority: None,
             repositories: None,
-            branch: None,
             depends_on: vec![],
         })
         .unwrap();
@@ -193,7 +192,6 @@ mod tests {
             assignee: None,
             priority: None,
             repositories: None,
-            branch: None,
             depends_on: vec!["W-001".to_string()],
         })
         .unwrap();

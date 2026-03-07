@@ -126,10 +126,14 @@ fn format_task_instruction(task: &Task) -> String {
         msg.push_str(&format!("\n{desc}\n"));
     }
     if let Some(ref repos) = task.repositories {
-        msg.push_str(&format!("\nRepositories: {}\n", repos.join(", ")));
-    }
-    if let Some(ref branch) = task.branch {
-        msg.push_str(&format!("Branch: {branch}\n"));
+        msg.push('\n');
+        for repo in repos {
+            if let Some(ref branch) = repo.branch {
+                msg.push_str(&format!("- {} (branch: {branch})\n", repo.name));
+            } else {
+                msg.push_str(&format!("- {}\n", repo.name));
+            }
+        }
     }
     msg.push_str("\nPlease begin working on this task.");
     msg
@@ -149,7 +153,7 @@ fn spawn_member<T: TmuxManager>(
         .leaders
         .first()
         .map(|l| l.tmux_target.as_str())
-        .unwrap_or("0");
+        .ok_or_else(|| anyhow::anyhow!("no leader found; cannot spawn member without a leader pane"))?;
     let tmux_target = tmux.create_pane(leader_target)?;
 
     let container_id =

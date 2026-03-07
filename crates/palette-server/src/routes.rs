@@ -24,6 +24,7 @@ pub fn create_router(state: Arc<AppState>) -> Router {
         // Task API
         .route("/tasks/create", post(handle_create_task))
         .route("/tasks/update", post(handle_update_task))
+        .route("/tasks/load", post(handle_load_tasks))
         .route("/tasks", get(handle_list_tasks))
         // Review API
         .route("/reviews/{id}/submit", post(handle_submit_review))
@@ -263,6 +264,91 @@ async fn handle_events(State(state): State<Arc<AppState>>) -> Json<Vec<EventReco
 }
 
 // --- Task API ---
+
+async fn handle_load_tasks(
+    State(state): State<Arc<AppState>>,
+    body: String,
+) -> Result<(StatusCode, Json<Vec<Task>>), (StatusCode, String)> {
+    let task_file = palette_db::task_file::TaskFile::parse(&body)
+        .map_err(|e| (StatusCode::BAD_REQUEST, format!("invalid YAML: {e}")))?;
+
+    let requests = task_file.into_requests();
+    let mut created_tasks = Vec::new();
+
+    // Create all tasks as draft
+    for req in &requests {
+        let task = state
+            .db
+            .create_task(req)
+            .map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))?;
+        tracing::info!(task_id = %task.id, "created task from YAML");
+        created_tasks.push(task);
+    }
+
+    // Transition work tasks to ready, triggering auto-assign via rule engine
+    let work_ids: Vec<String> = created_tasks
+        .iter()
+        .filter(|t| t.task_type == TaskType::Work)
+        .map(|t| t.id.clone())
+        .collect();
+
+    for work_id in &work_ids {
+        RuleEngine::validate_transition(TaskType::Work, TaskStatus::Draft, TaskStatus::Ready)
+            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+        state
+            .db
+            .update_task_status(work_id, TaskStatus::Ready)
+            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+        let effects = state
+            .rules
+            .on_status_change(&state.db, work_id, TaskStatus::Ready)
+            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+        for effect in &effects {
+            tracing::info!(?effect, "rule engine effect (task load)");
+        }
+
+        let deliveries = {
+            let mut infra = state.infra.lock().await;
+            let state_path = PathBuf::from(&state.state_path);
+            let deliveries = orchestrator::process_effects(
+                &effects,
+                &state.db,
+                &mut infra,
+                &state.docker,
+                &state.tmux,
+                &state.docker_config,
+                &state_path,
+            )
+            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+            for delivery in &deliveries {
+                let _ = orchestrator::deliver_queued_messages(
+                    &delivery.target_id,
+                    &state.db,
+                    &mut infra,
+                    &state.tmux,
+                );
+            }
+
+            deliveries
+        };
+
+        for delivery in deliveries {
+            spawn_readiness_watcher(delivery, Arc::clone(&state));
+        }
+    }
+
+    // Re-fetch all tasks to return updated statuses
+    let final_tasks: Vec<Task> = created_tasks
+        .iter()
+        .filter_map(|t| state.db.get_task(&t.id).ok().flatten())
+        .collect();
+
+    Ok((StatusCode::CREATED, Json(final_tasks)))
+}
 
 async fn handle_create_task(
     State(state): State<Arc<AppState>>,

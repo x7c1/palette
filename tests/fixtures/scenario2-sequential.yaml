@@ -1,0 +1,27 @@
+repositories:
+  - name: x7c1/palette
+    branch: e2e-scenario2
+
+tasks:
+  - id: W-A
+    type: work
+    title: Create file A
+    description: Create /home/agent/file-a.txt with content "Hello from Task A"
+    priority: high
+
+  - id: R-A
+    type: review
+    title: Review file A
+    depends_on: [W-A]
+
+  - id: W-B
+    type: work
+    title: Create file B
+    description: Create /home/agent/file-b.txt with content "Hello from Task B"
+    priority: medium
+    depends_on: [W-A]
+
+  - id: R-B
+    type: review
+    title: Review file B
+    depends_on: [W-B]

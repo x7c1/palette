@@ -131,6 +131,12 @@ impl FromStr for Verdict {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Repository {
+    pub name: String,
+    pub branch: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Task {
     pub id: String,
     #[serde(rename = "type")]
@@ -140,8 +146,7 @@ pub struct Task {
     pub assignee: Option<String>,
     pub status: TaskStatus,
     pub priority: Option<Priority>,
-    pub repositories: Option<Vec<String>>,
-    pub branch: Option<String>,
+    pub repositories: Option<Vec<Repository>>,
     pub pr_url: Option<String>,
     pub created_at: String,
     pub updated_at: String,
@@ -158,8 +163,7 @@ pub struct CreateTaskRequest {
     pub description: Option<String>,
     pub assignee: Option<String>,
     pub priority: Option<Priority>,
-    pub repositories: Option<Vec<String>>,
-    pub branch: Option<String>,
+    pub repositories: Option<Vec<Repository>>,
     #[serde(default)]
     pub depends_on: Vec<String>,
 }

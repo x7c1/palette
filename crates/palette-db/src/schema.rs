@@ -10,7 +10,6 @@ CREATE TABLE IF NOT EXISTS tasks (
     status TEXT NOT NULL,
     priority TEXT CHECK(priority IN ('high', 'medium', 'low') OR priority IS NULL),
     repositories TEXT,
-    branch TEXT,
     pr_url TEXT,
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL,
@@ -66,14 +65,7 @@ pub fn initialize(conn: &Connection) -> rusqlite::Result<()> {
 }
 
 /// Apply migrations for existing databases that lack new columns/tables.
-fn migrate(conn: &Connection) -> rusqlite::Result<()> {
-    // Add assigned_at column if missing (003-multi-member)
-    let has_assigned_at: bool = conn
-        .prepare("SELECT 1 FROM pragma_table_info('tasks') WHERE name='assigned_at'")?
-        .exists([])?;
-    if !has_assigned_at {
-        conn.execute_batch("ALTER TABLE tasks ADD COLUMN assigned_at TEXT")?;
-    }
+fn migrate(_conn: &Connection) -> rusqlite::Result<()> {
     Ok(())
 }
 
