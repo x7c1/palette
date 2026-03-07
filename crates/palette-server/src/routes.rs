@@ -74,11 +74,54 @@ async fn handle_stop(
         }
     };
 
-    // Enqueue event notification to leader
+    // Transition member's in_progress tasks to in_review and notify leader
     if let Some(ref leader_id) = leader_id {
-        let notification = format!("[event] member={member_id} type=stop");
-        if let Err(e) = state.db.enqueue_message(leader_id, &notification) {
-            tracing::error!(error = %e, "failed to enqueue stop notification for leader");
+        let member_tasks = state
+            .db
+            .list_tasks(&TaskFilter {
+                assignee: Some(member_id.to_string()),
+                status: Some(TaskStatus::InProgress),
+                ..Default::default()
+            })
+            .unwrap_or_default();
+
+        for task in &member_tasks {
+            if let Err(e) = state
+                .db
+                .update_task_status(&task.id, TaskStatus::InReview)
+            {
+                tracing::error!(task_id = %task.id, error = %e, "failed to transition task to in_review");
+                continue;
+            }
+            let effects = state
+                .rules
+                .on_status_change(&state.db, &task.id, TaskStatus::InReview)
+                .unwrap_or_default();
+            for effect in &effects {
+                tracing::info!(?effect, "rule engine effect (member stop)");
+            }
+
+            // Enqueue review instruction to leader
+            let review_msg = format!(
+                "[review] task={} member={} message: {}",
+                task.id,
+                member_id,
+                payload
+                    .get("last_assistant_message")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("(work completed)")
+            );
+            if let Err(e) = state.db.enqueue_message(leader_id, &review_msg) {
+                tracing::error!(error = %e, "failed to enqueue review notification for leader");
+            }
+        }
+
+        if member_tasks.is_empty() {
+            // No tasks to transition; just send a stop event
+            let notification = format!("[event] member={member_id} type=stop");
+            if let Err(e) = state.db.enqueue_message(leader_id, &notification) {
+                tracing::error!(error = %e, "failed to enqueue stop notification for leader");
+            }
         }
     }
 

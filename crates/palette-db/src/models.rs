@@ -208,7 +208,7 @@ pub struct ReviewCommentInput {
     pub body: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct TaskFilter {
     #[serde(rename = "type")]
     pub task_type: Option<TaskType>,

@@ -656,12 +656,12 @@ async fn scenario3_message_queuing_to_leader() {
         "leader should have pending messages"
     );
 
-    // Leader pane should NOT contain any event yet (leader is Working)
+    // Leader pane should NOT contain any review message yet (leader is Working)
     tokio::time::sleep(std::time::Duration::from_millis(200)).await;
     let content = capture_pane(&leader_pane);
     assert!(
-        !content.contains("[event]"),
-        "leader pane should not have events while Working, got: {content}"
+        !content.contains("[review]"),
+        "leader pane should not have reviews while Working, got: {content}"
     );
 
     // --- Leader stops (first time) → first queued message delivered ---
@@ -677,8 +677,8 @@ async fn scenario3_message_queuing_to_leader() {
 
     let content = capture_pane(&leader_pane);
     assert!(
-        content.contains("[event] member=member-a type=stop"),
-        "first stop should deliver member-a event, got: {content}"
+        content.contains("[review] task=W-A member=member-a"),
+        "first stop should deliver member-a review, got: {content}"
     );
 
     // Leader should still have pending messages (member-b event)
@@ -700,8 +700,8 @@ async fn scenario3_message_queuing_to_leader() {
 
     let content = capture_pane(&leader_pane);
     assert!(
-        content.contains("[event] member=member-b type=stop"),
-        "second stop should deliver member-b event, got: {content}"
+        content.contains("[review] task=W-B member=member-b"),
+        "second stop should deliver member-b review, got: {content}"
     );
 
     // Queue should now be empty
