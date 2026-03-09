@@ -6,7 +6,7 @@ use axum::{
     routing::{get, post},
 };
 use palette_core::orchestrator;
-use palette_core::state::MemberStatus;
+use palette_core::state::AgentStatus;
 use palette_db::*;
 use palette_tmux::{TmuxManager as _, TmuxManagerImpl};
 use std::path::PathBuf;
@@ -44,14 +44,15 @@ async fn handle_stop(
     Query(query): Query<HookQuery>,
     Json(payload): Json<serde_json::Value>,
 ) -> StatusCode {
-    let member_id = query.member_id.as_deref().unwrap_or("unknown");
-    tracing::info!(member_id = member_id, payload = %payload, "received stop hook");
+    let member_id_str = query.member_id.as_deref().unwrap_or("unknown");
+    let member_id = AgentId::new(member_id_str);
+    tracing::info!(member_id = member_id_str, payload = %payload, "received stop hook");
 
     let record = EventRecord {
         timestamp: now(),
         event_type: "stop".to_string(),
         payload: serde_json::json!({
-            "member_id": member_id,
+            "member_id": member_id_str,
             "original": payload,
         }),
     };
@@ -60,14 +61,14 @@ async fn handle_stop(
     // Update member status to Idle and resolve leader ID
     let leader_id = {
         let mut infra = state.infra.lock().await;
-        if let Some(member) = infra.find_member_mut(member_id) {
-            member.status = MemberStatus::Idle;
+        if let Some(member) = infra.find_member_mut(&member_id) {
+            member.status = AgentStatus::Idle;
             let leader_id = member.leader_id.clone();
             infra.touch();
             Some(leader_id)
         } else {
-            if let Some(leader) = infra.find_leader_mut(member_id) {
-                leader.status = MemberStatus::Idle;
+            if let Some(leader) = infra.find_leader_mut(&member_id) {
+                leader.status = AgentStatus::Idle;
                 infra.touch();
             }
             None
@@ -79,7 +80,7 @@ async fn handle_stop(
         let member_tasks = state
             .db
             .list_tasks(&TaskFilter {
-                assignee: Some(member_id.to_string()),
+                assignee: Some(member_id.clone()),
                 status: Some(TaskStatus::InProgress),
                 ..Default::default()
             })
@@ -126,7 +127,7 @@ async fn handle_stop(
     {
         let mut infra = state.infra.lock().await;
         let _ =
-            orchestrator::deliver_queued_messages(member_id, &state.db, &mut infra, &state.tmux);
+            orchestrator::deliver_queued_messages(&member_id, &state.db, &mut infra, &state.tmux);
     }
 
     // Notify background delivery loop (leader may have pending messages)
@@ -140,14 +141,15 @@ async fn handle_notification(
     Query(query): Query<HookQuery>,
     Json(payload): Json<serde_json::Value>,
 ) -> StatusCode {
-    let member_id = query.member_id.as_deref().unwrap_or("unknown");
-    tracing::info!(member_id = member_id, payload = %payload, "received notification hook");
+    let member_id_str = query.member_id.as_deref().unwrap_or("unknown");
+    let member_id = AgentId::new(member_id_str);
+    tracing::info!(member_id = member_id_str, payload = %payload, "received notification hook");
 
     let record = EventRecord {
         timestamp: now(),
         event_type: "notification".to_string(),
         payload: serde_json::json!({
-            "member_id": member_id,
+            "member_id": member_id_str,
             "original": payload,
         }),
     };
@@ -156,8 +158,8 @@ async fn handle_notification(
     // Update member status to WaitingPermission and resolve leader ID
     let leader_id = {
         let mut infra = state.infra.lock().await;
-        if let Some(member) = infra.find_member_mut(member_id) {
-            member.status = MemberStatus::WaitingPermission;
+        if let Some(member) = infra.find_member_mut(&member_id) {
+            member.status = AgentStatus::WaitingPermission;
             let leader_id = member.leader_id.clone();
             infra.touch();
             Some(leader_id)
@@ -231,22 +233,23 @@ async fn handle_send(
         ));
     }
 
-    let member_id = req.member_id.as_ref().unwrap();
+    let member_id_str = req.member_id.as_ref().unwrap();
+    let member_id = AgentId::new(member_id_str.as_str());
 
     // Check if target can receive input — idle or waiting for permission
     let is_idle = {
         let infra = state.infra.lock().await;
         infra
-            .find_member(member_id)
-            .or_else(|| infra.find_leader(member_id))
-            .map(|m| m.status == MemberStatus::Idle || m.status == MemberStatus::WaitingPermission)
+            .find_member(&member_id)
+            .or_else(|| infra.find_leader(&member_id))
+            .map(|m| m.status == AgentStatus::Idle || m.status == AgentStatus::WaitingPermission)
             .unwrap_or(false)
     };
 
     // Also check if there are already pending messages (maintain ordering)
     let has_pending = state
         .db
-        .has_pending_messages(member_id)
+        .has_pending_messages(&member_id)
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     let queued = if is_idle && !has_pending {
@@ -254,8 +257,8 @@ async fn handle_send(
         let tmux_target = {
             let infra = state.infra.lock().await;
             infra
-                .find_member(member_id)
-                .or_else(|| infra.find_leader(member_id))
+                .find_member(&member_id)
+                .or_else(|| infra.find_leader(&member_id))
                 .map(|m| m.tmux_target.clone())
                 .ok_or_else(|| {
                     (
@@ -266,16 +269,16 @@ async fn handle_send(
         };
 
         tracing::info!(target = %tmux_target, message = %req.message, "sending keys via tmux");
-        send_tmux_keys(&state.tmux, &tmux_target, &req.message, req.no_enter)
+        send_tmux_keys(&state.tmux, tmux_target.as_ref(), &req.message, req.no_enter)
             .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
         // Update status to Working
         let mut infra = state.infra.lock().await;
-        if let Some(member) = infra.find_member_mut(member_id) {
-            member.status = MemberStatus::Working;
+        if let Some(member) = infra.find_member_mut(&member_id) {
+            member.status = AgentStatus::Working;
             infra.touch();
-        } else if let Some(leader) = infra.find_leader_mut(member_id) {
-            leader.status = MemberStatus::Working;
+        } else if let Some(leader) = infra.find_leader_mut(&member_id) {
+            leader.status = AgentStatus::Working;
             infra.touch();
         }
 
@@ -284,9 +287,9 @@ async fn handle_send(
         // Queue the message
         state
             .db
-            .enqueue_message(member_id, &req.message)
+            .enqueue_message(&member_id, &req.message)
             .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-        tracing::info!(member_id = member_id, "message queued");
+        tracing::info!(member_id = member_id_str.as_str(), "message queued");
         true
     };
 
@@ -294,7 +297,7 @@ async fn handle_send(
         timestamp: now(),
         event_type: "send".to_string(),
         payload: serde_json::json!({
-            "member_id": member_id,
+            "member_id": member_id_str,
             "message": req.message,
             "queued": queued,
         }),
@@ -334,7 +337,7 @@ async fn handle_load_tasks(
     }
 
     // Transition work tasks to ready, triggering auto-assign via rule engine
-    let work_ids: Vec<String> = created_tasks
+    let work_ids: Vec<TaskId> = created_tasks
         .iter()
         .filter(|t| t.task_type == TaskType::Work)
         .map(|t| t.id.clone())
@@ -385,11 +388,7 @@ async fn handle_load_tasks(
         };
 
         for delivery in deliveries {
-            crate::spawn_readiness_watcher(
-                delivery.target_id,
-                delivery.tmux_target,
-                Arc::clone(&state),
-            );
+            crate::spawn_readiness_watcher(delivery.target_id, Arc::clone(&state));
         }
     }
 
@@ -477,11 +476,7 @@ async fn handle_update_task(
 
     // Spawn background readiness watchers for booting members
     for delivery in deliveries {
-        crate::spawn_readiness_watcher(
-            delivery.target_id,
-            delivery.tmux_target,
-            Arc::clone(&state),
-        );
+        crate::spawn_readiness_watcher(delivery.target_id, Arc::clone(&state));
     }
 
     Ok(Json(task))
@@ -505,6 +500,8 @@ async fn handle_submit_review(
     Path(review_task_id): Path<String>,
     Json(req): Json<SubmitReviewRequest>,
 ) -> Result<(StatusCode, Json<ReviewSubmission>), (StatusCode, String)> {
+    let review_task_id = TaskId::new(review_task_id);
+
     // Verify the task exists and is a review
     let task = state
         .db
@@ -555,7 +552,7 @@ async fn handle_submit_review(
                 let _ = state.db.enqueue_message(assignee, &feedback);
                 tracing::info!(
                     task_id = %work.id,
-                    assignee = assignee,
+                    assignee = %assignee,
                     "enqueued review feedback to member"
                 );
             }
@@ -594,11 +591,7 @@ async fn handle_submit_review(
 
     // Spawn background readiness watchers for booting members
     for delivery in deliveries {
-        crate::spawn_readiness_watcher(
-            delivery.target_id,
-            delivery.tmux_target,
-            Arc::clone(&state),
-        );
+        crate::spawn_readiness_watcher(delivery.target_id, Arc::clone(&state));
     }
 
     Ok((StatusCode::CREATED, Json(submission)))
@@ -608,6 +601,7 @@ async fn handle_get_submissions(
     State(state): State<Arc<AppState>>,
     Path(review_task_id): Path<String>,
 ) -> Result<Json<Vec<ReviewSubmission>>, (StatusCode, String)> {
+    let review_task_id = TaskId::new(review_task_id);
     let submissions = state
         .db
         .get_review_submissions(&review_task_id)

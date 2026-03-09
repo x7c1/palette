@@ -1,6 +1,10 @@
+use crate::state::{AgentRole, ContainerId};
 use anyhow::{Context as _, bail};
 use std::path::Path;
 use std::process::Command;
+
+/// Timeout in seconds when stopping a container.
+const CONTAINER_STOP_TIMEOUT_SECS: &str = "10";
 
 pub struct DockerManager {
     palette_url: String,
@@ -17,13 +21,14 @@ impl DockerManager {
         &self,
         name: &str,
         image: &str,
-        role: &str,
+        role: AgentRole,
         session_name: &str,
-    ) -> anyhow::Result<String> {
+    ) -> anyhow::Result<ContainerId> {
+        let role_str = role.as_str();
         let labels = [
             "palette.managed=true".to_string(),
             format!("palette.session={session_name}"),
-            format!("palette.role={role}"),
+            format!("palette.role={role_str}"),
             format!("palette.agent={name}"),
         ];
 
@@ -74,21 +79,24 @@ impl DockerManager {
         }
 
         // Docker socket for members
-        if role == "member" {
+        if role == AgentRole::Member {
             args.push("-v".to_string());
             args.push("/var/run/docker.sock:/var/run/docker.sock".to_string());
         }
 
         // Transcript volume: members write, leaders read
         let transcript_volume = format!("palette-transcripts-{session_name}");
-        if role == "member" {
-            args.push("-v".to_string());
-            args.push(format!("{transcript_volume}:/home/agent/.claude/projects"));
-        } else if role == "leader" {
-            args.push("-v".to_string());
-            args.push(format!(
-                "{transcript_volume}:/home/agent/.claude/projects:ro"
-            ));
+        match role {
+            AgentRole::Member => {
+                args.push("-v".to_string());
+                args.push(format!("{transcript_volume}:/home/agent/.claude/projects"));
+            }
+            AgentRole::Leader => {
+                args.push("-v".to_string());
+                args.push(format!(
+                    "{transcript_volume}:/home/agent/.claude/projects:ro"
+                ));
+            }
         }
 
         args.push(image.to_string());
@@ -101,13 +109,14 @@ impl DockerManager {
             bail!("failed to create container palette-{name}: {stderr}");
         }
 
-        let container_id = String::from_utf8_lossy(&output.stdout).trim().to_string();
+        let raw_id = String::from_utf8_lossy(&output.stdout).trim().to_string();
+        let container_id = ContainerId::new(raw_id);
         tracing::info!(container_id = %container_id, name = name, "created container");
         Ok(container_id)
     }
 
-    pub fn start_container(&self, container_id: &str) -> anyhow::Result<()> {
-        let output = run_docker(&["start", container_id])?;
+    pub fn start_container(&self, container_id: &ContainerId) -> anyhow::Result<()> {
+        let output = run_docker(&["start", container_id.as_ref()])?;
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
             bail!("failed to start container {container_id}: {stderr}");
@@ -116,8 +125,8 @@ impl DockerManager {
         Ok(())
     }
 
-    pub fn stop_container(&self, container_id: &str) -> anyhow::Result<()> {
-        let output = run_docker(&["stop", "-t", "10", container_id])?;
+    pub fn stop_container(&self, container_id: &ContainerId) -> anyhow::Result<()> {
+        let output = run_docker(&["stop", "-t", CONTAINER_STOP_TIMEOUT_SECS, container_id.as_ref()])?;
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
             tracing::warn!(container_id = %container_id, error = %stderr, "failed to stop container");
@@ -125,8 +134,8 @@ impl DockerManager {
         Ok(())
     }
 
-    pub fn remove_container(&self, container_id: &str) -> anyhow::Result<()> {
-        let output = run_docker(&["rm", "-f", container_id])?;
+    pub fn remove_container(&self, container_id: &ContainerId) -> anyhow::Result<()> {
+        let output = run_docker(&["rm", "-f", container_id.as_ref()])?;
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
             tracing::warn!(container_id = %container_id, error = %stderr, "failed to remove container");
@@ -139,7 +148,7 @@ impl DockerManager {
     /// and adds member_id to hook URLs as query parameter.
     pub fn write_settings(
         &self,
-        container_id: &str,
+        container_id: &ContainerId,
         template_path: &std::path::Path,
         member_id: &str,
     ) -> anyhow::Result<()> {
@@ -164,12 +173,13 @@ impl DockerManager {
                 ),
             );
 
+        let cid = container_id.as_ref();
         // Write via docker exec (as root to avoid permission issues, then chown)
         let output = run_docker(&[
             "exec",
             "--user",
             "root",
-            container_id,
+            cid,
             "sh",
             "-c",
             &format!(
@@ -188,14 +198,15 @@ impl DockerManager {
 
     /// Copy a local file into a running container.
     pub fn copy_file_to_container(
-        container_id: &str,
+        container_id: &ContainerId,
         local_path: &std::path::Path,
         container_path: &str,
     ) -> anyhow::Result<()> {
+        let cid = container_id.as_ref();
         let output = run_docker(&[
             "cp",
             &local_path.display().to_string(),
-            &format!("{container_id}:{container_path}"),
+            &format!("{cid}:{container_path}"),
         ])?;
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
@@ -212,20 +223,18 @@ impl DockerManager {
         Ok(())
     }
 
-    /// Build the command string to launch Claude Code inside a container's tmux pane.
-    /// Leaders bypass permissions (they run in a sandbox container).
-    /// Members keep default permissions (the leader handles their permission prompts).
     /// Copy a directory tree into a container.
     pub fn copy_dir_to_container(
-        container_id: &str,
+        container_id: &ContainerId,
         local_dir: &Path,
         container_path: &str,
     ) -> anyhow::Result<()> {
+        let cid = container_id.as_ref();
         let output = Command::new("docker")
             .args([
                 "cp",
                 &format!("{}/.", local_dir.display()),
-                &format!("{container_id}:{container_path}"),
+                &format!("{cid}:{container_path}"),
             ])
             .output()
             .context("failed to docker cp directory")?;
@@ -236,16 +245,27 @@ impl DockerManager {
         Ok(())
     }
 
-    pub fn claude_exec_command(container_id: &str, prompt_file: &str, role: &str) -> String {
+    /// Build the command string to launch Claude Code inside a container's tmux pane.
+    /// Leaders bypass permissions (they run in a sandbox container).
+    /// Members keep default permissions (the leader handles their permission prompts).
+    pub fn claude_exec_command(
+        container_id: &ContainerId,
+        prompt_file: &str,
+        role: AgentRole,
+    ) -> String {
+        let cid = container_id.as_ref();
         let plugin_flag = " --plugin-dir /home/agent/claude-code-plugin";
-        if role == "leader" {
-            format!(
-                "docker exec -it {container_id} claude --dangerously-skip-permissions --append-system-prompt-file {prompt_file}{plugin_flag}"
-            )
-        } else {
-            format!(
-                "docker exec -it {container_id} claude --append-system-prompt-file {prompt_file}{plugin_flag}"
-            )
+        match role {
+            AgentRole::Leader => {
+                format!(
+                    "docker exec -it {cid} claude --dangerously-skip-permissions --append-system-prompt-file {prompt_file}{plugin_flag}"
+                )
+            }
+            AgentRole::Member => {
+                format!(
+                    "docker exec -it {cid} claude --append-system-prompt-file {prompt_file}{plugin_flag}"
+                )
+            }
         }
     }
 }
@@ -303,8 +323,12 @@ mod tests {
 
     #[test]
     fn claude_exec_command_leader_bypasses_permissions() {
-        let cmd =
-            DockerManager::claude_exec_command("abc123", "/home/agent/prompts/leader.md", "leader");
+        let cid = ContainerId::new("abc123");
+        let cmd = DockerManager::claude_exec_command(
+            &cid,
+            "/home/agent/prompts/leader.md",
+            AgentRole::Leader,
+        );
         assert!(cmd.contains("docker exec -it abc123 claude"));
         assert!(cmd.contains("--dangerously-skip-permissions"));
         assert!(cmd.contains("--append-system-prompt-file /home/agent/prompts/leader.md"));
@@ -313,8 +337,12 @@ mod tests {
 
     #[test]
     fn claude_exec_command_member_keeps_permissions() {
-        let cmd =
-            DockerManager::claude_exec_command("abc123", "/home/agent/prompts/member.md", "member");
+        let cid = ContainerId::new("abc123");
+        let cmd = DockerManager::claude_exec_command(
+            &cid,
+            "/home/agent/prompts/member.md",
+            AgentRole::Member,
+        );
         assert!(cmd.contains("docker exec -it abc123 claude"));
         assert!(!cmd.contains("--dangerously-skip-permissions"));
         assert!(cmd.contains("--append-system-prompt-file /home/agent/prompts/member.md"));

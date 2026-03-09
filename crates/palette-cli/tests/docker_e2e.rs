@@ -14,6 +14,7 @@
 
 use anyhow::{Context as _, Result};
 use palette_core::Config;
+use palette_core::state::AgentRole;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -109,7 +110,7 @@ fn launch() -> Result<()> {
     let leader_id = docker.create_container(
         "test-leader",
         &config.docker.leader_image,
-        "leader",
+        AgentRole::Leader,
         SESSION_NAME,
     )?;
     guard.track("palette-test-leader");
@@ -118,7 +119,7 @@ fn launch() -> Result<()> {
     let member_id = docker.create_container(
         "test-member-a",
         &config.docker.member_image,
-        "member",
+        AgentRole::Member,
         SESSION_NAME,
     )?;
     guard.track("palette-test-member-a");
@@ -126,7 +127,7 @@ fn launch() -> Result<()> {
 
     // --- Verify containers are running ---
     let leader_status = Command::new("docker")
-        .args(["inspect", "-f", "{{.State.Running}}", &leader_id])
+        .args(["inspect", "-f", "{{.State.Running}}", leader_id.as_ref()])
         .output()?;
     assert_eq!(
         String::from_utf8_lossy(&leader_status.stdout).trim(),
@@ -135,7 +136,7 @@ fn launch() -> Result<()> {
     );
 
     let member_status = Command::new("docker")
-        .args(["inspect", "-f", "{{.State.Running}}", &member_id])
+        .args(["inspect", "-f", "{{.State.Running}}", member_id.as_ref()])
         .output()?;
     assert_eq!(
         String::from_utf8_lossy(&member_status.stdout).trim(),
@@ -212,7 +213,7 @@ fn launch() -> Result<()> {
     let leader_cmd = palette_core::docker::DockerManager::claude_exec_command(
         &leader_id,
         "/home/agent/prompt.md",
-        "leader",
+        AgentRole::Leader,
     );
     let leader_target = format!("{SESSION_NAME}:leader");
     let output = Command::new("tmux")
@@ -227,7 +228,7 @@ fn launch() -> Result<()> {
     let member_cmd = palette_core::docker::DockerManager::claude_exec_command(
         &member_id,
         "/home/agent/prompt.md",
-        "member",
+        AgentRole::Member,
     );
     let member_target = format!("{SESSION_NAME}:member-a");
     let output = Command::new("tmux")
@@ -313,7 +314,7 @@ fn claude_responds() -> Result<()> {
     let container_id = docker.create_container(
         "test-claude",
         &config.docker.leader_image,
-        "leader",
+        AgentRole::Leader,
         SESSION_NAME,
     )?;
     guard.track("palette-test-claude");
@@ -336,7 +337,7 @@ fn claude_responds() -> Result<()> {
     let cmd = palette_core::docker::DockerManager::claude_exec_command(
         &container_id,
         "/home/agent/prompt.md",
-        "leader",
+        AgentRole::Leader,
     );
     let _ = Command::new("tmux")
         .args(["send-keys", "-t", &target, "-l", &cmd])

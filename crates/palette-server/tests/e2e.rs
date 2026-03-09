@@ -1,7 +1,7 @@
 use palette_core::DockerConfig;
 use palette_core::docker::DockerManager;
-use palette_core::state::PersistentState;
-use palette_db::{Database, RuleEngine};
+use palette_core::state::{AgentRole, AgentState, AgentStatus, ContainerId, PersistentState, TmuxTarget};
+use palette_db::{AgentId, Database, RuleEngine, TaskId};
 use palette_server::{AppState, create_router};
 use palette_tmux::{TmuxManager, TmuxManagerImpl};
 use serde_json::json;
@@ -30,6 +30,14 @@ fn test_docker_config() -> DockerConfig {
         member_prompt: "prompts/member.md".to_string(),
         max_members: 3,
     }
+}
+
+fn aid(s: &str) -> AgentId {
+    AgentId::new(s)
+}
+
+fn tid(s: &str) -> TaskId {
+    TaskId::new(s)
 }
 
 /// Spawn the server on an OS-assigned port and return (addr, state)
@@ -171,13 +179,13 @@ async fn send_keys_delivers_to_tmux_pane() {
     let (base_url, state) = spawn_server(tmux, &session).await;
     {
         let mut infra = state.infra.lock().await;
-        infra.members.push(palette_core::state::MemberState {
-            id: "worker".to_string(),
-            role: "member".to_string(),
-            leader_id: String::new(),
-            container_id: String::new(),
-            tmux_target: target.clone(),
-            status: palette_core::state::MemberStatus::Idle,
+        infra.members.push(AgentState {
+            id: aid("worker"),
+            role: AgentRole::Member,
+            leader_id: aid(""),
+            container_id: ContainerId::new(""),
+            tmux_target: TmuxTarget::new(target.clone()),
+            status: AgentStatus::Idle,
             session_id: None,
         });
     }
@@ -521,13 +529,13 @@ async fn send_queues_when_member_is_working() {
     let (base_url, state) = spawn_server(tmux, &session).await;
     {
         let mut infra = state.infra.lock().await;
-        infra.members.push(palette_core::state::MemberState {
-            id: "worker".to_string(),
-            role: "member".to_string(),
-            leader_id: String::new(),
-            container_id: String::new(),
-            tmux_target: target.clone(),
-            status: palette_core::state::MemberStatus::Working,
+        infra.members.push(AgentState {
+            id: aid("worker"),
+            role: AgentRole::Member,
+            leader_id: aid(""),
+            container_id: ContainerId::new(""),
+            tmux_target: TmuxTarget::new(target.clone()),
+            status: AgentStatus::Working,
             session_id: None,
         });
     }
@@ -578,31 +586,31 @@ async fn scenario3_message_queuing_to_leader() {
     let (base_url, state) = spawn_server(tmux, &session).await;
     {
         let mut infra = state.infra.lock().await;
-        infra.leaders.push(palette_core::state::MemberState {
-            id: "leader-1".to_string(),
-            role: "leader".to_string(),
-            leader_id: String::new(),
-            container_id: String::new(),
-            tmux_target: leader_pane.clone(),
-            status: palette_core::state::MemberStatus::Working,
+        infra.leaders.push(AgentState {
+            id: aid("leader-1"),
+            role: AgentRole::Leader,
+            leader_id: aid(""),
+            container_id: ContainerId::new(""),
+            tmux_target: TmuxTarget::new(leader_pane.clone()),
+            status: AgentStatus::Working,
             session_id: None,
         });
-        infra.members.push(palette_core::state::MemberState {
-            id: "member-a".to_string(),
-            role: "member".to_string(),
-            leader_id: "leader-1".to_string(),
-            container_id: String::new(),
-            tmux_target: _member_a_pane.clone(),
-            status: palette_core::state::MemberStatus::Working,
+        infra.members.push(AgentState {
+            id: aid("member-a"),
+            role: AgentRole::Member,
+            leader_id: aid("leader-1"),
+            container_id: ContainerId::new(""),
+            tmux_target: TmuxTarget::new(_member_a_pane.clone()),
+            status: AgentStatus::Working,
             session_id: None,
         });
-        infra.members.push(palette_core::state::MemberState {
-            id: "member-b".to_string(),
-            role: "member".to_string(),
-            leader_id: "leader-1".to_string(),
-            container_id: String::new(),
-            tmux_target: _member_b_pane.clone(),
-            status: palette_core::state::MemberStatus::Working,
+        infra.members.push(AgentState {
+            id: aid("member-b"),
+            role: AgentRole::Member,
+            leader_id: aid("leader-1"),
+            container_id: ContainerId::new(""),
+            tmux_target: TmuxTarget::new(_member_b_pane.clone()),
+            status: AgentStatus::Working,
             session_id: None,
         });
     }
@@ -626,14 +634,14 @@ async fn scenario3_message_queuing_to_leader() {
     // Manually assign tasks (simulating what auto-assign does)
     state
         .db
-        .update_task_status("W-A", palette_db::TaskStatus::Ready)
+        .update_task_status(&tid("W-A"), palette_db::TaskStatus::Ready)
         .unwrap();
-    state.db.assign_task("W-A", "member-a").unwrap();
+    state.db.assign_task(&tid("W-A"), &aid("member-a")).unwrap();
     state
         .db
-        .update_task_status("W-B", palette_db::TaskStatus::Ready)
+        .update_task_status(&tid("W-B"), palette_db::TaskStatus::Ready)
         .unwrap();
-    state.db.assign_task("W-B", "member-b").unwrap();
+    state.db.assign_task(&tid("W-B"), &aid("member-b")).unwrap();
 
     // --- Both members stop while leader is Working ---
 
@@ -657,7 +665,7 @@ async fn scenario3_message_queuing_to_leader() {
 
     // Leader is Working, so both notifications should be queued
     assert!(
-        state.db.has_pending_messages("leader-1").unwrap(),
+        state.db.has_pending_messages(&aid("leader-1")).unwrap(),
         "leader should have pending messages"
     );
 
@@ -688,7 +696,7 @@ async fn scenario3_message_queuing_to_leader() {
 
     // Leader should still have pending messages (member-b event)
     assert!(
-        state.db.has_pending_messages("leader-1").unwrap(),
+        state.db.has_pending_messages(&aid("leader-1")).unwrap(),
         "leader should still have pending message for member-b"
     );
 
@@ -711,7 +719,7 @@ async fn scenario3_message_queuing_to_leader() {
 
     // Queue should now be empty
     assert!(
-        !state.db.has_pending_messages("leader-1").unwrap(),
+        !state.db.has_pending_messages(&aid("leader-1")).unwrap(),
         "leader queue should be empty after all deliveries"
     );
 }

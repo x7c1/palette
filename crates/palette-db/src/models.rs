@@ -1,5 +1,86 @@
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use std::fmt;
 use std::str::FromStr;
+
+// --- Newtype IDs ---
+
+/// Task identifier (e.g., "W-XXXXXXXX" for work, "R-XXXXXXXX" for review).
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct TaskId(String);
+
+impl TaskId {
+    pub fn new(id: impl Into<String>) -> Self {
+        Self(id.into())
+    }
+
+    pub fn generate(task_type: TaskType) -> Self {
+        let prefix = match task_type {
+            TaskType::Work => 'W',
+            TaskType::Review => 'R',
+        };
+        let suffix = &uuid::Uuid::new_v4().as_simple().to_string()[..8];
+        Self(format!("{prefix}-{suffix}"))
+    }
+}
+
+impl fmt::Display for TaskId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(&self.0)
+    }
+}
+
+impl AsRef<str> for TaskId {
+    fn as_ref(&self) -> &str {
+        &self.0
+    }
+}
+
+/// Agent identifier for both leaders and members (e.g., "leader-1", "member-a").
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct AgentId(String);
+
+impl AgentId {
+    pub fn new(id: impl Into<String>) -> Self {
+        Self(id.into())
+    }
+
+    /// Generate the next member ID from a sequence number
+    /// (0 → "member-a", 25 → "member-z", 26 → "member-aa", ...).
+    pub fn next_member(sequence: usize) -> Self {
+        let suffix = member_id_suffix(sequence);
+        Self(format!("member-{suffix}"))
+    }
+}
+
+impl fmt::Display for AgentId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(&self.0)
+    }
+}
+
+impl AsRef<str> for AgentId {
+    fn as_ref(&self) -> &str {
+        &self.0
+    }
+}
+
+fn member_id_suffix(n: usize) -> String {
+    let mut n = n;
+    let mut result = String::new();
+    loop {
+        result.insert(0, (b'a' + (n % 26) as u8) as char);
+        if n < 26 {
+            break;
+        }
+        n = n / 26 - 1;
+    }
+    result
+}
+
+// --- Enums ---
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -130,6 +211,8 @@ impl FromStr for Verdict {
     }
 }
 
+// --- Domain models ---
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Repository {
     pub name: String,
@@ -138,50 +221,50 @@ pub struct Repository {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Task {
-    pub id: String,
+    pub id: TaskId,
     #[serde(rename = "type")]
     pub task_type: TaskType,
     pub title: String,
     pub description: Option<String>,
-    pub assignee: Option<String>,
+    pub assignee: Option<AgentId>,
     pub status: TaskStatus,
     pub priority: Option<Priority>,
     pub repositories: Option<Vec<Repository>>,
     pub pr_url: Option<String>,
-    pub created_at: String,
-    pub updated_at: String,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
     pub notes: Option<String>,
-    pub assigned_at: Option<String>,
+    pub assigned_at: Option<DateTime<Utc>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CreateTaskRequest {
-    pub id: Option<String>,
+    pub id: Option<TaskId>,
     #[serde(rename = "type")]
     pub task_type: TaskType,
     pub title: String,
     pub description: Option<String>,
-    pub assignee: Option<String>,
+    pub assignee: Option<AgentId>,
     pub priority: Option<Priority>,
     pub repositories: Option<Vec<Repository>>,
     #[serde(default)]
-    pub depends_on: Vec<String>,
+    pub depends_on: Vec<TaskId>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UpdateTaskRequest {
-    pub id: String,
+    pub id: TaskId,
     pub status: TaskStatus,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ReviewSubmission {
     pub id: i64,
-    pub review_task_id: String,
+    pub review_task_id: TaskId,
     pub round: i32,
     pub verdict: Verdict,
     pub summary: Option<String>,
-    pub created_at: String,
+    pub created_at: DateTime<Utc>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -213,16 +296,16 @@ pub struct TaskFilter {
     #[serde(rename = "type")]
     pub task_type: Option<TaskType>,
     pub status: Option<TaskStatus>,
-    pub assignee: Option<String>,
+    pub assignee: Option<AgentId>,
 }
 
 /// A queued message in the message_queue table.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct QueuedMessage {
     pub id: i64,
-    pub target_id: String,
+    pub target_id: AgentId,
     pub message: String,
-    pub created_at: String,
+    pub created_at: DateTime<Utc>,
 }
 
 /// Side effects produced by the rule engine after a state transition.
@@ -230,13 +313,13 @@ pub struct QueuedMessage {
 pub enum RuleEffect {
     /// A task's status was changed by the rule engine.
     StatusChanged {
-        task_id: String,
+        task_id: TaskId,
         new_status: TaskStatus,
     },
     /// The review loop exceeded the max rounds; escalate.
-    Escalated { task_id: String, round: i32 },
+    Escalated { task_id: TaskId, round: i32 },
     /// A task is ready to be assigned to a member (orchestrator should spawn member).
-    AutoAssign { task_id: String },
+    AutoAssign { task_id: TaskId },
     /// A member's task is done; orchestrator should destroy its container.
-    DestroyMember { member_id: String },
+    DestroyMember { member_id: AgentId },
 }

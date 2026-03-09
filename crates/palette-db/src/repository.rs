@@ -1,7 +1,7 @@
+use crate::errors::{DbError, TaskError};
 use crate::models::*;
 use crate::schema;
-use anyhow::{Context as _, bail};
-use chrono::Utc;
+use chrono::{DateTime, Utc};
 use rusqlite::{Connection, params};
 use std::path::Path;
 use std::sync::Mutex;
@@ -10,21 +10,33 @@ pub struct Database {
     conn: Mutex<Connection>,
 }
 
+/// Acquire the Mutex lock, converting a poisoned lock into DbError.
+macro_rules! lock {
+    ($mutex:expr) => {
+        $mutex.lock().map_err(|_| DbError::LockPoisoned)?
+    };
+}
+
 impl Database {
-    pub fn open(path: &Path) -> anyhow::Result<Self> {
+    pub fn open(path: &Path) -> Result<Self, DbError> {
         if let Some(parent) = path.parent() {
-            std::fs::create_dir_all(parent)
-                .with_context(|| format!("failed to create db directory: {}", parent.display()))?;
+            std::fs::create_dir_all(parent).map_err(|e| {
+                DbError::Internal(format!(
+                    "failed to create db directory {}: {e}",
+                    parent.display()
+                ))
+            })?;
         }
-        let conn = Connection::open(path)
-            .with_context(|| format!("failed to open database: {}", path.display()))?;
+        let conn = Connection::open(path).map_err(|e| {
+            DbError::Internal(format!("failed to open database {}: {e}", path.display()))
+        })?;
         schema::initialize(&conn)?;
         Ok(Self {
             conn: Mutex::new(conn),
         })
     }
 
-    pub fn open_in_memory() -> anyhow::Result<Self> {
+    pub fn open_in_memory() -> Result<Self, DbError> {
         let conn = Connection::open_in_memory()?;
         schema::initialize(&conn)?;
         Ok(Self {
@@ -32,20 +44,14 @@ impl Database {
         })
     }
 
-    pub fn create_task(&self, req: &CreateTaskRequest) -> anyhow::Result<Task> {
-        let conn = self.conn.lock().unwrap();
-        let now = Utc::now().to_rfc3339();
-        let id = req.id.clone().unwrap_or_else(|| {
-            let prefix = req
-                .task_type
-                .as_str()
-                .chars()
-                .next()
-                .unwrap()
-                .to_uppercase();
-            let suffix = &uuid::Uuid::new_v4().as_simple().to_string()[..8];
-            format!("{prefix}-{suffix}")
-        });
+    pub fn create_task(&self, req: &CreateTaskRequest) -> Result<Task, DbError> {
+        let conn = lock!(self.conn);
+        let now = Utc::now();
+        let now_str = now.to_rfc3339();
+        let id = req
+            .id
+            .clone()
+            .unwrap_or_else(|| TaskId::generate(req.task_type));
 
         let repos_json = req
             .repositories
@@ -62,40 +68,38 @@ impl Database {
             "INSERT INTO tasks (id, type, title, description, assignee, status, priority, repositories, pr_url, created_at, updated_at, notes, assigned_at)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, NULL, ?9, ?10, NULL, NULL)",
             params![
-                id,
+                id.as_ref(),
                 req.task_type.as_str(),
                 req.title,
                 req.description,
-                req.assignee,
+                req.assignee.as_ref().map(|a| a.as_ref()),
                 initial_status.as_str(),
                 req.priority.map(|p| p.as_str()),
                 repos_json,
-                now,
-                now,
+                now_str,
+                now_str,
             ],
-        )
-        .context("failed to insert task")?;
+        )?;
 
         for dep in &req.depends_on {
             conn.execute(
                 "INSERT INTO dependencies (task_id, depends_on) VALUES (?1, ?2)",
-                params![id, dep],
-            )
-            .with_context(|| format!("failed to insert dependency: {id} -> {dep}"))?;
+                params![id.as_ref(), dep.as_ref()],
+            )?;
         }
 
         drop(conn);
         self.get_task(&id)?
-            .ok_or_else(|| anyhow::anyhow!("task not found after insert"))
+            .ok_or_else(|| TaskError::NotFound { task_id: id }.into())
     }
 
-    pub fn get_task(&self, id: &str) -> anyhow::Result<Option<Task>> {
-        let conn = self.conn.lock().unwrap();
+    pub fn get_task(&self, id: &TaskId) -> Result<Option<Task>, DbError> {
+        let conn = lock!(self.conn);
         let mut stmt = conn.prepare(
             "SELECT id, type, title, description, assignee, status, priority, repositories, pr_url, created_at, updated_at, notes, assigned_at
              FROM tasks WHERE id = ?1",
         )?;
-        let mut rows = stmt.query_map(params![id], |row| Ok(row_to_task(row)))?;
+        let mut rows = stmt.query_map(params![id.as_ref()], |row| Ok(row_to_task(row)))?;
         match rows.next() {
             Some(Ok(task)) => Ok(Some(task)),
             Some(Err(e)) => Err(e.into()),
@@ -103,8 +107,8 @@ impl Database {
         }
     }
 
-    pub fn list_tasks(&self, filter: &TaskFilter) -> anyhow::Result<Vec<Task>> {
-        let conn = self.conn.lock().unwrap();
+    pub fn list_tasks(&self, filter: &TaskFilter) -> Result<Vec<Task>, DbError> {
+        let conn = lock!(self.conn);
         let mut sql = "SELECT id, type, title, description, assignee, status, priority, repositories, pr_url, created_at, updated_at, notes, assigned_at FROM tasks WHERE 1=1".to_string();
         let mut param_values: Vec<Box<dyn rusqlite::types::ToSql>> = Vec::new();
 
@@ -117,7 +121,7 @@ impl Database {
             sql.push_str(&format!(" AND status = ?{}", param_values.len()));
         }
         if let Some(ref a) = filter.assignee {
-            param_values.push(Box::new(a.clone()));
+            param_values.push(Box::new(a.as_ref().to_string()));
             sql.push_str(&format!(" AND assignee = ?{}", param_values.len()));
         }
         sql.push_str(" ORDER BY created_at");
@@ -134,25 +138,30 @@ impl Database {
         Ok(tasks)
     }
 
-    pub fn update_task_status(&self, id: &str, status: TaskStatus) -> anyhow::Result<Task> {
-        let conn = self.conn.lock().unwrap();
+    pub fn update_task_status(&self, id: &TaskId, status: TaskStatus) -> Result<Task, DbError> {
+        let conn = lock!(self.conn);
         let now = Utc::now().to_rfc3339();
         let updated = conn.execute(
             "UPDATE tasks SET status = ?1, updated_at = ?2 WHERE id = ?3",
-            params![status.as_str(), now, id],
+            params![status.as_str(), now, id.as_ref()],
         )?;
         if updated == 0 {
-            bail!("task not found: {id}");
+            return Err(TaskError::NotFound {
+                task_id: id.clone(),
+            }
+            .into());
         }
         drop(conn);
         self.get_task(id)?
-            .ok_or_else(|| anyhow::anyhow!("task not found after update"))
+            .ok_or_else(|| TaskError::NotFound { task_id: id.clone() }.into())
     }
 
-    pub fn get_dependencies(&self, task_id: &str) -> anyhow::Result<Vec<String>> {
-        let conn = self.conn.lock().unwrap();
+    pub fn get_dependencies(&self, task_id: &TaskId) -> Result<Vec<TaskId>, DbError> {
+        let conn = lock!(self.conn);
         let mut stmt = conn.prepare("SELECT depends_on FROM dependencies WHERE task_id = ?1")?;
-        let rows = stmt.query_map(params![task_id], |row| row.get::<_, String>(0))?;
+        let rows = stmt.query_map(params![task_id.as_ref()], |row| {
+            Ok(TaskId::new(row.get::<_, String>(0)?))
+        })?;
         let mut deps = Vec::new();
         for row in rows {
             deps.push(row?);
@@ -160,10 +169,12 @@ impl Database {
         Ok(deps)
     }
 
-    pub fn get_dependents(&self, depends_on_id: &str) -> anyhow::Result<Vec<String>> {
-        let conn = self.conn.lock().unwrap();
+    pub fn get_dependents(&self, depends_on_id: &TaskId) -> Result<Vec<TaskId>, DbError> {
+        let conn = lock!(self.conn);
         let mut stmt = conn.prepare("SELECT task_id FROM dependencies WHERE depends_on = ?1")?;
-        let rows = stmt.query_map(params![depends_on_id], |row| row.get::<_, String>(0))?;
+        let rows = stmt.query_map(params![depends_on_id.as_ref()], |row| {
+            Ok(TaskId::new(row.get::<_, String>(0)?))
+        })?;
         let mut deps = Vec::new();
         for row in rows {
             deps.push(row?);
@@ -172,15 +183,15 @@ impl Database {
     }
 
     /// Find review tasks that depend on the given work task.
-    pub fn find_reviews_for_work(&self, work_id: &str) -> anyhow::Result<Vec<Task>> {
-        let conn = self.conn.lock().unwrap();
+    pub fn find_reviews_for_work(&self, work_id: &TaskId) -> Result<Vec<Task>, DbError> {
+        let conn = lock!(self.conn);
         let mut stmt = conn.prepare(
             "SELECT t.id, t.type, t.title, t.description, t.assignee, t.status, t.priority, t.repositories, t.pr_url, t.created_at, t.updated_at, t.notes, t.assigned_at
              FROM tasks t
              JOIN dependencies d ON d.task_id = t.id
              WHERE d.depends_on = ?1 AND t.type = 'review'",
         )?;
-        let rows = stmt.query_map(params![work_id], |row| Ok(row_to_task(row)))?;
+        let rows = stmt.query_map(params![work_id.as_ref()], |row| Ok(row_to_task(row)))?;
         let mut tasks = Vec::new();
         for row in rows {
             tasks.push(row?);
@@ -189,15 +200,15 @@ impl Database {
     }
 
     /// Find work tasks that a review task depends on.
-    pub fn find_works_for_review(&self, review_id: &str) -> anyhow::Result<Vec<Task>> {
-        let conn = self.conn.lock().unwrap();
+    pub fn find_works_for_review(&self, review_id: &TaskId) -> Result<Vec<Task>, DbError> {
+        let conn = lock!(self.conn);
         let mut stmt = conn.prepare(
             "SELECT t.id, t.type, t.title, t.description, t.assignee, t.status, t.priority, t.repositories, t.pr_url, t.created_at, t.updated_at, t.notes, t.assigned_at
              FROM tasks t
              JOIN dependencies d ON d.depends_on = t.id
              WHERE d.task_id = ?1 AND t.type = 'work'",
         )?;
-        let rows = stmt.query_map(params![review_id], |row| Ok(row_to_task(row)))?;
+        let rows = stmt.query_map(params![review_id.as_ref()], |row| Ok(row_to_task(row)))?;
         let mut tasks = Vec::new();
         for row in rows {
             tasks.push(row?);
@@ -207,17 +218,18 @@ impl Database {
 
     pub fn submit_review(
         &self,
-        review_task_id: &str,
+        review_task_id: &TaskId,
         req: &SubmitReviewRequest,
-    ) -> anyhow::Result<ReviewSubmission> {
-        let conn = self.conn.lock().unwrap();
-        let now = Utc::now().to_rfc3339();
+    ) -> Result<ReviewSubmission, DbError> {
+        let conn = lock!(self.conn);
+        let now = Utc::now();
+        let now_str = now.to_rfc3339();
 
         // Determine round number
         let round: i32 = conn
             .query_row(
                 "SELECT COALESCE(MAX(round), 0) FROM review_submissions WHERE review_task_id = ?1",
-                params![review_task_id],
+                params![review_task_id.as_ref()],
                 |row| row.get(0),
             )
             .unwrap_or(0)
@@ -227,11 +239,11 @@ impl Database {
             "INSERT INTO review_submissions (review_task_id, round, verdict, summary, created_at)
              VALUES (?1, ?2, ?3, ?4, ?5)",
             params![
-                review_task_id,
+                review_task_id.as_ref(),
                 round,
                 req.verdict.as_str(),
                 req.summary,
-                now
+                now_str
             ],
         )?;
 
@@ -247,7 +259,7 @@ impl Database {
 
         Ok(ReviewSubmission {
             id: submission_id,
-            review_task_id: review_task_id.to_string(),
+            review_task_id: review_task_id.clone(),
             round,
             verdict: req.verdict,
             summary: req.summary.clone(),
@@ -257,24 +269,24 @@ impl Database {
 
     pub fn get_review_submissions(
         &self,
-        review_task_id: &str,
-    ) -> anyhow::Result<Vec<ReviewSubmission>> {
-        let conn = self.conn.lock().unwrap();
+        review_task_id: &TaskId,
+    ) -> Result<Vec<ReviewSubmission>, DbError> {
+        let conn = lock!(self.conn);
         let mut stmt = conn.prepare(
             "SELECT id, review_task_id, round, verdict, summary, created_at
              FROM review_submissions WHERE review_task_id = ?1 ORDER BY round",
         )?;
-        let rows = stmt.query_map(params![review_task_id], |row| {
+        let rows = stmt.query_map(params![review_task_id.as_ref()], |row| {
             Ok(ReviewSubmission {
                 id: row.get(0)?,
-                review_task_id: row.get(1)?,
+                review_task_id: TaskId::new(row.get::<_, String>(1)?),
                 round: row.get(2)?,
                 verdict: row
                     .get::<_, String>(3)?
                     .parse()
                     .unwrap_or(Verdict::Approved),
                 summary: row.get(4)?,
-                created_at: row.get(5)?,
+                created_at: parse_datetime(&row.get::<_, String>(5)?),
             })
         })?;
         let mut submissions = Vec::new();
@@ -285,25 +297,28 @@ impl Database {
     }
 
     /// Assign a task to a member and set status to in_progress.
-    pub fn assign_task(&self, task_id: &str, assignee: &str) -> anyhow::Result<Task> {
-        let conn = self.conn.lock().unwrap();
+    pub fn assign_task(&self, task_id: &TaskId, assignee: &AgentId) -> Result<Task, DbError> {
+        let conn = lock!(self.conn);
         let now = Utc::now().to_rfc3339();
         let updated = conn.execute(
             "UPDATE tasks SET status = ?1, assignee = ?2, assigned_at = ?3, updated_at = ?4 WHERE id = ?5",
-            params![TaskStatus::InProgress.as_str(), assignee, now, now, task_id],
+            params![TaskStatus::InProgress.as_str(), assignee.as_ref(), now, now, task_id.as_ref()],
         )?;
         if updated == 0 {
-            bail!("task not found: {task_id}");
+            return Err(TaskError::NotFound {
+                task_id: task_id.clone(),
+            }
+            .into());
         }
         drop(conn);
         self.get_task(task_id)?
-            .ok_or_else(|| anyhow::anyhow!("task not found after assign"))
+            .ok_or_else(|| TaskError::NotFound { task_id: task_id.clone() }.into())
     }
 
     /// Find work tasks that are ready and have all work dependencies done.
     /// Returns tasks ordered by priority (high > medium > low > null).
-    pub fn find_assignable_tasks(&self) -> anyhow::Result<Vec<Task>> {
-        let conn = self.conn.lock().unwrap();
+    pub fn find_assignable_tasks(&self) -> Result<Vec<Task>, DbError> {
+        let conn = lock!(self.conn);
         let mut stmt = conn.prepare(
             "SELECT t.id, t.type, t.title, t.description, t.assignee, t.status, t.priority, t.repositories, t.pr_url, t.created_at, t.updated_at, t.notes, t.assigned_at
              FROM tasks t
@@ -333,8 +348,8 @@ impl Database {
     }
 
     /// Count the number of work tasks currently in_progress (active members).
-    pub fn count_active_members(&self) -> anyhow::Result<usize> {
-        let conn = self.conn.lock().unwrap();
+    pub fn count_active_members(&self) -> Result<usize, DbError> {
+        let conn = lock!(self.conn);
         let count: i64 = conn.query_row(
             "SELECT COUNT(*) FROM tasks WHERE type = 'work' AND status = 'in_progress'",
             [],
@@ -346,35 +361,40 @@ impl Database {
     // --- Message Queue ---
 
     /// Enqueue a message for a target (member or leader).
-    pub fn enqueue_message(&self, target_id: &str, message: &str) -> anyhow::Result<QueuedMessage> {
-        let conn = self.conn.lock().unwrap();
-        let now = Utc::now().to_rfc3339();
+    pub fn enqueue_message(
+        &self,
+        target_id: &AgentId,
+        message: &str,
+    ) -> Result<QueuedMessage, DbError> {
+        let conn = lock!(self.conn);
+        let now = Utc::now();
+        let now_str = now.to_rfc3339();
         conn.execute(
             "INSERT INTO message_queue (target_id, message, created_at) VALUES (?1, ?2, ?3)",
-            params![target_id, message, now],
+            params![target_id.as_ref(), message, now_str],
         )?;
         let id = conn.last_insert_rowid();
         Ok(QueuedMessage {
             id,
-            target_id: target_id.to_string(),
+            target_id: target_id.clone(),
             message: message.to_string(),
             created_at: now,
         })
     }
 
     /// Dequeue the next message for a target (FIFO). Returns None if empty.
-    pub fn dequeue_message(&self, target_id: &str) -> anyhow::Result<Option<QueuedMessage>> {
-        let conn = self.conn.lock().unwrap();
+    pub fn dequeue_message(&self, target_id: &AgentId) -> Result<Option<QueuedMessage>, DbError> {
+        let conn = lock!(self.conn);
         let msg = conn
             .prepare(
                 "SELECT id, target_id, message, created_at FROM message_queue WHERE target_id = ?1 ORDER BY id LIMIT 1",
             )?
-            .query_row(params![target_id], |row| {
+            .query_row(params![target_id.as_ref()], |row| {
                 Ok(QueuedMessage {
                     id: row.get(0)?,
-                    target_id: row.get(1)?,
+                    target_id: AgentId::new(row.get::<_, String>(1)?),
                     message: row.get(2)?,
-                    created_at: row.get(3)?,
+                    created_at: parse_datetime(&row.get::<_, String>(3)?),
                 })
             })
             .ok();
@@ -386,16 +406,16 @@ impl Database {
     }
 
     /// Check if a target has pending messages.
-    pub fn has_pending_messages(&self, target_id: &str) -> anyhow::Result<bool> {
-        let conn = self.conn.lock().unwrap();
+    pub fn has_pending_messages(&self, target_id: &AgentId) -> Result<bool, DbError> {
+        let conn = lock!(self.conn);
         let exists = conn
             .prepare("SELECT 1 FROM message_queue WHERE target_id = ?1 LIMIT 1")?
-            .exists(params![target_id])?;
+            .exists(params![target_id.as_ref()])?;
         Ok(exists)
     }
 
-    pub fn get_review_comments(&self, submission_id: i64) -> anyhow::Result<Vec<ReviewComment>> {
-        let conn = self.conn.lock().unwrap();
+    pub fn get_review_comments(&self, submission_id: i64) -> Result<Vec<ReviewComment>, DbError> {
+        let conn = lock!(self.conn);
         let mut stmt = conn.prepare(
             "SELECT id, submission_id, file, line, body FROM review_comments WHERE submission_id = ?1",
         )?;
@@ -416,17 +436,27 @@ impl Database {
     }
 }
 
+/// Parse an RFC3339 datetime string from the database.
+fn parse_datetime(s: &str) -> DateTime<Utc> {
+    DateTime::parse_from_rfc3339(s)
+        .map(|dt| dt.with_timezone(&Utc))
+        .unwrap_or_else(|_| Utc::now())
+}
+
 fn row_to_task(row: &rusqlite::Row) -> Task {
     let repos_str: Option<String> = row.get(7).unwrap();
     let repositories: Option<Vec<Repository>> =
         repos_str.and_then(|s| serde_json::from_str(&s).ok());
 
     Task {
-        id: row.get(0).unwrap(),
+        id: TaskId::new(row.get::<_, String>(0).unwrap()),
         task_type: row.get::<_, String>(1).unwrap().parse().unwrap(),
         title: row.get(2).unwrap(),
         description: row.get(3).unwrap(),
-        assignee: row.get(4).unwrap(),
+        assignee: row
+            .get::<_, Option<String>>(4)
+            .unwrap()
+            .map(AgentId::new),
         status: row.get::<_, String>(5).unwrap().parse().unwrap(),
         priority: row
             .get::<_, Option<String>>(6)
@@ -434,10 +464,13 @@ fn row_to_task(row: &rusqlite::Row) -> Task {
             .and_then(|s| s.parse().ok()),
         repositories,
         pr_url: row.get(8).unwrap(),
-        created_at: row.get(9).unwrap(),
-        updated_at: row.get(10).unwrap(),
+        created_at: parse_datetime(&row.get::<_, String>(9).unwrap()),
+        updated_at: parse_datetime(&row.get::<_, String>(10).unwrap()),
         notes: row.get(11).unwrap(),
-        assigned_at: row.get(12).unwrap(),
+        assigned_at: row
+            .get::<_, Option<String>>(12)
+            .unwrap()
+            .map(|s| parse_datetime(&s)),
     }
 }
 
@@ -449,16 +482,24 @@ mod tests {
         Database::open_in_memory().unwrap()
     }
 
+    fn tid(s: &str) -> TaskId {
+        TaskId::new(s)
+    }
+
+    fn aid(s: &str) -> AgentId {
+        AgentId::new(s)
+    }
+
     #[test]
     fn create_and_get_task() {
         let db = test_db();
         let task = db
             .create_task(&CreateTaskRequest {
-                id: Some("W-001".to_string()),
+                id: Some(tid("W-001")),
                 task_type: TaskType::Work,
                 title: "Implement feature".to_string(),
                 description: Some("Details".to_string()),
-                assignee: Some("member-a".to_string()),
+                assignee: Some(aid("member-a")),
                 priority: Some(Priority::High),
                 repositories: Some(vec![Repository {
                     name: "x7c1/palette".to_string(),
@@ -468,12 +509,12 @@ mod tests {
             })
             .unwrap();
 
-        assert_eq!(task.id, "W-001");
+        assert_eq!(task.id, tid("W-001"));
         assert_eq!(task.task_type, TaskType::Work);
         assert_eq!(task.status, TaskStatus::Draft);
         assert_eq!(task.priority, Some(Priority::High));
 
-        let fetched = db.get_task("W-001").unwrap().unwrap();
+        let fetched = db.get_task(&tid("W-001")).unwrap().unwrap();
         assert_eq!(fetched.title, "Implement feature");
     }
 
@@ -481,7 +522,7 @@ mod tests {
     fn create_task_with_dependencies() {
         let db = test_db();
         db.create_task(&CreateTaskRequest {
-            id: Some("W-001".to_string()),
+            id: Some(tid("W-001")),
             task_type: TaskType::Work,
             title: "Work task".to_string(),
             description: None,
@@ -493,29 +534,29 @@ mod tests {
         .unwrap();
 
         db.create_task(&CreateTaskRequest {
-            id: Some("R-001".to_string()),
+            id: Some(tid("R-001")),
             task_type: TaskType::Review,
             title: "Review task".to_string(),
             description: None,
             assignee: None,
             priority: None,
             repositories: None,
-            depends_on: vec!["W-001".to_string()],
+            depends_on: vec![tid("W-001")],
         })
         .unwrap();
 
-        let deps = db.get_dependencies("R-001").unwrap();
-        assert_eq!(deps, vec!["W-001"]);
+        let deps = db.get_dependencies(&tid("R-001")).unwrap();
+        assert_eq!(deps, vec![tid("W-001")]);
 
-        let dependents = db.get_dependents("W-001").unwrap();
-        assert_eq!(dependents, vec!["R-001"]);
+        let dependents = db.get_dependents(&tid("W-001")).unwrap();
+        assert_eq!(dependents, vec![tid("R-001")]);
     }
 
     #[test]
     fn list_tasks_with_filter() {
         let db = test_db();
         db.create_task(&CreateTaskRequest {
-            id: Some("W-001".to_string()),
+            id: Some(tid("W-001")),
             task_type: TaskType::Work,
             title: "Work 1".to_string(),
             description: None,
@@ -527,7 +568,7 @@ mod tests {
         .unwrap();
 
         db.create_task(&CreateTaskRequest {
-            id: Some("R-001".to_string()),
+            id: Some(tid("R-001")),
             task_type: TaskType::Review,
             title: "Review 1".to_string(),
             description: None,
@@ -555,14 +596,14 @@ mod tests {
             })
             .unwrap();
         assert_eq!(works.len(), 1);
-        assert_eq!(works[0].id, "W-001");
+        assert_eq!(works[0].id, tid("W-001"));
     }
 
     #[test]
     fn update_task_status() {
         let db = test_db();
         db.create_task(&CreateTaskRequest {
-            id: Some("W-001".to_string()),
+            id: Some(tid("W-001")),
             task_type: TaskType::Work,
             title: "Work".to_string(),
             description: None,
@@ -574,7 +615,7 @@ mod tests {
         .unwrap();
 
         let updated = db
-            .update_task_status("W-001", TaskStatus::InProgress)
+            .update_task_status(&tid("W-001"), TaskStatus::InProgress)
             .unwrap();
         assert_eq!(updated.status, TaskStatus::InProgress);
     }
@@ -583,7 +624,7 @@ mod tests {
     fn submit_and_get_review() {
         let db = test_db();
         db.create_task(&CreateTaskRequest {
-            id: Some("W-001".to_string()),
+            id: Some(tid("W-001")),
             task_type: TaskType::Work,
             title: "Work".to_string(),
             description: None,
@@ -595,20 +636,20 @@ mod tests {
         .unwrap();
 
         db.create_task(&CreateTaskRequest {
-            id: Some("R-001".to_string()),
+            id: Some(tid("R-001")),
             task_type: TaskType::Review,
             title: "Review".to_string(),
             description: None,
             assignee: None,
             priority: None,
             repositories: None,
-            depends_on: vec!["W-001".to_string()],
+            depends_on: vec![tid("W-001")],
         })
         .unwrap();
 
         let sub = db
             .submit_review(
-                "R-001",
+                &tid("R-001"),
                 &SubmitReviewRequest {
                     verdict: Verdict::ChangesRequested,
                     summary: Some("Needs fixes".to_string()),
@@ -625,7 +666,7 @@ mod tests {
 
         let sub2 = db
             .submit_review(
-                "R-001",
+                &tid("R-001"),
                 &SubmitReviewRequest {
                     verdict: Verdict::Approved,
                     summary: Some("LGTM".to_string()),
@@ -635,7 +676,7 @@ mod tests {
             .unwrap();
         assert_eq!(sub2.round, 2);
 
-        let submissions = db.get_review_submissions("R-001").unwrap();
+        let submissions = db.get_review_submissions(&tid("R-001")).unwrap();
         assert_eq!(submissions.len(), 2);
 
         let comments = db.get_review_comments(sub.id).unwrap();
@@ -647,7 +688,7 @@ mod tests {
     fn find_reviews_for_work() {
         let db = test_db();
         db.create_task(&CreateTaskRequest {
-            id: Some("W-001".to_string()),
+            id: Some(tid("W-001")),
             task_type: TaskType::Work,
             title: "Work".to_string(),
             description: None,
@@ -659,29 +700,29 @@ mod tests {
         .unwrap();
 
         db.create_task(&CreateTaskRequest {
-            id: Some("R-001".to_string()),
+            id: Some(tid("R-001")),
             task_type: TaskType::Review,
             title: "Review".to_string(),
             description: None,
             assignee: None,
             priority: None,
             repositories: None,
-            depends_on: vec!["W-001".to_string()],
+            depends_on: vec![tid("W-001")],
         })
         .unwrap();
 
-        let reviews = db.find_reviews_for_work("W-001").unwrap();
+        let reviews = db.find_reviews_for_work(&tid("W-001")).unwrap();
         assert_eq!(reviews.len(), 1);
-        assert_eq!(reviews[0].id, "R-001");
+        assert_eq!(reviews[0].id, tid("R-001"));
 
-        let works = db.find_works_for_review("R-001").unwrap();
+        let works = db.find_works_for_review(&tid("R-001")).unwrap();
         assert_eq!(works.len(), 1);
-        assert_eq!(works[0].id, "W-001");
+        assert_eq!(works[0].id, tid("W-001"));
     }
 
-    fn create_work(db: &Database, id: &str, priority: Option<Priority>, deps: Vec<String>) {
+    fn create_work(db: &Database, id: &str, priority: Option<Priority>, deps: Vec<TaskId>) {
         db.create_task(&CreateTaskRequest {
-            id: Some(id.to_string()),
+            id: Some(tid(id)),
             task_type: TaskType::Work,
             title: format!("Task {id}"),
             description: None,
@@ -697,11 +738,12 @@ mod tests {
     fn assign_task_sets_assignee_and_status() {
         let db = test_db();
         create_work(&db, "W-001", None, vec![]);
-        db.update_task_status("W-001", TaskStatus::Ready).unwrap();
+        db.update_task_status(&tid("W-001"), TaskStatus::Ready)
+            .unwrap();
 
-        let task = db.assign_task("W-001", "member-a").unwrap();
+        let task = db.assign_task(&tid("W-001"), &aid("member-a")).unwrap();
         assert_eq!(task.status, TaskStatus::InProgress);
-        assert_eq!(task.assignee, Some("member-a".to_string()));
+        assert_eq!(task.assignee, Some(aid("member-a")));
         assert!(task.assigned_at.is_some());
     }
 
@@ -715,40 +757,45 @@ mod tests {
         assert_eq!(db.find_assignable_tasks().unwrap().len(), 0);
 
         // Set both to ready
-        db.update_task_status("W-001", TaskStatus::Ready).unwrap();
-        db.update_task_status("W-002", TaskStatus::Ready).unwrap();
+        db.update_task_status(&tid("W-001"), TaskStatus::Ready)
+            .unwrap();
+        db.update_task_status(&tid("W-002"), TaskStatus::Ready)
+            .unwrap();
 
         let assignable = db.find_assignable_tasks().unwrap();
         assert_eq!(assignable.len(), 2);
-        assert_eq!(assignable[0].id, "W-001"); // high priority first
-        assert_eq!(assignable[1].id, "W-002"); // low priority second
+        assert_eq!(assignable[0].id, tid("W-001")); // high priority first
+        assert_eq!(assignable[1].id, tid("W-002")); // low priority second
     }
 
     #[test]
     fn find_assignable_tasks_with_deps() {
         let db = test_db();
         create_work(&db, "W-001", None, vec![]);
-        create_work(&db, "W-002", None, vec!["W-001".to_string()]);
+        create_work(&db, "W-002", None, vec![tid("W-001")]);
 
-        db.update_task_status("W-001", TaskStatus::Ready).unwrap();
-        db.update_task_status("W-002", TaskStatus::Ready).unwrap();
+        db.update_task_status(&tid("W-001"), TaskStatus::Ready)
+            .unwrap();
+        db.update_task_status(&tid("W-002"), TaskStatus::Ready)
+            .unwrap();
 
         // W-002 depends on W-001 which is not done
         let assignable = db.find_assignable_tasks().unwrap();
         assert_eq!(assignable.len(), 1);
-        assert_eq!(assignable[0].id, "W-001");
+        assert_eq!(assignable[0].id, tid("W-001"));
 
         // Complete W-001
-        db.update_task_status("W-001", TaskStatus::InProgress)
+        db.update_task_status(&tid("W-001"), TaskStatus::InProgress)
             .unwrap();
-        db.update_task_status("W-001", TaskStatus::InReview)
+        db.update_task_status(&tid("W-001"), TaskStatus::InReview)
             .unwrap();
-        db.update_task_status("W-001", TaskStatus::Done).unwrap();
+        db.update_task_status(&tid("W-001"), TaskStatus::Done)
+            .unwrap();
 
         // Now W-002 is assignable
         let assignable = db.find_assignable_tasks().unwrap();
         assert_eq!(assignable.len(), 1);
-        assert_eq!(assignable[0].id, "W-002");
+        assert_eq!(assignable[0].id, tid("W-002"));
     }
 
     #[test]
@@ -760,47 +807,50 @@ mod tests {
         //  \ /
         //   D
         create_work(&db, "A", None, vec![]);
-        create_work(&db, "B", None, vec!["A".to_string()]);
-        create_work(&db, "C", None, vec!["A".to_string()]);
-        create_work(&db, "D", None, vec!["B".to_string(), "C".to_string()]);
+        create_work(&db, "B", None, vec![tid("A")]);
+        create_work(&db, "C", None, vec![tid("A")]);
+        create_work(&db, "D", None, vec![tid("B"), tid("C")]);
 
         for id in ["A", "B", "C", "D"] {
-            db.update_task_status(id, TaskStatus::Ready).unwrap();
+            db.update_task_status(&tid(id), TaskStatus::Ready).unwrap();
         }
 
         // Only A is assignable
         let assignable = db.find_assignable_tasks().unwrap();
         assert_eq!(assignable.len(), 1);
-        assert_eq!(assignable[0].id, "A");
+        assert_eq!(assignable[0].id, tid("A"));
 
         // Complete A → B and C become assignable
-        db.assign_task("A", "m-a").unwrap();
-        db.update_task_status("A", TaskStatus::InReview).unwrap();
-        db.update_task_status("A", TaskStatus::Done).unwrap();
+        db.assign_task(&tid("A"), &aid("m-a")).unwrap();
+        db.update_task_status(&tid("A"), TaskStatus::InReview)
+            .unwrap();
+        db.update_task_status(&tid("A"), TaskStatus::Done).unwrap();
 
         let assignable = db.find_assignable_tasks().unwrap();
         assert_eq!(assignable.len(), 2);
-        let ids: Vec<&str> = assignable.iter().map(|t| t.id.as_str()).collect();
+        let ids: Vec<&str> = assignable.iter().map(|t| t.id.as_ref()).collect();
         assert!(ids.contains(&"B"));
         assert!(ids.contains(&"C"));
 
         // Complete B, but D still waits for C
-        db.assign_task("B", "m-b").unwrap();
-        db.update_task_status("B", TaskStatus::InReview).unwrap();
-        db.update_task_status("B", TaskStatus::Done).unwrap();
+        db.assign_task(&tid("B"), &aid("m-b")).unwrap();
+        db.update_task_status(&tid("B"), TaskStatus::InReview)
+            .unwrap();
+        db.update_task_status(&tid("B"), TaskStatus::Done).unwrap();
 
         let assignable = db.find_assignable_tasks().unwrap();
         assert_eq!(assignable.len(), 1);
-        assert_eq!(assignable[0].id, "C");
+        assert_eq!(assignable[0].id, tid("C"));
 
         // Complete C → D becomes assignable
-        db.assign_task("C", "m-c").unwrap();
-        db.update_task_status("C", TaskStatus::InReview).unwrap();
-        db.update_task_status("C", TaskStatus::Done).unwrap();
+        db.assign_task(&tid("C"), &aid("m-c")).unwrap();
+        db.update_task_status(&tid("C"), TaskStatus::InReview)
+            .unwrap();
+        db.update_task_status(&tid("C"), TaskStatus::Done).unwrap();
 
         let assignable = db.find_assignable_tasks().unwrap();
         assert_eq!(assignable.len(), 1);
-        assert_eq!(assignable[0].id, "D");
+        assert_eq!(assignable[0].id, tid("D"));
     }
 
     #[test]
@@ -811,17 +861,20 @@ mod tests {
 
         assert_eq!(db.count_active_members().unwrap(), 0);
 
-        db.update_task_status("W-001", TaskStatus::Ready).unwrap();
-        db.assign_task("W-001", "member-a").unwrap();
+        db.update_task_status(&tid("W-001"), TaskStatus::Ready)
+            .unwrap();
+        db.assign_task(&tid("W-001"), &aid("member-a")).unwrap();
         assert_eq!(db.count_active_members().unwrap(), 1);
 
-        db.update_task_status("W-002", TaskStatus::Ready).unwrap();
-        db.assign_task("W-002", "member-b").unwrap();
+        db.update_task_status(&tid("W-002"), TaskStatus::Ready)
+            .unwrap();
+        db.assign_task(&tid("W-002"), &aid("member-b")).unwrap();
         assert_eq!(db.count_active_members().unwrap(), 2);
 
-        db.update_task_status("W-001", TaskStatus::InReview)
+        db.update_task_status(&tid("W-001"), TaskStatus::InReview)
             .unwrap();
-        db.update_task_status("W-001", TaskStatus::Done).unwrap();
+        db.update_task_status(&tid("W-001"), TaskStatus::Done)
+            .unwrap();
         assert_eq!(db.count_active_members().unwrap(), 1);
     }
 
@@ -830,40 +883,40 @@ mod tests {
         let db = test_db();
 
         // Empty queue
-        assert!(db.dequeue_message("member-a").unwrap().is_none());
-        assert!(!db.has_pending_messages("member-a").unwrap());
+        assert!(db.dequeue_message(&aid("member-a")).unwrap().is_none());
+        assert!(!db.has_pending_messages(&aid("member-a")).unwrap());
 
         // Enqueue
-        let msg1 = db.enqueue_message("member-a", "hello").unwrap();
-        let msg2 = db.enqueue_message("member-a", "world").unwrap();
+        let msg1 = db.enqueue_message(&aid("member-a"), "hello").unwrap();
+        let msg2 = db.enqueue_message(&aid("member-a"), "world").unwrap();
         assert!(msg1.id < msg2.id);
 
-        assert!(db.has_pending_messages("member-a").unwrap());
-        assert!(!db.has_pending_messages("member-b").unwrap());
+        assert!(db.has_pending_messages(&aid("member-a")).unwrap());
+        assert!(!db.has_pending_messages(&aid("member-b")).unwrap());
 
         // Dequeue in FIFO order
-        let dequeued = db.dequeue_message("member-a").unwrap().unwrap();
+        let dequeued = db.dequeue_message(&aid("member-a")).unwrap().unwrap();
         assert_eq!(dequeued.message, "hello");
 
-        let dequeued = db.dequeue_message("member-a").unwrap().unwrap();
+        let dequeued = db.dequeue_message(&aid("member-a")).unwrap().unwrap();
         assert_eq!(dequeued.message, "world");
 
         // Queue is empty
-        assert!(db.dequeue_message("member-a").unwrap().is_none());
-        assert!(!db.has_pending_messages("member-a").unwrap());
+        assert!(db.dequeue_message(&aid("member-a")).unwrap().is_none());
+        assert!(!db.has_pending_messages(&aid("member-a")).unwrap());
     }
 
     #[test]
     fn message_queue_per_target_isolation() {
         let db = test_db();
 
-        db.enqueue_message("member-a", "msg-a").unwrap();
-        db.enqueue_message("member-b", "msg-b").unwrap();
+        db.enqueue_message(&aid("member-a"), "msg-a").unwrap();
+        db.enqueue_message(&aid("member-b"), "msg-b").unwrap();
 
-        let dequeued = db.dequeue_message("member-a").unwrap().unwrap();
+        let dequeued = db.dequeue_message(&aid("member-a")).unwrap().unwrap();
         assert_eq!(dequeued.message, "msg-a");
 
-        let dequeued = db.dequeue_message("member-b").unwrap().unwrap();
+        let dequeued = db.dequeue_message(&aid("member-b")).unwrap().unwrap();
         assert_eq!(dequeued.message, "msg-b");
     }
 }

@@ -1,4 +1,4 @@
-use crate::models::{CreateTaskRequest, Priority, Repository, TaskType};
+use crate::models::{CreateTaskRequest, Priority, Repository, TaskId, TaskType};
 use serde::Deserialize;
 
 /// Top-level YAML task definition file.
@@ -20,7 +20,7 @@ pub struct RepositoryEntry {
 /// A single task entry in the YAML file.
 #[derive(Debug, Deserialize)]
 pub struct TaskEntry {
-    pub id: String,
+    pub id: TaskId,
     #[serde(rename = "type")]
     pub task_type: TaskType,
     pub title: String,
@@ -29,7 +29,7 @@ pub struct TaskEntry {
     /// Per-task repositories override. If omitted, inherits from top-level.
     pub repositories: Option<Vec<RepositoryEntry>>,
     #[serde(default)]
-    pub depends_on: Vec<String>,
+    pub depends_on: Vec<TaskId>,
 }
 
 impl TaskFile {
@@ -114,7 +114,7 @@ tasks:
 
         let requests = file.into_requests();
         assert_eq!(requests.len(), 2);
-        assert_eq!(requests[0].id, Some("W-A".to_string()));
+        assert_eq!(requests[0].id, Some(TaskId::new("W-A")));
         assert_eq!(requests[0].task_type, TaskType::Work);
         assert_eq!(requests[0].priority, Some(Priority::High));
 
@@ -125,7 +125,7 @@ tasks:
         assert_eq!(repos[0].branch.as_deref(), Some("feature/test"));
 
         // Review task also inherits
-        assert_eq!(requests[1].depends_on, vec!["W-A"]);
+        assert_eq!(requests[1].depends_on, vec![TaskId::new("W-A")]);
         assert!(requests[1].repositories.is_some());
     }
 

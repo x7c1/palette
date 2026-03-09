@@ -4,8 +4,8 @@ use axum::Router;
 use palette_core::DockerConfig;
 use palette_core::docker::DockerManager;
 use palette_core::orchestrator;
-use palette_core::state::PersistentState;
-use palette_db::{Database, RuleEngine};
+use palette_core::state::{AgentStatus, PersistentState};
+use palette_db::{AgentId, Database, RuleEngine};
 use palette_tmux::{TmuxManager as _, TmuxManagerImpl};
 use std::sync::Arc;
 
@@ -35,18 +35,33 @@ pub fn create_router(state: Arc<AppState>) -> Router {
 
 /// Spawn a background task that polls a tmux pane for Claude Code readiness (`❯` prompt),
 /// then transitions the target from Booting to Idle and delivers queued messages.
-pub fn spawn_readiness_watcher(target_id: String, tmux_target: String, state: Arc<AppState>) {
-    use palette_core::state::MemberStatus;
+/// Interval between readiness polls.
+const READINESS_POLL_INTERVAL: std::time::Duration = std::time::Duration::from_secs(3);
 
+/// Maximum time to wait for Claude Code readiness.
+const READINESS_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(120);
+
+pub fn spawn_readiness_watcher(target_id: AgentId, state: Arc<AppState>) {
+    let max_polls = READINESS_TIMEOUT.as_secs() / READINESS_POLL_INTERVAL.as_secs();
     tokio::spawn(async move {
-        // Poll every 3 seconds for up to 120 seconds
-        for _ in 0..40 {
-            tokio::time::sleep(std::time::Duration::from_secs(3)).await;
+        for _ in 0..max_polls {
+            tokio::time::sleep(READINESS_POLL_INTERVAL).await;
 
-            let pane_content = match state.tmux.capture_pane(&tmux_target) {
+            let tmux_target = {
+                let infra = state.infra.lock().await;
+                let agent = infra
+                    .find_member(&target_id)
+                    .or_else(|| infra.find_leader(&target_id));
+                match agent {
+                    Some(m) => m.tmux_target.clone(),
+                    None => return,
+                }
+            };
+
+            let pane_content = match state.tmux.capture_pane(tmux_target.as_ref()) {
                 Ok(content) => content,
                 Err(e) => {
-                    tracing::warn!(target_id, error = %e, "failed to capture pane");
+                    tracing::warn!(target_id = %target_id, error = %e, "failed to capture pane");
                     continue;
                 }
             };
@@ -55,19 +70,19 @@ pub fn spawn_readiness_watcher(target_id: String, tmux_target: String, state: Ar
                 continue;
             }
 
-            tracing::info!(target_id, "Claude Code is ready, delivering queued message");
+            tracing::info!(target_id = %target_id, "Claude Code is ready, delivering queued message");
 
             {
                 let mut infra = state.infra.lock().await;
                 let is_booting = infra
                     .find_member(&target_id)
                     .or_else(|| infra.find_leader(&target_id))
-                    .is_some_and(|m| m.status == MemberStatus::Booting);
+                    .is_some_and(|m| m.status == AgentStatus::Booting);
                 if is_booting {
                     if let Some(m) = infra.find_member_mut(&target_id) {
-                        m.status = MemberStatus::Idle;
+                        m.status = AgentStatus::Idle;
                     } else if let Some(m) = infra.find_leader_mut(&target_id) {
-                        m.status = MemberStatus::Idle;
+                        m.status = AgentStatus::Idle;
                     }
                     infra.touch();
                 }
@@ -85,7 +100,7 @@ pub fn spawn_readiness_watcher(target_id: String, tmux_target: String, state: Ar
             return;
         }
 
-        tracing::error!(target_id, "timed out waiting for Claude Code readiness");
+        tracing::error!(target_id = %target_id, "timed out waiting for Claude Code readiness");
     });
 }
 
@@ -101,11 +116,11 @@ pub fn spawn_delivery_loop(state: Arc<AppState>) {
                     let mut infra = state.infra.lock().await;
 
                     // Collect Idle targets (leaders + members)
-                    let idle_targets: Vec<String> = infra
+                    let idle_targets: Vec<AgentId> = infra
                         .leaders
                         .iter()
                         .chain(infra.members.iter())
-                        .filter(|m| m.status == palette_core::state::MemberStatus::Idle)
+                        .filter(|m| m.status == AgentStatus::Idle)
                         .map(|m| m.id.clone())
                         .collect();
 
@@ -121,7 +136,7 @@ pub fn spawn_delivery_loop(state: Arc<AppState>) {
                             Ok(false) => {}
                             Err(e) => {
                                 tracing::error!(
-                                    target_id = target_id,
+                                    target_id = %target_id,
                                     error = %e,
                                     "delivery loop: failed to deliver"
                                 );

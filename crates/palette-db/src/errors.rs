@@ -1,0 +1,122 @@
+use crate::models::{TaskId, TaskStatus, TaskType};
+use std::fmt;
+
+/// Domain-level task errors.
+#[derive(Debug)]
+pub enum TaskError {
+    NotFound { task_id: TaskId },
+    InvalidTransition { task_id: TaskId, from: TaskStatus, to: TaskStatus },
+    DuplicateId { task_id: TaskId },
+}
+
+impl fmt::Display for TaskError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            TaskError::NotFound { task_id } => write!(f, "task not found: {task_id}"),
+            TaskError::InvalidTransition { task_id, from, to } => {
+                write!(
+                    f,
+                    "invalid transition for task {task_id}: {} -> {}",
+                    from.as_str(),
+                    to.as_str()
+                )
+            }
+            TaskError::DuplicateId { task_id } => write!(f, "duplicate task id: {task_id}"),
+        }
+    }
+}
+
+impl std::error::Error for TaskError {}
+
+/// Domain-level review errors.
+#[derive(Debug)]
+pub enum ReviewError {
+    TaskNotFound { review_task_id: TaskId },
+    NotReviewTask { task_id: TaskId },
+}
+
+impl fmt::Display for ReviewError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            ReviewError::TaskNotFound { review_task_id } => {
+                write!(f, "review task not found: {review_task_id}")
+            }
+            ReviewError::NotReviewTask { task_id } => {
+                write!(f, "task {task_id} is not a review task")
+            }
+        }
+    }
+}
+
+impl std::error::Error for ReviewError {}
+
+/// Database-layer error combining storage and domain errors.
+#[derive(Debug)]
+pub enum DbError {
+    /// SQLite or other storage error.
+    Storage(rusqlite::Error),
+    /// Domain task error.
+    Task(TaskError),
+    /// Domain review error.
+    Review(ReviewError),
+    /// Lock acquisition failed (Mutex poisoned).
+    LockPoisoned,
+    /// Invalid status transition for a task type.
+    InvalidTransition {
+        task_type: TaskType,
+        from: TaskStatus,
+        to: TaskStatus,
+    },
+    /// Generic internal error.
+    Internal(String),
+}
+
+impl fmt::Display for DbError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            DbError::Storage(e) => write!(f, "database error: {e}"),
+            DbError::Task(e) => write!(f, "{e}"),
+            DbError::Review(e) => write!(f, "{e}"),
+            DbError::LockPoisoned => write!(f, "database lock poisoned"),
+            DbError::InvalidTransition { task_type, from, to } => {
+                write!(
+                    f,
+                    "invalid status transition for {} task: {} -> {}",
+                    task_type.as_str(),
+                    from.as_str(),
+                    to.as_str()
+                )
+            }
+            DbError::Internal(msg) => write!(f, "internal error: {msg}"),
+        }
+    }
+}
+
+impl std::error::Error for DbError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            DbError::Storage(e) => Some(e),
+            DbError::Task(e) => Some(e),
+            DbError::Review(e) => Some(e),
+            _ => None,
+        }
+    }
+}
+
+impl From<rusqlite::Error> for DbError {
+    fn from(e: rusqlite::Error) -> Self {
+        DbError::Storage(e)
+    }
+}
+
+impl From<TaskError> for DbError {
+    fn from(e: TaskError) -> Self {
+        DbError::Task(e)
+    }
+}
+
+impl From<ReviewError> for DbError {
+    fn from(e: ReviewError) -> Self {
+        DbError::Review(e)
+    }
+}

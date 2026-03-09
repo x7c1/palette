@@ -1,10 +1,81 @@
 use anyhow::Context as _;
+use chrono::{DateTime, Utc};
+use palette_db::AgentId;
 use serde::{Deserialize, Serialize};
+use std::fmt;
 use std::path::Path;
+
+/// Docker container identifier.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct ContainerId(String);
+
+impl ContainerId {
+    pub fn new(id: impl Into<String>) -> Self {
+        Self(id.into())
+    }
+}
+
+impl fmt::Display for ContainerId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(&self.0)
+    }
+}
+
+impl AsRef<str> for ContainerId {
+    fn as_ref(&self) -> &str {
+        &self.0
+    }
+}
+
+/// Tmux pane reference (e.g., "%42" or "session:window").
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct TmuxTarget(String);
+
+impl TmuxTarget {
+    pub fn new(target: impl Into<String>) -> Self {
+        Self(target.into())
+    }
+}
+
+impl fmt::Display for TmuxTarget {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(&self.0)
+    }
+}
+
+impl AsRef<str> for TmuxTarget {
+    fn as_ref(&self) -> &str {
+        &self.0
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
-pub enum MemberStatus {
+pub enum AgentRole {
+    Leader,
+    Member,
+}
+
+impl AgentRole {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            AgentRole::Leader => "leader",
+            AgentRole::Member => "member",
+        }
+    }
+}
+
+impl fmt::Display for AgentRole {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum AgentStatus {
     Booting,
     Working,
     Idle,
@@ -13,33 +84,33 @@ pub enum MemberStatus {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct MemberState {
-    pub id: String,
-    pub role: String,
-    pub leader_id: String,
-    pub container_id: String,
-    pub tmux_target: String,
-    pub status: MemberStatus,
+pub struct AgentState {
+    pub id: AgentId,
+    pub role: AgentRole,
+    pub leader_id: AgentId,
+    pub container_id: ContainerId,
+    pub tmux_target: TmuxTarget,
+    pub status: AgentStatus,
     pub session_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PersistentState {
     pub session_name: String,
-    pub leaders: Vec<MemberState>,
-    pub members: Vec<MemberState>,
-    pub created_at: String,
-    pub updated_at: String,
+    pub leaders: Vec<AgentState>,
+    pub members: Vec<AgentState>,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
 }
 
 impl PersistentState {
     pub fn new(session_name: String) -> Self {
-        let now = chrono::Utc::now().to_rfc3339();
+        let now = Utc::now();
         Self {
             session_name,
             leaders: Vec::new(),
             members: Vec::new(),
-            created_at: now.clone(),
+            created_at: now,
             updated_at: now,
         }
     }
@@ -72,33 +143,33 @@ impl PersistentState {
         Ok(Some(state))
     }
 
-    pub fn find_member(&self, id: &str) -> Option<&MemberState> {
-        self.members.iter().find(|m| m.id == id)
+    pub fn find_member(&self, id: &AgentId) -> Option<&AgentState> {
+        self.members.iter().find(|m| m.id == *id)
     }
 
-    pub fn find_member_mut(&mut self, id: &str) -> Option<&mut MemberState> {
-        self.members.iter_mut().find(|m| m.id == id)
+    pub fn find_member_mut(&mut self, id: &AgentId) -> Option<&mut AgentState> {
+        self.members.iter_mut().find(|m| m.id == *id)
     }
 
-    pub fn find_leader(&self, id: &str) -> Option<&MemberState> {
-        self.leaders.iter().find(|m| m.id == id)
+    pub fn find_leader(&self, id: &AgentId) -> Option<&AgentState> {
+        self.leaders.iter().find(|m| m.id == *id)
     }
 
-    pub fn find_leader_mut(&mut self, id: &str) -> Option<&mut MemberState> {
-        self.leaders.iter_mut().find(|m| m.id == id)
+    pub fn find_leader_mut(&mut self, id: &AgentId) -> Option<&mut AgentState> {
+        self.leaders.iter_mut().find(|m| m.id == *id)
     }
 
     /// Find any agent (leader or member) by container_id.
-    pub fn find_by_container(&self, container_id: &str) -> Option<&MemberState> {
+    pub fn find_by_container(&self, container_id: &ContainerId) -> Option<&AgentState> {
         self.leaders
             .iter()
             .chain(self.members.iter())
-            .find(|m| m.container_id == container_id)
+            .find(|m| m.container_id == *container_id)
     }
 
     /// Remove a member by ID, returning the removed state.
-    pub fn remove_member(&mut self, id: &str) -> Option<MemberState> {
-        if let Some(pos) = self.members.iter().position(|m| m.id == id) {
+    pub fn remove_member(&mut self, id: &AgentId) -> Option<AgentState> {
+        if let Some(pos) = self.members.iter().position(|m| m.id == *id) {
             Some(self.members.remove(pos))
         } else {
             None
@@ -106,33 +177,22 @@ impl PersistentState {
     }
 
     /// Generate the next member ID (member-a, member-b, ..., member-z, member-aa, ...).
-    pub fn next_member_id(&self) -> String {
-        let existing_count = self.members.len();
-        let suffix = member_id_suffix(existing_count);
-        format!("member-{suffix}")
+    pub fn next_member_id(&self) -> AgentId {
+        AgentId::next_member(self.members.len())
     }
 
     pub fn touch(&mut self) {
-        self.updated_at = chrono::Utc::now().to_rfc3339();
+        self.updated_at = Utc::now();
     }
-}
-
-fn member_id_suffix(n: usize) -> String {
-    let mut n = n;
-    let mut result = String::new();
-    loop {
-        result.insert(0, (b'a' + (n % 26) as u8) as char);
-        if n < 26 {
-            break;
-        }
-        n = n / 26 - 1;
-    }
-    result
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn aid(s: &str) -> AgentId {
+        AgentId::new(s)
+    }
 
     #[test]
     fn save_and_load_state() {
@@ -140,13 +200,13 @@ mod tests {
         let path = dir.path().join("state.json");
 
         let mut state = PersistentState::new("test-session".to_string());
-        state.members.push(MemberState {
-            id: "member-a".to_string(),
-            role: "member".to_string(),
-            leader_id: "leader-1".to_string(),
-            container_id: "abc123".to_string(),
-            tmux_target: "test-session:member-a".to_string(),
-            status: MemberStatus::Idle,
+        state.members.push(AgentState {
+            id: aid("member-a"),
+            role: AgentRole::Member,
+            leader_id: aid("leader-1"),
+            container_id: ContainerId::new("abc123"),
+            tmux_target: TmuxTarget::new("test-session:member-a"),
+            status: AgentStatus::Idle,
             session_id: None,
         });
 
@@ -154,7 +214,7 @@ mod tests {
         let loaded = PersistentState::load(&path).unwrap().unwrap();
         assert_eq!(loaded.session_name, "test-session");
         assert_eq!(loaded.members.len(), 1);
-        assert_eq!(loaded.members[0].id, "member-a");
+        assert_eq!(loaded.members[0].id, aid("member-a"));
     }
 
     #[test]
@@ -180,17 +240,17 @@ mod tests {
     #[test]
     fn find_member() {
         let mut state = PersistentState::new("test".to_string());
-        state.members.push(MemberState {
-            id: "member-a".to_string(),
-            role: "member".to_string(),
-            leader_id: "leader-1".to_string(),
-            container_id: "abc123".to_string(),
-            tmux_target: "test:member-a".to_string(),
-            status: MemberStatus::Idle,
+        state.members.push(AgentState {
+            id: aid("member-a"),
+            role: AgentRole::Member,
+            leader_id: aid("leader-1"),
+            container_id: ContainerId::new("abc123"),
+            tmux_target: TmuxTarget::new("test:member-a"),
+            status: AgentStatus::Idle,
             session_id: None,
         });
 
-        assert!(state.find_member("member-a").is_some());
-        assert!(state.find_member("member-b").is_none());
+        assert!(state.find_member(&aid("member-a")).is_some());
+        assert!(state.find_member(&aid("member-b")).is_none());
     }
 }

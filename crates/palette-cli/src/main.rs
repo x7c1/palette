@@ -1,8 +1,8 @@
 use anyhow::Context as _;
 use palette_core::Config;
 use palette_core::docker::DockerManager;
-use palette_core::state::{MemberState, MemberStatus, PersistentState};
-use palette_db::{Database, RuleEngine};
+use palette_core::state::{AgentRole, AgentState, AgentStatus, PersistentState, TmuxTarget};
+use palette_db::{AgentId, Database, RuleEngine};
 use palette_server::AppState;
 use palette_tmux::{TmuxManager, TmuxManagerImpl};
 use std::net::SocketAddr;
@@ -61,10 +61,9 @@ async fn main() -> anyhow::Result<()> {
     {
         let infra = state.infra.lock().await;
         for leader in &infra.leaders {
-            if leader.status == palette_core::state::MemberStatus::Booting {
+            if leader.status == AgentStatus::Booting {
                 palette_server::spawn_readiness_watcher(
                     leader.id.clone(),
-                    leader.tmux_target.clone(),
                     Arc::clone(&state),
                 );
             }
@@ -82,12 +81,12 @@ async fn main() -> anyhow::Result<()> {
 }
 
 struct AgentSpec<'a> {
-    id: &'a str,
+    id: &'a AgentId,
     name: &'a str,
-    role: &'a str,
+    role: AgentRole,
     image: &'a str,
     prompt: &'a str,
-    leader_id: &'a str,
+    leader_id: &'a AgentId,
 }
 
 fn spawn_agent(
@@ -97,10 +96,10 @@ fn spawn_agent(
     tmux: &TmuxManagerImpl,
     session_name: &str,
     settings_template: &Path,
-) -> anyhow::Result<MemberState> {
+) -> anyhow::Result<AgentState> {
     let container_id = docker.create_container(spec.name, spec.image, spec.role, session_name)?;
     docker.start_container(&container_id)?;
-    docker.write_settings(&container_id, settings_template, spec.id)?;
+    docker.write_settings(&container_id, settings_template, spec.id.as_ref())?;
     DockerManager::copy_file_to_container(
         &container_id,
         Path::new(spec.prompt),
@@ -114,15 +113,15 @@ fn spawn_agent(
 
     let cmd = DockerManager::claude_exec_command(&container_id, "/home/agent/prompt.md", spec.role);
     tmux.send_keys(tmux_target, &cmd)?;
-    tracing::info!(name = spec.name, role = spec.role, "launched Claude Code");
+    tracing::info!(name = spec.name, role = %spec.role, "launched Claude Code");
 
-    Ok(MemberState {
-        id: spec.id.to_string(),
-        role: spec.role.to_string(),
-        leader_id: spec.leader_id.to_string(),
+    Ok(AgentState {
+        id: spec.id.clone(),
+        role: spec.role,
+        leader_id: spec.leader_id.clone(),
         container_id,
-        tmux_target: tmux_target.to_string(),
-        status: MemberStatus::Booting,
+        tmux_target: TmuxTarget::new(tmux_target),
+        status: AgentStatus::Booting,
         session_id: None,
     })
 }
@@ -142,14 +141,16 @@ fn bootstrap_leader(
         .create_target("leader")
         .context("failed to create leader tmux target")?;
 
+    let leader_id = AgentId::new("leader-1");
+    let empty_leader_id = AgentId::new("");
     let leader = spawn_agent(
         &AgentSpec {
-            id: "leader-1",
+            id: &leader_id,
             name: "leader",
-            role: "leader",
+            role: AgentRole::Leader,
             image: &config.docker.leader_image,
             prompt: &config.docker.leader_prompt,
-            leader_id: "",
+            leader_id: &empty_leader_id,
         },
         &leader_target,
         docker,

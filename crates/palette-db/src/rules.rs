@@ -1,6 +1,6 @@
+use crate::errors::{DbError, TaskError};
 use crate::models::*;
 use crate::repository::Database;
-use anyhow::bail;
 
 pub struct RuleEngine {
     max_review_rounds: u32,
@@ -15,12 +15,14 @@ impl RuleEngine {
     pub fn on_status_change(
         &self,
         db: &Database,
-        task_id: &str,
+        task_id: &TaskId,
         new_status: TaskStatus,
-    ) -> anyhow::Result<Vec<RuleEffect>> {
+    ) -> Result<Vec<RuleEffect>, DbError> {
         let task = db
             .get_task(task_id)?
-            .ok_or_else(|| anyhow::anyhow!("task not found: {task_id}"))?;
+            .ok_or_else(|| TaskError::NotFound {
+                task_id: task_id.clone(),
+            })?;
 
         let mut effects = Vec::new();
 
@@ -28,7 +30,7 @@ impl RuleEngine {
             // work -> ready: trigger auto-assign evaluation
             (TaskType::Work, TaskStatus::Ready) => {
                 effects.push(RuleEffect::AutoAssign {
-                    task_id: task_id.to_string(),
+                    task_id: task_id.clone(),
                 });
             }
             // work -> in_review: enable related reviews
@@ -69,9 +71,9 @@ impl RuleEngine {
     pub fn on_review_submitted(
         &self,
         db: &Database,
-        review_task_id: &str,
+        review_task_id: &TaskId,
         submission: &ReviewSubmission,
-    ) -> anyhow::Result<Vec<RuleEffect>> {
+    ) -> Result<Vec<RuleEffect>, DbError> {
         let mut effects = Vec::new();
         let work_tasks = db.find_works_for_review(review_task_id)?;
 
@@ -103,7 +105,7 @@ impl RuleEngine {
                 for work in &work_tasks {
                     let all_reviews = db.find_reviews_for_work(&work.id)?;
                     let all_approved = all_reviews.iter().all(|r| {
-                        if r.id == review_task_id {
+                        if r.id == *review_task_id {
                             return true; // This one is being approved now
                         }
                         let subs = db.get_review_submissions(&r.id).unwrap_or_default();
@@ -128,7 +130,7 @@ impl RuleEngine {
         task_type: TaskType,
         from: TaskStatus,
         to: TaskStatus,
-    ) -> anyhow::Result<()> {
+    ) -> Result<(), DbError> {
         let valid = match (task_type, from, to) {
             // Work transitions
             (TaskType::Work, TaskStatus::Draft, TaskStatus::Ready) => true,
@@ -149,12 +151,11 @@ impl RuleEngine {
         };
 
         if !valid {
-            bail!(
-                "invalid status transition for {} task: {} -> {}",
-                task_type.as_str(),
-                from.as_str(),
-                to.as_str()
-            );
+            return Err(DbError::InvalidTransition {
+                task_type,
+                from,
+                to,
+            });
         }
 
         Ok(())
@@ -171,13 +172,17 @@ mod tests {
         (db, engine)
     }
 
+    fn tid(s: &str) -> TaskId {
+        TaskId::new(s)
+    }
+
     fn create_work_review_pair(db: &Database) {
         db.create_task(&CreateTaskRequest {
-            id: Some("W-001".to_string()),
+            id: Some(tid("W-001")),
             task_type: TaskType::Work,
             title: "Work".to_string(),
             description: None,
-            assignee: Some("member-a".to_string()),
+            assignee: Some(AgentId::new("member-a")),
             priority: None,
             repositories: None,
             depends_on: vec![],
@@ -185,14 +190,14 @@ mod tests {
         .unwrap();
 
         db.create_task(&CreateTaskRequest {
-            id: Some("R-001".to_string()),
+            id: Some(tid("R-001")),
             task_type: TaskType::Review,
             title: "Review".to_string(),
             description: None,
             assignee: None,
             priority: None,
             repositories: None,
-            depends_on: vec!["W-001".to_string()],
+            depends_on: vec![tid("W-001")],
         })
         .unwrap();
     }
@@ -202,21 +207,22 @@ mod tests {
         let (db, engine) = setup();
         create_work_review_pair(&db);
 
-        db.update_task_status("W-001", TaskStatus::Ready).unwrap();
-        db.update_task_status("W-001", TaskStatus::InProgress)
+        db.update_task_status(&tid("W-001"), TaskStatus::Ready)
             .unwrap();
-        db.update_task_status("W-001", TaskStatus::InReview)
+        db.update_task_status(&tid("W-001"), TaskStatus::InProgress)
+            .unwrap();
+        db.update_task_status(&tid("W-001"), TaskStatus::InReview)
             .unwrap();
 
         let effects = engine
-            .on_status_change(&db, "W-001", TaskStatus::InReview)
+            .on_status_change(&db, &tid("W-001"), TaskStatus::InReview)
             .unwrap();
 
         assert_eq!(effects.len(), 1);
         assert_eq!(
             effects[0],
             RuleEffect::StatusChanged {
-                task_id: "R-001".to_string(),
+                task_id: tid("R-001"),
                 new_status: TaskStatus::Todo,
             }
         );
@@ -227,17 +233,18 @@ mod tests {
         let (db, engine) = setup();
         create_work_review_pair(&db);
 
-        db.update_task_status("W-001", TaskStatus::Ready).unwrap();
-        db.update_task_status("W-001", TaskStatus::InProgress)
+        db.update_task_status(&tid("W-001"), TaskStatus::Ready)
             .unwrap();
-        db.update_task_status("W-001", TaskStatus::InReview)
+        db.update_task_status(&tid("W-001"), TaskStatus::InProgress)
             .unwrap();
-        db.update_task_status("R-001", TaskStatus::InProgress)
+        db.update_task_status(&tid("W-001"), TaskStatus::InReview)
+            .unwrap();
+        db.update_task_status(&tid("R-001"), TaskStatus::InProgress)
             .unwrap();
 
         let sub = db
             .submit_review(
-                "R-001",
+                &tid("R-001"),
                 &SubmitReviewRequest {
                     verdict: Verdict::ChangesRequested,
                     summary: None,
@@ -246,18 +253,20 @@ mod tests {
             )
             .unwrap();
 
-        let effects = engine.on_review_submitted(&db, "R-001", &sub).unwrap();
+        let effects = engine
+            .on_review_submitted(&db, &tid("R-001"), &sub)
+            .unwrap();
 
         assert_eq!(effects.len(), 1);
         assert_eq!(
             effects[0],
             RuleEffect::StatusChanged {
-                task_id: "W-001".to_string(),
+                task_id: tid("W-001"),
                 new_status: TaskStatus::InProgress,
             }
         );
 
-        let work = db.get_task("W-001").unwrap().unwrap();
+        let work = db.get_task(&tid("W-001")).unwrap().unwrap();
         assert_eq!(work.status, TaskStatus::InProgress);
     }
 
@@ -266,17 +275,18 @@ mod tests {
         let (db, engine) = setup();
         create_work_review_pair(&db);
 
-        db.update_task_status("W-001", TaskStatus::Ready).unwrap();
-        db.update_task_status("W-001", TaskStatus::InProgress)
+        db.update_task_status(&tid("W-001"), TaskStatus::Ready)
             .unwrap();
-        db.update_task_status("W-001", TaskStatus::InReview)
+        db.update_task_status(&tid("W-001"), TaskStatus::InProgress)
             .unwrap();
-        db.update_task_status("R-001", TaskStatus::InProgress)
+        db.update_task_status(&tid("W-001"), TaskStatus::InReview)
+            .unwrap();
+        db.update_task_status(&tid("R-001"), TaskStatus::InProgress)
             .unwrap();
 
         let sub = db
             .submit_review(
-                "R-001",
+                &tid("R-001"),
                 &SubmitReviewRequest {
                     verdict: Verdict::Approved,
                     summary: Some("LGTM".to_string()),
@@ -285,13 +295,15 @@ mod tests {
             )
             .unwrap();
 
-        let effects = engine.on_review_submitted(&db, "R-001", &sub).unwrap();
+        let effects = engine
+            .on_review_submitted(&db, &tid("R-001"), &sub)
+            .unwrap();
 
         assert_eq!(effects.len(), 1);
         assert_eq!(
             effects[0],
             RuleEffect::StatusChanged {
-                task_id: "W-001".to_string(),
+                task_id: tid("W-001"),
                 new_status: TaskStatus::Done,
             }
         );
@@ -303,18 +315,19 @@ mod tests {
         let engine = RuleEngine::new(2); // Low threshold for testing
         create_work_review_pair(&db);
 
-        db.update_task_status("W-001", TaskStatus::Ready).unwrap();
-        db.update_task_status("W-001", TaskStatus::InProgress)
+        db.update_task_status(&tid("W-001"), TaskStatus::Ready)
             .unwrap();
-        db.update_task_status("W-001", TaskStatus::InReview)
+        db.update_task_status(&tid("W-001"), TaskStatus::InProgress)
             .unwrap();
-        db.update_task_status("R-001", TaskStatus::InProgress)
+        db.update_task_status(&tid("W-001"), TaskStatus::InReview)
+            .unwrap();
+        db.update_task_status(&tid("R-001"), TaskStatus::InProgress)
             .unwrap();
 
         // Round 1
         let sub1 = db
             .submit_review(
-                "R-001",
+                &tid("R-001"),
                 &SubmitReviewRequest {
                     verdict: Verdict::ChangesRequested,
                     summary: None,
@@ -322,16 +335,18 @@ mod tests {
                 },
             )
             .unwrap();
-        engine.on_review_submitted(&db, "R-001", &sub1).unwrap();
+        engine
+            .on_review_submitted(&db, &tid("R-001"), &sub1)
+            .unwrap();
 
         // Reset work to in_review for round 2
-        db.update_task_status("W-001", TaskStatus::InReview)
+        db.update_task_status(&tid("W-001"), TaskStatus::InReview)
             .unwrap();
 
         // Round 2 - should escalate
         let sub2 = db
             .submit_review(
-                "R-001",
+                &tid("R-001"),
                 &SubmitReviewRequest {
                     verdict: Verdict::ChangesRequested,
                     summary: None,
@@ -339,7 +354,9 @@ mod tests {
                 },
             )
             .unwrap();
-        let effects = engine.on_review_submitted(&db, "R-001", &sub2).unwrap();
+        let effects = engine
+            .on_review_submitted(&db, &tid("R-001"), &sub2)
+            .unwrap();
 
         assert_eq!(effects.len(), 1);
         assert!(matches!(effects[0], RuleEffect::Escalated { .. }));
