@@ -1,5 +1,5 @@
 use crate::error::Error;
-use crate::repository_row;
+mod repository_row;
 use crate::schema;
 use chrono::{DateTime, Utc};
 use palette_domain::*;
