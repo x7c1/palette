@@ -1,4 +1,4 @@
-use palette_domain::{AgentId, AgentRole, AgentStatus, ContainerId, TerminalTarget};
+use crate::{AgentId, AgentRole, AgentSessionId, AgentStatus, ContainerId, TerminalTarget};
 
 #[derive(Debug, Clone)]
 pub struct AgentState {
@@ -8,5 +8,5 @@ pub struct AgentState {
     pub container_id: ContainerId,
     pub terminal_target: TerminalTarget,
     pub status: AgentStatus,
-    pub session_id: Option<String>,
+    pub session_id: Option<AgentSessionId>,
 }

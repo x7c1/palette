@@ -4,6 +4,12 @@ pub use agent_id::AgentId;
 mod agent_role;
 pub use agent_role::AgentRole;
 
+mod agent_session_id;
+pub use agent_session_id::AgentSessionId;
+
+mod agent_state;
+pub use agent_state::AgentState;
+
 mod agent_status;
 pub use agent_status::AgentStatus;
 
@@ -60,6 +66,9 @@ pub use task_status::TaskStatus;
 
 mod task_type;
 pub use task_type::TaskType;
+
+mod pending_delivery;
+pub use pending_delivery::PendingDelivery;
 
 mod terminal_target;
 pub use terminal_target::TerminalTarget;

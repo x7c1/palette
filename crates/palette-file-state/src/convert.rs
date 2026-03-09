@@ -2,7 +2,9 @@ use crate::Error;
 use crate::record::{AgentRecord, StateFile};
 use palette_core::models::AgentState;
 use palette_core::persistent_state::PersistentState;
-use palette_domain::{AgentId, AgentRole, AgentStatus, ContainerId, TerminalTarget};
+use palette_domain::{
+    AgentId, AgentRole, AgentSessionId, AgentStatus, ContainerId, TerminalTarget,
+};
 
 pub fn to_state_file(state: &PersistentState) -> StateFile {
     StateFile {
@@ -46,7 +48,7 @@ fn to_agent_record(agent: &AgentState) -> AgentRecord {
         container_id: agent.container_id.as_ref().to_string(),
         terminal_target: agent.terminal_target.as_ref().to_string(),
         status: status_to_str(agent.status),
-        session_id: agent.session_id.clone(),
+        session_id: agent.session_id.as_ref().map(|s| s.to_string()),
     }
 }
 
@@ -58,7 +60,7 @@ fn from_agent_record(record: AgentRecord) -> Result<AgentState, Error> {
         container_id: ContainerId::new(record.container_id),
         terminal_target: TerminalTarget::new(record.terminal_target),
         status: parse_status(&record.status)?,
-        session_id: record.session_id,
+        session_id: record.session_id.map(AgentSessionId::new),
     })
 }
 
