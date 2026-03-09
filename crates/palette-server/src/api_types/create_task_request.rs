@@ -18,6 +18,7 @@ pub struct CreateTaskRequest {
     pub depends_on: Vec<String>,
 }
 
+// TODO: Replace From with TryFrom to validate external input (see plan 009-api-input-validation)
 impl From<CreateTaskRequest> for domain::CreateTaskRequest {
     fn from(api: CreateTaskRequest) -> Self {
         Self {

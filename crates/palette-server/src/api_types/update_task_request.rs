@@ -8,6 +8,7 @@ pub struct UpdateTaskRequest {
     pub status: TaskStatus,
 }
 
+// TODO: Replace From with TryFrom to validate external input (see plan 009-api-input-validation)
 impl From<UpdateTaskRequest> for domain::UpdateTaskRequest {
     fn from(api: UpdateTaskRequest) -> Self {
         Self {

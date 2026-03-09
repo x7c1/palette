@@ -11,6 +11,7 @@ pub struct SubmitReviewRequest {
     pub comments: Vec<ReviewCommentInput>,
 }
 
+// TODO: Replace From with TryFrom to validate external input (see plan 009-api-input-validation)
 impl From<SubmitReviewRequest> for domain::SubmitReviewRequest {
     fn from(api: SubmitReviewRequest) -> Self {
         Self {
