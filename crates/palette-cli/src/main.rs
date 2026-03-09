@@ -1,7 +1,8 @@
 use anyhow::Context as _;
-use palette_core::Config;
+use palette_core::config::Config;
 use palette_core::docker::DockerManager;
-use palette_core::state::{AgentRole, AgentState, AgentStatus, PersistentState, TmuxTarget};
+use palette_core::models::{AgentRole, AgentState, AgentStatus, TmuxTarget};
+use palette_core::persistent_state::PersistentState;
 use palette_db::{AgentId, Database, RuleEngine};
 use palette_server::AppState;
 use palette_tmux::{TmuxManager, TmuxManagerImpl};

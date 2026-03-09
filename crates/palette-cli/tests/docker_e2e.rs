@@ -13,8 +13,8 @@
 //!   inspection.
 
 use anyhow::{Context as _, Result};
-use palette_core::Config;
-use palette_core::state::AgentRole;
+use palette_core::config::Config;
+use palette_core::models::AgentRole;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 

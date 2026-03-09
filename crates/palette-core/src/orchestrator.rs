@@ -1,5 +1,5 @@
 use crate::config::DockerConfig;
-use crate::docker_manager::DockerManager;
+use crate::docker::DockerManager;
 use crate::models::{AgentRole, AgentState, AgentStatus, PendingDelivery, TmuxTarget};
 use crate::persistent_state::PersistentState;
 use palette_db::{AgentId, Database, RuleEffect, RuleEngine, Task};
