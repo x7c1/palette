@@ -2,7 +2,7 @@ use crate::models::AgentState;
 use crate::models::ContainerId;
 use anyhow::Context as _;
 use chrono::{DateTime, Utc};
-use palette_db::AgentId;
+use palette_domain::AgentId;
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 

@@ -2,7 +2,8 @@ use crate::config::DockerConfig;
 use crate::docker::DockerManager;
 use crate::models::{AgentRole, AgentState, AgentStatus, PendingDelivery, TmuxTarget};
 use crate::persistent_state::PersistentState;
-use palette_db::{AgentId, Database, RuleEffect, RuleEngine, Task};
+use palette_db::Database;
+use palette_domain::{AgentId, RuleEffect, RuleEngine, Task};
 use palette_tmux::TmuxManager;
 
 /// Processes rule engine effects: auto-assign tasks, spawn/destroy members.

@@ -9,7 +9,8 @@ use palette_core::docker::DockerManager;
 use palette_core::models::AgentStatus;
 use palette_core::orchestrator;
 use palette_core::persistent_state::PersistentState;
-use palette_db::{AgentId, Database, RuleEngine};
+use palette_db::Database;
+use palette_domain::{AgentId, RuleEngine};
 use palette_tmux::{TmuxManager as _, TmuxManagerImpl};
 use std::sync::Arc;
 

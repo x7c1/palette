@@ -2,12 +2,12 @@ use super::AgentRole;
 use super::AgentStatus;
 use super::ContainerId;
 use super::TmuxTarget;
-use palette_db::AgentId;
+use palette_domain::AgentId;
 use serde::{Deserialize, Serialize};
 
 /// Serde helpers for AgentId (domain type without serde derives).
 mod agent_id_serde {
-    use palette_db::AgentId;
+    use palette_domain::AgentId;
     use serde::{self, Deserialize, Deserializer, Serializer};
 
     pub fn serialize<S>(id: &AgentId, serializer: S) -> Result<S::Ok, S::Error>

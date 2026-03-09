@@ -11,7 +11,7 @@ use axum::{
 };
 use palette_core::models::AgentStatus;
 use palette_core::orchestrator;
-use palette_db::{
+use palette_domain::{
     AgentId, CreateTaskRequest, RuleEngine, SubmitReviewRequest, TaskFilter, TaskId, TaskStatus,
     TaskType, UpdateTaskRequest, Verdict,
 };

@@ -8,5 +8,3 @@ pub use database::Database;
 
 mod schema;
 mod task_store;
-
-pub use palette_domain::*;

@@ -2,7 +2,8 @@ use palette_core::config::DockerConfig;
 use palette_core::docker::DockerManager;
 use palette_core::models::{AgentRole, AgentState, AgentStatus, ContainerId, TmuxTarget};
 use palette_core::persistent_state::PersistentState;
-use palette_db::{AgentId, Database, RuleEngine, TaskId};
+use palette_db::Database;
+use palette_domain::{AgentId, RuleEngine, TaskId};
 use palette_server::{AppState, create_router};
 use palette_tmux::{TmuxManager, TmuxManagerImpl};
 use serde_json::json;
@@ -635,12 +636,12 @@ async fn scenario3_message_queuing_to_leader() {
     // Manually assign tasks (simulating what auto-assign does)
     state
         .db
-        .update_task_status(&tid("W-A"), palette_db::TaskStatus::Ready)
+        .update_task_status(&tid("W-A"), palette_domain::TaskStatus::Ready)
         .unwrap();
     state.db.assign_task(&tid("W-A"), &aid("member-a")).unwrap();
     state
         .db
-        .update_task_status(&tid("W-B"), palette_db::TaskStatus::Ready)
+        .update_task_status(&tid("W-B"), palette_domain::TaskStatus::Ready)
         .unwrap();
     state.db.assign_task(&tid("W-B"), &aid("member-b")).unwrap();
 

@@ -1,5 +1,5 @@
 use super::TmuxTarget;
-use palette_db::AgentId;
+use palette_domain::AgentId;
 
 /// A pending delivery that needs to be attempted.
 #[derive(Debug, Clone)]
