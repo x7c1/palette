@@ -170,8 +170,12 @@ fn spawn_member<T: TmuxManager>(
     let tmux_target = TmuxTarget::new(tmux.create_pane(leader_target)?);
 
     let member_id_str = member_id.as_ref();
-    let container_id =
-        docker.create_container(member_id_str, &config.member_image, AgentRole::Member, session_name)?;
+    let container_id = docker.create_container(
+        member_id_str,
+        &config.member_image,
+        AgentRole::Member,
+        session_name,
+    )?;
     docker.start_container(&container_id)?;
     docker.write_settings(
         &container_id,
@@ -189,8 +193,11 @@ fn spawn_member<T: TmuxManager>(
         "/home/agent/claude-code-plugin",
     )?;
 
-    let cmd =
-        DockerManager::claude_exec_command(&container_id, "/home/agent/prompt.md", AgentRole::Member);
+    let cmd = DockerManager::claude_exec_command(
+        &container_id,
+        "/home/agent/prompt.md",
+        AgentRole::Member,
+    );
     tmux.send_keys(tmux_target.as_ref(), &cmd)?;
     tracing::info!(member_id = %member_id, "spawned member");
 

@@ -20,10 +20,8 @@ impl RuleEngine {
     ) -> Result<Vec<RuleEffect>, S::Error> {
         let task = store
             .get_task(task_id)?
-            .ok_or_else(|| {
-                crate::errors::TaskError::NotFound {
-                    task_id: task_id.clone(),
-                }
+            .ok_or_else(|| crate::errors::TaskError::NotFound {
+                task_id: task_id.clone(),
             })?;
 
         let mut effects = Vec::new();
@@ -153,7 +151,11 @@ impl RuleEngine {
         };
 
         if !valid {
-            return Err(TransitionError { task_type, from, to });
+            return Err(TransitionError {
+                task_type,
+                from,
+                to,
+            });
         }
 
         Ok(())

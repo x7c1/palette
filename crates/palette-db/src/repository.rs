@@ -157,8 +157,12 @@ impl Database {
             .into());
         }
         drop(conn);
-        self.get_task(id)?
-            .ok_or_else(|| TaskError::NotFound { task_id: id.clone() }.into())
+        self.get_task(id)?.ok_or_else(|| {
+            TaskError::NotFound {
+                task_id: id.clone(),
+            }
+            .into()
+        })
     }
 
     pub fn get_dependencies(&self, task_id: &TaskId) -> Result<Vec<TaskId>, DbError> {
@@ -320,8 +324,12 @@ impl Database {
             .into());
         }
         drop(conn);
-        self.get_task(task_id)?
-            .ok_or_else(|| TaskError::NotFound { task_id: task_id.clone() }.into())
+        self.get_task(task_id)?.ok_or_else(|| {
+            TaskError::NotFound {
+                task_id: task_id.clone(),
+            }
+            .into()
+        })
     }
 
     /// Find work tasks that are ready and have all work dependencies done.
@@ -476,10 +484,7 @@ fn row_to_task(row: &rusqlite::Row) -> Task {
         task_type: row.get::<_, String>(1).unwrap().parse().unwrap(),
         title: row.get(2).unwrap(),
         description: row.get(3).unwrap(),
-        assignee: row
-            .get::<_, Option<String>>(4)
-            .unwrap()
-            .map(AgentId::new),
+        assignee: row.get::<_, Option<String>>(4).unwrap().map(AgentId::new),
         status: row.get::<_, String>(5).unwrap().parse().unwrap(),
         priority: row
             .get::<_, Option<String>>(6)

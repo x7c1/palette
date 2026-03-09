@@ -269,8 +269,13 @@ async fn handle_send(
         };
 
         tracing::info!(target = %tmux_target, message = %req.message, "sending keys via tmux");
-        send_tmux_keys(&state.tmux, tmux_target.as_ref(), &req.message, req.no_enter)
-            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+        send_tmux_keys(
+            &state.tmux,
+            tmux_target.as_ref(),
+            &req.message,
+            req.no_enter,
+        )
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
         // Update status to Working
         let mut infra = state.infra.lock().await;

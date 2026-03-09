@@ -62,10 +62,7 @@ async fn main() -> anyhow::Result<()> {
         let infra = state.infra.lock().await;
         for leader in &infra.leaders {
             if leader.status == AgentStatus::Booting {
-                palette_server::spawn_readiness_watcher(
-                    leader.id.clone(),
-                    Arc::clone(&state),
-                );
+                palette_server::spawn_readiness_watcher(leader.id.clone(), Arc::clone(&state));
             }
         }
     }

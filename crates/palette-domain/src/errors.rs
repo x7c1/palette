@@ -4,9 +4,17 @@ use std::fmt;
 /// Domain-level task errors.
 #[derive(Debug)]
 pub enum TaskError {
-    NotFound { task_id: TaskId },
-    InvalidTransition { task_id: TaskId, from: TaskStatus, to: TaskStatus },
-    DuplicateId { task_id: TaskId },
+    NotFound {
+        task_id: TaskId,
+    },
+    InvalidTransition {
+        task_id: TaskId,
+        from: TaskStatus,
+        to: TaskStatus,
+    },
+    DuplicateId {
+        task_id: TaskId,
+    },
 }
 
 impl fmt::Display for TaskError {

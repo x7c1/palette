@@ -29,10 +29,7 @@ impl TaskStore for Database {
         self.find_assignable_tasks()
     }
 
-    fn get_review_submissions(
-        &self,
-        review_id: &TaskId,
-    ) -> Result<Vec<ReviewSubmission>, DbError> {
+    fn get_review_submissions(&self, review_id: &TaskId) -> Result<Vec<ReviewSubmission>, DbError> {
         self.get_review_submissions(review_id)
     }
 }
