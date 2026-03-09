@@ -5,7 +5,7 @@ mod record;
 
 mod convert;
 
-use palette_core::persistent_state::PersistentState;
+use palette_domain::PersistentState;
 use std::path::Path;
 
 /// Save state atomically (write to temp file, then rename).

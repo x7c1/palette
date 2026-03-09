@@ -1,9 +1,8 @@
 use crate::Error;
 use crate::record::{AgentRecord, StateFile};
-use palette_core::models::AgentState;
-use palette_core::persistent_state::PersistentState;
 use palette_domain::{
-    AgentId, AgentRole, AgentSessionId, AgentStatus, ContainerId, TerminalTarget,
+    AgentId, AgentRole, AgentSessionId, AgentState, AgentStatus, ContainerId, PersistentState,
+    TerminalTarget,
 };
 
 pub fn to_state_file(state: &PersistentState) -> StateFile {

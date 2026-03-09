@@ -6,7 +6,6 @@ license.workspace = true
 
 [dependencies]
 chrono.workspace = true
-palette-core = { path = "../palette-core" }
 palette-domain = { path = "../palette-domain" }
 serde.workspace = true
 serde_json.workspace = true

@@ -926,7 +926,6 @@ name = "palette-file-state"
 version = "0.1.0"
 dependencies = [
  "chrono",
- "palette-core",
  "palette-domain",
  "serde",
  "serde_json",

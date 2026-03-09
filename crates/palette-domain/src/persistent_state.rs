@@ -1,7 +1,5 @@
-use crate::models::AgentState;
-use crate::models::ContainerId;
+use crate::{AgentId, AgentState, ContainerId};
 use chrono::{DateTime, Utc};
-use palette_domain::AgentId;
 
 pub struct PersistentState {
     pub session_name: String,

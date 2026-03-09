@@ -6,10 +6,9 @@ use axum::Router;
 use palette_core::config::DockerConfig;
 use palette_core::models::AgentStatus;
 use palette_core::orchestrator;
-use palette_core::persistent_state::PersistentState;
 use palette_db::Database;
 use palette_docker::DockerManager;
-use palette_domain::{AgentId, RuleEngine};
+use palette_domain::{AgentId, PersistentState, RuleEngine};
 use palette_tmux::{TerminalManager as _, TmuxManagerImpl};
 use std::sync::Arc;
 

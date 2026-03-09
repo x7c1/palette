@@ -70,6 +70,9 @@ pub use task_type::TaskType;
 mod pending_delivery;
 pub use pending_delivery::PendingDelivery;
 
+mod persistent_state;
+pub use persistent_state::PersistentState;
+
 mod terminal_target;
 pub use terminal_target::TerminalTarget;
 

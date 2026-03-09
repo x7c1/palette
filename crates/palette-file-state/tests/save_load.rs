@@ -1,6 +1,6 @@
-use palette_core::models::AgentState;
-use palette_core::persistent_state::PersistentState;
-use palette_domain::{AgentId, AgentRole, AgentStatus, ContainerId, TerminalTarget};
+use palette_domain::{
+    AgentId, AgentRole, AgentState, AgentStatus, ContainerId, PersistentState, TerminalTarget,
+};
 
 fn aid(s: &str) -> AgentId {
     AgentId::new(s)
