@@ -1,4 +1,4 @@
-use palette_tmux::{TmuxManager, TmuxManagerImpl};
+use palette_tmux::{TerminalManager, TmuxManagerImpl};
 use std::process::Command;
 
 fn test_session_name(test_name: &str) -> String {

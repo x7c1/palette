@@ -1,7 +1,7 @@
 use crate::Error;
 use std::process::Command;
 
-use crate::TmuxManager;
+use crate::TerminalManager;
 
 pub struct TmuxManagerImpl {
     session_name: String,
@@ -17,7 +17,7 @@ impl TmuxManagerImpl {
     }
 }
 
-impl TmuxManager for TmuxManagerImpl {
+impl TerminalManager for TmuxManagerImpl {
     fn create_session(&self, name: &str) -> crate::Result<()> {
         let output = self.run_tmux(&["has-session", "-t", name])?;
         if output.status.success() {

@@ -1,11 +1,11 @@
 use palette_core::config::Config;
 use palette_core::docker::DockerManager;
-use palette_core::models::{AgentRole, AgentState, AgentStatus, TmuxTarget};
+use palette_core::models::{AgentRole, AgentState, AgentStatus, TerminalTarget};
 use palette_core::persistent_state::PersistentState;
 use palette_db::Database;
 use palette_domain::{AgentId, RuleEngine};
 use palette_server::AppState;
-use palette_tmux::{TmuxManager, TmuxManagerImpl};
+use palette_tmux::{TerminalManager, TmuxManagerImpl};
 use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -118,7 +118,7 @@ fn spawn_agent(
         role: spec.role,
         leader_id: spec.leader_id.clone(),
         container_id,
-        tmux_target: TmuxTarget::new(tmux_target),
+        terminal_target: TerminalTarget::new(tmux_target),
         status: AgentStatus::Booting,
         session_id: None,
     })

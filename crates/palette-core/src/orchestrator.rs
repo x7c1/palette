@@ -1,16 +1,16 @@
 use crate::config::DockerConfig;
 use crate::docker::DockerManager;
-use crate::models::{AgentRole, AgentState, AgentStatus, PendingDelivery, TmuxTarget};
+use crate::models::{AgentRole, AgentState, AgentStatus, PendingDelivery, TerminalTarget};
 use crate::persistent_state::PersistentState;
 use palette_db::Database;
 use palette_domain::{AgentId, RuleEffect, RuleEngine, Task};
-use palette_tmux::TmuxManager;
+use palette_tmux::TerminalManager;
 
 /// Processes rule engine effects: auto-assign tasks, spawn/destroy members.
 /// Returns a list of messages that need to be sent to members via tmux.
 ///
 /// The caller is responsible for saving state after this function returns.
-pub fn process_effects<T: TmuxManager>(
+pub fn process_effects<T: TerminalManager>(
     effects: &[RuleEffect],
     db: &Database,
     infra: &mut PersistentState,
@@ -43,7 +43,7 @@ pub fn process_effects<T: TmuxManager>(
                 // Spawn a new member
                 let member_id = infra.next_member_id();
                 let member = spawn_member(&member_id, infra, docker, tmux, config)?;
-                let tmux_target = member.tmux_target.clone();
+                let terminal_target = member.terminal_target.clone();
                 infra.members.push(member);
 
                 // Assign task
@@ -60,7 +60,7 @@ pub fn process_effects<T: TmuxManager>(
 
                 deliveries.push(PendingDelivery {
                     target_id: member_id,
-                    tmux_target,
+                    terminal_target,
                 });
 
                 infra.touch();
@@ -93,7 +93,7 @@ pub fn process_effects<T: TmuxManager>(
 }
 
 /// Delivers queued messages to idle targets.
-pub fn deliver_queued_messages<T: TmuxManager>(
+pub fn deliver_queued_messages<T: TerminalManager>(
     target_id: &AgentId,
     db: &Database,
     infra: &mut PersistentState,
@@ -103,13 +103,13 @@ pub fn deliver_queued_messages<T: TmuxManager>(
         .find_member(target_id)
         .or_else(|| infra.find_leader(target_id));
 
-    let tmux_target = match member {
-        Some(m) if m.status == AgentStatus::Idle => m.tmux_target.clone(),
+    let terminal_target = match member {
+        Some(m) if m.status == AgentStatus::Idle => m.terminal_target.clone(),
         _ => return Ok(false),
     };
 
     if let Some(msg) = db.dequeue_message(target_id)? {
-        tmux.send_keys(tmux_target.as_ref(), &msg.message)?;
+        tmux.send_keys(terminal_target.as_ref(), &msg.message)?;
         // Update status to Working
         if let Some(m) = infra.find_member_mut(target_id) {
             m.status = AgentStatus::Working;
@@ -144,7 +144,7 @@ fn format_task_instruction(task: &Task) -> String {
     msg
 }
 
-fn spawn_member<T: TmuxManager>(
+fn spawn_member<T: TerminalManager>(
     member_id: &AgentId,
     infra: &PersistentState,
     docker: &DockerManager,
@@ -157,13 +157,13 @@ fn spawn_member<T: TmuxManager>(
     let leader_target = infra
         .leaders
         .first()
-        .map(|l| l.tmux_target.as_ref())
+        .map(|l| l.terminal_target.as_ref())
         .ok_or_else(|| {
             crate::Error::Internal(
                 "no leader found; cannot spawn member without a leader pane".into(),
             )
         })?;
-    let tmux_target = TmuxTarget::new(tmux.create_pane(leader_target)?);
+    let terminal_target = TerminalTarget::new(tmux.create_pane(leader_target)?);
 
     let member_id_str = member_id.as_ref();
     let container_id = docker.create_container(
@@ -194,7 +194,7 @@ fn spawn_member<T: TmuxManager>(
         "/home/agent/prompt.md",
         AgentRole::Member,
     );
-    tmux.send_keys(tmux_target.as_ref(), &cmd)?;
+    tmux.send_keys(terminal_target.as_ref(), &cmd)?;
     tracing::info!(member_id = %member_id, "spawned member");
 
     Ok(AgentState {
@@ -202,7 +202,7 @@ fn spawn_member<T: TmuxManager>(
         role: AgentRole::Member,
         leader_id: AgentId::new("leader-1"),
         container_id,
-        tmux_target,
+        terminal_target,
         status: AgentStatus::Booting,
         session_id: None,
     })

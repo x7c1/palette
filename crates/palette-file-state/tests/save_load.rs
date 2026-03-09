@@ -1,6 +1,6 @@
-use palette_core::models::{AgentState, ContainerId, TmuxTarget};
+use palette_core::models::AgentState;
 use palette_core::persistent_state::PersistentState;
-use palette_domain::{AgentId, AgentRole, AgentStatus};
+use palette_domain::{AgentId, AgentRole, AgentStatus, ContainerId, TerminalTarget};
 
 fn aid(s: &str) -> AgentId {
     AgentId::new(s)
@@ -17,7 +17,7 @@ fn save_and_load_state() {
         role: AgentRole::Member,
         leader_id: aid("leader-1"),
         container_id: ContainerId::new("abc123"),
-        tmux_target: TmuxTarget::new("test-session:member-a"),
+        terminal_target: TerminalTarget::new("test-session:member-a"),
         status: AgentStatus::Idle,
         session_id: None,
     });
@@ -29,10 +29,7 @@ fn save_and_load_state() {
     assert_eq!(loaded.members[0].id, aid("member-a"));
     assert_eq!(loaded.members[0].role, AgentRole::Member);
     assert_eq!(loaded.members[0].status, AgentStatus::Idle);
-    assert_eq!(
-        loaded.members[0].container_id.as_ref(),
-        "abc123"
-    );
+    assert_eq!(loaded.members[0].container_id.as_ref(), "abc123");
 }
 
 #[test]

@@ -1,6 +1,6 @@
 use std::fmt;
 
-/// Docker container identifier.
+/// Container identifier (e.g., Docker, Podman).
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ContainerId(String);
 

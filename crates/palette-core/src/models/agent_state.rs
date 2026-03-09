@@ -1,6 +1,4 @@
-use super::ContainerId;
-use super::TmuxTarget;
-use palette_domain::{AgentId, AgentRole, AgentStatus};
+use palette_domain::{AgentId, AgentRole, AgentStatus, ContainerId, TerminalTarget};
 
 #[derive(Debug, Clone)]
 pub struct AgentState {
@@ -8,7 +6,7 @@ pub struct AgentState {
     pub role: AgentRole,
     pub leader_id: AgentId,
     pub container_id: ContainerId,
-    pub tmux_target: TmuxTarget,
+    pub terminal_target: TerminalTarget,
     pub status: AgentStatus,
     pub session_id: Option<String>,
 }

@@ -1,11 +1,11 @@
 use palette_core::config::DockerConfig;
 use palette_core::docker::DockerManager;
-use palette_core::models::{AgentRole, AgentState, AgentStatus, ContainerId, TmuxTarget};
+use palette_core::models::{AgentRole, AgentState, AgentStatus, ContainerId, TerminalTarget};
 use palette_core::persistent_state::PersistentState;
 use palette_db::Database;
 use palette_domain::{AgentId, RuleEngine, TaskId};
 use palette_server::{AppState, create_router};
-use palette_tmux::{TmuxManager, TmuxManagerImpl};
+use palette_tmux::{TerminalManager, TmuxManagerImpl};
 use serde_json::json;
 use std::process::Command;
 use std::sync::Arc;
@@ -186,7 +186,7 @@ async fn send_keys_delivers_to_tmux_pane() {
             role: AgentRole::Member,
             leader_id: aid(""),
             container_id: ContainerId::new(""),
-            tmux_target: TmuxTarget::new(target.clone()),
+            terminal_target: TerminalTarget::new(target.clone()),
             status: AgentStatus::Idle,
             session_id: None,
         });
@@ -536,7 +536,7 @@ async fn send_queues_when_member_is_working() {
             role: AgentRole::Member,
             leader_id: aid(""),
             container_id: ContainerId::new(""),
-            tmux_target: TmuxTarget::new(target.clone()),
+            terminal_target: TerminalTarget::new(target.clone()),
             status: AgentStatus::Working,
             session_id: None,
         });
@@ -593,7 +593,7 @@ async fn scenario3_message_queuing_to_leader() {
             role: AgentRole::Leader,
             leader_id: aid(""),
             container_id: ContainerId::new(""),
-            tmux_target: TmuxTarget::new(leader_pane.clone()),
+            terminal_target: TerminalTarget::new(leader_pane.clone()),
             status: AgentStatus::Working,
             session_id: None,
         });
@@ -602,7 +602,7 @@ async fn scenario3_message_queuing_to_leader() {
             role: AgentRole::Member,
             leader_id: aid("leader-1"),
             container_id: ContainerId::new(""),
-            tmux_target: TmuxTarget::new(_member_a_pane.clone()),
+            terminal_target: TerminalTarget::new(_member_a_pane.clone()),
             status: AgentStatus::Working,
             session_id: None,
         });
@@ -611,7 +611,7 @@ async fn scenario3_message_queuing_to_leader() {
             role: AgentRole::Member,
             leader_id: aid("leader-1"),
             container_id: ContainerId::new(""),
-            tmux_target: TmuxTarget::new(_member_b_pane.clone()),
+            terminal_target: TerminalTarget::new(_member_b_pane.clone()),
             status: AgentStatus::Working,
             session_id: None,
         });

@@ -15,7 +15,7 @@ pub struct AgentRecord {
     pub role: String,
     pub leader_id: String,
     pub container_id: String,
-    pub tmux_target: String,
+    pub terminal_target: String,
     pub status: String,
     pub session_id: Option<String>,
 }

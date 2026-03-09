@@ -16,7 +16,7 @@ use palette_domain::{
     AgentId, CreateTaskRequest, RuleEngine, SubmitReviewRequest, TaskFilter, TaskId, TaskStatus,
     TaskType, UpdateTaskRequest, Verdict,
 };
-use palette_tmux::{TmuxManager as _, TmuxManagerImpl};
+use palette_tmux::{TerminalManager as _, TmuxManagerImpl};
 use std::sync::Arc;
 
 pub fn create_router(state: Arc<AppState>) -> Router {
@@ -261,12 +261,12 @@ async fn handle_send(
 
     let queued = if is_idle && !has_pending {
         // Send directly
-        let tmux_target = {
+        let terminal_target = {
             let infra = state.infra.lock().await;
             infra
                 .find_member(&member_id)
                 .or_else(|| infra.find_leader(&member_id))
-                .map(|m| m.tmux_target.clone())
+                .map(|m| m.terminal_target.clone())
                 .ok_or_else(|| {
                     (
                         StatusCode::NOT_FOUND,
@@ -275,10 +275,10 @@ async fn handle_send(
                 })?
         };
 
-        tracing::info!(target = %tmux_target, message = %req.message, "sending keys via tmux");
+        tracing::info!(target = %terminal_target, message = %req.message, "sending keys via tmux");
         send_tmux_keys(
             &state.tmux,
-            tmux_target.as_ref(),
+            terminal_target.as_ref(),
             &req.message,
             req.no_enter,
         )

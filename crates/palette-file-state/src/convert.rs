@@ -1,8 +1,8 @@
 use crate::Error;
 use crate::record::{AgentRecord, StateFile};
-use palette_core::models::{AgentState, ContainerId, TmuxTarget};
+use palette_core::models::AgentState;
 use palette_core::persistent_state::PersistentState;
-use palette_domain::{AgentId, AgentRole, AgentStatus};
+use palette_domain::{AgentId, AgentRole, AgentStatus, ContainerId, TerminalTarget};
 
 pub fn to_state_file(state: &PersistentState) -> StateFile {
     StateFile {
@@ -44,7 +44,7 @@ fn to_agent_record(agent: &AgentState) -> AgentRecord {
         role: agent.role.as_str().to_string(),
         leader_id: agent.leader_id.as_ref().to_string(),
         container_id: agent.container_id.as_ref().to_string(),
-        tmux_target: agent.tmux_target.as_ref().to_string(),
+        terminal_target: agent.terminal_target.as_ref().to_string(),
         status: status_to_str(agent.status),
         session_id: agent.session_id.clone(),
     }
@@ -56,7 +56,7 @@ fn from_agent_record(record: AgentRecord) -> Result<AgentState, Error> {
         role: parse_role(&record.role)?,
         leader_id: AgentId::new(record.leader_id),
         container_id: ContainerId::new(record.container_id),
-        tmux_target: TmuxTarget::new(record.tmux_target),
+        terminal_target: TerminalTarget::new(record.terminal_target),
         status: parse_status(&record.status)?,
         session_id: record.session_id,
     })

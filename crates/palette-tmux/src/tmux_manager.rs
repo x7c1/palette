@@ -1,4 +1,4 @@
-pub trait TmuxManager {
+pub trait TerminalManager {
     fn create_session(&self, name: &str) -> crate::Result<()>;
     fn create_target(&self, name: &str) -> crate::Result<String>;
     fn create_pane(&self, base_target: &str) -> crate::Result<String>;

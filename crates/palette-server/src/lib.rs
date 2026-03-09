@@ -10,7 +10,7 @@ use palette_core::orchestrator;
 use palette_core::persistent_state::PersistentState;
 use palette_db::Database;
 use palette_domain::{AgentId, RuleEngine};
-use palette_tmux::{TmuxManager as _, TmuxManagerImpl};
+use palette_tmux::{TerminalManager as _, TmuxManagerImpl};
 use std::sync::Arc;
 
 pub struct AppState {
@@ -51,18 +51,18 @@ pub fn spawn_readiness_watcher(target_id: AgentId, state: Arc<AppState>) {
         for _ in 0..max_polls {
             tokio::time::sleep(READINESS_POLL_INTERVAL).await;
 
-            let tmux_target = {
+            let terminal_target = {
                 let infra = state.infra.lock().await;
                 let agent = infra
                     .find_member(&target_id)
                     .or_else(|| infra.find_leader(&target_id));
                 match agent {
-                    Some(m) => m.tmux_target.clone(),
+                    Some(m) => m.terminal_target.clone(),
                     None => return,
                 }
             };
 
-            let pane_content = match state.tmux.capture_pane(tmux_target.as_ref()) {
+            let pane_content = match state.tmux.capture_pane(terminal_target.as_ref()) {
                 Ok(content) => content,
                 Err(e) => {
                     tracing::warn!(target_id = %target_id, error = %e, "failed to capture pane");

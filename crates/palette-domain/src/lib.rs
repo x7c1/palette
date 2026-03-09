@@ -7,6 +7,9 @@ pub use agent_role::AgentRole;
 mod agent_status;
 pub use agent_status::AgentStatus;
 
+mod container_id;
+pub use container_id::ContainerId;
+
 mod create_task_request;
 pub use create_task_request::CreateTaskRequest;
 
@@ -57,6 +60,9 @@ pub use task_status::TaskStatus;
 
 mod task_type;
 pub use task_type::TaskType;
+
+mod terminal_target;
+pub use terminal_target::TerminalTarget;
 
 mod transition_error;
 pub use transition_error::TransitionError;
