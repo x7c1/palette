@@ -1,6 +1,5 @@
 use crate::models::AgentState;
 use crate::models::ContainerId;
-use anyhow::Context as _;
 use chrono::{DateTime, Utc};
 use palette_domain::AgentId;
 use serde::{Deserialize, Serialize};
@@ -28,30 +27,24 @@ impl PersistentState {
     }
 
     /// Save state atomically (write to temp file, then rename).
-    pub fn save(&self, path: &Path) -> anyhow::Result<()> {
+    pub fn save(&self, path: &Path) -> crate::Result<()> {
         if let Some(parent) = path.parent() {
-            std::fs::create_dir_all(parent).with_context(|| {
-                format!("failed to create state directory: {}", parent.display())
-            })?;
+            std::fs::create_dir_all(parent)?;
         }
         let json = serde_json::to_string_pretty(self)?;
         let tmp_path = path.with_extension("json.tmp");
-        std::fs::write(&tmp_path, &json)
-            .with_context(|| format!("failed to write temp state file: {}", tmp_path.display()))?;
-        std::fs::rename(&tmp_path, path)
-            .with_context(|| format!("failed to rename state file: {}", path.display()))?;
+        std::fs::write(&tmp_path, &json)?;
+        std::fs::rename(&tmp_path, path)?;
         Ok(())
     }
 
     /// Load state from file. Returns None if file doesn't exist.
-    pub fn load(path: &Path) -> anyhow::Result<Option<Self>> {
+    pub fn load(path: &Path) -> crate::Result<Option<Self>> {
         if !path.exists() {
             return Ok(None);
         }
-        let content = std::fs::read_to_string(path)
-            .with_context(|| format!("failed to read state file: {}", path.display()))?;
-        let state: Self =
-            serde_json::from_str(&content).with_context(|| "failed to parse state file")?;
+        let content = std::fs::read_to_string(path)?;
+        let state: Self = serde_json::from_str(&content)?;
         Ok(Some(state))
     }
 

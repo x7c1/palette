@@ -7,7 +7,6 @@ pub use rules_config::RulesConfig;
 mod tmux_config;
 pub use tmux_config::TmuxConfig;
 
-use anyhow::Context as _;
 use serde::Deserialize;
 use std::path::Path;
 
@@ -33,11 +32,9 @@ fn default_state_path() -> String {
 }
 
 impl Config {
-    pub fn load(path: &Path) -> anyhow::Result<Self> {
-        let content = std::fs::read_to_string(path)
-            .with_context(|| format!("failed to read config file: {}", path.display()))?;
-        let config: Config =
-            toml::from_str(&content).with_context(|| "failed to parse config file")?;
+    pub fn load(path: &Path) -> crate::Result<Self> {
+        let content = std::fs::read_to_string(path)?;
+        let config: Config = toml::from_str(&content)?;
         Ok(config)
     }
 }

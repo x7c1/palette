@@ -5,7 +5,6 @@ edition.workspace = true
 license.workspace = true
 
 [dependencies]
-anyhow.workspace = true
 chrono.workspace = true
 palette-db = { path = "../palette-db" }
 palette-domain = { path = "../palette-domain" }

@@ -1,4 +1,3 @@
-use anyhow::Context as _;
 use palette_core::config::Config;
 use palette_core::docker::DockerManager;
 use palette_core::models::{AgentRole, AgentState, AgentStatus, TmuxTarget};
@@ -12,7 +11,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 #[tokio::main]
-async fn main() -> anyhow::Result<()> {
+async fn main() -> palette_core::Result<()> {
     tracing_subscriber::fmt()
         .with_env_filter(
             tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| "info".into()),
@@ -95,7 +94,7 @@ fn spawn_agent(
     tmux: &TmuxManagerImpl,
     session_name: &str,
     settings_template: &Path,
-) -> anyhow::Result<AgentState> {
+) -> palette_core::Result<AgentState> {
     let container_id = docker.create_container(spec.name, spec.image, spec.role, session_name)?;
     docker.start_container(&container_id)?;
     docker.write_settings(&container_id, settings_template, spec.id.as_ref())?;
@@ -131,14 +130,12 @@ fn bootstrap_leader(
     tmux: &TmuxManagerImpl,
     docker: &DockerManager,
     state_path: &Path,
-) -> anyhow::Result<PersistentState> {
+) -> palette_core::Result<PersistentState> {
     let session_name = &config.tmux.session_name;
     let settings_template = Path::new(&config.docker.settings_template);
     let mut state = PersistentState::new(session_name.clone());
 
-    let leader_target = tmux
-        .create_target("leader")
-        .context("failed to create leader tmux target")?;
+    let leader_target = tmux.create_target("leader")?;
 
     let leader_id = AgentId::new("leader-1");
     let empty_leader_id = AgentId::new("");

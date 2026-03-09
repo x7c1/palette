@@ -16,7 +16,7 @@ pub fn process_effects<T: TmuxManager>(
     tmux: &T,
     config: &DockerConfig,
     state_path: &std::path::Path,
-) -> anyhow::Result<Vec<PendingDelivery>> {
+) -> crate::Result<Vec<PendingDelivery>> {
     let mut deliveries = Vec::new();
     let mut pending: Vec<RuleEffect> = effects.to_vec();
 
@@ -99,7 +99,7 @@ pub fn deliver_queued_messages<T: TmuxManager>(
     db: &Database,
     infra: &mut PersistentState,
     tmux: &T,
-) -> anyhow::Result<bool> {
+) -> crate::Result<bool> {
     let member = infra
         .find_member(target_id)
         .or_else(|| infra.find_leader(target_id));
@@ -151,7 +151,7 @@ fn spawn_member<T: TmuxManager>(
     docker: &DockerManager,
     tmux: &T,
     config: &DockerConfig,
-) -> anyhow::Result<AgentState> {
+) -> crate::Result<AgentState> {
     let session_name = &infra.session_name;
 
     // Create a new tmux pane by splitting from the leader's pane
@@ -160,7 +160,9 @@ fn spawn_member<T: TmuxManager>(
         .first()
         .map(|l| l.tmux_target.as_ref())
         .ok_or_else(|| {
-            anyhow::anyhow!("no leader found; cannot spawn member without a leader pane")
+            crate::Error::Internal(
+                "no leader found; cannot spawn member without a leader pane".into(),
+            )
         })?;
     let tmux_target = TmuxTarget::new(tmux.create_pane(leader_target)?);
 

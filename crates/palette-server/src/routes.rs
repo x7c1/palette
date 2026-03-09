@@ -1,8 +1,8 @@
-use crate::{AppState, EventRecord};
-use crate::{
+use crate::api_types::{
     CreateTaskApi, ReviewSubmissionResponse, SubmitReviewApi, TaskFile, TaskFilterApi,
     TaskResponse, UpdateTaskApi,
 };
+use crate::{AppState, EventRecord};
 use axum::{
     Json, Router,
     extract::{Path, Query, State},
@@ -641,7 +641,7 @@ fn send_tmux_keys(
     target: &str,
     message: &str,
     no_enter: bool,
-) -> anyhow::Result<()> {
+) -> palette_tmux::Result<()> {
     if no_enter {
         tmux.send_keys_literal(target, message)
     } else {

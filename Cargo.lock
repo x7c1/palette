@@ -879,7 +879,6 @@ dependencies = [
 name = "palette-core"
 version = "0.1.0"
 dependencies = [
- "anyhow",
  "chrono",
  "palette-db",
  "palette-domain",
@@ -895,7 +894,6 @@ dependencies = [
 name = "palette-db"
 version = "0.1.0"
 dependencies = [
- "anyhow",
  "chrono",
  "palette-domain",
  "rusqlite",
@@ -916,7 +914,6 @@ dependencies = [
 name = "palette-server"
 version = "0.1.0"
 dependencies = [
- "anyhow",
  "axum",
  "chrono",
  "palette-core",
@@ -935,7 +932,6 @@ dependencies = [
 name = "palette-tmux"
 version = "0.1.0"
 dependencies = [
- "anyhow",
  "tracing",
 ]
 

@@ -1,6 +1,6 @@
+use crate::Error;
 use crate::models::AgentRole;
 use crate::models::ContainerId;
-use anyhow::{Context as _, bail};
 use std::path::Path;
 use std::process::Command;
 
@@ -24,7 +24,7 @@ impl DockerManager {
         image: &str,
         role: AgentRole,
         session_name: &str,
-    ) -> anyhow::Result<ContainerId> {
+    ) -> crate::Result<ContainerId> {
         let role_str = role.as_str();
         let labels = [
             "palette.managed=true".to_string(),
@@ -107,7 +107,9 @@ impl DockerManager {
         let output = run_docker(&args)?;
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
-            bail!("failed to create container palette-{name}: {stderr}");
+            return Err(Error::Docker(format!(
+                "failed to create container palette-{name}: {stderr}"
+            )));
         }
 
         let raw_id = String::from_utf8_lossy(&output.stdout).trim().to_string();
@@ -116,17 +118,19 @@ impl DockerManager {
         Ok(container_id)
     }
 
-    pub fn start_container(&self, container_id: &ContainerId) -> anyhow::Result<()> {
+    pub fn start_container(&self, container_id: &ContainerId) -> crate::Result<()> {
         let output = run_docker(&["start", container_id.as_ref()])?;
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
-            bail!("failed to start container {container_id}: {stderr}");
+            return Err(Error::Docker(format!(
+                "failed to start container {container_id}: {stderr}"
+            )));
         }
         tracing::info!(container_id = %container_id, "started container");
         Ok(())
     }
 
-    pub fn stop_container(&self, container_id: &ContainerId) -> anyhow::Result<()> {
+    pub fn stop_container(&self, container_id: &ContainerId) -> crate::Result<()> {
         let output = run_docker(&[
             "stop",
             "-t",
@@ -140,7 +144,7 @@ impl DockerManager {
         Ok(())
     }
 
-    pub fn remove_container(&self, container_id: &ContainerId) -> anyhow::Result<()> {
+    pub fn remove_container(&self, container_id: &ContainerId) -> crate::Result<()> {
         let output = run_docker(&["rm", "-f", container_id.as_ref()])?;
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
@@ -157,13 +161,8 @@ impl DockerManager {
         container_id: &ContainerId,
         template_path: &std::path::Path,
         member_id: &str,
-    ) -> anyhow::Result<()> {
-        let template = std::fs::read_to_string(template_path).with_context(|| {
-            format!(
-                "failed to read settings template: {}",
-                template_path.display()
-            )
-        })?;
+    ) -> crate::Result<()> {
+        let template = std::fs::read_to_string(template_path)?;
 
         // Replace template placeholders with actual URLs
         let settings = template
@@ -195,7 +194,9 @@ impl DockerManager {
 
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
-            bail!("failed to write settings.json in container {container_id}: {stderr}");
+            return Err(Error::Docker(format!(
+                "failed to write settings.json in container {container_id}: {stderr}"
+            )));
         }
 
         tracing::info!(container_id = %container_id, member_id = member_id, "wrote settings.json");
@@ -207,7 +208,7 @@ impl DockerManager {
         container_id: &ContainerId,
         local_path: &std::path::Path,
         container_path: &str,
-    ) -> anyhow::Result<()> {
+    ) -> crate::Result<()> {
         let cid = container_id.as_ref();
         let output = run_docker(&[
             "cp",
@@ -216,10 +217,10 @@ impl DockerManager {
         ])?;
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
-            bail!(
+            return Err(Error::Docker(format!(
                 "failed to copy {} to {container_id}:{container_path}: {stderr}",
                 local_path.display()
-            );
+            )));
         }
         tracing::info!(
             container_id = %container_id,
@@ -234,7 +235,7 @@ impl DockerManager {
         container_id: &ContainerId,
         local_dir: &Path,
         container_path: &str,
-    ) -> anyhow::Result<()> {
+    ) -> crate::Result<()> {
         let cid = container_id.as_ref();
         let output = Command::new("docker")
             .args([
@@ -242,11 +243,12 @@ impl DockerManager {
                 &format!("{}/.", local_dir.display()),
                 &format!("{cid}:{container_path}"),
             ])
-            .output()
-            .context("failed to docker cp directory")?;
+            .output()?;
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
-            bail!("failed to copy directory to container: {stderr}");
+            return Err(Error::Docker(format!(
+                "failed to copy directory to container: {stderr}"
+            )));
         }
         Ok(())
     }
@@ -276,15 +278,12 @@ impl DockerManager {
     }
 }
 
-fn run_docker<I, S>(args: I) -> anyhow::Result<std::process::Output>
+fn run_docker<I, S>(args: I) -> crate::Result<std::process::Output>
 where
-    I: IntoIterator<Item = S> + std::fmt::Debug + Clone,
+    I: IntoIterator<Item = S>,
     S: AsRef<std::ffi::OsStr>,
 {
-    Command::new("docker")
-        .args(args.clone())
-        .output()
-        .with_context(|| format!("failed to run docker {args:?}"))
+    Ok(Command::new("docker").args(args).output()?)
 }
 
 #[cfg(test)]

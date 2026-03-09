@@ -1,3 +1,6 @@
+mod error;
+pub use error::{Error, Result};
+
 pub mod config;
 pub mod docker;
 pub mod models;
