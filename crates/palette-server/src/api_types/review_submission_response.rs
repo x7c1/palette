@@ -1,4 +1,4 @@
-use crate::verdict_api::VerdictApi;
+use super::VerdictApi;
 use chrono::{DateTime, Utc};
 use palette_domain::ReviewSubmission;
 use serde::Serialize;

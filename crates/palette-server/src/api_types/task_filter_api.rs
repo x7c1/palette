@@ -1,5 +1,5 @@
-use crate::task_status_api::TaskStatusApi;
-use crate::task_type_api::TaskTypeApi;
+use super::TaskStatusApi;
+use super::TaskTypeApi;
 use palette_domain::{AgentId, TaskFilter, TaskStatus, TaskType};
 use serde::Deserialize;
 

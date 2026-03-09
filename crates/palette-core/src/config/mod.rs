@@ -1,6 +1,12 @@
-use crate::docker_config::DockerConfig;
-use crate::rules_config::RulesConfig;
-use crate::tmux_config::TmuxConfig;
+mod docker_config;
+pub use docker_config::DockerConfig;
+
+mod rules_config;
+pub use rules_config::RulesConfig;
+
+mod tmux_config;
+pub use tmux_config::TmuxConfig;
+
 use anyhow::Context as _;
 use serde::Deserialize;
 use std::path::Path;

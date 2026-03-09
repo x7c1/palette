@@ -1,11 +1,7 @@
-use crate::agent_role::AgentRole;
-use crate::agent_state::AgentState;
-use crate::agent_status::AgentStatus;
-use crate::docker_config::DockerConfig;
+use crate::config::DockerConfig;
 use crate::docker_manager::DockerManager;
-use crate::pending_delivery::PendingDelivery;
+use crate::models::{AgentRole, AgentState, AgentStatus, PendingDelivery, TmuxTarget};
 use crate::persistent_state::PersistentState;
-use crate::tmux_target::TmuxTarget;
 use palette_db::{AgentId, Database, RuleEffect, RuleEngine, Task};
 use palette_tmux::TmuxManager;
 

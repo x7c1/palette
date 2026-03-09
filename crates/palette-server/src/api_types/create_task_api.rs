@@ -1,6 +1,6 @@
-use crate::priority_api::PriorityApi;
-use crate::repository_api::RepositoryApi;
-use crate::task_type_api::TaskTypeApi;
+use super::PriorityApi;
+use super::RepositoryApi;
+use super::TaskTypeApi;
 use palette_domain::{AgentId, CreateTaskRequest, Priority, Repository, TaskId};
 use serde::Deserialize;
 

@@ -1,4 +1,4 @@
-use crate::tmux_target::TmuxTarget;
+use super::TmuxTarget;
 use palette_db::AgentId;
 
 /// A pending delivery that needs to be attempted.

@@ -1,5 +1,5 @@
-use crate::agent_role::AgentRole;
-use crate::container_id::ContainerId;
+use crate::models::AgentRole;
+use crate::models::ContainerId;
 use anyhow::{Context as _, bail};
 use std::path::Path;
 use std::process::Command;

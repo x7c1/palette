@@ -1,5 +1,5 @@
-use crate::review_comment_input_api::ReviewCommentInputApi;
-use crate::verdict_api::VerdictApi;
+use super::ReviewCommentInputApi;
+use super::VerdictApi;
 use palette_domain::{ReviewCommentInput, SubmitReviewRequest};
 use serde::Deserialize;
 

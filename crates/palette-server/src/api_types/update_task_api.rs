@@ -1,4 +1,4 @@
-use crate::task_status_api::TaskStatusApi;
+use super::TaskStatusApi;
 use palette_domain::{TaskId, UpdateTaskRequest};
 use serde::Deserialize;
 

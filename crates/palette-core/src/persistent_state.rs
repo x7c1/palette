@@ -1,5 +1,5 @@
-use crate::agent_state::AgentState;
-use crate::container_id::ContainerId;
+use crate::models::AgentState;
+use crate::models::ContainerId;
 use anyhow::Context as _;
 use chrono::{DateTime, Utc};
 use palette_db::AgentId;
@@ -101,9 +101,9 @@ impl PersistentState {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::agent_role::AgentRole;
-    use crate::agent_status::AgentStatus;
-    use crate::tmux_target::TmuxTarget;
+    use crate::models::AgentRole;
+    use crate::models::AgentStatus;
+    use crate::models::TmuxTarget;
 
     fn aid(s: &str) -> AgentId {
         AgentId::new(s)
