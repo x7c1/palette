@@ -13,7 +13,7 @@ use palette_core::models::AgentStatus;
 use palette_core::orchestrator;
 use palette_domain::{
     AgentId, CreateTaskRequest, PersistentState, RuleEngine, SubmitReviewRequest, TaskFilter,
-    TaskId, TaskStatus, TaskType, UpdateTaskRequest, Verdict,
+    TaskId, TaskStatus, TaskType, TerminalTarget, UpdateTaskRequest, Verdict,
 };
 use palette_tmux::{TerminalManager as _, TmuxManagerImpl};
 use std::sync::Arc;
@@ -229,7 +229,8 @@ async fn handle_send(
             };
             state.event_log.lock().await.push(record);
 
-            send_tmux_keys(&state.tmux, target, &req.message, req.no_enter)
+            let terminal_target = TerminalTarget::new(target);
+            send_tmux_keys(&state.tmux, &terminal_target, &req.message, req.no_enter)
                 .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
             return Ok(Json(SendResponse { queued: false }));
         }
@@ -275,13 +276,8 @@ async fn handle_send(
         };
 
         tracing::info!(target = %terminal_target, message = %req.message, "sending keys via tmux");
-        send_tmux_keys(
-            &state.tmux,
-            terminal_target.as_ref(),
-            &req.message,
-            req.no_enter,
-        )
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+        send_tmux_keys(&state.tmux, &terminal_target, &req.message, req.no_enter)
+            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
         // Update status to Working
         let mut infra = state.infra.lock().await;
@@ -634,7 +630,7 @@ async fn handle_get_submissions(
 /// then delivers the queued message.
 fn send_tmux_keys(
     tmux: &TmuxManagerImpl,
-    target: &str,
+    target: &TerminalTarget,
     message: &str,
     no_enter: bool,
 ) -> palette_tmux::Result<()> {

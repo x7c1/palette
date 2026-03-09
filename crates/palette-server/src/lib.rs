@@ -61,7 +61,7 @@ pub fn spawn_readiness_watcher(target_id: AgentId, state: Arc<AppState>) {
                 }
             };
 
-            let pane_content = match state.tmux.capture_pane(terminal_target.as_ref()) {
+            let pane_content = match state.tmux.capture_pane(&terminal_target) {
                 Ok(content) => content,
                 Err(e) => {
                     tracing::warn!(target_id = %target_id, error = %e, "failed to capture pane");

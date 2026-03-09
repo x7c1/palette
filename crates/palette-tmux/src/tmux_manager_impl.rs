@@ -1,4 +1,5 @@
 use crate::Error;
+use palette_domain::TerminalTarget;
 use std::process::Command;
 
 use crate::TerminalManager;
@@ -35,7 +36,7 @@ impl TerminalManager for TmuxManagerImpl {
         Ok(())
     }
 
-    fn create_target(&self, name: &str) -> crate::Result<String> {
+    fn create_target(&self, name: &str) -> crate::Result<TerminalTarget> {
         let target = format!("{}:{}", self.session_name, name);
 
         // Create a new window with the given name
@@ -59,16 +60,16 @@ impl TerminalManager for TmuxManagerImpl {
         let pane_id = String::from_utf8_lossy(&output.stdout).trim().to_string();
         tracing::info!(target = %target, pane_id = %pane_id, "created tmux target");
         // Return pane_id for precise targeting (window name is ambiguous with multiple panes)
-        Ok(pane_id)
+        Ok(TerminalTarget::new(pane_id))
     }
 
-    fn create_pane(&self, base_target: &str) -> crate::Result<String> {
+    fn create_pane(&self, base_target: &TerminalTarget) -> crate::Result<TerminalTarget> {
         // Split the base target horizontally to create a side-by-side pane
         let output = self.run_tmux(&[
             "split-window",
             "-h",
             "-t",
-            base_target,
+            base_target.as_ref(),
             "-P",
             "-F",
             "#{pane_id}",
@@ -82,12 +83,12 @@ impl TerminalManager for TmuxManagerImpl {
 
         let pane_id = String::from_utf8_lossy(&output.stdout).trim().to_string();
         tracing::info!(base_target = %base_target, pane_id = %pane_id, "created tmux pane");
-        Ok(pane_id)
+        Ok(TerminalTarget::new(pane_id))
     }
 
-    fn send_keys(&self, target: &str, text: &str) -> crate::Result<()> {
+    fn send_keys(&self, target: &TerminalTarget, text: &str) -> crate::Result<()> {
         // Use literal mode (-l) to avoid interpretation of special characters
-        let output = self.run_tmux(&["send-keys", "-t", target, "-l", text])?;
+        let output = self.run_tmux(&["send-keys", "-t", target.as_ref(), "-l", text])?;
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
             return Err(Error::Command(format!(
@@ -96,7 +97,7 @@ impl TerminalManager for TmuxManagerImpl {
         }
 
         // Send Enter key separately (not in literal mode)
-        let output = self.run_tmux(&["send-keys", "-t", target, "Enter"])?;
+        let output = self.run_tmux(&["send-keys", "-t", target.as_ref(), "Enter"])?;
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
             return Err(Error::Command(format!(
@@ -104,24 +105,24 @@ impl TerminalManager for TmuxManagerImpl {
             )));
         }
 
-        tracing::debug!(target = target, "sent keys");
+        tracing::debug!(target = %target, "sent keys");
         Ok(())
     }
 
-    fn send_keys_literal(&self, target: &str, text: &str) -> crate::Result<()> {
-        let output = self.run_tmux(&["send-keys", "-t", target, "-l", text])?;
+    fn send_keys_literal(&self, target: &TerminalTarget, text: &str) -> crate::Result<()> {
+        let output = self.run_tmux(&["send-keys", "-t", target.as_ref(), "-l", text])?;
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
             return Err(Error::Command(format!(
                 "failed to send literal keys to '{target}': {stderr}"
             )));
         }
-        tracing::debug!(target = target, "sent literal keys (no enter)");
+        tracing::debug!(target = %target, "sent literal keys (no enter)");
         Ok(())
     }
 
-    fn send_raw_key(&self, target: &str, key: &str) -> crate::Result<()> {
-        let output = self.run_tmux(&["send-keys", "-t", target, key])?;
+    fn send_raw_key(&self, target: &TerminalTarget, key: &str) -> crate::Result<()> {
+        let output = self.run_tmux(&["send-keys", "-t", target.as_ref(), key])?;
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
             return Err(Error::Command(format!(
@@ -131,8 +132,8 @@ impl TerminalManager for TmuxManagerImpl {
         Ok(())
     }
 
-    fn capture_pane(&self, target: &str) -> crate::Result<String> {
-        let output = self.run_tmux(&["capture-pane", "-t", target, "-p", "-J"])?;
+    fn capture_pane(&self, target: &TerminalTarget) -> crate::Result<String> {
+        let output = self.run_tmux(&["capture-pane", "-t", target.as_ref(), "-p", "-J"])?;
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
             return Err(Error::Command(format!(

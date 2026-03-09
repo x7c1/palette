@@ -89,7 +89,7 @@ struct AgentSpec<'a> {
 
 fn spawn_agent(
     spec: &AgentSpec,
-    tmux_target: &str,
+    terminal_target: &TerminalTarget,
     docker: &DockerManager,
     tmux: &TmuxManagerImpl,
     session_name: &str,
@@ -110,7 +110,7 @@ fn spawn_agent(
     )?;
 
     let cmd = DockerManager::claude_exec_command(&container_id, "/home/agent/prompt.md", spec.role);
-    tmux.send_keys(tmux_target, &cmd)?;
+    tmux.send_keys(terminal_target, &cmd)?;
     tracing::info!(name = spec.name, role = %spec.role, "launched Claude Code");
 
     Ok(AgentState {
@@ -118,7 +118,7 @@ fn spawn_agent(
         role: spec.role,
         leader_id: spec.leader_id.clone(),
         container_id,
-        terminal_target: TerminalTarget::new(tmux_target),
+        terminal_target: terminal_target.clone(),
         status: AgentStatus::Booting,
         session_id: None,
     })

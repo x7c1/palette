@@ -89,9 +89,17 @@ impl Drop for SessionGuard {
 }
 
 /// Capture the content of a tmux pane (including scrollback buffer)
-fn capture_pane(target: &str) -> String {
+fn capture_pane(target: &TerminalTarget) -> String {
     let output = Command::new("tmux")
-        .args(["capture-pane", "-t", target, "-p", "-J", "-S", "-200"])
+        .args([
+            "capture-pane",
+            "-t",
+            target.as_ref(),
+            "-p",
+            "-J",
+            "-S",
+            "-200",
+        ])
         .output()
         .expect("failed to capture pane");
     String::from_utf8_lossy(&output.stdout).to_string()
@@ -187,7 +195,7 @@ async fn send_keys_delivers_to_tmux_pane() {
             role: AgentRole::Member,
             leader_id: aid(""),
             container_id: ContainerId::new(""),
-            terminal_target: TerminalTarget::new(target.clone()),
+            terminal_target: target.clone(),
             status: AgentStatus::Idle,
             session_id: None,
         });
@@ -228,7 +236,7 @@ async fn send_keys_with_direct_target() {
 
     let resp = client
         .post(format!("{base_url}/send"))
-        .json(&json!({"target": target, "message": "echo direct-test"}))
+        .json(&json!({"target": target.to_string(), "message": "echo direct-test"}))
         .send()
         .await
         .unwrap();
@@ -537,7 +545,7 @@ async fn send_queues_when_member_is_working() {
             role: AgentRole::Member,
             leader_id: aid(""),
             container_id: ContainerId::new(""),
-            terminal_target: TerminalTarget::new(target.clone()),
+            terminal_target: target.clone(),
             status: AgentStatus::Working,
             session_id: None,
         });
@@ -594,7 +602,7 @@ async fn scenario3_message_queuing_to_leader() {
             role: AgentRole::Leader,
             leader_id: aid(""),
             container_id: ContainerId::new(""),
-            terminal_target: TerminalTarget::new(leader_pane.clone()),
+            terminal_target: leader_pane.clone(),
             status: AgentStatus::Working,
             session_id: None,
         });
@@ -603,7 +611,7 @@ async fn scenario3_message_queuing_to_leader() {
             role: AgentRole::Member,
             leader_id: aid("leader-1"),
             container_id: ContainerId::new(""),
-            terminal_target: TerminalTarget::new(_member_a_pane.clone()),
+            terminal_target: _member_a_pane.clone(),
             status: AgentStatus::Working,
             session_id: None,
         });
@@ -612,7 +620,7 @@ async fn scenario3_message_queuing_to_leader() {
             role: AgentRole::Member,
             leader_id: aid("leader-1"),
             container_id: ContainerId::new(""),
-            terminal_target: TerminalTarget::new(_member_b_pane.clone()),
+            terminal_target: _member_b_pane.clone(),
             status: AgentStatus::Working,
             session_id: None,
         });

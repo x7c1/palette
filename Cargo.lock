@@ -956,6 +956,7 @@ dependencies = [
 name = "palette-tmux"
 version = "0.1.0"
 dependencies = [
+ "palette-domain",
  "tracing",
 ]
 

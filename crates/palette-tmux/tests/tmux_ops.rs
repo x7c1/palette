@@ -20,7 +20,7 @@ fn create_session_and_target() {
     assert!(tmux.is_alive(&session).unwrap());
 
     let target = tmux.create_target("test-pane").unwrap();
-    assert!(tmux.is_alive(&target).unwrap());
+    assert!(tmux.is_alive(target.as_ref()).unwrap());
 
     cleanup_session(&session);
 }
@@ -57,7 +57,7 @@ fn send_keys_literal_mode() {
     std::thread::sleep(std::time::Duration::from_millis(300));
 
     let output = Command::new("tmux")
-        .args(["capture-pane", "-t", &target, "-p"])
+        .args(["capture-pane", "-t", target.as_ref(), "-p"])
         .output()
         .unwrap();
     let content = String::from_utf8_lossy(&output.stdout);

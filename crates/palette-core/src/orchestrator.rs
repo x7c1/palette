@@ -1,5 +1,5 @@
 use crate::config::DockerConfig;
-use crate::models::{AgentRole, AgentState, AgentStatus, PendingDelivery, TerminalTarget};
+use crate::models::{AgentRole, AgentState, AgentStatus, PendingDelivery};
 use palette_db::Database;
 use palette_docker::DockerManager;
 use palette_domain::{AgentId, PersistentState, RuleEffect, RuleEngine, Task};
@@ -108,7 +108,7 @@ pub fn deliver_queued_messages<T: TerminalManager>(
     };
 
     if let Some(msg) = db.dequeue_message(target_id)? {
-        tmux.send_keys(terminal_target.as_ref(), &msg.message)?;
+        tmux.send_keys(&terminal_target, &msg.message)?;
         // Update status to Working
         if let Some(m) = infra.find_member_mut(target_id) {
             m.status = AgentStatus::Working;
@@ -156,13 +156,13 @@ fn spawn_member<T: TerminalManager>(
     let leader_target = infra
         .leaders
         .first()
-        .map(|l| l.terminal_target.as_ref())
+        .map(|l| &l.terminal_target)
         .ok_or_else(|| {
             crate::Error::Internal(
                 "no leader found; cannot spawn member without a leader pane".into(),
             )
         })?;
-    let terminal_target = TerminalTarget::new(tmux.create_pane(leader_target)?);
+    let terminal_target = tmux.create_pane(leader_target)?;
 
     let member_id_str = member_id.as_ref();
     let container_id = docker.create_container(
@@ -193,7 +193,7 @@ fn spawn_member<T: TerminalManager>(
         "/home/agent/prompt.md",
         AgentRole::Member,
     );
-    tmux.send_keys(terminal_target.as_ref(), &cmd)?;
+    tmux.send_keys(&terminal_target, &cmd)?;
     tracing::info!(member_id = %member_id, "spawned member");
 
     Ok(AgentState {
