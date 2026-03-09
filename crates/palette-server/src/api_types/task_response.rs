@@ -1,22 +1,22 @@
-use super::PriorityApi;
-use super::RepositoryApi;
-use super::TaskStatusApi;
-use super::TaskTypeApi;
+use super::Priority;
+use super::Repository;
+use super::TaskStatus;
+use super::TaskType;
 use chrono::{DateTime, Utc};
-use palette_domain::Task;
+use palette_domain as domain;
 use serde::Serialize;
 
 #[derive(Debug, Serialize)]
 pub struct TaskResponse {
     pub id: String,
     #[serde(rename = "type")]
-    pub task_type: TaskTypeApi,
+    pub task_type: TaskType,
     pub title: String,
     pub description: Option<String>,
     pub assignee: Option<String>,
-    pub status: TaskStatusApi,
-    pub priority: Option<PriorityApi>,
-    pub repositories: Option<Vec<RepositoryApi>>,
+    pub status: TaskStatus,
+    pub priority: Option<Priority>,
+    pub repositories: Option<Vec<Repository>>,
     pub pr_url: Option<String>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
@@ -24,8 +24,8 @@ pub struct TaskResponse {
     pub assigned_at: Option<DateTime<Utc>>,
 }
 
-impl From<Task> for TaskResponse {
-    fn from(t: Task) -> Self {
+impl From<domain::Task> for TaskResponse {
+    fn from(t: domain::Task) -> Self {
         Self {
             id: t.id.to_string(),
             task_type: t.task_type.into(),
@@ -33,11 +33,11 @@ impl From<Task> for TaskResponse {
             description: t.description,
             assignee: t.assignee.map(|a| a.to_string()),
             status: t.status.into(),
-            priority: t.priority.map(PriorityApi::from),
+            priority: t.priority.map(Priority::from),
             repositories: t.repositories.map(|repos| {
                 repos
                     .into_iter()
-                    .map(|r| RepositoryApi {
+                    .map(|r| Repository {
                         name: r.name,
                         branch: r.branch,
                     })

@@ -1,20 +1,20 @@
 use crate::AppState;
-use crate::api_types::{ReviewSubmissionResponse, SubmitReviewApi};
+use crate::api_types::{ReviewSubmissionResponse, SubmitReviewRequest};
 use axum::{
     Json,
     extract::{Path, State},
     http::StatusCode,
 };
-use palette_domain::{ServerEvent, SubmitReviewRequest, TaskId, TaskType, Verdict};
+use palette_domain::{self as domain, ServerEvent, TaskId, TaskType, Verdict};
 use std::sync::Arc;
 
 pub async fn handle_submit_review(
     State(state): State<Arc<AppState>>,
     Path(review_task_id): Path<String>,
-    Json(api_req): Json<SubmitReviewApi>,
+    Json(api_req): Json<SubmitReviewRequest>,
 ) -> Result<(StatusCode, Json<ReviewSubmissionResponse>), (StatusCode, String)> {
     let review_task_id = TaskId::new(review_task_id);
-    let req: SubmitReviewRequest = api_req.into();
+    let req: domain::SubmitReviewRequest = api_req.into();
 
     // Verify the task exists and is a review
     let task = state

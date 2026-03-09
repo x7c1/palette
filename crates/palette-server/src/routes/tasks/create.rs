@@ -1,14 +1,14 @@
 use crate::AppState;
-use crate::api_types::{CreateTaskApi, TaskResponse};
+use crate::api_types::{CreateTaskRequest, TaskResponse};
 use axum::{Json, extract::State, http::StatusCode};
-use palette_domain::CreateTaskRequest;
+use palette_domain as domain;
 use std::sync::Arc;
 
 pub async fn handle_create_task(
     State(state): State<Arc<AppState>>,
-    Json(api_req): Json<CreateTaskApi>,
+    Json(api_req): Json<CreateTaskRequest>,
 ) -> Result<(StatusCode, Json<TaskResponse>), (StatusCode, String)> {
-    let req: CreateTaskRequest = api_req.into();
+    let req: domain::CreateTaskRequest = api_req.into();
     let task = state
         .db
         .create_task(&req)

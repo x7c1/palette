@@ -1,14 +1,14 @@
 use crate::AppState;
-use crate::api_types::{TaskResponse, UpdateTaskApi};
+use crate::api_types::{TaskResponse, UpdateTaskRequest};
 use axum::{Json, extract::State, http::StatusCode};
-use palette_domain::{RuleEngine, ServerEvent, UpdateTaskRequest};
+use palette_domain::{self as domain, RuleEngine, ServerEvent};
 use std::sync::Arc;
 
 pub async fn handle_update_task(
     State(state): State<Arc<AppState>>,
-    Json(api_req): Json<UpdateTaskApi>,
+    Json(api_req): Json<UpdateTaskRequest>,
 ) -> Result<Json<TaskResponse>, (StatusCode, String)> {
-    let req: UpdateTaskRequest = api_req.into();
+    let req: domain::UpdateTaskRequest = api_req.into();
     let current = state
         .db
         .get_task(&req.id)

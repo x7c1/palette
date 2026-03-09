@@ -1,42 +1,42 @@
-use super::PriorityApi;
-use super::RepositoryApi;
-use super::TaskTypeApi;
-use palette_domain::{AgentId, CreateTaskRequest, Priority, Repository, TaskId};
+use super::Priority;
+use super::Repository;
+use super::TaskType;
+use palette_domain as domain;
 use serde::Deserialize;
 
 #[derive(Debug, Deserialize)]
-pub struct CreateTaskApi {
+pub struct CreateTaskRequest {
     pub id: Option<String>,
     #[serde(rename = "type")]
-    pub task_type: TaskTypeApi,
+    pub task_type: TaskType,
     pub title: String,
     pub description: Option<String>,
     pub assignee: Option<String>,
-    pub priority: Option<PriorityApi>,
-    pub repositories: Option<Vec<RepositoryApi>>,
+    pub priority: Option<Priority>,
+    pub repositories: Option<Vec<Repository>>,
     #[serde(default)]
     pub depends_on: Vec<String>,
 }
 
-impl From<CreateTaskApi> for CreateTaskRequest {
-    fn from(api: CreateTaskApi) -> Self {
+impl From<CreateTaskRequest> for domain::CreateTaskRequest {
+    fn from(api: CreateTaskRequest) -> Self {
         Self {
-            id: api.id.map(TaskId::new),
+            id: api.id.map(domain::TaskId::new),
             task_type: api.task_type.into(),
             title: api.title,
             description: api.description,
-            assignee: api.assignee.map(AgentId::new),
-            priority: api.priority.map(Priority::from),
+            assignee: api.assignee.map(domain::AgentId::new),
+            priority: api.priority.map(domain::Priority::from),
             repositories: api.repositories.map(|repos| {
                 repos
                     .into_iter()
-                    .map(|r| Repository {
+                    .map(|r| domain::Repository {
                         name: r.name,
                         branch: r.branch,
                     })
                     .collect()
             }),
-            depends_on: api.depends_on.into_iter().map(TaskId::new).collect(),
+            depends_on: api.depends_on.into_iter().map(domain::TaskId::new).collect(),
         }
     }
 }

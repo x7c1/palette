@@ -1,4 +1,4 @@
-use palette_domain::ReviewComment;
+use palette_domain as domain;
 use serde::Serialize;
 
 #[derive(Debug, Serialize)]
@@ -10,8 +10,8 @@ pub struct ReviewCommentResponse {
     pub body: String,
 }
 
-impl From<ReviewComment> for ReviewCommentResponse {
-    fn from(c: ReviewComment) -> Self {
+impl From<domain::ReviewComment> for ReviewCommentResponse {
+    fn from(c: domain::ReviewComment) -> Self {
         Self {
             id: c.id,
             submission_id: c.submission_id,

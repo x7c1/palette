@@ -1,7 +1,7 @@
 use serde::Deserialize;
 
 #[derive(Debug, Deserialize)]
-pub struct ReviewCommentInputApi {
+pub struct ReviewCommentInput {
     pub file: String,
     pub line: i32,
     pub body: String,

@@ -1,25 +1,25 @@
-use super::ReviewCommentInputApi;
-use super::VerdictApi;
-use palette_domain::{ReviewCommentInput, SubmitReviewRequest};
+use super::ReviewCommentInput;
+use super::Verdict;
+use palette_domain as domain;
 use serde::Deserialize;
 
 #[derive(Debug, Deserialize)]
-pub struct SubmitReviewApi {
-    pub verdict: VerdictApi,
+pub struct SubmitReviewRequest {
+    pub verdict: Verdict,
     pub summary: Option<String>,
     #[serde(default)]
-    pub comments: Vec<ReviewCommentInputApi>,
+    pub comments: Vec<ReviewCommentInput>,
 }
 
-impl From<SubmitReviewApi> for SubmitReviewRequest {
-    fn from(api: SubmitReviewApi) -> Self {
+impl From<SubmitReviewRequest> for domain::SubmitReviewRequest {
+    fn from(api: SubmitReviewRequest) -> Self {
         Self {
             verdict: api.verdict.into(),
             summary: api.summary,
             comments: api
                 .comments
                 .into_iter()
-                .map(|c| ReviewCommentInput {
+                .map(|c| domain::ReviewCommentInput {
                     file: c.file,
                     line: c.line,
                     body: c.body,

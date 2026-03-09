@@ -1,5 +1,5 @@
 use crate::AppState;
-use crate::api_types::{TaskFilterApi, TaskResponse};
+use crate::api_types::{TaskFilter, TaskResponse};
 use axum::{
     Json,
     extract::{Query, State},
@@ -9,7 +9,7 @@ use std::sync::Arc;
 
 pub async fn handle_list_tasks(
     State(state): State<Arc<AppState>>,
-    Query(api_filter): Query<TaskFilterApi>,
+    Query(api_filter): Query<TaskFilter>,
 ) -> Result<Json<Vec<TaskResponse>>, (StatusCode, String)> {
     let filter = api_filter.into();
     let tasks = state

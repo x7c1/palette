@@ -1,6 +1,6 @@
-use super::VerdictApi;
+use super::Verdict;
 use chrono::{DateTime, Utc};
-use palette_domain::ReviewSubmission;
+use palette_domain as domain;
 use serde::Serialize;
 
 #[derive(Debug, Serialize)]
@@ -8,13 +8,13 @@ pub struct ReviewSubmissionResponse {
     pub id: i64,
     pub review_task_id: String,
     pub round: i32,
-    pub verdict: VerdictApi,
+    pub verdict: Verdict,
     pub summary: Option<String>,
     pub created_at: DateTime<Utc>,
 }
 
-impl From<ReviewSubmission> for ReviewSubmissionResponse {
-    fn from(s: ReviewSubmission) -> Self {
+impl From<domain::ReviewSubmission> for ReviewSubmissionResponse {
+    fn from(s: domain::ReviewSubmission) -> Self {
         Self {
             id: s.id,
             review_task_id: s.review_task_id.to_string(),
