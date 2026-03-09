@@ -3,7 +3,7 @@ use palette_db::Database;
 use palette_docker::DockerManager;
 use palette_domain::{
     AgentId, AgentRole, AgentState, AgentStatus, ContainerId, PersistentState, RuleEngine, TaskId,
-    TerminalTarget,
+    TerminalSessionName, TerminalTarget,
 };
 use palette_server::{AppState, create_router};
 use palette_tmux::{TerminalManager, TmuxManagerImpl};
@@ -12,12 +12,12 @@ use std::process::Command;
 use std::sync::Arc;
 
 /// Unique session name for each test to avoid conflicts
-fn test_session_name(test_name: &str) -> String {
-    format!("palette-test-{}-{}", test_name, std::process::id())
+fn test_session_name(test_name: &str) -> TerminalSessionName {
+    TerminalSessionName::new(format!("palette-test-{}-{}", test_name, std::process::id()))
 }
 
 /// Create a session name and a guard that cleans up the tmux session on drop.
-fn test_session_name_with_guard(test_name: &str) -> (String, SessionGuard) {
+fn test_session_name_with_guard(test_name: &str) -> (TerminalSessionName, SessionGuard) {
     let name = test_session_name(test_name);
     let guard = SessionGuard::new(name.clone());
     (name, guard)
@@ -44,7 +44,10 @@ fn tid(s: &str) -> TaskId {
 }
 
 /// Spawn the server on an OS-assigned port and return (addr, state)
-async fn spawn_server(tmux: TmuxManagerImpl, session_name: &str) -> (String, Arc<AppState>) {
+async fn spawn_server(
+    tmux: TmuxManagerImpl,
+    session_name: &TerminalSessionName,
+) -> (String, Arc<AppState>) {
     let db = Database::open_in_memory().unwrap();
     let rules = RuleEngine::new(5);
     let docker = DockerManager::new("http://127.0.0.1:0".to_string());
@@ -72,10 +75,10 @@ async fn spawn_server(tmux: TmuxManagerImpl, session_name: &str) -> (String, Arc
 }
 
 /// RAII guard that kills the tmux session on drop (including panic).
-struct SessionGuard(String);
+struct SessionGuard(TerminalSessionName);
 
 impl SessionGuard {
-    fn new(session: String) -> Self {
+    fn new(session: TerminalSessionName) -> Self {
         Self(session)
     }
 }
@@ -83,7 +86,7 @@ impl SessionGuard {
 impl Drop for SessionGuard {
     fn drop(&mut self) {
         let _ = Command::new("tmux")
-            .args(["kill-session", "-t", &self.0])
+            .args(["kill-session", "-t", self.0.as_ref()])
             .output();
     }
 }

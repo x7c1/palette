@@ -73,6 +73,9 @@ pub use pending_delivery::PendingDelivery;
 mod persistent_state;
 pub use persistent_state::PersistentState;
 
+mod terminal_session_name;
+pub use terminal_session_name::TerminalSessionName;
+
 mod terminal_target;
 pub use terminal_target::TerminalTarget;
 

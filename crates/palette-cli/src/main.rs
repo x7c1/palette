@@ -2,7 +2,8 @@ use palette_core::config::Config;
 use palette_db::Database;
 use palette_docker::DockerManager;
 use palette_domain::{
-    AgentId, AgentRole, AgentState, AgentStatus, PersistentState, RuleEngine, TerminalTarget,
+    AgentId, AgentRole, AgentState, AgentStatus, PersistentState, RuleEngine, TerminalSessionName,
+    TerminalTarget,
 };
 use palette_server::AppState;
 use palette_tmux::{TerminalManager, TmuxManagerImpl};
@@ -26,8 +27,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let config = Config::load(&config_path)?;
     tracing::info!(?config, "loaded config");
 
-    let tmux = TmuxManagerImpl::new(config.tmux.session_name.clone());
-    tmux.create_session(&config.tmux.session_name)?;
+    let session_name = TerminalSessionName::new(&config.tmux.session_name);
+    let tmux = TmuxManagerImpl::new(session_name.clone());
+    tmux.create_session(&session_name)?;
 
     let db = Database::open(Path::new(&config.db_path))?;
     tracing::info!(db_path = %config.db_path, "database initialized");

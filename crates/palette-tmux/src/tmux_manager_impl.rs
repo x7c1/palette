@@ -1,15 +1,15 @@
 use crate::Error;
-use palette_domain::TerminalTarget;
+use palette_domain::{TerminalSessionName, TerminalTarget};
 use std::process::Command;
 
 use crate::TerminalManager;
 
 pub struct TmuxManagerImpl {
-    session_name: String,
+    session_name: TerminalSessionName,
 }
 
 impl TmuxManagerImpl {
-    pub fn new(session_name: String) -> Self {
+    pub fn new(session_name: TerminalSessionName) -> Self {
         Self { session_name }
     }
 
@@ -19,7 +19,8 @@ impl TmuxManagerImpl {
 }
 
 impl TerminalManager for TmuxManagerImpl {
-    fn create_session(&self, name: &str) -> crate::Result<()> {
+    fn create_session(&self, name: &TerminalSessionName) -> crate::Result<()> {
+        let name = name.as_ref();
         let output = self.run_tmux(&["has-session", "-t", name])?;
         if output.status.success() {
             tracing::info!(session = name, "tmux session already exists");
@@ -37,13 +38,14 @@ impl TerminalManager for TmuxManagerImpl {
     }
 
     fn create_target(&self, name: &str) -> crate::Result<TerminalTarget> {
-        let target = format!("{}:{}", self.session_name, name);
+        let session = self.session_name.as_ref();
+        let target = format!("{session}:{name}");
 
         // Create a new window with the given name
         let output = self.run_tmux(&[
             "new-window",
             "-t",
-            &self.session_name,
+            session,
             "-n",
             name,
             "-P",
@@ -143,8 +145,13 @@ impl TerminalManager for TmuxManagerImpl {
         Ok(String::from_utf8_lossy(&output.stdout).to_string())
     }
 
-    fn is_alive(&self, target: &str) -> crate::Result<bool> {
-        let output = self.run_tmux(&["has-session", "-t", target])?;
+    fn is_session_alive(&self, name: &TerminalSessionName) -> crate::Result<bool> {
+        let output = self.run_tmux(&["has-session", "-t", name.as_ref()])?;
+        Ok(output.status.success())
+    }
+
+    fn is_terminal_alive(&self, target: &TerminalTarget) -> crate::Result<bool> {
+        let output = self.run_tmux(&["has-session", "-t", target.as_ref()])?;
         Ok(output.status.success())
     }
 }
