@@ -27,15 +27,9 @@ impl From<CreateTaskRequest> for domain::CreateTaskRequest {
             description: api.description,
             assignee: api.assignee.map(domain::AgentId::new),
             priority: api.priority.map(domain::Priority::from),
-            repositories: api.repositories.map(|repos| {
-                repos
-                    .into_iter()
-                    .map(|r| domain::Repository {
-                        name: r.name,
-                        branch: r.branch,
-                    })
-                    .collect()
-            }),
+            repositories: api
+                .repositories
+                .map(|repos| repos.into_iter().map(Into::into).collect()),
             depends_on: api
                 .depends_on
                 .into_iter()

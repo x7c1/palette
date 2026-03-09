@@ -34,15 +34,9 @@ impl From<domain::Task> for TaskResponse {
             assignee: t.assignee.map(|a| a.to_string()),
             status: t.status.into(),
             priority: t.priority.map(Priority::from),
-            repositories: t.repositories.map(|repos| {
-                repos
-                    .into_iter()
-                    .map(|r| Repository {
-                        name: r.name,
-                        branch: r.branch,
-                    })
-                    .collect()
-            }),
+            repositories: t
+                .repositories
+                .map(|repos| repos.into_iter().map(Into::into).collect()),
             pr_url: t.pr_url,
             created_at: t.created_at,
             updated_at: t.updated_at,
