@@ -1,0 +1,38 @@
+use super::Orchestrator;
+use palette_domain::{AgentId, AgentStatus};
+use std::sync::Arc;
+
+use crate::deliver_queued_messages;
+
+impl Orchestrator {
+    pub(super) async fn deliver_to_all_idle(this: &Arc<Self>) {
+        loop {
+            let mut infra = this.infra.lock().await;
+            let idle_targets: Vec<AgentId> = infra
+                .leaders
+                .iter()
+                .chain(infra.members.iter())
+                .filter(|m| m.status == AgentStatus::Idle)
+                .map(|m| m.id.clone())
+                .collect();
+
+            let mut any_delivered = false;
+            for target_id in &idle_targets {
+                match deliver_queued_messages(target_id, &this.db, &mut infra, &*this.tmux) {
+                    Ok(true) => any_delivered = true,
+                    Ok(false) => {}
+                    Err(e) => {
+                        tracing::error!(
+                            target_id = %target_id,
+                            error = %e,
+                            "delivery loop: failed to deliver"
+                        );
+                    }
+                }
+            }
+            if !any_delivered {
+                break;
+            }
+        }
+    }
+}
