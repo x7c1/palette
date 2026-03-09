@@ -7,8 +7,10 @@ license.workspace = true
 [dependencies]
 anyhow.workspace = true
 axum.workspace = true
+chrono.workspace = true
 palette-core = { path = "../palette-core" }
 palette-db = { path = "../palette-db" }
+palette-domain = { path = "../palette-domain" }
 palette-tmux = { path = "../palette-tmux" }
 serde.workspace = true
 serde_json.workspace = true

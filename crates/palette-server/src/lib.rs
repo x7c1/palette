@@ -1,3 +1,4 @@
+pub mod api_types;
 mod routes;
 
 use axum::Router;

@@ -908,7 +908,6 @@ name = "palette-domain"
 version = "0.1.0"
 dependencies = [
  "chrono",
- "serde",
  "uuid",
 ]
 
@@ -918,8 +917,10 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "axum",
+ "chrono",
  "palette-core",
  "palette-db",
+ "palette-domain",
  "palette-tmux",
  "reqwest",
  "serde",

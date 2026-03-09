@@ -1,5 +1,6 @@
 use crate::errors::DbError;
 use crate::models::QueuedMessage;
+use crate::repository_row;
 use crate::schema;
 use chrono::{DateTime, Utc};
 use palette_domain::*;
@@ -57,7 +58,7 @@ impl Database {
         let repos_json = req
             .repositories
             .as_ref()
-            .map(|r| serde_json::to_string(r).unwrap());
+            .map(|r| repository_row::repositories_to_json(r));
 
         // Work tasks start as Draft; review tasks start as Todo
         let initial_status = match req.task_type {
@@ -477,7 +478,7 @@ fn query_task(conn: &Connection, id: &TaskId) -> Result<Option<Task>, DbError> {
 fn row_to_task(row: &rusqlite::Row) -> Task {
     let repos_str: Option<String> = row.get(7).unwrap();
     let repositories: Option<Vec<Repository>> =
-        repos_str.and_then(|s| serde_json::from_str(&s).ok());
+        repos_str.and_then(|s| repository_row::repositories_from_json(&s));
 
     Task {
         id: TaskId::new(row.get::<_, String>(0).unwrap()),

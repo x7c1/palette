@@ -1,6 +1,7 @@
 mod errors;
 mod models;
 mod repository;
+mod repository_row;
 mod rules;
 mod schema;
 pub mod task_file;

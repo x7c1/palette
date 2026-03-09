@@ -6,30 +6,77 @@ use serde::Deserialize;
 pub struct TaskFile {
     /// Default repositories inherited by all tasks unless overridden.
     #[serde(default)]
-    pub repositories: Vec<RepositoryEntry>,
-    pub tasks: Vec<TaskEntry>,
+    repositories: Vec<RepositoryEntry>,
+    tasks: Vec<TaskEntry>,
 }
 
 /// A repository with name (org/repo) and optional branch.
 #[derive(Debug, Clone, Deserialize)]
-pub struct RepositoryEntry {
-    pub name: String,
-    pub branch: Option<String>,
+struct RepositoryEntry {
+    name: String,
+    branch: Option<String>,
+}
+
+/// Task type as represented in YAML input.
+#[derive(Debug, Clone, Copy, Deserialize)]
+#[serde(rename_all = "snake_case")]
+enum TaskTypeInput {
+    Work,
+    Review,
+}
+
+impl From<TaskTypeInput> for TaskType {
+    fn from(t: TaskTypeInput) -> Self {
+        match t {
+            TaskTypeInput::Work => TaskType::Work,
+            TaskTypeInput::Review => TaskType::Review,
+        }
+    }
+}
+
+/// Priority as represented in YAML input.
+#[derive(Debug, Clone, Copy, Deserialize)]
+#[serde(rename_all = "snake_case")]
+enum PriorityInput {
+    High,
+    Medium,
+    Low,
+}
+
+impl From<PriorityInput> for Priority {
+    fn from(p: PriorityInput) -> Self {
+        match p {
+            PriorityInput::High => Priority::High,
+            PriorityInput::Medium => Priority::Medium,
+            PriorityInput::Low => Priority::Low,
+        }
+    }
+}
+
+/// Task ID as represented in YAML input.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(transparent)]
+struct TaskIdInput(String);
+
+impl From<TaskIdInput> for TaskId {
+    fn from(id: TaskIdInput) -> Self {
+        TaskId::new(id.0)
+    }
 }
 
 /// A single task entry in the YAML file.
 #[derive(Debug, Deserialize)]
-pub struct TaskEntry {
-    pub id: TaskId,
+struct TaskEntry {
+    id: TaskIdInput,
     #[serde(rename = "type")]
-    pub task_type: TaskType,
-    pub title: String,
-    pub description: Option<String>,
-    pub priority: Option<Priority>,
+    task_type: TaskTypeInput,
+    title: String,
+    description: Option<String>,
+    priority: Option<PriorityInput>,
     /// Per-task repositories override. If omitted, inherits from top-level.
-    pub repositories: Option<Vec<RepositoryEntry>>,
+    repositories: Option<Vec<RepositoryEntry>>,
     #[serde(default)]
-    pub depends_on: Vec<TaskId>,
+    depends_on: Vec<TaskIdInput>,
 }
 
 impl TaskFile {
@@ -70,14 +117,14 @@ impl TaskFile {
                     .or_else(|| default_repos.clone());
 
                 CreateTaskRequest {
-                    id: Some(entry.id),
-                    task_type: entry.task_type,
+                    id: Some(entry.id.into()),
+                    task_type: entry.task_type.into(),
                     title: entry.title,
                     description: entry.description,
                     assignee: None,
-                    priority: entry.priority,
+                    priority: entry.priority.map(Priority::from),
                     repositories,
-                    depends_on: entry.depends_on,
+                    depends_on: entry.depends_on.into_iter().map(TaskId::from).collect(),
                 }
             })
             .collect()

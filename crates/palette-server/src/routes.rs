@@ -1,3 +1,7 @@
+use crate::api_types::{
+    CreateTaskApi, ReviewSubmissionResponse, SubmitReviewApi, TaskFilterApi, TaskResponse,
+    UpdateTaskApi,
+};
 use crate::{AppState, EventRecord};
 use axum::{
     Json, Router,
@@ -324,7 +328,7 @@ async fn handle_events(State(state): State<Arc<AppState>>) -> Json<Vec<EventReco
 async fn handle_load_tasks(
     State(state): State<Arc<AppState>>,
     body: String,
-) -> Result<(StatusCode, Json<Vec<Task>>), (StatusCode, String)> {
+) -> Result<(StatusCode, Json<Vec<TaskResponse>>), (StatusCode, String)> {
     let task_file = palette_db::task_file::TaskFile::parse(&body)
         .map_err(|e| (StatusCode::BAD_REQUEST, format!("invalid YAML: {e}")))?;
 
@@ -398,9 +402,10 @@ async fn handle_load_tasks(
     }
 
     // Re-fetch all tasks to return updated statuses
-    let final_tasks: Vec<Task> = created_tasks
+    let final_tasks: Vec<TaskResponse> = created_tasks
         .iter()
         .filter_map(|t| state.db.get_task(&t.id).ok().flatten())
+        .map(TaskResponse::from)
         .collect();
 
     Ok((StatusCode::CREATED, Json(final_tasks)))
@@ -408,20 +413,22 @@ async fn handle_load_tasks(
 
 async fn handle_create_task(
     State(state): State<Arc<AppState>>,
-    Json(req): Json<CreateTaskRequest>,
-) -> Result<(StatusCode, Json<Task>), (StatusCode, String)> {
+    Json(api_req): Json<CreateTaskApi>,
+) -> Result<(StatusCode, Json<TaskResponse>), (StatusCode, String)> {
+    let req: CreateTaskRequest = api_req.into();
     let task = state
         .db
         .create_task(&req)
         .map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))?;
     tracing::info!(task_id = %task.id, "created task");
-    Ok((StatusCode::CREATED, Json(task)))
+    Ok((StatusCode::CREATED, Json(TaskResponse::from(task))))
 }
 
 async fn handle_update_task(
     State(state): State<Arc<AppState>>,
-    Json(req): Json<UpdateTaskRequest>,
-) -> Result<Json<Task>, (StatusCode, String)> {
+    Json(api_req): Json<UpdateTaskApi>,
+) -> Result<Json<TaskResponse>, (StatusCode, String)> {
+    let req: UpdateTaskRequest = api_req.into();
     let current = state
         .db
         .get_task(&req.id)
@@ -484,18 +491,19 @@ async fn handle_update_task(
         crate::spawn_readiness_watcher(delivery.target_id, Arc::clone(&state));
     }
 
-    Ok(Json(task))
+    Ok(Json(TaskResponse::from(task)))
 }
 
 async fn handle_list_tasks(
     State(state): State<Arc<AppState>>,
-    Query(filter): Query<TaskFilter>,
-) -> Result<Json<Vec<Task>>, (StatusCode, String)> {
+    Query(api_filter): Query<TaskFilterApi>,
+) -> Result<Json<Vec<TaskResponse>>, (StatusCode, String)> {
+    let filter: TaskFilter = api_filter.into();
     let tasks = state
         .db
         .list_tasks(&filter)
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-    Ok(Json(tasks))
+    Ok(Json(tasks.into_iter().map(TaskResponse::from).collect()))
 }
 
 // --- Review API ---
@@ -503,9 +511,10 @@ async fn handle_list_tasks(
 async fn handle_submit_review(
     State(state): State<Arc<AppState>>,
     Path(review_task_id): Path<String>,
-    Json(req): Json<SubmitReviewRequest>,
-) -> Result<(StatusCode, Json<ReviewSubmission>), (StatusCode, String)> {
+    Json(api_req): Json<SubmitReviewApi>,
+) -> Result<(StatusCode, Json<ReviewSubmissionResponse>), (StatusCode, String)> {
     let review_task_id = TaskId::new(review_task_id);
+    let req: SubmitReviewRequest = api_req.into();
 
     // Verify the task exists and is a review
     let task = state
@@ -599,19 +608,27 @@ async fn handle_submit_review(
         crate::spawn_readiness_watcher(delivery.target_id, Arc::clone(&state));
     }
 
-    Ok((StatusCode::CREATED, Json(submission)))
+    Ok((
+        StatusCode::CREATED,
+        Json(ReviewSubmissionResponse::from(submission)),
+    ))
 }
 
 async fn handle_get_submissions(
     State(state): State<Arc<AppState>>,
     Path(review_task_id): Path<String>,
-) -> Result<Json<Vec<ReviewSubmission>>, (StatusCode, String)> {
+) -> Result<Json<Vec<ReviewSubmissionResponse>>, (StatusCode, String)> {
     let review_task_id = TaskId::new(review_task_id);
     let submissions = state
         .db
         .get_review_submissions(&review_task_id)
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-    Ok(Json(submissions))
+    Ok(Json(
+        submissions
+            .into_iter()
+            .map(ReviewSubmissionResponse::from)
+            .collect(),
+    ))
 }
 
 /// Spawn a background task that polls a member's tmux pane for Claude Code readiness,
