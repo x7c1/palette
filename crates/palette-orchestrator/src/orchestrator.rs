@@ -1,4 +1,4 @@
-use crate::config::DockerConfig;
+use crate::DockerConfig;
 use palette_db::Database;
 use palette_docker::DockerManager;
 use palette_domain::{

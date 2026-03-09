@@ -1,4 +1,6 @@
-use palette_core::config::Config;
+mod config;
+
+use config::Config;
 use palette_db::Database;
 use palette_docker::DockerManager;
 use palette_domain::{
@@ -96,7 +98,7 @@ fn spawn_agent(
     tmux: &TmuxManager,
     session_name: &str,
     settings_template: &Path,
-) -> palette_core::Result<AgentState> {
+) -> Result<AgentState, Box<dyn std::error::Error>> {
     let container_id = docker.create_container(spec.name, spec.image, spec.role, session_name)?;
     docker.start_container(&container_id)?;
     docker.write_settings(&container_id, settings_template, spec.id.as_ref())?;

@@ -1,12 +1,10 @@
-mod docker_config;
-pub use docker_config::DockerConfig;
-
 mod rules_config;
 pub use rules_config::RulesConfig;
 
 mod tmux_config;
 pub use tmux_config::TmuxConfig;
 
+use palette_orchestrator::DockerConfig;
 use serde::Deserialize;
 use std::path::Path;
 
@@ -32,9 +30,10 @@ fn default_state_path() -> String {
 }
 
 impl Config {
-    pub fn load(path: &Path) -> crate::Result<Self> {
+    pub fn load(path: &Path) -> std::io::Result<Self> {
         let content = std::fs::read_to_string(path)?;
-        let config: Config = toml::from_str(&content)?;
+        let config: Config = toml::from_str(&content)
+            .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
         Ok(config)
     }
 }

@@ -864,32 +864,19 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "axum",
- "palette-core",
  "palette-db",
  "palette-docker",
  "palette-domain",
  "palette-file-state",
+ "palette-orchestrator",
  "palette-server",
  "palette-tmux",
+ "serde",
  "serde_json",
  "tokio",
- "tracing",
- "tracing-subscriber",
-]
-
-[[package]]
-name = "palette-core"
-version = "0.1.0"
-dependencies = [
- "chrono",
- "palette-db",
- "palette-docker",
- "palette-domain",
- "palette-tmux",
- "serde",
- "tempfile",
  "toml",
  "tracing",
+ "tracing-subscriber",
 ]
 
 [[package]]
@@ -933,16 +920,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "palette-orchestrator"
+version = "0.1.0"
+dependencies = [
+ "palette-db",
+ "palette-docker",
+ "palette-domain",
+ "palette-tmux",
+ "serde",
+ "tracing",
+]
+
+[[package]]
 name = "palette-server"
 version = "0.1.0"
 dependencies = [
  "axum",
  "chrono",
- "palette-core",
  "palette-db",
  "palette-docker",
  "palette-domain",
  "palette-file-state",
+ "palette-orchestrator",
  "palette-tmux",
  "reqwest",
  "serde",

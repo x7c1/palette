@@ -1,10 +1,10 @@
-use palette_core::config::DockerConfig;
 use palette_db::Database;
 use palette_docker::DockerManager;
 use palette_domain::{
     AgentId, AgentRole, AgentState, AgentStatus, ContainerId, PersistentState, RuleEngine, TaskId,
     TerminalSessionName, TerminalTarget,
 };
+use palette_orchestrator::DockerConfig;
 use palette_server::{AppState, create_router};
 use palette_tmux::{TerminalManager, TmuxManager};
 use serde_json::json;

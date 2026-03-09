@@ -1,14 +1,14 @@
 [workspace]
 resolver = "2"
 members = [
-    "crates/palette-core",
+    "crates/palette-cli",
     "crates/palette-db",
     "crates/palette-docker",
     "crates/palette-domain",
+    "crates/palette-file-state",
+    "crates/palette-orchestrator",
     "crates/palette-server",
     "crates/palette-tmux",
-    "crates/palette-file-state",
-    "crates/palette-cli",
 ]
 
 [workspace.package]

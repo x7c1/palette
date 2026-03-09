@@ -13,12 +13,26 @@
 //!   inspection.
 
 use anyhow::{Context as _, Result};
-use palette_core::config::Config;
 use palette_domain::AgentRole;
+use palette_orchestrator::DockerConfig;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
 const SESSION_NAME: &str = "palette-test";
+
+/// Minimal config struct for loading test configuration.
+#[derive(serde::Deserialize)]
+struct TestConfig {
+    docker: DockerConfig,
+}
+
+impl TestConfig {
+    fn load(path: &Path) -> Result<Self> {
+        let content = std::fs::read_to_string(path)?;
+        let config: Self = toml::from_str(&content)?;
+        Ok(config)
+    }
+}
 
 /// Resolve a path relative to the workspace root (two levels up from palette-cli).
 fn workspace_path(relative: &str) -> PathBuf {
@@ -104,7 +118,7 @@ fn launch() -> Result<()> {
         .output()?;
 
     // --- Setup Docker containers ---
-    let config = Config::load(&workspace_path("config/palette.toml"))?;
+    let config = TestConfig::load(&workspace_path("config/palette.toml"))?;
     let docker = palette_docker::DockerManager::new(config.docker.palette_url.clone());
 
     let leader_id = docker.create_container(
@@ -308,7 +322,7 @@ fn claude_responds() -> Result<()> {
         .output()?;
 
     // --- Setup container ---
-    let config = Config::load(&workspace_path("config/palette.toml"))?;
+    let config = TestConfig::load(&workspace_path("config/palette.toml"))?;
     let docker = palette_docker::DockerManager::new(config.docker.palette_url.clone());
 
     let container_id = docker.create_container(

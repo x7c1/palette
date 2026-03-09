@@ -9,7 +9,6 @@ use axum::{
     http::StatusCode,
     routing::{get, post},
 };
-use palette_core::orchestrator;
 use palette_domain::AgentStatus;
 use palette_domain::{
     AgentId, CreateTaskRequest, PersistentState, RuleEngine, SubmitReviewRequest, TaskFilter,
@@ -132,8 +131,12 @@ async fn handle_stop(
     // Deliver any queued messages to the now-idle member (own queue only)
     {
         let mut infra = state.infra.lock().await;
-        let _ =
-            orchestrator::deliver_queued_messages(&member_id, &state.db, &mut infra, &state.tmux);
+        let _ = palette_orchestrator::deliver_queued_messages(
+            &member_id,
+            &state.db,
+            &mut infra,
+            &state.tmux,
+        );
     }
 
     // Notify background delivery loop (leader may have pending messages)
@@ -370,7 +373,7 @@ async fn handle_load_tasks(
 
         let deliveries = {
             let mut infra = state.infra.lock().await;
-            let deliveries = orchestrator::process_effects(
+            let deliveries = palette_orchestrator::process_effects(
                 &effects,
                 &state.db,
                 &mut infra,
@@ -381,7 +384,7 @@ async fn handle_load_tasks(
             .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
             for delivery in &deliveries {
-                let _ = orchestrator::deliver_queued_messages(
+                let _ = palette_orchestrator::deliver_queued_messages(
                     &delivery.target_id,
                     &state.db,
                     &mut infra,
@@ -458,7 +461,7 @@ async fn handle_update_task(
     // Process orchestrator effects (auto-assign, destroy members)
     let deliveries = {
         let mut infra = state.infra.lock().await;
-        let deliveries = orchestrator::process_effects(
+        let deliveries = palette_orchestrator::process_effects(
             &effects,
             &state.db,
             &mut infra,
@@ -470,7 +473,7 @@ async fn handle_update_task(
 
         // Deliver queued messages for non-booting members
         for delivery in &deliveries {
-            let _ = orchestrator::deliver_queued_messages(
+            let _ = palette_orchestrator::deliver_queued_messages(
                 &delivery.target_id,
                 &state.db,
                 &mut infra,
@@ -572,7 +575,7 @@ async fn handle_submit_review(
     // Process orchestrator effects
     let deliveries = {
         let mut infra = state.infra.lock().await;
-        let deliveries = orchestrator::process_effects(
+        let deliveries = palette_orchestrator::process_effects(
             &effects,
             &state.db,
             &mut infra,
@@ -583,7 +586,7 @@ async fn handle_submit_review(
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
         for delivery in &deliveries {
-            let _ = orchestrator::deliver_queued_messages(
+            let _ = palette_orchestrator::deliver_queued_messages(
                 &delivery.target_id,
                 &state.db,
                 &mut infra,

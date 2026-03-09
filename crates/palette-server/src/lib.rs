@@ -3,12 +3,11 @@ pub mod api_types;
 mod routes;
 
 use axum::Router;
-use palette_core::config::DockerConfig;
-use palette_core::orchestrator;
 use palette_db::Database;
 use palette_docker::DockerManager;
 use palette_domain::AgentStatus;
 use palette_domain::{AgentId, PersistentState, RuleEngine};
+use palette_orchestrator::DockerConfig;
 use palette_tmux::{TerminalManager as _, TmuxManager};
 use std::sync::Arc;
 
@@ -89,7 +88,7 @@ pub fn spawn_readiness_watcher(target_id: AgentId, state: Arc<AppState>) {
                     }
                     infra.touch();
                 }
-                let _ = orchestrator::deliver_queued_messages(
+                let _ = palette_orchestrator::deliver_queued_messages(
                     &target_id,
                     &state.db,
                     &mut infra,
@@ -129,7 +128,7 @@ pub fn spawn_delivery_loop(state: Arc<AppState>) {
 
                     let mut any_delivered = false;
                     for target_id in &idle_targets {
-                        match orchestrator::deliver_queued_messages(
+                        match palette_orchestrator::deliver_queued_messages(
                             target_id,
                             &state.db,
                             &mut infra,
