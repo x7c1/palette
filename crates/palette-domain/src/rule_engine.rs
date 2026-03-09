@@ -1,6 +1,6 @@
 use crate::review_submission::ReviewSubmission;
 use crate::rule_effect::RuleEffect;
-use crate::store::TaskStore;
+use crate::task_store::TaskStore;
 use crate::task_error::TaskError;
 use crate::task_id::TaskId;
 use crate::task_status::TaskStatus;

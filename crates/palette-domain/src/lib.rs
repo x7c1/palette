@@ -25,11 +25,11 @@ pub use review_submission::ReviewSubmission;
 mod rule_effect;
 pub use rule_effect::RuleEffect;
 
-mod rules;
-pub use rules::RuleEngine;
+mod rule_engine;
+pub use rule_engine::RuleEngine;
 
-mod store;
-pub use store::TaskStore;
+mod task_store;
+pub use task_store::TaskStore;
 
 mod submit_review_request;
 pub use submit_review_request::SubmitReviewRequest;
