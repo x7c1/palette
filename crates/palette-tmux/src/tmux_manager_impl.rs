@@ -28,7 +28,7 @@ impl TmuxManager for TmuxManagerImpl {
             tracing::info!(session = name, "tmux session already exists");
             return Ok(());
         }
-        let output = self.run_tmux(&["new-session", "-d", "-s", name])?;
+        let output = self.run_tmux(&["new-session", "-d", "-s", name, "-x", "200", "-y", "50"])?;
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
             bail!("failed to create tmux session '{name}': {stderr}");
@@ -122,7 +122,7 @@ impl TmuxManager for TmuxManagerImpl {
     }
 
     fn capture_pane(&self, target: &str) -> anyhow::Result<String> {
-        let output = self.run_tmux(&["capture-pane", "-t", target, "-p"])?;
+        let output = self.run_tmux(&["capture-pane", "-t", target, "-p", "-J"])?;
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
             bail!("failed to capture pane '{target}': {stderr}");
