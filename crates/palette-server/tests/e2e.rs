@@ -687,7 +687,7 @@ async fn scenario3_message_queuing_to_leader() {
         .unwrap();
     assert_eq!(resp.status(), 200);
 
-    tokio::time::sleep(std::time::Duration::from_millis(300)).await;
+    tokio::time::sleep(std::time::Duration::from_millis(500)).await;
 
     let content = capture_pane(&leader_pane);
     assert!(
@@ -710,7 +710,7 @@ async fn scenario3_message_queuing_to_leader() {
         .unwrap();
     assert_eq!(resp.status(), 200);
 
-    tokio::time::sleep(std::time::Duration::from_millis(300)).await;
+    tokio::time::sleep(std::time::Duration::from_millis(500)).await;
 
     let content = capture_pane(&leader_pane);
     assert!(
