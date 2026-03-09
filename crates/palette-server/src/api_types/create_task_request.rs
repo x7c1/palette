@@ -36,7 +36,11 @@ impl From<CreateTaskRequest> for domain::CreateTaskRequest {
                     })
                     .collect()
             }),
-            depends_on: api.depends_on.into_iter().map(domain::TaskId::new).collect(),
+            depends_on: api
+                .depends_on
+                .into_iter()
+                .map(domain::TaskId::new)
+                .collect(),
         }
     }
 }
