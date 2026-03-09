@@ -8,7 +8,7 @@ mod database;
 pub use database::Database;
 
 mod repository_row;
-mod rules;
+mod task_store;
 mod schema;
 pub mod task_file;
 

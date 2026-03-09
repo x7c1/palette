@@ -1,7 +1,3 @@
-// RuleEngine and domain logic have moved to palette-domain.
-// This module contains the TaskStore implementation for Database
-// and integration tests.
-
 use crate::Error;
 use crate::database::Database;
 use palette_domain::*;
