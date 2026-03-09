@@ -36,3 +36,6 @@ pub use verdict_api::VerdictApi;
 
 mod repository_api;
 pub use repository_api::RepositoryApi;
+
+mod task_file;
+pub use task_file::TaskFile;

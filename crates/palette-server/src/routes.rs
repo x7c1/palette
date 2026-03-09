@@ -1,6 +1,6 @@
 use crate::{AppState, EventRecord};
 use crate::{
-    CreateTaskApi, ReviewSubmissionResponse, SubmitReviewApi, TaskFilterApi, TaskResponse,
+    CreateTaskApi, ReviewSubmissionResponse, SubmitReviewApi, TaskFile, TaskFilterApi, TaskResponse,
     UpdateTaskApi,
 };
 use axum::{
@@ -332,7 +332,7 @@ async fn handle_load_tasks(
     State(state): State<Arc<AppState>>,
     body: String,
 ) -> Result<(StatusCode, Json<Vec<TaskResponse>>), (StatusCode, String)> {
-    let task_file = crate::task_file::TaskFile::parse(&body)
+    let task_file = TaskFile::parse(&body)
         .map_err(|e| (StatusCode::BAD_REQUEST, format!("invalid YAML: {e}")))?;
 
     let requests = task_file.into_requests();

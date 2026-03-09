@@ -2,7 +2,6 @@ pub mod api_types;
 pub use api_types::*;
 
 mod routes;
-mod task_file;
 
 use axum::Router;
 use palette_core::config::DockerConfig;
