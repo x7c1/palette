@@ -4,11 +4,11 @@ use std::process::Command;
 
 use crate::TerminalManager;
 
-pub struct TmuxManagerImpl {
+pub struct TmuxManager {
     session_name: TerminalSessionName,
 }
 
-impl TmuxManagerImpl {
+impl TmuxManager {
     pub fn new(session_name: TerminalSessionName) -> Self {
         Self { session_name }
     }
@@ -18,7 +18,7 @@ impl TmuxManagerImpl {
     }
 }
 
-impl TerminalManager for TmuxManagerImpl {
+impl TerminalManager for TmuxManager {
     fn create_session(&self, name: &TerminalSessionName) -> crate::Result<()> {
         let name = name.as_ref();
         let output = self.run_tmux(&["has-session", "-t", name])?;

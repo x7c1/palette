@@ -6,7 +6,7 @@ use palette_domain::{
     TerminalSessionName, TerminalTarget,
 };
 use palette_server::{AppState, create_router};
-use palette_tmux::{TerminalManager, TmuxManagerImpl};
+use palette_tmux::{TerminalManager, TmuxManager};
 use serde_json::json;
 use std::process::Command;
 use std::sync::Arc;
@@ -45,7 +45,7 @@ fn tid(s: &str) -> TaskId {
 
 /// Spawn the server on an OS-assigned port and return (addr, state)
 async fn spawn_server(
-    tmux: TmuxManagerImpl,
+    tmux: TmuxManager,
     session_name: &TerminalSessionName,
 ) -> (String, Arc<AppState>) {
     let db = Database::open_in_memory().unwrap();
@@ -111,7 +111,7 @@ fn capture_pane(target: &TerminalTarget) -> String {
 #[tokio::test]
 async fn hooks_stop_records_event() {
     let (session, _guard) = test_session_name_with_guard("stop");
-    let tmux = TmuxManagerImpl::new(session.clone());
+    let tmux = TmuxManager::new(session.clone());
     tmux.create_session(&session).unwrap();
 
     let _target = tmux.create_target("worker").unwrap();
@@ -147,7 +147,7 @@ async fn hooks_stop_records_event() {
 #[tokio::test]
 async fn hooks_notification_records_event() {
     let (session, _guard) = test_session_name_with_guard("notif");
-    let tmux = TmuxManagerImpl::new(session.clone());
+    let tmux = TmuxManager::new(session.clone());
     tmux.create_session(&session).unwrap();
 
     let _target = tmux.create_target("worker").unwrap();
@@ -184,7 +184,7 @@ async fn hooks_notification_records_event() {
 #[tokio::test]
 async fn send_keys_delivers_to_tmux_pane() {
     let (session, _guard) = test_session_name_with_guard("send");
-    let tmux = TmuxManagerImpl::new(session.clone());
+    let tmux = TmuxManager::new(session.clone());
     tmux.create_session(&session).unwrap();
 
     let target = tmux.create_target("worker").unwrap();
@@ -229,7 +229,7 @@ async fn send_keys_delivers_to_tmux_pane() {
 #[tokio::test]
 async fn send_keys_with_direct_target() {
     let (session, _guard) = test_session_name_with_guard("direct");
-    let tmux = TmuxManagerImpl::new(session.clone());
+    let tmux = TmuxManager::new(session.clone());
     tmux.create_session(&session).unwrap();
 
     let target = tmux.create_target("worker").unwrap();
@@ -257,7 +257,7 @@ async fn send_keys_with_direct_target() {
 #[tokio::test]
 async fn task_api_create_and_list() {
     let (session, _guard) = test_session_name_with_guard("taskapi");
-    let tmux = TmuxManagerImpl::new(session.clone());
+    let tmux = TmuxManager::new(session.clone());
     tmux.create_session(&session).unwrap();
 
     let (base_url, _state) = spawn_server(tmux, &session).await;
@@ -327,7 +327,7 @@ async fn task_api_create_and_list() {
 #[tokio::test]
 async fn task_api_update_with_rules() {
     let (session, _guard) = test_session_name_with_guard("taskrules");
-    let tmux = TmuxManagerImpl::new(session.clone());
+    let tmux = TmuxManager::new(session.clone());
     tmux.create_session(&session).unwrap();
 
     let (base_url, _state) = spawn_server(tmux, &session).await;
@@ -384,7 +384,7 @@ async fn task_api_update_with_rules() {
 #[tokio::test]
 async fn review_api_submit_and_get() {
     let (session, _guard) = test_session_name_with_guard("review");
-    let tmux = TmuxManagerImpl::new(session.clone());
+    let tmux = TmuxManager::new(session.clone());
     tmux.create_session(&session).unwrap();
 
     let (base_url, _state) = spawn_server(tmux, &session).await;
@@ -471,7 +471,7 @@ async fn review_api_submit_and_get() {
 #[tokio::test]
 async fn full_cycle_work_review_approved() {
     let (session, _guard) = test_session_name_with_guard("cycle");
-    let tmux = TmuxManagerImpl::new(session.clone());
+    let tmux = TmuxManager::new(session.clone());
     tmux.create_session(&session).unwrap();
 
     let (base_url, _state) = spawn_server(tmux, &session).await;
@@ -536,7 +536,7 @@ async fn full_cycle_work_review_approved() {
 #[tokio::test]
 async fn send_queues_when_member_is_working() {
     let (session, _guard) = test_session_name_with_guard("queue");
-    let tmux = TmuxManagerImpl::new(session.clone());
+    let tmux = TmuxManager::new(session.clone());
     tmux.create_session(&session).unwrap();
 
     let target = tmux.create_target("worker").unwrap();
@@ -590,7 +590,7 @@ async fn send_queues_when_member_is_working() {
 #[tokio::test]
 async fn scenario3_message_queuing_to_leader() {
     let (session, _guard) = test_session_name_with_guard("scenario3");
-    let tmux = TmuxManagerImpl::new(session.clone());
+    let tmux = TmuxManager::new(session.clone());
     tmux.create_session(&session).unwrap();
 
     let leader_pane = tmux.create_target("leader").unwrap();

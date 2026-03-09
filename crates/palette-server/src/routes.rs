@@ -15,7 +15,7 @@ use palette_domain::{
     AgentId, CreateTaskRequest, PersistentState, RuleEngine, SubmitReviewRequest, TaskFilter,
     TaskId, TaskStatus, TaskType, TerminalTarget, UpdateTaskRequest, Verdict,
 };
-use palette_tmux::{TerminalManager as _, TmuxManagerImpl};
+use palette_tmux::{TerminalManager as _, TmuxManager};
 use std::sync::Arc;
 
 pub fn create_router(state: Arc<AppState>) -> Router {
@@ -629,7 +629,7 @@ async fn handle_get_submissions(
 /// Spawn a background task that polls a member's tmux pane for Claude Code readiness,
 /// then delivers the queued message.
 fn send_tmux_keys(
-    tmux: &TmuxManagerImpl,
+    tmux: &TmuxManager,
     target: &TerminalTarget,
     message: &str,
     no_enter: bool,

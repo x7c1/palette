@@ -6,7 +6,7 @@ use palette_domain::{
     TerminalTarget,
 };
 use palette_server::AppState;
-use palette_tmux::{TerminalManager, TmuxManagerImpl};
+use palette_tmux::{TerminalManager, TmuxManager};
 use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -28,7 +28,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     tracing::info!(?config, "loaded config");
 
     let session_name = TerminalSessionName::new(&config.tmux.session_name);
-    let tmux = TmuxManagerImpl::new(session_name.clone());
+    let tmux = TmuxManager::new(session_name.clone());
     tmux.create_session(&session_name)?;
 
     let db = Database::open(Path::new(&config.db_path))?;
@@ -93,7 +93,7 @@ fn spawn_agent(
     spec: &AgentSpec,
     terminal_target: &TerminalTarget,
     docker: &DockerManager,
-    tmux: &TmuxManagerImpl,
+    tmux: &TmuxManager,
     session_name: &str,
     settings_template: &Path,
 ) -> palette_core::Result<AgentState> {
@@ -129,7 +129,7 @@ fn spawn_agent(
 /// Bootstrap only the leader. Members are spawned on-demand by the orchestrator.
 fn bootstrap_leader(
     config: &Config,
-    tmux: &TmuxManagerImpl,
+    tmux: &TmuxManager,
     docker: &DockerManager,
     state_path: &Path,
 ) -> Result<PersistentState, Box<dyn std::error::Error>> {

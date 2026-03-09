@@ -9,11 +9,11 @@ use palette_core::orchestrator;
 use palette_db::Database;
 use palette_docker::DockerManager;
 use palette_domain::{AgentId, PersistentState, RuleEngine};
-use palette_tmux::{TerminalManager as _, TmuxManagerImpl};
+use palette_tmux::{TerminalManager as _, TmuxManager};
 use std::sync::Arc;
 
 pub struct AppState {
-    pub tmux: TmuxManagerImpl,
+    pub tmux: TmuxManager,
     pub db: Database,
     pub rules: RuleEngine,
     pub docker: DockerManager,

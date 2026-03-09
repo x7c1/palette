@@ -1,5 +1,5 @@
 use palette_domain::TerminalSessionName;
-use palette_tmux::{TerminalManager, TmuxManagerImpl};
+use palette_tmux::{TerminalManager, TmuxManager};
 use std::process::Command;
 
 fn test_session_name(test_name: &str) -> TerminalSessionName {
@@ -19,7 +19,7 @@ fn cleanup_session(session: &TerminalSessionName) {
 #[test]
 fn create_session_and_target() {
     let session = test_session_name("create");
-    let tmux = TmuxManagerImpl::new(session.clone());
+    let tmux = TmuxManager::new(session.clone());
 
     tmux.create_session(&session).unwrap();
     assert!(tmux.is_session_alive(&session).unwrap());
@@ -33,7 +33,7 @@ fn create_session_and_target() {
 #[test]
 fn create_session_idempotent() {
     let session = test_session_name("idempotent");
-    let tmux = TmuxManagerImpl::new(session.clone());
+    let tmux = TmuxManager::new(session.clone());
 
     tmux.create_session(&session).unwrap();
     tmux.create_session(&session).unwrap(); // should not fail
@@ -45,14 +45,14 @@ fn create_session_idempotent() {
 #[test]
 fn is_alive_returns_false_for_nonexistent() {
     let session = TerminalSessionName::new("nonexistent-session-12345");
-    let tmux = TmuxManagerImpl::new(session.clone());
+    let tmux = TmuxManager::new(session.clone());
     assert!(!tmux.is_session_alive(&session).unwrap());
 }
 
 #[test]
 fn send_keys_literal_mode() {
     let session = test_session_name("literal");
-    let tmux = TmuxManagerImpl::new(session.clone());
+    let tmux = TmuxManager::new(session.clone());
 
     tmux.create_session(&session).unwrap();
     let target = tmux.create_target("worker").unwrap();
