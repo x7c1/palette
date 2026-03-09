@@ -14,7 +14,7 @@ impl ContainerId {
 
 impl fmt::Display for ContainerId {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(&self.0)
+        fmt::Display::fmt(&self.0, f)
     }
 }
 
