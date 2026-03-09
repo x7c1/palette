@@ -7,6 +7,7 @@ use palette_domain::{
     AgentId, AgentRole, AgentState, AgentStatus, PersistentState, RuleEngine, TerminalSessionName,
     TerminalTarget,
 };
+use palette_orchestrator::Orchestrator;
 use palette_server::AppState;
 use palette_tmux::{TerminalManager, TmuxManager};
 use std::net::SocketAddr;
@@ -30,10 +31,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     tracing::info!(?config, "loaded config");
 
     let session_name = TerminalSessionName::new(&config.tmux.session_name);
-    let tmux = TmuxManager::new(session_name.clone());
+    let tmux = Arc::new(TmuxManager::new(session_name.clone()));
     tmux.create_session(&session_name)?;
 
-    let db = Database::open(Path::new(&config.db_path))?;
+    let db = Arc::new(Database::open(Path::new(&config.db_path))?);
     tracing::info!(db_path = %config.db_path, "database initialized");
 
     let rules = RuleEngine::new(config.rules.max_review_rounds);
@@ -47,30 +48,37 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
         None => bootstrap_leader(&config, &tmux, &docker, &state_path)?,
     };
+    let infra = Arc::new(tokio::sync::Mutex::new(infra));
+
+    let (event_tx, event_rx) = tokio::sync::mpsc::unbounded_channel();
 
     let state = Arc::new(AppState {
-        tmux,
-        db,
-        rules,
-        docker,
-        docker_config: config.docker,
-        infra: tokio::sync::Mutex::new(infra),
-        state_path: config.state_path.clone(),
+        tmux: Arc::clone(&tmux),
+        db: Arc::clone(&db),
+        rules: RuleEngine::new(config.rules.max_review_rounds),
+        infra: Arc::clone(&infra),
         event_log: tokio::sync::Mutex::new(Vec::new()),
-        delivery_notify: tokio::sync::Notify::new(),
+        event_tx,
     });
 
-    palette_server::spawn_delivery_loop(Arc::clone(&state));
+    // Start orchestrator event loop
+    let orchestrator = Arc::new(Orchestrator {
+        db: Arc::clone(&db),
+        docker,
+        docker_config: config.docker,
+        tmux: Arc::clone(&tmux),
+        infra: Arc::clone(&infra),
+        state_path: config.state_path.clone(),
+        rules,
+    });
 
-    // Spawn readiness watchers for leaders that are still Booting
+    // Resume readiness watchers for agents that were booting when we last shut down
     {
-        let infra = state.infra.lock().await;
-        for leader in &infra.leaders {
-            if leader.status == AgentStatus::Booting {
-                palette_server::spawn_readiness_watcher(leader.id.clone(), Arc::clone(&state));
-            }
-        }
+        let infra_guard = infra.lock().await;
+        Orchestrator::resume_booting_watchers(&orchestrator, &infra_guard);
     }
+
+    orchestrator.start(event_rx);
 
     let app = palette_server::create_router(state);
     let addr = SocketAddr::from(([0, 0, 0, 0], config.port));

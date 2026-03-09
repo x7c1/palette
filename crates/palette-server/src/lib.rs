@@ -4,24 +4,17 @@ mod routes;
 
 use axum::Router;
 use palette_db::Database;
-use palette_docker::DockerManager;
-use palette_domain::AgentStatus;
-use palette_domain::{AgentId, PersistentState, RuleEngine};
-use palette_orchestrator::DockerConfig;
-use palette_tmux::{TerminalManager as _, TmuxManager};
+use palette_domain::{PersistentState, RuleEngine, ServerEvent};
+use palette_tmux::TmuxManager;
 use std::sync::Arc;
 
 pub struct AppState {
-    pub tmux: TmuxManager,
-    pub db: Database,
+    pub tmux: Arc<TmuxManager>,
+    pub db: Arc<Database>,
     pub rules: RuleEngine,
-    pub docker: DockerManager,
-    pub docker_config: DockerConfig,
-    pub infra: tokio::sync::Mutex<PersistentState>,
-    pub state_path: String,
+    pub infra: Arc<tokio::sync::Mutex<PersistentState>>,
     pub event_log: tokio::sync::Mutex<Vec<EventRecord>>,
-    /// Notifies the delivery loop that there may be Idle workers with pending messages.
-    pub delivery_notify: tokio::sync::Notify,
+    pub event_tx: tokio::sync::mpsc::UnboundedSender<ServerEvent>,
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
@@ -33,125 +26,4 @@ pub struct EventRecord {
 
 pub fn create_router(state: Arc<AppState>) -> Router {
     routes::create_router(state)
-}
-
-/// Spawn a background task that polls a tmux pane for Claude Code readiness (`❯` prompt),
-/// then transitions the target from Booting to Idle and delivers queued messages.
-/// Interval between readiness polls.
-const READINESS_POLL_INTERVAL: std::time::Duration = std::time::Duration::from_secs(3);
-
-/// Maximum time to wait for Claude Code readiness.
-const READINESS_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(120);
-
-pub fn spawn_readiness_watcher(target_id: AgentId, state: Arc<AppState>) {
-    let max_polls = READINESS_TIMEOUT.as_secs() / READINESS_POLL_INTERVAL.as_secs();
-    tokio::spawn(async move {
-        for _ in 0..max_polls {
-            tokio::time::sleep(READINESS_POLL_INTERVAL).await;
-
-            let terminal_target = {
-                let infra = state.infra.lock().await;
-                let agent = infra
-                    .find_member(&target_id)
-                    .or_else(|| infra.find_leader(&target_id));
-                match agent {
-                    Some(m) => m.terminal_target.clone(),
-                    None => return,
-                }
-            };
-
-            let pane_content = match state.tmux.capture_pane(&terminal_target) {
-                Ok(content) => content,
-                Err(e) => {
-                    tracing::warn!(target_id = %target_id, error = %e, "failed to capture pane");
-                    continue;
-                }
-            };
-
-            if !pane_content.contains('❯') {
-                continue;
-            }
-
-            tracing::info!(target_id = %target_id, "Claude Code is ready, delivering queued message");
-
-            {
-                let mut infra = state.infra.lock().await;
-                let is_booting = infra
-                    .find_member(&target_id)
-                    .or_else(|| infra.find_leader(&target_id))
-                    .is_some_and(|m| m.status == AgentStatus::Booting);
-                if is_booting {
-                    if let Some(m) = infra.find_member_mut(&target_id) {
-                        m.status = AgentStatus::Idle;
-                    } else if let Some(m) = infra.find_leader_mut(&target_id) {
-                        m.status = AgentStatus::Idle;
-                    }
-                    infra.touch();
-                }
-                let _ = palette_orchestrator::deliver_queued_messages(
-                    &target_id,
-                    &state.db,
-                    &mut infra,
-                    &state.tmux,
-                );
-                let state_path = std::path::PathBuf::from(&state.state_path);
-                if let Err(e) = palette_file_state::save(&infra, &state_path) {
-                    tracing::error!(error = %e, "failed to save state after delivery");
-                }
-            }
-            return;
-        }
-
-        tracing::error!(target_id = %target_id, "timed out waiting for Claude Code readiness");
-    });
-}
-
-/// Spawn a background loop that delivers queued messages to Idle workers.
-pub fn spawn_delivery_loop(state: Arc<AppState>) {
-    tokio::spawn(async move {
-        loop {
-            state.delivery_notify.notified().await;
-
-            // Drain: keep delivering until no more Idle workers have pending messages
-            loop {
-                let delivered = {
-                    let mut infra = state.infra.lock().await;
-
-                    // Collect Idle targets (leaders + members)
-                    let idle_targets: Vec<AgentId> = infra
-                        .leaders
-                        .iter()
-                        .chain(infra.members.iter())
-                        .filter(|m| m.status == AgentStatus::Idle)
-                        .map(|m| m.id.clone())
-                        .collect();
-
-                    let mut any_delivered = false;
-                    for target_id in &idle_targets {
-                        match palette_orchestrator::deliver_queued_messages(
-                            target_id,
-                            &state.db,
-                            &mut infra,
-                            &state.tmux,
-                        ) {
-                            Ok(true) => any_delivered = true,
-                            Ok(false) => {}
-                            Err(e) => {
-                                tracing::error!(
-                                    target_id = %target_id,
-                                    error = %e,
-                                    "delivery loop: failed to deliver"
-                                );
-                            }
-                        }
-                    }
-                    any_delivered
-                };
-
-                if !delivered {
-                    break;
-                }
-            }
-        }
-    });
 }

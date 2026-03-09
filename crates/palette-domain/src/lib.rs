@@ -43,6 +43,9 @@ pub use rule_effect::RuleEffect;
 mod rule_engine;
 pub use rule_engine::RuleEngine;
 
+mod server_event;
+pub use server_event::ServerEvent;
+
 mod task_store;
 pub use task_store::TaskStore;
 

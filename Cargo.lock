@@ -926,8 +926,10 @@ dependencies = [
  "palette-db",
  "palette-docker",
  "palette-domain",
+ "palette-file-state",
  "palette-tmux",
  "serde",
+ "tokio",
  "tracing",
 ]
 
@@ -940,7 +942,6 @@ dependencies = [
  "palette-db",
  "palette-docker",
  "palette-domain",
- "palette-file-state",
  "palette-orchestrator",
  "palette-tmux",
  "reqwest",

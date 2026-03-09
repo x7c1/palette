@@ -4,7 +4,7 @@ use palette_domain::{
     AgentId, AgentRole, AgentState, AgentStatus, ContainerId, PersistentState, RuleEngine, TaskId,
     TerminalSessionName, TerminalTarget,
 };
-use palette_orchestrator::DockerConfig;
+use palette_orchestrator::{DockerConfig, Orchestrator};
 use palette_server::{AppState, create_router};
 use palette_tmux::{TerminalManager, TmuxManager};
 use serde_json::json;
@@ -48,23 +48,36 @@ async fn spawn_server(
     tmux: TmuxManager,
     session_name: &TerminalSessionName,
 ) -> (String, Arc<AppState>) {
-    let db = Database::open_in_memory().unwrap();
-    let rules = RuleEngine::new(5);
+    let db = Arc::new(Database::open_in_memory().unwrap());
+    let tmux = Arc::new(tmux);
     let docker = DockerManager::new("http://127.0.0.1:0".to_string());
-    let infra = PersistentState::new(session_name.to_string());
+    let infra = Arc::new(tokio::sync::Mutex::new(PersistentState::new(
+        session_name.to_string(),
+    )));
+
+    let (event_tx, event_rx) = tokio::sync::mpsc::unbounded_channel();
 
     let state = Arc::new(AppState {
-        tmux,
-        db,
-        rules,
+        tmux: Arc::clone(&tmux),
+        db: Arc::clone(&db),
+        rules: RuleEngine::new(5),
+        infra: Arc::clone(&infra),
+        event_log: tokio::sync::Mutex::new(Vec::new()),
+        event_tx,
+    });
+
+    // Start orchestrator event loop
+    let orchestrator = Arc::new(Orchestrator {
+        db: Arc::clone(&db),
         docker,
         docker_config: test_docker_config(),
-        infra: tokio::sync::Mutex::new(infra),
+        tmux: Arc::clone(&tmux),
+        infra: Arc::clone(&infra),
         state_path: String::new(),
-        event_log: tokio::sync::Mutex::new(Vec::new()),
-        delivery_notify: tokio::sync::Notify::new(),
+        rules: RuleEngine::new(5),
     });
-    palette_server::spawn_delivery_loop(Arc::clone(&state));
+    orchestrator.start(event_rx);
+
     let app = create_router(state.clone());
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let addr = listener.local_addr().unwrap();

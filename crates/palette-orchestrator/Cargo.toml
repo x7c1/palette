@@ -8,6 +8,8 @@ license.workspace = true
 palette-db = { path = "../palette-db" }
 palette-docker = { path = "../palette-docker" }
 palette-domain = { path = "../palette-domain" }
+palette-file-state = { path = "../palette-file-state" }
 palette-tmux = { path = "../palette-tmux" }
 serde.workspace = true
+tokio.workspace = true
 tracing.workspace = true

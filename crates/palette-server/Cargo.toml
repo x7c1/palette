@@ -8,10 +8,7 @@ license.workspace = true
 axum.workspace = true
 chrono.workspace = true
 palette-db = { path = "../palette-db" }
-palette-docker = { path = "../palette-docker" }
 palette-domain = { path = "../palette-domain" }
-palette-file-state = { path = "../palette-file-state" }
-palette-orchestrator = { path = "../palette-orchestrator" }
 palette-tmux = { path = "../palette-tmux" }
 serde.workspace = true
 serde_json.workspace = true
