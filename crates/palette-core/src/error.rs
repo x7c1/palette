@@ -6,7 +6,7 @@ pub enum Error {
     Toml(toml::de::Error),
     Db(palette_db::Error),
     Tmux(palette_tmux::Error),
-    Docker(String),
+    Docker(palette_docker::Error),
     Internal(String),
 }
 
@@ -34,6 +34,12 @@ impl From<palette_tmux::Error> for Error {
     }
 }
 
+impl From<palette_docker::Error> for Error {
+    fn from(e: palette_docker::Error) -> Self {
+        Self::Docker(e)
+    }
+}
+
 impl std::error::Error for Error {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self {
@@ -41,7 +47,8 @@ impl std::error::Error for Error {
             Self::Toml(e) => Some(e),
             Self::Db(e) => Some(e),
             Self::Tmux(e) => Some(e),
-            Self::Docker(_) | Self::Internal(_) => None,
+            Self::Docker(e) => Some(e),
+            Self::Internal(_) => None,
         }
     }
 }
@@ -53,7 +60,7 @@ impl std::fmt::Display for Error {
             Self::Toml(e) => write!(f, "TOML error: {e}"),
             Self::Db(e) => write!(f, "DB error: {e}"),
             Self::Tmux(e) => write!(f, "tmux error: {e}"),
-            Self::Docker(msg) => write!(f, "Docker error: {msg}"),
+            Self::Docker(e) => write!(f, "Docker error: {e}"),
             Self::Internal(msg) => f.write_str(msg),
         }
     }

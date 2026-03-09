@@ -1,0 +1,12 @@
+[package]
+name = "palette-docker"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+palette-domain = { path = "../palette-domain" }
+tracing.workspace = true
+
+[dev-dependencies]
+tempfile = "3"

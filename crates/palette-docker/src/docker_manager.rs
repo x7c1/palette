@@ -1,6 +1,5 @@
 use crate::Error;
-use crate::models::AgentRole;
-use crate::models::ContainerId;
+use palette_domain::{AgentRole, ContainerId};
 use std::path::Path;
 use std::process::Command;
 
@@ -107,7 +106,7 @@ impl DockerManager {
         let output = run_docker(&args)?;
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
-            return Err(Error::Docker(format!(
+            return Err(Error::Command(format!(
                 "failed to create container palette-{name}: {stderr}"
             )));
         }
@@ -122,7 +121,7 @@ impl DockerManager {
         let output = run_docker(["start", container_id.as_ref()])?;
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
-            return Err(Error::Docker(format!(
+            return Err(Error::Command(format!(
                 "failed to start container {container_id}: {stderr}"
             )));
         }
@@ -194,7 +193,7 @@ impl DockerManager {
 
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
-            return Err(Error::Docker(format!(
+            return Err(Error::Command(format!(
                 "failed to write settings.json in container {container_id}: {stderr}"
             )));
         }
@@ -217,7 +216,7 @@ impl DockerManager {
         ])?;
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
-            return Err(Error::Docker(format!(
+            return Err(Error::Command(format!(
                 "failed to copy {} to {container_id}:{container_path}: {stderr}",
                 local_path.display()
             )));
@@ -246,7 +245,7 @@ impl DockerManager {
             .output()?;
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
-            return Err(Error::Docker(format!(
+            return Err(Error::Command(format!(
                 "failed to copy directory to container: {stderr}"
             )));
         }

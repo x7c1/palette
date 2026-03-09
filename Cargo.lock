@@ -866,6 +866,7 @@ dependencies = [
  "axum",
  "palette-core",
  "palette-db",
+ "palette-docker",
  "palette-domain",
  "palette-file-state",
  "palette-server",
@@ -882,6 +883,7 @@ version = "0.1.0"
 dependencies = [
  "chrono",
  "palette-db",
+ "palette-docker",
  "palette-domain",
  "palette-tmux",
  "serde",
@@ -900,6 +902,15 @@ dependencies = [
  "serde",
  "serde_json",
  "uuid",
+]
+
+[[package]]
+name = "palette-docker"
+version = "0.1.0"
+dependencies = [
+ "palette-domain",
+ "tempfile",
+ "tracing",
 ]
 
 [[package]]
@@ -930,6 +941,7 @@ dependencies = [
  "chrono",
  "palette-core",
  "palette-db",
+ "palette-docker",
  "palette-domain",
  "palette-file-state",
  "palette-tmux",

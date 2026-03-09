@@ -3,6 +3,7 @@ resolver = "2"
 members = [
     "crates/palette-core",
     "crates/palette-db",
+    "crates/palette-docker",
     "crates/palette-domain",
     "crates/palette-server",
     "crates/palette-tmux",

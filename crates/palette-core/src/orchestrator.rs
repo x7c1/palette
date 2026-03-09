@@ -1,8 +1,8 @@
 use crate::config::DockerConfig;
-use crate::docker::DockerManager;
 use crate::models::{AgentRole, AgentState, AgentStatus, PendingDelivery, TerminalTarget};
 use crate::persistent_state::PersistentState;
 use palette_db::Database;
+use palette_docker::DockerManager;
 use palette_domain::{AgentId, RuleEffect, RuleEngine, Task};
 use palette_tmux::TerminalManager;
 

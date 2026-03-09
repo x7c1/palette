@@ -105,7 +105,7 @@ fn launch() -> Result<()> {
 
     // --- Setup Docker containers ---
     let config = Config::load(&workspace_path("config/palette.toml"))?;
-    let docker = palette_core::docker::DockerManager::new(config.docker.palette_url.clone());
+    let docker = palette_docker::DockerManager::new(config.docker.palette_url.clone());
 
     let leader_id = docker.create_container(
         "test-leader",
@@ -185,12 +185,12 @@ fn launch() -> Result<()> {
     );
 
     // --- Copy prompt files ---
-    palette_core::docker::DockerManager::copy_file_to_container(
+    palette_docker::DockerManager::copy_file_to_container(
         &leader_id,
         &workspace_path(&config.docker.leader_prompt),
         "/home/agent/prompt.md",
     )?;
-    palette_core::docker::DockerManager::copy_file_to_container(
+    palette_docker::DockerManager::copy_file_to_container(
         &member_id,
         &workspace_path(&config.docker.member_prompt),
         "/home/agent/prompt.md",
@@ -210,7 +210,7 @@ fn launch() -> Result<()> {
     );
 
     // --- Send Claude Code command to tmux panes ---
-    let leader_cmd = palette_core::docker::DockerManager::claude_exec_command(
+    let leader_cmd = palette_docker::DockerManager::claude_exec_command(
         &leader_id,
         "/home/agent/prompt.md",
         AgentRole::Leader,
@@ -225,7 +225,7 @@ fn launch() -> Result<()> {
         .args(["send-keys", "-t", &leader_target, "Enter"])
         .output()?;
 
-    let member_cmd = palette_core::docker::DockerManager::claude_exec_command(
+    let member_cmd = palette_docker::DockerManager::claude_exec_command(
         &member_id,
         "/home/agent/prompt.md",
         AgentRole::Member,
@@ -309,7 +309,7 @@ fn claude_responds() -> Result<()> {
 
     // --- Setup container ---
     let config = Config::load(&workspace_path("config/palette.toml"))?;
-    let docker = palette_core::docker::DockerManager::new(config.docker.palette_url.clone());
+    let docker = palette_docker::DockerManager::new(config.docker.palette_url.clone());
 
     let container_id = docker.create_container(
         "test-claude",
@@ -326,7 +326,7 @@ fn claude_responds() -> Result<()> {
         &workspace_path(&config.docker.settings_template),
         "test-claude",
     )?;
-    palette_core::docker::DockerManager::copy_file_to_container(
+    palette_docker::DockerManager::copy_file_to_container(
         &container_id,
         &workspace_path(&config.docker.leader_prompt),
         "/home/agent/prompt.md",
@@ -334,7 +334,7 @@ fn claude_responds() -> Result<()> {
 
     // --- Launch Claude Code ---
     let target = format!("{SESSION_NAME}:claude-test");
-    let cmd = palette_core::docker::DockerManager::claude_exec_command(
+    let cmd = palette_docker::DockerManager::claude_exec_command(
         &container_id,
         "/home/agent/prompt.md",
         AgentRole::Leader,

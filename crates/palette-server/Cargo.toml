@@ -9,6 +9,7 @@ axum.workspace = true
 chrono.workspace = true
 palette-core = { path = "../palette-core" }
 palette-db = { path = "../palette-db" }
+palette-docker = { path = "../palette-docker" }
 palette-domain = { path = "../palette-domain" }
 palette-file-state = { path = "../palette-file-state" }
 palette-tmux = { path = "../palette-tmux" }
@@ -20,6 +21,7 @@ tracing.workspace = true
 
 [dev-dependencies]
 palette-core = { path = "../palette-core" }
+palette-docker = { path = "../palette-docker" }
 reqwest.workspace = true
 serde_json.workspace = true
 tokio.workspace = true

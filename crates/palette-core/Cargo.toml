@@ -7,6 +7,7 @@ license.workspace = true
 [dependencies]
 chrono.workspace = true
 palette-db = { path = "../palette-db" }
+palette-docker = { path = "../palette-docker" }
 palette-domain = { path = "../palette-domain" }
 palette-tmux = { path = "../palette-tmux" }
 serde.workspace = true

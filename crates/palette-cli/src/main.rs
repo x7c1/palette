@@ -1,8 +1,8 @@
 use palette_core::config::Config;
-use palette_core::docker::DockerManager;
 use palette_core::models::{AgentRole, AgentState, AgentStatus, TerminalTarget};
 use palette_core::persistent_state::PersistentState;
 use palette_db::Database;
+use palette_docker::DockerManager;
 use palette_domain::{AgentId, RuleEngine};
 use palette_server::AppState;
 use palette_tmux::{TerminalManager, TmuxManagerImpl};
