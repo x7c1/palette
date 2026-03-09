@@ -1,54 +1,5 @@
-use crate::models::{TaskId, TaskStatus, TaskType};
+use palette_domain::{ReviewError, TaskError};
 use std::fmt;
-
-/// Domain-level task errors.
-#[derive(Debug)]
-pub enum TaskError {
-    NotFound { task_id: TaskId },
-    InvalidTransition { task_id: TaskId, from: TaskStatus, to: TaskStatus },
-    DuplicateId { task_id: TaskId },
-}
-
-impl fmt::Display for TaskError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            TaskError::NotFound { task_id } => write!(f, "task not found: {task_id}"),
-            TaskError::InvalidTransition { task_id, from, to } => {
-                write!(
-                    f,
-                    "invalid transition for task {task_id}: {} -> {}",
-                    from.as_str(),
-                    to.as_str()
-                )
-            }
-            TaskError::DuplicateId { task_id } => write!(f, "duplicate task id: {task_id}"),
-        }
-    }
-}
-
-impl std::error::Error for TaskError {}
-
-/// Domain-level review errors.
-#[derive(Debug)]
-pub enum ReviewError {
-    TaskNotFound { review_task_id: TaskId },
-    NotReviewTask { task_id: TaskId },
-}
-
-impl fmt::Display for ReviewError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            ReviewError::TaskNotFound { review_task_id } => {
-                write!(f, "review task not found: {review_task_id}")
-            }
-            ReviewError::NotReviewTask { task_id } => {
-                write!(f, "task {task_id} is not a review task")
-            }
-        }
-    }
-}
-
-impl std::error::Error for ReviewError {}
 
 /// Database-layer error combining storage and domain errors.
 #[derive(Debug)]
@@ -61,12 +12,6 @@ pub enum DbError {
     Review(ReviewError),
     /// Lock acquisition failed (Mutex poisoned).
     LockPoisoned,
-    /// Invalid status transition for a task type.
-    InvalidTransition {
-        task_type: TaskType,
-        from: TaskStatus,
-        to: TaskStatus,
-    },
     /// Generic internal error.
     Internal(String),
 }
@@ -78,15 +23,6 @@ impl fmt::Display for DbError {
             DbError::Task(e) => write!(f, "{e}"),
             DbError::Review(e) => write!(f, "{e}"),
             DbError::LockPoisoned => write!(f, "database lock poisoned"),
-            DbError::InvalidTransition { task_type, from, to } => {
-                write!(
-                    f,
-                    "invalid status transition for {} task: {} -> {}",
-                    task_type.as_str(),
-                    from.as_str(),
-                    to.as_str()
-                )
-            }
             DbError::Internal(msg) => write!(f, "internal error: {msg}"),
         }
     }

@@ -1,6 +1,6 @@
 use rusqlite::Connection;
 
-pub const SCHEMA: &str = r#"
+pub(crate) const SCHEMA: &str = r#"
 CREATE TABLE IF NOT EXISTS tasks (
     id TEXT PRIMARY KEY,
     type TEXT NOT NULL CHECK(type IN ('work', 'review')),
@@ -57,7 +57,7 @@ CREATE INDEX IF NOT EXISTS idx_review_comments_submission ON review_comments(sub
 CREATE INDEX IF NOT EXISTS idx_message_queue_target ON message_queue(target_id, id);
 "#;
 
-pub fn initialize(conn: &Connection) -> rusqlite::Result<()> {
+pub(crate) fn initialize(conn: &Connection) -> rusqlite::Result<()> {
     conn.execute_batch("PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON;")?;
     conn.execute_batch(SCHEMA)?;
     migrate(conn)?;

@@ -1,4 +1,4 @@
-use crate::models::{CreateTaskRequest, Priority, Repository, TaskId, TaskType};
+use palette_domain::{CreateTaskRequest, Priority, Repository, TaskId, TaskType};
 use serde::Deserialize;
 
 /// Top-level YAML task definition file.

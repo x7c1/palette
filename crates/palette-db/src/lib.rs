@@ -5,7 +5,7 @@ mod rules;
 mod schema;
 pub mod task_file;
 
-pub use errors::*;
-pub use models::*;
+pub use errors::DbError;
+pub use models::QueuedMessage;
+pub use palette_domain::*;
 pub use repository::Database;
-pub use rules::RuleEngine;

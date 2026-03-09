@@ -895,10 +895,20 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "chrono",
+ "palette-domain",
  "rusqlite",
  "serde",
  "serde_json",
  "serde_yaml",
+ "uuid",
+]
+
+[[package]]
+name = "palette-domain"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "serde",
  "uuid",
 ]
 

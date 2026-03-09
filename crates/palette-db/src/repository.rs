@@ -1,7 +1,8 @@
-use crate::errors::{DbError, TaskError};
-use crate::models::*;
+use crate::errors::DbError;
+use crate::models::QueuedMessage;
 use crate::schema;
 use chrono::{DateTime, Utc};
+use palette_domain::*;
 use rusqlite::{Connection, params};
 use std::path::Path;
 use std::sync::Mutex;
@@ -45,7 +46,7 @@ impl Database {
     }
 
     pub fn create_task(&self, req: &CreateTaskRequest) -> Result<Task, DbError> {
-        let conn = lock!(self.conn);
+        let mut conn = lock!(self.conn);
         let now = Utc::now();
         let now_str = now.to_rfc3339();
         let id = req
@@ -64,7 +65,9 @@ impl Database {
             TaskType::Review => TaskStatus::Todo,
         };
 
-        conn.execute(
+        let tx = conn.transaction()?;
+
+        tx.execute(
             "INSERT INTO tasks (id, type, title, description, assignee, status, priority, repositories, pr_url, created_at, updated_at, notes, assigned_at)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, NULL, ?9, ?10, NULL, NULL)",
             params![
@@ -82,15 +85,17 @@ impl Database {
         )?;
 
         for dep in &req.depends_on {
-            conn.execute(
+            tx.execute(
                 "INSERT INTO dependencies (task_id, depends_on) VALUES (?1, ?2)",
                 params![id.as_ref(), dep.as_ref()],
             )?;
         }
 
-        drop(conn);
-        self.get_task(&id)?
-            .ok_or_else(|| TaskError::NotFound { task_id: id }.into())
+        let task = query_task(&tx, &id)?
+            .ok_or_else(|| DbError::Task(TaskError::NotFound { task_id: id }))?;
+
+        tx.commit()?;
+        Ok(task)
     }
 
     pub fn get_task(&self, id: &TaskId) -> Result<Option<Task>, DbError> {
@@ -221,12 +226,14 @@ impl Database {
         review_task_id: &TaskId,
         req: &SubmitReviewRequest,
     ) -> Result<ReviewSubmission, DbError> {
-        let conn = lock!(self.conn);
+        let mut conn = lock!(self.conn);
         let now = Utc::now();
         let now_str = now.to_rfc3339();
 
+        let tx = conn.transaction()?;
+
         // Determine round number
-        let round: i32 = conn
+        let round: i32 = tx
             .query_row(
                 "SELECT COALESCE(MAX(round), 0) FROM review_submissions WHERE review_task_id = ?1",
                 params![review_task_id.as_ref()],
@@ -235,7 +242,7 @@ impl Database {
             .unwrap_or(0)
             + 1;
 
-        conn.execute(
+        tx.execute(
             "INSERT INTO review_submissions (review_task_id, round, verdict, summary, created_at)
              VALUES (?1, ?2, ?3, ?4, ?5)",
             params![
@@ -247,15 +254,17 @@ impl Database {
             ],
         )?;
 
-        let submission_id = conn.last_insert_rowid();
+        let submission_id = tx.last_insert_rowid();
 
         for comment in &req.comments {
-            conn.execute(
+            tx.execute(
                 "INSERT INTO review_comments (submission_id, file, line, body)
                  VALUES (?1, ?2, ?3, ?4)",
                 params![submission_id, comment.file, comment.line, comment.body],
             )?;
         }
+
+        tx.commit()?;
 
         Ok(ReviewSubmission {
             id: submission_id,
@@ -441,6 +450,20 @@ fn parse_datetime(s: &str) -> DateTime<Utc> {
     DateTime::parse_from_rfc3339(s)
         .map(|dt| dt.with_timezone(&Utc))
         .unwrap_or_else(|_| Utc::now())
+}
+
+/// Query a single task by ID from a connection or transaction.
+fn query_task(conn: &Connection, id: &TaskId) -> Result<Option<Task>, DbError> {
+    let mut stmt = conn.prepare(
+        "SELECT id, type, title, description, assignee, status, priority, repositories, pr_url, created_at, updated_at, notes, assigned_at
+         FROM tasks WHERE id = ?1",
+    )?;
+    let mut rows = stmt.query_map(params![id.as_ref()], |row| Ok(row_to_task(row)))?;
+    match rows.next() {
+        Some(Ok(task)) => Ok(Some(task)),
+        Some(Err(e)) => Err(e.into()),
+        None => Ok(None),
+    }
 }
 
 fn row_to_task(row: &rusqlite::Row) -> Task {
