@@ -119,7 +119,7 @@ impl DockerManager {
     }
 
     pub fn start_container(&self, container_id: &ContainerId) -> crate::Result<()> {
-        let output = run_docker(&["start", container_id.as_ref()])?;
+        let output = run_docker(["start", container_id.as_ref()])?;
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
             return Err(Error::Docker(format!(
@@ -131,7 +131,7 @@ impl DockerManager {
     }
 
     pub fn stop_container(&self, container_id: &ContainerId) -> crate::Result<()> {
-        let output = run_docker(&[
+        let output = run_docker([
             "stop",
             "-t",
             CONTAINER_STOP_TIMEOUT_SECS,
@@ -145,7 +145,7 @@ impl DockerManager {
     }
 
     pub fn remove_container(&self, container_id: &ContainerId) -> crate::Result<()> {
-        let output = run_docker(&["rm", "-f", container_id.as_ref()])?;
+        let output = run_docker(["rm", "-f", container_id.as_ref()])?;
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
             tracing::warn!(container_id = %container_id, error = %stderr, "failed to remove container");
@@ -180,7 +180,7 @@ impl DockerManager {
 
         let cid = container_id.as_ref();
         // Write via docker exec (as root to avoid permission issues, then chown)
-        let output = run_docker(&[
+        let output = run_docker([
             "exec",
             "--user",
             "root",
@@ -210,7 +210,7 @@ impl DockerManager {
         container_path: &str,
     ) -> crate::Result<()> {
         let cid = container_id.as_ref();
-        let output = run_docker(&[
+        let output = run_docker([
             "cp",
             &local_path.display().to_string(),
             &format!("{cid}:{container_path}"),
