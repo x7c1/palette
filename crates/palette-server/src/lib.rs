@@ -97,7 +97,7 @@ pub fn spawn_readiness_watcher(target_id: AgentId, state: Arc<AppState>) {
                     &state.tmux,
                 );
                 let state_path = std::path::PathBuf::from(&state.state_path);
-                if let Err(e) = infra.save(&state_path) {
+                if let Err(e) = palette_file_state::save(&infra, &state_path) {
                     tracing::error!(error = %e, "failed to save state after delivery");
                 }
             }

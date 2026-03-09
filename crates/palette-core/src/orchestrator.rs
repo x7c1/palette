@@ -8,6 +8,8 @@ use palette_tmux::TmuxManager;
 
 /// Processes rule engine effects: auto-assign tasks, spawn/destroy members.
 /// Returns a list of messages that need to be sent to members via tmux.
+///
+/// The caller is responsible for saving state after this function returns.
 pub fn process_effects<T: TmuxManager>(
     effects: &[RuleEffect],
     db: &Database,
@@ -15,7 +17,6 @@ pub fn process_effects<T: TmuxManager>(
     docker: &DockerManager,
     tmux: &T,
     config: &DockerConfig,
-    state_path: &std::path::Path,
 ) -> crate::Result<Vec<PendingDelivery>> {
     let mut deliveries = Vec::new();
     let mut pending: Vec<RuleEffect> = effects.to_vec();
@@ -63,7 +64,6 @@ pub fn process_effects<T: TmuxManager>(
                 });
 
                 infra.touch();
-                infra.save(state_path)?;
             }
             RuleEffect::DestroyMember { member_id } => {
                 if let Some(member) = infra.remove_member(member_id) {
@@ -71,7 +71,6 @@ pub fn process_effects<T: TmuxManager>(
                     let _ = docker.stop_container(&member.container_id);
                     let _ = docker.remove_container(&member.container_id);
                     infra.touch();
-                    infra.save(state_path)?;
                 }
             }
             RuleEffect::StatusChanged {

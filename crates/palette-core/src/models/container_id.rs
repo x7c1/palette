@@ -1,9 +1,7 @@
-use serde::{Deserialize, Serialize};
 use std::fmt;
 
 /// Docker container identifier.
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[serde(transparent)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ContainerId(String);
 
 impl ContainerId {

@@ -867,6 +867,7 @@ dependencies = [
  "palette-core",
  "palette-db",
  "palette-domain",
+ "palette-file-state",
  "palette-server",
  "palette-tmux",
  "serde_json",
@@ -884,7 +885,6 @@ dependencies = [
  "palette-domain",
  "palette-tmux",
  "serde",
- "serde_json",
  "tempfile",
  "toml",
  "tracing",
@@ -911,6 +911,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "palette-file-state"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "palette-core",
+ "palette-domain",
+ "serde",
+ "serde_json",
+ "tempfile",
+]
+
+[[package]]
 name = "palette-server"
 version = "0.1.0"
 dependencies = [
@@ -919,6 +931,7 @@ dependencies = [
  "palette-core",
  "palette-db",
  "palette-domain",
+ "palette-file-state",
  "palette-tmux",
  "reqwest",
  "serde",

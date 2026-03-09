@@ -1,11 +1,8 @@
-mod agent_role;
-pub use agent_role::AgentRole;
+pub use palette_domain::AgentRole;
+pub use palette_domain::AgentStatus;
 
 mod agent_state;
 pub use agent_state::AgentState;
-
-mod agent_status;
-pub use agent_status::AgentStatus;
 
 mod container_id;
 pub use container_id::ContainerId;

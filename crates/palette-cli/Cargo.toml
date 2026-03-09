@@ -13,6 +13,7 @@ axum.workspace = true
 palette-core = { path = "../palette-core" }
 palette-db = { path = "../palette-db" }
 palette-domain = { path = "../palette-domain" }
+palette-file-state = { path = "../palette-file-state" }
 palette-server = { path = "../palette-server" }
 palette-tmux = { path = "../palette-tmux" }
 serde_json.workspace = true

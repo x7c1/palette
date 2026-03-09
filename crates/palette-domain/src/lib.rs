@@ -1,6 +1,12 @@
 mod agent_id;
 pub use agent_id::AgentId;
 
+mod agent_role;
+pub use agent_role::AgentRole;
+
+mod agent_status;
+pub use agent_status::AgentStatus;
+
 mod create_task_request;
 pub use create_task_request::CreateTaskRequest;
 

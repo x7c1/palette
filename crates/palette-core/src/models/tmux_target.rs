@@ -1,9 +1,7 @@
-use serde::{Deserialize, Serialize};
 use std::fmt;
 
 /// Tmux pane reference (e.g., "%42" or "session:window").
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[serde(transparent)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct TmuxTarget(String);
 
 impl TmuxTarget {

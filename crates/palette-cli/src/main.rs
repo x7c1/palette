@@ -11,7 +11,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 #[tokio::main]
-async fn main() -> palette_core::Result<()> {
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
     tracing_subscriber::fmt()
         .with_env_filter(
             tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| "info".into()),
@@ -36,7 +36,7 @@ async fn main() -> palette_core::Result<()> {
     let docker = DockerManager::new(config.docker.palette_url.clone());
 
     let state_path = PathBuf::from(&config.state_path);
-    let infra = match PersistentState::load(&state_path)? {
+    let infra = match palette_file_state::load(&state_path)? {
         Some(state) => {
             tracing::info!("restored previous state");
             state
@@ -130,7 +130,7 @@ fn bootstrap_leader(
     tmux: &TmuxManagerImpl,
     docker: &DockerManager,
     state_path: &Path,
-) -> palette_core::Result<PersistentState> {
+) -> Result<PersistentState, Box<dyn std::error::Error>> {
     let session_name = &config.tmux.session_name;
     let settings_template = Path::new(&config.docker.settings_template);
     let mut state = PersistentState::new(session_name.clone());
@@ -156,7 +156,7 @@ fn bootstrap_leader(
     )?;
     state.leaders.push(leader);
 
-    state.save(state_path)?;
+    palette_file_state::save(&state, state_path)?;
     tracing::info!("bootstrapped leader (members spawn on-demand)");
     Ok(state)
 }

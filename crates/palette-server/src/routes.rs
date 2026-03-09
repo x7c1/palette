@@ -11,12 +11,12 @@ use axum::{
 };
 use palette_core::models::AgentStatus;
 use palette_core::orchestrator;
+use palette_core::persistent_state::PersistentState;
 use palette_domain::{
     AgentId, CreateTaskRequest, RuleEngine, SubmitReviewRequest, TaskFilter, TaskId, TaskStatus,
     TaskType, UpdateTaskRequest, Verdict,
 };
 use palette_tmux::{TmuxManager as _, TmuxManagerImpl};
-use std::path::PathBuf;
 use std::sync::Arc;
 
 pub fn create_router(state: Arc<AppState>) -> Router {
@@ -375,7 +375,6 @@ async fn handle_load_tasks(
 
         let deliveries = {
             let mut infra = state.infra.lock().await;
-            let state_path = PathBuf::from(&state.state_path);
             let deliveries = orchestrator::process_effects(
                 &effects,
                 &state.db,
@@ -383,7 +382,6 @@ async fn handle_load_tasks(
                 &state.docker,
                 &state.tmux,
                 &state.docker_config,
-                &state_path,
             )
             .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
@@ -396,6 +394,7 @@ async fn handle_load_tasks(
                 );
             }
 
+            save_state(&state, &infra);
             deliveries
         };
 
@@ -464,7 +463,6 @@ async fn handle_update_task(
     // Process orchestrator effects (auto-assign, destroy members)
     let deliveries = {
         let mut infra = state.infra.lock().await;
-        let state_path = PathBuf::from(&state.state_path);
         let deliveries = orchestrator::process_effects(
             &effects,
             &state.db,
@@ -472,7 +470,6 @@ async fn handle_update_task(
             &state.docker,
             &state.tmux,
             &state.docker_config,
-            &state_path,
         )
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
@@ -486,6 +483,7 @@ async fn handle_update_task(
             );
         }
 
+        save_state(&state, &infra);
         deliveries
     };
 
@@ -579,7 +577,6 @@ async fn handle_submit_review(
     // Process orchestrator effects
     let deliveries = {
         let mut infra = state.infra.lock().await;
-        let state_path = PathBuf::from(&state.state_path);
         let deliveries = orchestrator::process_effects(
             &effects,
             &state.db,
@@ -587,7 +584,6 @@ async fn handle_submit_review(
             &state.docker,
             &state.tmux,
             &state.docker_config,
-            &state_path,
         )
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
@@ -600,6 +596,7 @@ async fn handle_submit_review(
             );
         }
 
+        save_state(&state, &infra);
         deliveries
     };
 
@@ -646,6 +643,13 @@ fn send_tmux_keys(
         tmux.send_keys_literal(target, message)
     } else {
         tmux.send_keys(target, message)
+    }
+}
+
+fn save_state(state: &AppState, infra: &PersistentState) {
+    let path = std::path::PathBuf::from(&state.state_path);
+    if let Err(e) = palette_file_state::save(infra, &path) {
+        tracing::error!(error = %e, "failed to save state");
     }
 }
 
