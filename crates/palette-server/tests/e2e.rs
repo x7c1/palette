@@ -89,7 +89,7 @@ impl Drop for SessionGuard {
 /// Capture the content of a tmux pane (including scrollback buffer)
 fn capture_pane(target: &str) -> String {
     let output = Command::new("tmux")
-        .args(["capture-pane", "-t", target, "-p", "-S", "-200"])
+        .args(["capture-pane", "-t", target, "-p", "-J", "-S", "-200"])
         .output()
         .expect("failed to capture pane");
     String::from_utf8_lossy(&output.stdout).to_string()
