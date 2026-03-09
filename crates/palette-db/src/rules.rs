@@ -2,8 +2,8 @@
 // This module contains the TaskStore implementation for Database
 // and integration tests.
 
-use crate::errors::DbError;
-use crate::repository::Database;
+use crate::db_error::DbError;
+use crate::database::Database;
 use palette_domain::*;
 
 impl TaskStore for Database {

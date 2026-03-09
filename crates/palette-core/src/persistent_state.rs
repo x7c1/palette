@@ -1,121 +1,10 @@
+use crate::agent_state::AgentState;
+use crate::container_id::ContainerId;
 use anyhow::Context as _;
 use chrono::{DateTime, Utc};
 use palette_db::AgentId;
 use serde::{Deserialize, Serialize};
-use std::fmt;
 use std::path::Path;
-
-/// Serde helpers for AgentId (domain type without serde derives).
-mod agent_id_serde {
-    use palette_db::AgentId;
-    use serde::{self, Deserialize, Deserializer, Serializer};
-
-    pub fn serialize<S>(id: &AgentId, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        serializer.serialize_str(id.as_ref())
-    }
-
-    pub fn deserialize<'de, D>(deserializer: D) -> Result<AgentId, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        let s = String::deserialize(deserializer)?;
-        Ok(AgentId::new(s))
-    }
-}
-
-/// Docker container identifier.
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[serde(transparent)]
-pub struct ContainerId(String);
-
-impl ContainerId {
-    pub fn new(id: impl Into<String>) -> Self {
-        Self(id.into())
-    }
-}
-
-impl fmt::Display for ContainerId {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(&self.0)
-    }
-}
-
-impl AsRef<str> for ContainerId {
-    fn as_ref(&self) -> &str {
-        &self.0
-    }
-}
-
-/// Tmux pane reference (e.g., "%42" or "session:window").
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[serde(transparent)]
-pub struct TmuxTarget(String);
-
-impl TmuxTarget {
-    pub fn new(target: impl Into<String>) -> Self {
-        Self(target.into())
-    }
-}
-
-impl fmt::Display for TmuxTarget {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(&self.0)
-    }
-}
-
-impl AsRef<str> for TmuxTarget {
-    fn as_ref(&self) -> &str {
-        &self.0
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum AgentRole {
-    Leader,
-    Member,
-}
-
-impl AgentRole {
-    pub fn as_str(&self) -> &'static str {
-        match self {
-            AgentRole::Leader => "leader",
-            AgentRole::Member => "member",
-        }
-    }
-}
-
-impl fmt::Display for AgentRole {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(self.as_str())
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum AgentStatus {
-    Booting,
-    Working,
-    Idle,
-    WaitingPermission,
-    Crashed,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct AgentState {
-    #[serde(with = "agent_id_serde")]
-    pub id: AgentId,
-    pub role: AgentRole,
-    #[serde(with = "agent_id_serde")]
-    pub leader_id: AgentId,
-    pub container_id: ContainerId,
-    pub tmux_target: TmuxTarget,
-    pub status: AgentStatus,
-    pub session_id: Option<String>,
-}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PersistentState {
@@ -212,6 +101,9 @@ impl PersistentState {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::agent_role::AgentRole;
+    use crate::agent_status::AgentStatus;
+    use crate::tmux_target::TmuxTarget;
 
     fn aid(s: &str) -> AgentId {
         AgentId::new(s)

@@ -1,3 +1,5 @@
-mod manager;
+mod tmux_manager;
+pub use tmux_manager::TmuxManager;
 
-pub use manager::{TmuxManager, TmuxManagerImpl};
+mod tmux_manager_impl;
+pub use tmux_manager_impl::TmuxManagerImpl;

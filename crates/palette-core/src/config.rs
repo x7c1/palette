@@ -1,3 +1,6 @@
+use crate::docker_config::DockerConfig;
+use crate::rules_config::RulesConfig;
+use crate::tmux_config::TmuxConfig;
 use anyhow::Context as _;
 use serde::Deserialize;
 use std::path::Path;
@@ -15,76 +18,12 @@ pub struct Config {
     pub docker: DockerConfig,
 }
 
-#[derive(Debug, Deserialize)]
-pub struct TmuxConfig {
-    pub session_name: String,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct RulesConfig {
-    #[serde(default = "default_max_review_rounds")]
-    pub max_review_rounds: u32,
-}
-
-#[derive(Debug, Clone, Deserialize)]
-pub struct DockerConfig {
-    pub palette_url: String,
-    #[serde(default = "default_leader_image")]
-    pub leader_image: String,
-    #[serde(default = "default_member_image")]
-    pub member_image: String,
-    #[serde(default = "default_settings_template")]
-    pub settings_template: String,
-    #[serde(default = "default_leader_prompt")]
-    pub leader_prompt: String,
-    #[serde(default = "default_member_prompt")]
-    pub member_prompt: String,
-    #[serde(default = "default_max_members")]
-    pub max_members: usize,
-}
-
-fn default_max_members() -> usize {
-    3
-}
-
 fn default_db_path() -> String {
     "data/palette.db".to_string()
 }
 
 fn default_state_path() -> String {
     "data/state.json".to_string()
-}
-
-fn default_max_review_rounds() -> u32 {
-    5
-}
-
-fn default_leader_image() -> String {
-    "palette-leader:latest".to_string()
-}
-
-fn default_member_image() -> String {
-    "palette-member:latest".to_string()
-}
-
-fn default_settings_template() -> String {
-    "config/hooks/member-settings.json".to_string()
-}
-
-fn default_leader_prompt() -> String {
-    "prompts/leader.md".to_string()
-}
-
-fn default_member_prompt() -> String {
-    "prompts/member.md".to_string()
-}
-
-impl Default for RulesConfig {
-    fn default() -> Self {
-        Self {
-            max_review_rounds: default_max_review_rounds(),
-        }
-    }
 }
 
 impl Config {

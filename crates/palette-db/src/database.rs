@@ -1,5 +1,5 @@
-use crate::errors::DbError;
-use crate::models::QueuedMessage;
+use crate::db_error::DbError;
+use crate::queued_message::QueuedMessage;
 use crate::repository_row;
 use crate::schema;
 use chrono::{DateTime, Utc};

@@ -1,6 +1,11 @@
-use crate::config::DockerConfig;
-use crate::docker::DockerManager;
-use crate::state::{AgentRole, AgentState, AgentStatus, PersistentState, TmuxTarget};
+use crate::agent_role::AgentRole;
+use crate::agent_state::AgentState;
+use crate::agent_status::AgentStatus;
+use crate::docker_config::DockerConfig;
+use crate::docker_manager::DockerManager;
+use crate::pending_delivery::PendingDelivery;
+use crate::persistent_state::PersistentState;
+use crate::tmux_target::TmuxTarget;
 use palette_db::{AgentId, Database, RuleEffect, RuleEngine, Task};
 use palette_tmux::TmuxManager;
 
@@ -121,13 +126,6 @@ pub fn deliver_queued_messages<T: TmuxManager>(
     } else {
         Ok(false)
     }
-}
-
-/// A pending delivery that needs to be attempted.
-#[derive(Debug, Clone)]
-pub struct PendingDelivery {
-    pub target_id: AgentId,
-    pub tmux_target: TmuxTarget,
 }
 
 /// Format a task into an instruction message for a member.
