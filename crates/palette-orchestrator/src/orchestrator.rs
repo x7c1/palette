@@ -1,210 +1,197 @@
-use crate::DockerConfig;
 use palette_db::Database;
 use palette_docker::DockerManager;
-use palette_domain::{
-    AgentId, AgentRole, AgentState, AgentStatus, PendingDelivery, PersistentState, RuleEffect,
-    RuleEngine, Task,
-};
-use palette_tmux::TerminalManager;
+use palette_domain::{AgentId, AgentStatus, PersistentState, RuleEngine, ServerEvent};
+use std::sync::Arc;
+use tokio::sync::mpsc;
 
-/// Processes rule engine effects: auto-assign tasks, spawn/destroy members.
-/// Returns a list of messages that need to be sent to members via tmux.
-///
-/// The caller is responsible for saving state after this function returns.
-pub fn process_effects<T: TerminalManager>(
-    effects: &[RuleEffect],
-    db: &Database,
-    infra: &mut PersistentState,
-    docker: &DockerManager,
-    tmux: &T,
-    config: &DockerConfig,
-) -> crate::Result<Vec<PendingDelivery>> {
-    let mut deliveries = Vec::new();
-    let mut pending: Vec<RuleEffect> = effects.to_vec();
+use crate::{DockerConfig, deliver_queued_messages, process_effects};
 
-    while let Some(effect) = pending.pop() {
-        match &effect {
-            RuleEffect::AutoAssign { task_id } => {
-                // Only assign if the task is truly assignable (ready + all deps done)
-                let assignable = db.find_assignable_tasks()?;
-                let task = match assignable.iter().find(|t| t.id == *task_id) {
-                    Some(t) => t.clone(),
-                    None => continue,
+/// Interval between readiness polls.
+const READINESS_POLL_INTERVAL: std::time::Duration = std::time::Duration::from_secs(3);
+
+/// Maximum time to wait for Claude Code readiness.
+const READINESS_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(120);
+
+pub struct Orchestrator {
+    pub db: Arc<Database>,
+    pub docker: DockerManager,
+    pub docker_config: DockerConfig,
+    pub tmux: Arc<palette_tmux::TmuxManager>,
+    pub infra: Arc<tokio::sync::Mutex<PersistentState>>,
+    pub state_path: String,
+    pub rules: RuleEngine,
+}
+
+impl Orchestrator {
+    /// Start the event processing loop.
+    pub fn start(self: Arc<Self>, mut rx: mpsc::UnboundedReceiver<ServerEvent>) {
+        let this = self;
+        tokio::spawn(async move {
+            while let Some(event) = rx.recv().await {
+                Self::handle_event(&this, event).await;
+            }
+        });
+    }
+
+    /// Start readiness watchers for any agents currently in Booting state.
+    pub fn resume_booting_watchers(this: &Arc<Self>, infra: &PersistentState) {
+        for leader in &infra.leaders {
+            if leader.status == AgentStatus::Booting {
+                Self::spawn_readiness_watcher(this, leader.id.clone());
+            }
+        }
+        for member in &infra.members {
+            if member.status == AgentStatus::Booting {
+                Self::spawn_readiness_watcher(this, member.id.clone());
+            }
+        }
+    }
+
+    async fn handle_event(this: &Arc<Self>, event: ServerEvent) {
+        match event {
+            ServerEvent::ProcessEffects { effects } => {
+                let mut infra = this.infra.lock().await;
+                match process_effects(
+                    &effects,
+                    &this.db,
+                    &mut infra,
+                    &this.docker,
+                    &*this.tmux,
+                    &this.docker_config,
+                ) {
+                    Ok(deliveries) => {
+                        for d in &deliveries {
+                            let _ = deliver_queued_messages(
+                                &d.target_id,
+                                &this.db,
+                                &mut infra,
+                                &*this.tmux,
+                            );
+                        }
+                        Self::save_state(this, &infra);
+                        drop(infra);
+                        for d in deliveries {
+                            Self::spawn_readiness_watcher(this, d.target_id);
+                        }
+                    }
+                    Err(e) => {
+                        tracing::error!(error = %e, "failed to process effects");
+                    }
+                }
+            }
+            ServerEvent::DeliverMessages { target_id } => {
+                let mut infra = this.infra.lock().await;
+                let _ = deliver_queued_messages(&target_id, &this.db, &mut infra, &*this.tmux);
+            }
+            ServerEvent::NotifyDeliveryLoop => {
+                Self::deliver_to_all_idle(this).await;
+            }
+        }
+    }
+
+    async fn deliver_to_all_idle(this: &Arc<Self>) {
+        loop {
+            let mut infra = this.infra.lock().await;
+            let idle_targets: Vec<AgentId> = infra
+                .leaders
+                .iter()
+                .chain(infra.members.iter())
+                .filter(|m| m.status == AgentStatus::Idle)
+                .map(|m| m.id.clone())
+                .collect();
+
+            let mut any_delivered = false;
+            for target_id in &idle_targets {
+                match deliver_queued_messages(target_id, &this.db, &mut infra, &*this.tmux) {
+                    Ok(true) => any_delivered = true,
+                    Ok(false) => {}
+                    Err(e) => {
+                        tracing::error!(
+                            target_id = %target_id,
+                            error = %e,
+                            "delivery loop: failed to deliver"
+                        );
+                    }
+                }
+            }
+            if !any_delivered {
+                break;
+            }
+        }
+    }
+
+    fn spawn_readiness_watcher(this: &Arc<Self>, target_id: AgentId) {
+        let this = Arc::clone(this);
+        let max_polls = READINESS_TIMEOUT.as_secs() / READINESS_POLL_INTERVAL.as_secs();
+
+        tokio::spawn(async move {
+            for _ in 0..max_polls {
+                tokio::time::sleep(READINESS_POLL_INTERVAL).await;
+
+                let terminal_target = {
+                    let infra = this.infra.lock().await;
+                    let agent = infra
+                        .find_member(&target_id)
+                        .or_else(|| infra.find_leader(&target_id));
+                    match agent {
+                        Some(m) => m.terminal_target.clone(),
+                        None => return,
+                    }
                 };
-                let active = db.count_active_members()?;
-                if active >= config.max_members {
-                    tracing::info!(
-                        task_id = %task_id,
-                        active = active,
-                        max = config.max_members,
-                        "max members reached, task waits"
-                    );
+
+                use palette_tmux::TerminalManager as _;
+                let pane_content = match this.tmux.capture_pane(&terminal_target) {
+                    Ok(content) => content,
+                    Err(e) => {
+                        tracing::warn!(
+                            target_id = %target_id,
+                            error = %e,
+                            "failed to capture pane"
+                        );
+                        continue;
+                    }
+                };
+
+                if !pane_content.contains('❯') {
                     continue;
                 }
-                // Spawn a new member
-                let member_id = infra.next_member_id();
-                let member = spawn_member(&member_id, infra, docker, tmux, config)?;
-                let terminal_target = member.terminal_target.clone();
-                infra.members.push(member);
 
-                // Assign task
-                db.assign_task(task_id, &member_id)?;
                 tracing::info!(
-                    task_id = %task_id,
-                    member_id = %member_id,
-                    "auto-assigned task"
+                    target_id = %target_id,
+                    "Claude Code is ready, delivering queued message"
                 );
 
-                // Build task instruction message
-                let instruction = format_task_instruction(&task);
-                db.enqueue_message(&member_id, &instruction)?;
-
-                deliveries.push(PendingDelivery {
-                    target_id: member_id,
-                    terminal_target,
-                });
-
-                infra.touch();
-            }
-            RuleEffect::DestroyMember { member_id } => {
-                if let Some(member) = infra.remove_member(member_id) {
-                    tracing::info!(member_id = %member_id, "destroying member container");
-                    let _ = docker.stop_container(&member.container_id);
-                    let _ = docker.remove_container(&member.container_id);
-                    infra.touch();
+                {
+                    let mut infra = this.infra.lock().await;
+                    let is_booting = infra
+                        .find_member(&target_id)
+                        .or_else(|| infra.find_leader(&target_id))
+                        .is_some_and(|m| m.status == AgentStatus::Booting);
+                    if is_booting {
+                        if let Some(m) = infra.find_member_mut(&target_id) {
+                            m.status = AgentStatus::Idle;
+                        } else if let Some(m) = infra.find_leader_mut(&target_id) {
+                            m.status = AgentStatus::Idle;
+                        }
+                        infra.touch();
+                    }
+                    let _ = deliver_queued_messages(&target_id, &this.db, &mut infra, &*this.tmux);
+                    Self::save_state(&this, &infra);
                 }
+                return;
             }
-            RuleEffect::StatusChanged {
-                task_id,
-                new_status,
-            } => {
-                // Chain: re-evaluate rules for the new status
-                let rules = RuleEngine::new(0); // max_review_rounds unused for status changes
-                let chained = rules.on_status_change(db, task_id, *new_status)?;
-                for e in &chained {
-                    tracing::info!(?e, "chained rule engine effect");
-                }
-                pending.extend(chained);
-            }
-            _ => {}
+
+            tracing::error!(
+                target_id = %target_id,
+                "timed out waiting for Claude Code readiness"
+            );
+        });
+    }
+
+    fn save_state(this: &Arc<Self>, infra: &PersistentState) {
+        let path = std::path::PathBuf::from(&this.state_path);
+        if let Err(e) = palette_file_state::save(infra, &path) {
+            tracing::error!(error = %e, "failed to save state");
         }
     }
-
-    Ok(deliveries)
-}
-
-/// Delivers queued messages to idle targets.
-pub fn deliver_queued_messages<T: TerminalManager>(
-    target_id: &AgentId,
-    db: &Database,
-    infra: &mut PersistentState,
-    tmux: &T,
-) -> crate::Result<bool> {
-    let member = infra
-        .find_member(target_id)
-        .or_else(|| infra.find_leader(target_id));
-
-    let terminal_target = match member {
-        Some(m) if m.status == AgentStatus::Idle => m.terminal_target.clone(),
-        _ => return Ok(false),
-    };
-
-    if let Some(msg) = db.dequeue_message(target_id)? {
-        tmux.send_keys(&terminal_target, &msg.message)?;
-        // Update status to Working
-        if let Some(m) = infra.find_member_mut(target_id) {
-            m.status = AgentStatus::Working;
-        } else if let Some(l) = infra.find_leader_mut(target_id) {
-            l.status = AgentStatus::Working;
-        }
-        infra.touch();
-        tracing::info!(target_id = %target_id, "delivered queued message");
-        Ok(true)
-    } else {
-        Ok(false)
-    }
-}
-
-/// Format a task into an instruction message for a member.
-fn format_task_instruction(task: &Task) -> String {
-    let mut msg = format!("## Task: {}\n\nID: {}\n", task.title, task.id);
-    if let Some(ref desc) = task.description {
-        msg.push_str(&format!("\n{desc}\n"));
-    }
-    if let Some(ref repos) = task.repositories {
-        msg.push('\n');
-        for repo in repos {
-            if let Some(ref branch) = repo.branch {
-                msg.push_str(&format!("- {} (branch: {branch})\n", repo.name));
-            } else {
-                msg.push_str(&format!("- {}\n", repo.name));
-            }
-        }
-    }
-    msg.push_str("\nPlease begin working on this task.");
-    msg
-}
-
-fn spawn_member<T: TerminalManager>(
-    member_id: &AgentId,
-    infra: &PersistentState,
-    docker: &DockerManager,
-    tmux: &T,
-    config: &DockerConfig,
-) -> crate::Result<AgentState> {
-    let session_name = &infra.session_name;
-
-    // Create a new tmux pane by splitting from the leader's pane
-    let leader_target = infra
-        .leaders
-        .first()
-        .map(|l| &l.terminal_target)
-        .ok_or_else(|| {
-            crate::Error::Internal(
-                "no leader found; cannot spawn member without a leader pane".into(),
-            )
-        })?;
-    let terminal_target = tmux.create_pane(leader_target)?;
-
-    let member_id_str = member_id.as_ref();
-    let container_id = docker.create_container(
-        member_id_str,
-        &config.member_image,
-        AgentRole::Member,
-        session_name,
-    )?;
-    docker.start_container(&container_id)?;
-    docker.write_settings(
-        &container_id,
-        std::path::Path::new(&config.settings_template),
-        member_id_str,
-    )?;
-    DockerManager::copy_file_to_container(
-        &container_id,
-        std::path::Path::new(&config.member_prompt),
-        "/home/agent/prompt.md",
-    )?;
-    DockerManager::copy_dir_to_container(
-        &container_id,
-        std::path::Path::new("claude-code-plugin"),
-        "/home/agent/claude-code-plugin",
-    )?;
-
-    let cmd = DockerManager::claude_exec_command(
-        &container_id,
-        "/home/agent/prompt.md",
-        AgentRole::Member,
-    );
-    tmux.send_keys(&terminal_target, &cmd)?;
-    tracing::info!(member_id = %member_id, "spawned member");
-
-    Ok(AgentState {
-        id: member_id.clone(),
-        role: AgentRole::Member,
-        leader_id: AgentId::new("leader-1"),
-        container_id,
-        terminal_target,
-        status: AgentStatus::Booting,
-        session_id: None,
-    })
 }
