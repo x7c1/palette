@@ -2,7 +2,7 @@ use super::*;
 
 impl Database {
     /// Assign a task to a member and set status to in_progress.
-    pub fn assign_task(&self, task_id: &TaskId, assignee: &AgentId) -> Result<Task, DbError> {
+    pub fn assign_task(&self, task_id: &TaskId, assignee: &AgentId) -> crate::Result<Task> {
         let conn = lock!(self.conn);
         let now = Utc::now().to_rfc3339();
         let updated = conn.execute(

@@ -1,9 +1,11 @@
 use palette_domain::{ReviewError, TaskError};
 use std::fmt;
 
+pub type Result<T> = std::result::Result<T, Error>;
+
 /// Database-layer error combining storage and domain errors.
 #[derive(Debug)]
-pub enum DbError {
+pub enum Error {
     /// SQLite or other storage error.
     Storage(rusqlite::Error),
     /// Domain task error.
@@ -16,43 +18,43 @@ pub enum DbError {
     Internal(String),
 }
 
-impl fmt::Display for DbError {
+impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            DbError::Storage(e) => write!(f, "database error: {e}"),
-            DbError::Task(e) => write!(f, "{e}"),
-            DbError::Review(e) => write!(f, "{e}"),
-            DbError::LockPoisoned => write!(f, "database lock poisoned"),
-            DbError::Internal(msg) => write!(f, "internal error: {msg}"),
+            Error::Storage(e) => write!(f, "database error: {e}"),
+            Error::Task(e) => write!(f, "{e}"),
+            Error::Review(e) => write!(f, "{e}"),
+            Error::LockPoisoned => write!(f, "database lock poisoned"),
+            Error::Internal(msg) => write!(f, "internal error: {msg}"),
         }
     }
 }
 
-impl std::error::Error for DbError {
+impl std::error::Error for Error {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self {
-            DbError::Storage(e) => Some(e),
-            DbError::Task(e) => Some(e),
-            DbError::Review(e) => Some(e),
+            Error::Storage(e) => Some(e),
+            Error::Task(e) => Some(e),
+            Error::Review(e) => Some(e),
             _ => None,
         }
     }
 }
 
-impl From<rusqlite::Error> for DbError {
+impl From<rusqlite::Error> for Error {
     fn from(e: rusqlite::Error) -> Self {
-        DbError::Storage(e)
+        Error::Storage(e)
     }
 }
 
-impl From<TaskError> for DbError {
+impl From<TaskError> for Error {
     fn from(e: TaskError) -> Self {
-        DbError::Task(e)
+        Error::Task(e)
     }
 }
 
-impl From<ReviewError> for DbError {
+impl From<ReviewError> for Error {
     fn from(e: ReviewError) -> Self {
-        DbError::Review(e)
+        Error::Review(e)
     }
 }

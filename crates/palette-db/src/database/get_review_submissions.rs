@@ -4,7 +4,7 @@ impl Database {
     pub fn get_review_submissions(
         &self,
         review_task_id: &TaskId,
-    ) -> Result<Vec<ReviewSubmission>, DbError> {
+    ) -> crate::Result<Vec<ReviewSubmission>> {
         let conn = lock!(self.conn);
         let mut stmt = conn.prepare(
             "SELECT id, review_task_id, round, verdict, summary, created_at

@@ -2,7 +2,7 @@ use super::*;
 
 impl Database {
     /// Count the number of work tasks currently in_progress (active members).
-    pub fn count_active_members(&self) -> Result<usize, DbError> {
+    pub fn count_active_members(&self) -> crate::Result<usize> {
         let conn = lock!(self.conn);
         let count: i64 = conn.query_row(
             "SELECT COUNT(*) FROM tasks WHERE type = 'work' AND status = 'in_progress'",

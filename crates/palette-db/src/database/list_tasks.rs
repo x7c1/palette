@@ -1,7 +1,7 @@
 use super::*;
 
 impl Database {
-    pub fn list_tasks(&self, filter: &TaskFilter) -> Result<Vec<Task>, DbError> {
+    pub fn list_tasks(&self, filter: &TaskFilter) -> crate::Result<Vec<Task>> {
         let conn = lock!(self.conn);
         let mut sql = "SELECT id, type, title, description, assignee, status, priority, repositories, pr_url, created_at, updated_at, notes, assigned_at FROM tasks WHERE 1=1".to_string();
         let mut param_values: Vec<Box<dyn rusqlite::types::ToSql>> = Vec::new();

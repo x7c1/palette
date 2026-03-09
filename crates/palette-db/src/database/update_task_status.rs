@@ -1,7 +1,7 @@
 use super::*;
 
 impl Database {
-    pub fn update_task_status(&self, id: &TaskId, status: TaskStatus) -> Result<Task, DbError> {
+    pub fn update_task_status(&self, id: &TaskId, status: TaskStatus) -> crate::Result<Task> {
         let conn = lock!(self.conn);
         let now = Utc::now().to_rfc3339();
         let updated = conn.execute(

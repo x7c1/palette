@@ -1,4 +1,4 @@
-use crate::models::DbError;
+use crate::error::Error;
 use crate::repository_row;
 use crate::schema;
 use chrono::{DateTime, Utc};
@@ -11,10 +11,10 @@ pub struct Database {
     conn: Mutex<Connection>,
 }
 
-/// Acquire the Mutex lock, converting a poisoned lock into DbError.
+/// Acquire the Mutex lock, converting a poisoned lock into Error.
 macro_rules! lock {
     ($mutex:expr) => {
-        $mutex.lock().map_err(|_| DbError::LockPoisoned)?
+        $mutex.lock().map_err(|_| Error::LockPoisoned)?
     };
 }
 
@@ -37,17 +37,17 @@ mod submit_review;
 mod update_task_status;
 
 impl Database {
-    pub fn open(path: &Path) -> Result<Self, DbError> {
+    pub fn open(path: &Path) -> crate::Result<Self> {
         if let Some(parent) = path.parent() {
             std::fs::create_dir_all(parent).map_err(|e| {
-                DbError::Internal(format!(
+                Error::Internal(format!(
                     "failed to create db directory {}: {e}",
                     parent.display()
                 ))
             })?;
         }
         let conn = Connection::open(path).map_err(|e| {
-            DbError::Internal(format!("failed to open database {}: {e}", path.display()))
+            Error::Internal(format!("failed to open database {}: {e}", path.display()))
         })?;
         schema::initialize(&conn)?;
         Ok(Self {
@@ -55,7 +55,7 @@ impl Database {
         })
     }
 
-    pub fn open_in_memory() -> Result<Self, DbError> {
+    pub fn open_in_memory() -> crate::Result<Self> {
         let conn = Connection::open_in_memory()?;
         schema::initialize(&conn)?;
         Ok(Self {
@@ -72,7 +72,7 @@ fn parse_datetime(s: &str) -> DateTime<Utc> {
 }
 
 /// Query a single task by ID from a connection or transaction.
-fn query_task(conn: &Connection, id: &TaskId) -> Result<Option<Task>, DbError> {
+fn query_task(conn: &Connection, id: &TaskId) -> crate::Result<Option<Task>> {
     let mut stmt = conn.prepare(
         "SELECT id, type, title, description, assignee, status, priority, repositories, pr_url, created_at, updated_at, notes, assigned_at
          FROM tasks WHERE id = ?1",

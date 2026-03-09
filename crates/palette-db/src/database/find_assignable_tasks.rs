@@ -3,7 +3,7 @@ use super::*;
 impl Database {
     /// Find work tasks that are ready and have all work dependencies done.
     /// Returns tasks ordered by priority (high > medium > low > null).
-    pub fn find_assignable_tasks(&self) -> Result<Vec<Task>, DbError> {
+    pub fn find_assignable_tasks(&self) -> crate::Result<Vec<Task>> {
         let conn = lock!(self.conn);
         let mut stmt = conn.prepare(
             "SELECT t.id, t.type, t.title, t.description, t.assignee, t.status, t.priority, t.repositories, t.pr_url, t.created_at, t.updated_at, t.notes, t.assigned_at

@@ -5,7 +5,7 @@ impl Database {
         &self,
         review_task_id: &TaskId,
         req: &SubmitReviewRequest,
-    ) -> Result<ReviewSubmission, DbError> {
+    ) -> crate::Result<ReviewSubmission> {
         let mut conn = lock!(self.conn);
         let now = Utc::now();
         let now_str = now.to_rfc3339();

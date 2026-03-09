@@ -2,7 +2,7 @@ use super::*;
 
 impl Database {
     /// Find work tasks that a review task depends on.
-    pub fn find_works_for_review(&self, review_id: &TaskId) -> Result<Vec<Task>, DbError> {
+    pub fn find_works_for_review(&self, review_id: &TaskId) -> crate::Result<Vec<Task>> {
         let conn = lock!(self.conn);
         let mut stmt = conn.prepare(
             "SELECT t.id, t.type, t.title, t.description, t.assignee, t.status, t.priority, t.repositories, t.pr_url, t.created_at, t.updated_at, t.notes, t.assigned_at

@@ -1,7 +1,7 @@
 use super::*;
 
 impl Database {
-    pub fn get_dependents(&self, depends_on_id: &TaskId) -> Result<Vec<TaskId>, DbError> {
+    pub fn get_dependents(&self, depends_on_id: &TaskId) -> crate::Result<Vec<TaskId>> {
         let conn = lock!(self.conn);
         let mut stmt = conn.prepare("SELECT task_id FROM dependencies WHERE depends_on = ?1")?;
         let rows = stmt.query_map(params![depends_on_id.as_ref()], |row| {

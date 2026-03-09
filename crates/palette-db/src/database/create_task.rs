@@ -1,7 +1,7 @@
 use super::*;
 
 impl Database {
-    pub fn create_task(&self, req: &CreateTaskRequest) -> Result<Task, DbError> {
+    pub fn create_task(&self, req: &CreateTaskRequest) -> crate::Result<Task> {
         let mut conn = lock!(self.conn);
         let now = Utc::now();
         let now_str = now.to_rfc3339();
@@ -48,7 +48,7 @@ impl Database {
         }
 
         let task = query_task(&tx, &id)?
-            .ok_or_else(|| DbError::Task(TaskError::NotFound { task_id: id }))?;
+            .ok_or_else(|| Error::Task(TaskError::NotFound { task_id: id }))?;
 
         tx.commit()?;
         Ok(task)

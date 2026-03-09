@@ -1,7 +1,7 @@
 use super::*;
 
 impl Database {
-    pub fn get_task(&self, id: &TaskId) -> Result<Option<Task>, DbError> {
+    pub fn get_task(&self, id: &TaskId) -> crate::Result<Option<Task>> {
         let conn = lock!(self.conn);
         let mut stmt = conn.prepare(
             "SELECT id, type, title, description, assignee, status, priority, repositories, pr_url, created_at, updated_at, notes, assigned_at

@@ -7,7 +7,7 @@ impl Database {
         &self,
         target_id: &AgentId,
         message: &str,
-    ) -> Result<QueuedMessage, DbError> {
+    ) -> crate::Result<QueuedMessage> {
         let conn = lock!(self.conn);
         let now = Utc::now();
         let now_str = now.to_rfc3339();
