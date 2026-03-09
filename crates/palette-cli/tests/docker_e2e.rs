@@ -14,7 +14,7 @@
 
 use anyhow::{Context as _, Result};
 use palette_core::config::Config;
-use palette_core::models::AgentRole;
+use palette_domain::AgentRole;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 

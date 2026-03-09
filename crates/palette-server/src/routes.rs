@@ -9,8 +9,8 @@ use axum::{
     http::StatusCode,
     routing::{get, post},
 };
-use palette_core::models::AgentStatus;
 use palette_core::orchestrator;
+use palette_domain::AgentStatus;
 use palette_domain::{
     AgentId, CreateTaskRequest, PersistentState, RuleEngine, SubmitReviewRequest, TaskFilter,
     TaskId, TaskStatus, TaskType, TerminalTarget, UpdateTaskRequest, Verdict,
