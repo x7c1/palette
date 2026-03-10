@@ -139,15 +139,25 @@ jq . data/state.json | head -60
 echo ""
 echo "=== Verification ==="
 W_STATUS=$(curl -s ${BASE_URL}/tasks | jq -r '.[] | select(.type == "work") | .status')
+R_STATUS=$(curl -s ${BASE_URL}/tasks | jq -r '.[] | select(.type == "review") | .status')
+R_ASSIGNEE=$(curl -s ${BASE_URL}/tasks | jq -r '.[] | select(.type == "review") | .assignee // "none"')
 REVIEW_ROUNDS=$(curl -s ${BASE_URL}/tasks | jq -r '.[] | select(.type == "review") | .id' | while read rid; do
     curl -s "${BASE_URL}/reviews/$rid/submissions" | jq 'length'
 done | head -1)
 
 echo "Work status: $W_STATUS (expected: done)"
+echo "Review status: $R_STATUS"
+echo "Review assignee: $R_ASSIGNEE (expected: auto-assigned member)"
 echo "Review rounds: ${REVIEW_ROUNDS:-0}"
+
+# Verify review member was auto-spawned under review integrator
+STATE_JSON=$(cat data/state.json 2>/dev/null || echo "{}")
+REVIEW_MEMBERS=$(echo "$STATE_JSON" | jq '[.members[] | select(.leader_id != null)] | length' 2>/dev/null || echo 0)
+echo "Members spawned: $REVIEW_MEMBERS"
 
 RESULT=PASSED
 if [ "${STALL_ABORT:-0}" = "1" ]; then RESULT="FAILED (stall)"; fi
 if [ "$W_STATUS" != "done" ]; then RESULT=FAILED; fi
+if [ "$R_ASSIGNEE" = "none" ]; then echo "WARN: Review task was not auto-assigned"; fi
 
 echo "=== SCENARIO 3 $RESULT ==="

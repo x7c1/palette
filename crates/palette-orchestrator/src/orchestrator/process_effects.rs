@@ -203,6 +203,75 @@ mod tests {
     }
 
     #[test]
+    fn review_todo_triggers_auto_assign() {
+        let db = setup_db();
+        create_work_review_pair(&db);
+
+        db.update_task_status(&tid("W-001"), TaskStatus::Ready)
+            .unwrap();
+        db.update_task_status(&tid("W-001"), TaskStatus::InProgress)
+            .unwrap();
+        db.update_task_status(&tid("W-001"), TaskStatus::InReview)
+            .unwrap();
+        db.update_task_status(&tid("R-001"), TaskStatus::Todo)
+            .unwrap();
+
+        let engine = RuleEngine::new(&db, 5);
+        let effects = engine
+            .on_status_change(&tid("R-001"), TaskStatus::Todo)
+            .unwrap();
+
+        assert_eq!(effects.len(), 1);
+        assert_eq!(
+            effects[0],
+            RuleEffect::AutoAssign {
+                task_id: tid("R-001"),
+            }
+        );
+    }
+
+    #[test]
+    fn review_auto_assign_chains_from_work_in_review() {
+        // Verify the full chain: work → in_review → review → todo → auto_assign
+        let db = setup_db();
+        create_work_review_pair(&db);
+
+        db.update_task_status(&tid("W-001"), TaskStatus::Ready)
+            .unwrap();
+        db.update_task_status(&tid("W-001"), TaskStatus::InProgress)
+            .unwrap();
+        db.update_task_status(&tid("W-001"), TaskStatus::InReview)
+            .unwrap();
+
+        let engine = RuleEngine::new(&db, 5);
+
+        // Step 1: work → in_review produces StatusChanged for review
+        let effects = engine
+            .on_status_change(&tid("W-001"), TaskStatus::InReview)
+            .unwrap();
+        assert_eq!(effects.len(), 1);
+        assert_eq!(
+            effects[0],
+            RuleEffect::StatusChanged {
+                task_id: tid("R-001"),
+                new_status: TaskStatus::Todo,
+            }
+        );
+
+        // Step 2: chained StatusChanged(R-001, Todo) produces AutoAssign
+        let chained = engine
+            .on_status_change(&tid("R-001"), TaskStatus::Todo)
+            .unwrap();
+        assert_eq!(chained.len(), 1);
+        assert_eq!(
+            chained[0],
+            RuleEffect::AutoAssign {
+                task_id: tid("R-001"),
+            }
+        );
+    }
+
+    #[test]
     fn changes_requested_reverts_work() {
         let db = setup_db();
         create_work_review_pair(&db);

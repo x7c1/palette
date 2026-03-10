@@ -144,4 +144,18 @@ pub(crate) mod test_helpers {
         })
         .unwrap();
     }
+
+    pub fn create_review(db: &Database, id: &str, deps: Vec<TaskId>) {
+        db.create_task(&CreateTaskRequest {
+            id: Some(tid(id)),
+            task_type: TaskType::Review,
+            title: format!("Review {id}"),
+            description: None,
+            assignee: None,
+            priority: None,
+            repositories: None,
+            depends_on: deps,
+        })
+        .unwrap();
+    }
 }
