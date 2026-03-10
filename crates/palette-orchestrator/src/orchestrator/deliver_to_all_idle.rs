@@ -18,7 +18,7 @@ impl Orchestrator {
 
             let mut any_delivered = false;
             for target_id in &idle_targets {
-                match deliver_queued_messages(target_id, &this.db, &mut infra, &*this.tmux) {
+                match deliver_queued_messages(target_id, &this.db, &mut infra, &this.tmux) {
                     Ok(true) => any_delivered = true,
                     Ok(false) => {}
                     Err(e) => {

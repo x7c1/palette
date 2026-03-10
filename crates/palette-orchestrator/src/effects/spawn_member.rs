@@ -1,13 +1,13 @@
 use crate::DockerConfig;
 use palette_docker::DockerManager;
 use palette_domain::{AgentId, AgentRole, AgentState, AgentStatus, PersistentState};
-use palette_tmux::TerminalManager;
+use palette_tmux::TmuxManager;
 
-pub(super) fn spawn_member<T: TerminalManager>(
+pub(super) fn spawn_member(
     member_id: &AgentId,
     infra: &PersistentState,
     docker: &DockerManager,
-    tmux: &T,
+    tmux: &TmuxManager,
     config: &DockerConfig,
 ) -> crate::Result<AgentState> {
     let session_name = &infra.session_name;

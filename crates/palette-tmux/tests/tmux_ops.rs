@@ -1,5 +1,5 @@
 use palette_domain::TerminalSessionName;
-use palette_tmux::{TerminalManager, TmuxManager};
+use palette_tmux::TmuxManager;
 use std::process::Command;
 
 fn test_session_name(test_name: &str) -> TerminalSessionName {

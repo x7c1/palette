@@ -14,7 +14,7 @@ impl Orchestrator {
                     &this.db,
                     &mut infra,
                     &this.docker,
-                    &*this.tmux,
+                    &this.tmux,
                     &this.docker_config,
                 ) {
                     Ok(deliveries) => {
@@ -23,7 +23,7 @@ impl Orchestrator {
                                 &d.target_id,
                                 &this.db,
                                 &mut infra,
-                                &*this.tmux,
+                                &this.tmux,
                             );
                         }
                         Self::save_state(this, &infra);
@@ -39,7 +39,7 @@ impl Orchestrator {
             }
             ServerEvent::DeliverMessages { target_id } => {
                 let mut infra = this.infra.lock().await;
-                let _ = deliver_queued_messages(&target_id, &this.db, &mut infra, &*this.tmux);
+                let _ = deliver_queued_messages(&target_id, &this.db, &mut infra, &this.tmux);
             }
             ServerEvent::NotifyDeliveryLoop => {
                 Self::deliver_to_all_idle(this).await;

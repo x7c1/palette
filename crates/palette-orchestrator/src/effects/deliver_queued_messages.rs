@@ -1,13 +1,13 @@
 use palette_db::Database;
 use palette_domain::{AgentId, AgentStatus, PersistentState};
-use palette_tmux::TerminalManager;
+use palette_tmux::TmuxManager;
 
 /// Delivers queued messages to idle targets.
-pub fn deliver_queued_messages<T: TerminalManager>(
+pub fn deliver_queued_messages(
     target_id: &AgentId,
     db: &Database,
     infra: &mut PersistentState,
-    tmux: &T,
+    tmux: &TmuxManager,
 ) -> crate::Result<bool> {
     let member = infra
         .find_member(target_id)

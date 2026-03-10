@@ -1,8 +1,5 @@
 mod error;
 pub use error::{Error, Result};
 
-mod terminal_manager;
-pub use terminal_manager::TerminalManager;
-
 mod tmux_manager;
 pub use tmux_manager::TmuxManager;

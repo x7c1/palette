@@ -3,18 +3,18 @@ use crate::DockerConfig;
 use palette_db::Database;
 use palette_docker::DockerManager;
 use palette_domain::{PendingDelivery, PersistentState, RuleEffect, RuleEngine};
-use palette_tmux::TerminalManager;
+use palette_tmux::TmuxManager;
 
 /// Processes rule engine effects: auto-assign tasks, spawn/destroy members.
 /// Returns a list of messages that need to be sent to members via tmux.
 ///
 /// The caller is responsible for saving state after this function returns.
-pub fn process_effects<T: TerminalManager>(
+pub fn process_effects(
     effects: &[RuleEffect],
     db: &Database,
     infra: &mut PersistentState,
     docker: &DockerManager,
-    tmux: &T,
+    tmux: &TmuxManager,
     config: &DockerConfig,
 ) -> crate::Result<Vec<PendingDelivery>> {
     let mut deliveries = Vec::new();

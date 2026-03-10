@@ -1,7 +1,6 @@
 use crate::{AppState, EventRecord};
 use axum::{Json, extract::State, http::StatusCode};
 use palette_domain::{AgentId, AgentStatus, TerminalTarget};
-use palette_tmux::TerminalManager as _;
 use std::sync::Arc;
 
 use super::now;

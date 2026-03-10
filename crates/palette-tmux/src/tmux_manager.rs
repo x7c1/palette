@@ -2,8 +2,6 @@ use crate::Error;
 use palette_domain::{TerminalSessionName, TerminalTarget};
 use std::process::Command;
 
-use crate::TerminalManager;
-
 pub struct TmuxManager {
     session_name: TerminalSessionName,
 }
@@ -16,10 +14,8 @@ impl TmuxManager {
     fn run_tmux(&self, args: &[&str]) -> crate::Result<std::process::Output> {
         Ok(Command::new("tmux").args(args).output()?)
     }
-}
 
-impl TerminalManager for TmuxManager {
-    fn create_session(&self, name: &TerminalSessionName) -> crate::Result<()> {
+    pub fn create_session(&self, name: &TerminalSessionName) -> crate::Result<()> {
         let name = name.as_ref();
         let output = self.run_tmux(&["has-session", "-t", name])?;
         if output.status.success() {
@@ -37,7 +33,7 @@ impl TerminalManager for TmuxManager {
         Ok(())
     }
 
-    fn create_target(&self, name: &str) -> crate::Result<TerminalTarget> {
+    pub fn create_target(&self, name: &str) -> crate::Result<TerminalTarget> {
         let session = self.session_name.as_ref();
         let target = format!("{session}:{name}");
 
@@ -65,7 +61,7 @@ impl TerminalManager for TmuxManager {
         Ok(TerminalTarget::new(pane_id))
     }
 
-    fn create_pane(&self, base_target: &TerminalTarget) -> crate::Result<TerminalTarget> {
+    pub fn create_pane(&self, base_target: &TerminalTarget) -> crate::Result<TerminalTarget> {
         // Split the base target horizontally to create a side-by-side pane
         let output = self.run_tmux(&[
             "split-window",
@@ -88,7 +84,7 @@ impl TerminalManager for TmuxManager {
         Ok(TerminalTarget::new(pane_id))
     }
 
-    fn send_keys(&self, target: &TerminalTarget, text: &str) -> crate::Result<()> {
+    pub fn send_keys(&self, target: &TerminalTarget, text: &str) -> crate::Result<()> {
         // Use literal mode (-l) to avoid interpretation of special characters
         let output = self.run_tmux(&["send-keys", "-t", target.as_ref(), "-l", text])?;
         if !output.status.success() {
@@ -111,7 +107,7 @@ impl TerminalManager for TmuxManager {
         Ok(())
     }
 
-    fn send_keys_literal(&self, target: &TerminalTarget, text: &str) -> crate::Result<()> {
+    pub fn send_keys_literal(&self, target: &TerminalTarget, text: &str) -> crate::Result<()> {
         let output = self.run_tmux(&["send-keys", "-t", target.as_ref(), "-l", text])?;
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
@@ -123,7 +119,7 @@ impl TerminalManager for TmuxManager {
         Ok(())
     }
 
-    fn send_raw_key(&self, target: &TerminalTarget, key: &str) -> crate::Result<()> {
+    pub fn send_raw_key(&self, target: &TerminalTarget, key: &str) -> crate::Result<()> {
         let output = self.run_tmux(&["send-keys", "-t", target.as_ref(), key])?;
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
@@ -134,7 +130,7 @@ impl TerminalManager for TmuxManager {
         Ok(())
     }
 
-    fn capture_pane(&self, target: &TerminalTarget) -> crate::Result<String> {
+    pub fn capture_pane(&self, target: &TerminalTarget) -> crate::Result<String> {
         let output = self.run_tmux(&["capture-pane", "-t", target.as_ref(), "-p", "-J"])?;
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
@@ -145,12 +141,12 @@ impl TerminalManager for TmuxManager {
         Ok(String::from_utf8_lossy(&output.stdout).to_string())
     }
 
-    fn is_session_alive(&self, name: &TerminalSessionName) -> crate::Result<bool> {
+    pub fn is_session_alive(&self, name: &TerminalSessionName) -> crate::Result<bool> {
         let output = self.run_tmux(&["has-session", "-t", name.as_ref()])?;
         Ok(output.status.success())
     }
 
-    fn is_terminal_alive(&self, target: &TerminalTarget) -> crate::Result<bool> {
+    pub fn is_terminal_alive(&self, target: &TerminalTarget) -> crate::Result<bool> {
         let output = self.run_tmux(&["has-session", "-t", target.as_ref()])?;
         Ok(output.status.success())
     }

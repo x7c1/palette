@@ -6,7 +6,7 @@ use palette_domain::{
 };
 use palette_orchestrator::{DockerConfig, Orchestrator};
 use palette_server::{AppState, create_router};
-use palette_tmux::{TerminalManager, TmuxManager};
+use palette_tmux::TmuxManager;
 use serde_json::json;
 use std::process::Command;
 use std::sync::Arc;

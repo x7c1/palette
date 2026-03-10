@@ -9,7 +9,7 @@ use palette_domain::{
 };
 use palette_orchestrator::Orchestrator;
 use palette_server::AppState;
-use palette_tmux::{TerminalManager, TmuxManager};
+use palette_tmux::TmuxManager;
 use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;

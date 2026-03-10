@@ -30,7 +30,6 @@ impl Orchestrator {
                     }
                 };
 
-                use palette_tmux::TerminalManager as _;
                 let pane_content = match this.tmux.capture_pane(&terminal_target) {
                     Ok(content) => content,
                     Err(e) => {
@@ -66,7 +65,7 @@ impl Orchestrator {
                         }
                         infra.touch();
                     }
-                    let _ = deliver_queued_messages(&target_id, &this.db, &mut infra, &*this.tmux);
+                    let _ = deliver_queued_messages(&target_id, &this.db, &mut infra, &this.tmux);
                     Self::save_state(&this, &infra);
                 }
                 return;
