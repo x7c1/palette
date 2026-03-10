@@ -105,7 +105,8 @@ fn spawn_agent(
     session_name: &str,
     settings_template: &Path,
 ) -> Result<AgentState, Box<dyn std::error::Error>> {
-    let container_id = docker.create_container(spec.name, spec.image, spec.role, session_name, None)?;
+    let container_id =
+        docker.create_container(spec.name, spec.image, spec.role, session_name, None)?;
     docker.start_container(&container_id)?;
     docker.write_settings(&container_id, settings_template, spec.id.as_ref())?;
     DockerManager::copy_file_to_container(

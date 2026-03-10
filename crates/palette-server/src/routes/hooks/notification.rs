@@ -69,18 +69,13 @@ pub async fn handle_notification(
         .capture_pane(&ctx.terminal_target)
         .ok()
         .map(|content| {
-            let lines: Vec<&str> = content
-                .lines()
-                .filter(|l| !l.trim().is_empty())
-                .collect();
+            let lines: Vec<&str> = content.lines().filter(|l| !l.trim().is_empty()).collect();
             let start = lines.len().saturating_sub(10);
             lines[start..].join(" | ")
         });
 
     // Build notification message
-    let mut notification = format!(
-        "[event] member={member_id} type=permission_prompt"
-    );
+    let mut notification = format!("[event] member={member_id} type=permission_prompt");
     if let Some(ref tool) = pending_tool {
         notification.push_str(&format!(" tool={} input={}", tool.name, tool.input));
     }
@@ -113,8 +108,7 @@ fn extract_pending_tool(
     container_id: &palette_domain::agent::ContainerId,
     transcript_path: &str,
 ) -> Option<PendingTool> {
-    let content =
-        palette_docker::read_container_file(container_id, transcript_path, 5).ok()?;
+    let content = palette_docker::read_container_file(container_id, transcript_path, 5).ok()?;
 
     for line in content.lines().rev() {
         let entry: serde_json::Value = serde_json::from_str(line).ok()?;

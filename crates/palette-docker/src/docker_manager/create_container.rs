@@ -84,9 +84,7 @@ impl DockerManager {
         // Transcript volume: all agents write their transcripts here
         let transcript_volume = format!("palette-transcripts-{session_name}");
         args.push("-v".to_string());
-        args.push(format!(
-            "{transcript_volume}:/home/agent/.claude/projects"
-        ));
+        args.push(format!("{transcript_volume}:/home/agent/.claude/projects"));
 
         // Workspace volume: shared between worker and reviewer for the same task
         if let Some(ws) = workspace {
