@@ -1,6 +1,5 @@
-use crate::agent_id::AgentId;
-use crate::task_status::TaskStatus;
-use crate::task_type::TaskType;
+use super::{TaskStatus, TaskType};
+use crate::agent::AgentId;
 
 #[derive(Debug, Clone, Default)]
 pub struct TaskFilter {

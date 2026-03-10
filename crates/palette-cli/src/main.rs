@@ -3,10 +3,10 @@ mod config;
 use config::Config;
 use palette_db::Database;
 use palette_docker::DockerManager;
-use palette_domain::{
-    AgentId, AgentRole, AgentState, AgentStatus, PersistentState, RuleEngine, TerminalSessionName,
-    TerminalTarget,
-};
+use palette_domain::agent::{AgentId, AgentRole, AgentState, AgentStatus};
+use palette_domain::rule::RuleEngine;
+use palette_domain::server::PersistentState;
+use palette_domain::terminal::{TerminalSessionName, TerminalTarget};
 use palette_orchestrator::Orchestrator;
 use palette_server::AppState;
 use palette_tmux::TmuxManager;

@@ -1,5 +1,5 @@
 use super::TmuxManager;
-use palette_domain::TerminalTarget;
+use palette_domain::terminal::TerminalTarget;
 
 impl TmuxManager {
     pub fn is_terminal_alive(&self, target: &TerminalTarget) -> crate::Result<bool> {

@@ -1,6 +1,6 @@
 use std::fmt;
 
-use crate::task_id::TaskId;
+use crate::task::TaskId;
 
 /// Domain-level review errors.
 #[derive(Debug)]

@@ -9,7 +9,7 @@ pub struct ReviewCommentInput {
 }
 
 // TODO: Replace From with TryFrom to validate external input (see plan 009-api-input-validation)
-impl From<ReviewCommentInput> for domain::ReviewCommentInput {
+impl From<ReviewCommentInput> for domain::review::ReviewCommentInput {
     fn from(c: ReviewCommentInput) -> Self {
         Self {
             file: c.file,

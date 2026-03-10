@@ -1,5 +1,5 @@
 use super::Orchestrator;
-use palette_domain::{AgentId, AgentStatus};
+use palette_domain::agent::{AgentId, AgentStatus};
 use std::sync::Arc;
 
 use crate::deliver_queued_messages;

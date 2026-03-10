@@ -1,5 +1,5 @@
 use crate::Error;
-use palette_domain::{AgentRole, ContainerId};
+use palette_domain::agent::{AgentRole, ContainerId};
 use std::path::Path;
 use std::process::Command;
 

@@ -1,5 +1,5 @@
 use super::TmuxManager;
-use palette_domain::TerminalSessionName;
+use palette_domain::terminal::TerminalSessionName;
 
 impl TmuxManager {
     pub fn is_session_alive(&self, name: &TerminalSessionName) -> crate::Result<bool> {
@@ -11,7 +11,7 @@ impl TmuxManager {
 #[cfg(test)]
 mod tests {
     use super::TmuxManager;
-    use palette_domain::TerminalSessionName;
+    use palette_domain::terminal::TerminalSessionName;
 
     #[test]
     fn returns_false_for_nonexistent() {

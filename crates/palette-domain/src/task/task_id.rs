@@ -1,6 +1,6 @@
 use std::fmt;
 
-use crate::task_type::TaskType;
+use super::TaskType;
 
 /// Task identifier (e.g., "W-XXXXXXXX" for work, "R-XXXXXXXX" for review).
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]

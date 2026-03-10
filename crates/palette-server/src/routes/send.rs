@@ -1,7 +1,8 @@
 use crate::api_types::{SendRequest, SendResponse};
 use crate::{AppState, EventRecord};
 use axum::{Json, extract::State, http::StatusCode};
-use palette_domain::{AgentId, AgentStatus, TerminalTarget};
+use palette_domain::agent::{AgentId, AgentStatus};
+use palette_domain::terminal::TerminalTarget;
 use std::sync::Arc;
 
 use super::now;

@@ -1,4 +1,4 @@
-use palette_domain::TaskType;
+use palette_domain::task::TaskType;
 use serde::Deserialize;
 
 /// Task type as represented in YAML input.

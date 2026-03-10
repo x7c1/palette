@@ -1,4 +1,4 @@
-use palette_domain::TaskId;
+use palette_domain::task::TaskId;
 use serde::Deserialize;
 
 /// Task ID as represented in YAML input.

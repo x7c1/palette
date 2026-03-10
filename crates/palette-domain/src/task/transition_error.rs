@@ -1,7 +1,6 @@
 use std::fmt;
 
-use crate::task_status::TaskStatus;
-use crate::task_type::TaskType;
+use super::{TaskStatus, TaskType};
 
 /// Invalid status transition error.
 #[derive(Debug)]

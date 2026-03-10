@@ -7,7 +7,8 @@ mod start;
 
 use palette_db::Database;
 use palette_docker::DockerManager;
-use palette_domain::{PersistentState, RuleEngine};
+use palette_domain::rule::RuleEngine;
+use palette_domain::server::PersistentState;
 use std::sync::Arc;
 
 use crate::DockerConfig;

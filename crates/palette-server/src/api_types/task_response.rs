@@ -24,8 +24,8 @@ pub struct TaskResponse {
     pub assigned_at: Option<DateTime<Utc>>,
 }
 
-impl From<domain::Task> for TaskResponse {
-    fn from(t: domain::Task) -> Self {
+impl From<domain::task::Task> for TaskResponse {
+    fn from(t: domain::task::Task) -> Self {
         Self {
             id: t.id.to_string(),
             task_type: t.task_type.into(),

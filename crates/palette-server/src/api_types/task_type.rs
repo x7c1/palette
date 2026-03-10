@@ -8,20 +8,20 @@ pub enum TaskType {
     Review,
 }
 
-impl From<TaskType> for domain::TaskType {
+impl From<TaskType> for domain::task::TaskType {
     fn from(t: TaskType) -> Self {
         match t {
-            TaskType::Work => domain::TaskType::Work,
-            TaskType::Review => domain::TaskType::Review,
+            TaskType::Work => domain::task::TaskType::Work,
+            TaskType::Review => domain::task::TaskType::Review,
         }
     }
 }
 
-impl From<domain::TaskType> for TaskType {
-    fn from(t: domain::TaskType) -> Self {
+impl From<domain::task::TaskType> for TaskType {
+    fn from(t: domain::task::TaskType) -> Self {
         match t {
-            domain::TaskType::Work => TaskType::Work,
-            domain::TaskType::Review => TaskType::Review,
+            domain::task::TaskType::Work => TaskType::Work,
+            domain::task::TaskType::Review => TaskType::Review,
         }
     }
 }

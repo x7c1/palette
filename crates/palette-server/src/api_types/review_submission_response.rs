@@ -13,8 +13,8 @@ pub struct ReviewSubmissionResponse {
     pub created_at: DateTime<Utc>,
 }
 
-impl From<domain::ReviewSubmission> for ReviewSubmissionResponse {
-    fn from(s: domain::ReviewSubmission) -> Self {
+impl From<domain::review::ReviewSubmission> for ReviewSubmissionResponse {
+    fn from(s: domain::review::ReviewSubmission) -> Self {
         Self {
             id: s.id,
             review_task_id: s.review_task_id.to_string(),

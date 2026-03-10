@@ -1,6 +1,7 @@
 use crate::DockerConfig;
 use palette_docker::DockerManager;
-use palette_domain::{AgentId, AgentRole, AgentState, AgentStatus, PersistentState};
+use palette_domain::agent::{AgentId, AgentRole, AgentState, AgentStatus};
+use palette_domain::server::PersistentState;
 use palette_tmux::TmuxManager;
 
 pub(super) fn spawn_member(

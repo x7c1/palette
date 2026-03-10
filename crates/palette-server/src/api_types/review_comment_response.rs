@@ -10,8 +10,8 @@ pub struct ReviewCommentResponse {
     pub body: String,
 }
 
-impl From<domain::ReviewComment> for ReviewCommentResponse {
-    fn from(c: domain::ReviewComment) -> Self {
+impl From<domain::review::ReviewComment> for ReviewCommentResponse {
+    fn from(c: domain::review::ReviewComment) -> Self {
         Self {
             id: c.id,
             submission_id: c.submission_id,

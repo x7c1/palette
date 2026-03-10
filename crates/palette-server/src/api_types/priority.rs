@@ -9,22 +9,22 @@ pub enum Priority {
     Low,
 }
 
-impl From<Priority> for domain::Priority {
+impl From<Priority> for domain::task::Priority {
     fn from(p: Priority) -> Self {
         match p {
-            Priority::High => domain::Priority::High,
-            Priority::Medium => domain::Priority::Medium,
-            Priority::Low => domain::Priority::Low,
+            Priority::High => domain::task::Priority::High,
+            Priority::Medium => domain::task::Priority::Medium,
+            Priority::Low => domain::task::Priority::Low,
         }
     }
 }
 
-impl From<domain::Priority> for Priority {
-    fn from(p: domain::Priority) -> Self {
+impl From<domain::task::Priority> for Priority {
+    fn from(p: domain::task::Priority) -> Self {
         match p {
-            domain::Priority::High => Priority::High,
-            domain::Priority::Medium => Priority::Medium,
-            domain::Priority::Low => Priority::Low,
+            domain::task::Priority::High => Priority::High,
+            domain::task::Priority::Medium => Priority::Medium,
+            domain::task::Priority::Low => Priority::Low,
         }
     }
 }

@@ -1,5 +1,5 @@
 use super::Orchestrator;
-use palette_domain::PersistentState;
+use palette_domain::server::PersistentState;
 use std::sync::Arc;
 
 impl Orchestrator {

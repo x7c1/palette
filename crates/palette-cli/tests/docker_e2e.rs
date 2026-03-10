@@ -13,7 +13,7 @@
 //!   inspection.
 
 use anyhow::{Context as _, Result};
-use palette_domain::AgentRole;
+use palette_domain::agent::AgentRole;
 use palette_orchestrator::DockerConfig;
 use std::path::{Path, PathBuf};
 use std::process::Command;

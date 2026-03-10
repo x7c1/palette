@@ -1,9 +1,10 @@
 use palette_db::Database;
 use palette_docker::DockerManager;
-use palette_domain::{
-    AgentId, AgentRole, AgentState, AgentStatus, ContainerId, PersistentState, RuleEngine, TaskId,
-    TerminalSessionName, TerminalTarget,
-};
+use palette_domain::agent::{AgentId, AgentRole, AgentState, AgentStatus, ContainerId};
+use palette_domain::rule::RuleEngine;
+use palette_domain::server::PersistentState;
+use palette_domain::task::TaskId;
+use palette_domain::terminal::{TerminalSessionName, TerminalTarget};
 use palette_orchestrator::{DockerConfig, Orchestrator};
 use palette_server::api_types::{
     CreateTaskRequest, ReviewCommentInput, SendRequest, SubmitReviewRequest, TaskStatus, TaskType,
@@ -725,12 +726,12 @@ async fn scenario3_message_queuing_to_leader() {
     // Manually assign tasks (simulating what auto-assign does)
     state
         .db
-        .update_task_status(&tid("W-A"), palette_domain::TaskStatus::Ready)
+        .update_task_status(&tid("W-A"), palette_domain::task::TaskStatus::Ready)
         .unwrap();
     state.db.assign_task(&tid("W-A"), &aid("member-a")).unwrap();
     state
         .db
-        .update_task_status(&tid("W-B"), palette_domain::TaskStatus::Ready)
+        .update_task_status(&tid("W-B"), palette_domain::task::TaskStatus::Ready)
         .unwrap();
     state.db.assign_task(&tid("W-B"), &aid("member-b")).unwrap();
 

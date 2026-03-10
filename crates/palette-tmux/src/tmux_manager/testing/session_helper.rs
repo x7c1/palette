@@ -1,5 +1,5 @@
 use super::super::TmuxManager;
-use palette_domain::TerminalSessionName;
+use palette_domain::terminal::TerminalSessionName;
 
 pub fn test_session_name(test_name: &str) -> TerminalSessionName {
     TerminalSessionName::new(format!(

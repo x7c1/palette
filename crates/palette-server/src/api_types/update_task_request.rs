@@ -9,10 +9,10 @@ pub struct UpdateTaskRequest {
 }
 
 // TODO: Replace From with TryFrom to validate external input (see plan 009-api-input-validation)
-impl From<UpdateTaskRequest> for domain::UpdateTaskRequest {
+impl From<UpdateTaskRequest> for domain::task::UpdateTaskRequest {
     fn from(api: UpdateTaskRequest) -> Self {
         Self {
-            id: domain::TaskId::new(api.id),
+            id: domain::task::TaskId::new(api.id),
             status: api.status.into(),
         }
     }

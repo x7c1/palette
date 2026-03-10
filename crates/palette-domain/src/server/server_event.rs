@@ -1,5 +1,5 @@
-use crate::agent_id::AgentId;
-use crate::rule_effect::RuleEffect;
+use crate::agent::AgentId;
+use crate::rule::RuleEffect;
 
 /// Events emitted by the server for asynchronous processing by the orchestrator.
 #[derive(Debug)]

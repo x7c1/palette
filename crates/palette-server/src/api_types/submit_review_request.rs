@@ -12,7 +12,7 @@ pub struct SubmitReviewRequest {
 }
 
 // TODO: Replace From with TryFrom to validate external input (see plan 009-api-input-validation)
-impl From<SubmitReviewRequest> for domain::SubmitReviewRequest {
+impl From<SubmitReviewRequest> for domain::review::SubmitReviewRequest {
     fn from(api: SubmitReviewRequest) -> Self {
         Self {
             verdict: api.verdict.into(),

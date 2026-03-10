@@ -1,5 +1,5 @@
 use chrono::{DateTime, Utc};
-use palette_domain::AgentId;
+use palette_domain::agent::AgentId;
 
 /// A queued message in the message_queue table.
 #[derive(Debug, Clone)]

@@ -14,32 +14,32 @@ pub enum TaskStatus {
     Escalated,
 }
 
-impl From<TaskStatus> for domain::TaskStatus {
+impl From<TaskStatus> for domain::task::TaskStatus {
     fn from(s: TaskStatus) -> Self {
         match s {
-            TaskStatus::Draft => domain::TaskStatus::Draft,
-            TaskStatus::Ready => domain::TaskStatus::Ready,
-            TaskStatus::Todo => domain::TaskStatus::Todo,
-            TaskStatus::InProgress => domain::TaskStatus::InProgress,
-            TaskStatus::InReview => domain::TaskStatus::InReview,
-            TaskStatus::Done => domain::TaskStatus::Done,
-            TaskStatus::Blocked => domain::TaskStatus::Blocked,
-            TaskStatus::Escalated => domain::TaskStatus::Escalated,
+            TaskStatus::Draft => domain::task::TaskStatus::Draft,
+            TaskStatus::Ready => domain::task::TaskStatus::Ready,
+            TaskStatus::Todo => domain::task::TaskStatus::Todo,
+            TaskStatus::InProgress => domain::task::TaskStatus::InProgress,
+            TaskStatus::InReview => domain::task::TaskStatus::InReview,
+            TaskStatus::Done => domain::task::TaskStatus::Done,
+            TaskStatus::Blocked => domain::task::TaskStatus::Blocked,
+            TaskStatus::Escalated => domain::task::TaskStatus::Escalated,
         }
     }
 }
 
-impl From<domain::TaskStatus> for TaskStatus {
-    fn from(s: domain::TaskStatus) -> Self {
+impl From<domain::task::TaskStatus> for TaskStatus {
+    fn from(s: domain::task::TaskStatus) -> Self {
         match s {
-            domain::TaskStatus::Draft => TaskStatus::Draft,
-            domain::TaskStatus::Ready => TaskStatus::Ready,
-            domain::TaskStatus::Todo => TaskStatus::Todo,
-            domain::TaskStatus::InProgress => TaskStatus::InProgress,
-            domain::TaskStatus::InReview => TaskStatus::InReview,
-            domain::TaskStatus::Done => TaskStatus::Done,
-            domain::TaskStatus::Blocked => TaskStatus::Blocked,
-            domain::TaskStatus::Escalated => TaskStatus::Escalated,
+            domain::task::TaskStatus::Draft => TaskStatus::Draft,
+            domain::task::TaskStatus::Ready => TaskStatus::Ready,
+            domain::task::TaskStatus::Todo => TaskStatus::Todo,
+            domain::task::TaskStatus::InProgress => TaskStatus::InProgress,
+            domain::task::TaskStatus::InReview => TaskStatus::InReview,
+            domain::task::TaskStatus::Done => TaskStatus::Done,
+            domain::task::TaskStatus::Blocked => TaskStatus::Blocked,
+            domain::task::TaskStatus::Escalated => TaskStatus::Escalated,
         }
     }
 }

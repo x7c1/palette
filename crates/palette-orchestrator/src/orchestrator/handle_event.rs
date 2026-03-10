@@ -1,5 +1,5 @@
 use super::Orchestrator;
-use palette_domain::ServerEvent;
+use palette_domain::server::ServerEvent;
 use std::sync::Arc;
 
 use crate::{deliver_queued_messages, process_effects};

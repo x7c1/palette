@@ -1,6 +1,7 @@
 use crate::Error;
 use crate::database::Database;
-use palette_domain::*;
+use palette_domain::review::*;
+use palette_domain::task::*;
 
 impl TaskStore for Database {
     type Error = Error;

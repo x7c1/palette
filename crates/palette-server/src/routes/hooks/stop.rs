@@ -4,7 +4,9 @@ use axum::{
     extract::{Query, State},
     http::StatusCode,
 };
-use palette_domain::{AgentId, AgentStatus, ServerEvent, TaskFilter, TaskStatus};
+use palette_domain::agent::{AgentId, AgentStatus};
+use palette_domain::server::ServerEvent;
+use palette_domain::task::{TaskFilter, TaskStatus};
 use std::sync::Arc;
 
 use super::HookQuery;

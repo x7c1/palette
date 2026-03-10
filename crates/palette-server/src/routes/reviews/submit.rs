@@ -5,7 +5,9 @@ use axum::{
     extract::{Path, State},
     http::StatusCode,
 };
-use palette_domain::{self as domain, ServerEvent, TaskId, TaskType, Verdict};
+use palette_domain::review::Verdict;
+use palette_domain::server::ServerEvent;
+use palette_domain::task::{TaskId, TaskType};
 use std::sync::Arc;
 
 pub async fn handle_submit_review(
@@ -14,7 +16,7 @@ pub async fn handle_submit_review(
     Json(api_req): Json<SubmitReviewRequest>,
 ) -> Result<(StatusCode, Json<ReviewSubmissionResponse>), (StatusCode, String)> {
     let review_task_id = TaskId::new(review_task_id);
-    let req: domain::SubmitReviewRequest = api_req.into();
+    let req: palette_domain::review::SubmitReviewRequest = api_req.into();
 
     // Verify the task exists and is a review
     let task = state

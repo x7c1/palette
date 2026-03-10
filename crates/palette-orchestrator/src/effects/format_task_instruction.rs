@@ -1,4 +1,4 @@
-use palette_domain::Task;
+use palette_domain::task::Task;
 
 /// Format a task into an instruction message for a member.
 pub(super) fn format_task_instruction(task: &Task) -> String {

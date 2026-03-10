@@ -8,7 +8,7 @@ pub async fn handle_create_task(
     State(state): State<Arc<AppState>>,
     Json(api_req): Json<CreateTaskRequest>,
 ) -> Result<(StatusCode, Json<TaskResponse>), (StatusCode, String)> {
-    let req: domain::CreateTaskRequest = api_req.into();
+    let req: domain::task::CreateTaskRequest = api_req.into();
     let task = state
         .db
         .create_task(&req)

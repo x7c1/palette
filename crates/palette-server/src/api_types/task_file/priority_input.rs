@@ -1,4 +1,4 @@
-use palette_domain::Priority;
+use palette_domain::task::Priority;
 use serde::Deserialize;
 
 /// Priority as represented in YAML input.

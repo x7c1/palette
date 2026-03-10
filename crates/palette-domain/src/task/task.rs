@@ -1,11 +1,7 @@
 use chrono::{DateTime, Utc};
 
-use crate::agent_id::AgentId;
-use crate::priority::Priority;
-use crate::repository::Repository;
-use crate::task_id::TaskId;
-use crate::task_status::TaskStatus;
-use crate::task_type::TaskType;
+use super::{Priority, Repository, TaskId, TaskStatus, TaskType};
+use crate::agent::AgentId;
 
 #[derive(Debug, Clone)]
 pub struct Task {

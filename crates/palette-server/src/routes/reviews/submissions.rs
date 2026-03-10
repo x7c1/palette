@@ -5,7 +5,7 @@ use axum::{
     extract::{Path, State},
     http::StatusCode,
 };
-use palette_domain::TaskId;
+use palette_domain::task::TaskId;
 use std::sync::Arc;
 
 pub async fn handle_get_submissions(

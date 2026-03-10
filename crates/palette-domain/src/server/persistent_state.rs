@@ -1,4 +1,4 @@
-use crate::{AgentId, AgentState, ContainerId};
+use crate::agent::{AgentId, AgentState, ContainerId};
 use chrono::{DateTime, Utc};
 
 pub struct PersistentState {

@@ -19,22 +19,22 @@ pub struct CreateTaskRequest {
 }
 
 // TODO: Replace From with TryFrom to validate external input (see plan 009-api-input-validation)
-impl From<CreateTaskRequest> for domain::CreateTaskRequest {
+impl From<CreateTaskRequest> for domain::task::CreateTaskRequest {
     fn from(api: CreateTaskRequest) -> Self {
         Self {
-            id: api.id.map(domain::TaskId::new),
+            id: api.id.map(domain::task::TaskId::new),
             task_type: api.task_type.into(),
             title: api.title,
             description: api.description,
-            assignee: api.assignee.map(domain::AgentId::new),
-            priority: api.priority.map(domain::Priority::from),
+            assignee: api.assignee.map(domain::agent::AgentId::new),
+            priority: api.priority.map(domain::task::Priority::from),
             repositories: api
                 .repositories
                 .map(|repos| repos.into_iter().map(Into::into).collect()),
             depends_on: api
                 .depends_on
                 .into_iter()
-                .map(domain::TaskId::new)
+                .map(domain::task::TaskId::new)
                 .collect(),
         }
     }

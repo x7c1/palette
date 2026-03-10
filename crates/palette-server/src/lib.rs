@@ -4,7 +4,8 @@ mod routes;
 
 use axum::Router;
 use palette_db::Database;
-use palette_domain::{PersistentState, RuleEngine, ServerEvent};
+use palette_domain::rule::RuleEngine;
+use palette_domain::server::{PersistentState, ServerEvent};
 use palette_tmux::TmuxManager;
 use std::sync::Arc;
 

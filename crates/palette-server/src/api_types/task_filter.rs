@@ -11,12 +11,12 @@ pub struct TaskFilter {
     pub assignee: Option<String>,
 }
 
-impl From<TaskFilter> for domain::TaskFilter {
+impl From<TaskFilter> for domain::task::TaskFilter {
     fn from(api: TaskFilter) -> Self {
         Self {
-            task_type: api.task_type.map(domain::TaskType::from),
-            status: api.status.map(domain::TaskStatus::from),
-            assignee: api.assignee.map(domain::AgentId::new),
+            task_type: api.task_type.map(domain::task::TaskType::from),
+            status: api.status.map(domain::task::TaskStatus::from),
+            assignee: api.assignee.map(domain::agent::AgentId::new),
         }
     }
 }

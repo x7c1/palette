@@ -1,5 +1,4 @@
-use crate::review_comment_input::ReviewCommentInput;
-use crate::verdict::Verdict;
+use super::{ReviewCommentInput, Verdict};
 
 #[derive(Debug, Clone)]
 pub struct SubmitReviewRequest {

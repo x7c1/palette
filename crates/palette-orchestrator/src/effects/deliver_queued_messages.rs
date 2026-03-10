@@ -1,5 +1,6 @@
 use palette_db::Database;
-use palette_domain::{AgentId, AgentStatus, PersistentState};
+use palette_domain::agent::{AgentId, AgentStatus};
+use palette_domain::server::PersistentState;
 use palette_tmux::TmuxManager;
 
 /// Delivers queued messages to idle targets.

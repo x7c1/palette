@@ -1,4 +1,4 @@
-use palette_domain::Repository;
+use palette_domain::task::Repository;
 use serde::{Deserialize, Serialize};
 
 /// DB-layer representation of a repository for JSON storage in SQLite.

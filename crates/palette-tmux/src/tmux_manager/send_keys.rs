@@ -1,6 +1,6 @@
 use super::TmuxManager;
 use crate::Error;
-use palette_domain::TerminalTarget;
+use palette_domain::terminal::TerminalTarget;
 
 impl TmuxManager {
     pub fn send_keys(&self, target: &TerminalTarget, text: &str) -> crate::Result<()> {

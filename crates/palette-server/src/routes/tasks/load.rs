@@ -1,7 +1,9 @@
 use crate::AppState;
 use crate::api_types::{TaskFile, TaskResponse};
 use axum::{Json, extract::State, http::StatusCode};
-use palette_domain::{RuleEngine, ServerEvent, TaskId, TaskStatus, TaskType};
+use palette_domain::rule::RuleEngine;
+use palette_domain::server::ServerEvent;
+use palette_domain::task::{TaskId, TaskStatus, TaskType};
 use std::sync::Arc;
 
 pub async fn handle_load_tasks(

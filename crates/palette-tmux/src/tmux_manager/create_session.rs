@@ -1,6 +1,6 @@
 use super::TmuxManager;
 use crate::Error;
-use palette_domain::TerminalSessionName;
+use palette_domain::terminal::TerminalSessionName;
 
 impl TmuxManager {
     pub fn create_session(&self, name: &TerminalSessionName) -> crate::Result<()> {

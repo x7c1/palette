@@ -4,7 +4,7 @@ mod task_entry;
 mod task_id_input;
 mod task_type_input;
 
-use palette_domain::{CreateTaskRequest, Priority, Repository, TaskId};
+use palette_domain::task::{CreateTaskRequest, Priority, Repository, TaskId};
 use repository_entry::RepositoryEntry;
 use serde::Deserialize;
 use task_entry::TaskEntry;
@@ -73,7 +73,7 @@ impl TaskFile {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use palette_domain::{TaskId, TaskType};
+    use palette_domain::task::{TaskId, TaskType};
 
     #[test]
     fn parse_basic_task_file() {

@@ -1,6 +1,5 @@
-use crate::agent_id::AgentId;
-use crate::task_id::TaskId;
-use crate::task_status::TaskStatus;
+use crate::agent::AgentId;
+use crate::task::{TaskId, TaskStatus};
 
 /// Side effects produced by the rule engine after a state transition.
 #[derive(Debug, Clone, PartialEq, Eq)]

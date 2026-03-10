@@ -1,4 +1,5 @@
-use palette_domain::{ReviewError, TaskError};
+use palette_domain::review::ReviewError;
+use palette_domain::task::TaskError;
 use std::fmt;
 
 pub type Result<T> = std::result::Result<T, Error>;

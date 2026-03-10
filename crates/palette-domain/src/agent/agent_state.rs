@@ -1,4 +1,5 @@
-use crate::{AgentId, AgentRole, AgentSessionId, AgentStatus, ContainerId, TerminalTarget};
+use super::{AgentId, AgentRole, AgentSessionId, AgentStatus, ContainerId};
+use crate::terminal::TerminalTarget;
 
 #[derive(Debug, Clone)]
 pub struct AgentState {

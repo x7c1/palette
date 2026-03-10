@@ -60,7 +60,10 @@ impl Database {
 #[cfg(test)]
 mod tests {
     use super::super::test_helpers::*;
-    use palette_domain::*;
+
+    use palette_domain::review::*;
+
+    use palette_domain::task::*;
 
     #[test]
     fn submit_and_get_review() {

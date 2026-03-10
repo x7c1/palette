@@ -1,7 +1,7 @@
 use chrono::{DateTime, Utc};
 
-use crate::task_id::TaskId;
-use crate::verdict::Verdict;
+use super::Verdict;
+use crate::task::TaskId;
 
 #[derive(Debug, Clone)]
 pub struct ReviewSubmission {

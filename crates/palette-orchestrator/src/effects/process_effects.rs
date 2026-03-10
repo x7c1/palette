@@ -2,7 +2,8 @@ use super::{format_task_instruction, spawn_member};
 use crate::DockerConfig;
 use palette_db::Database;
 use palette_docker::DockerManager;
-use palette_domain::{PendingDelivery, PersistentState, RuleEffect, RuleEngine};
+use palette_domain::rule::{RuleEffect, RuleEngine};
+use palette_domain::server::{PendingDelivery, PersistentState};
 use palette_tmux::TmuxManager;
 
 /// Processes rule engine effects: auto-assign tasks, spawn/destroy members.
@@ -94,7 +95,11 @@ pub fn process_effects(
 #[cfg(test)]
 mod tests {
     use palette_db::Database;
-    use palette_domain::*;
+    use palette_domain::agent::*;
+    use palette_domain::review::*;
+    use palette_domain::rule::*;
+
+    use palette_domain::task::*;
 
     fn setup() -> (Database, RuleEngine) {
         let db = Database::open_in_memory().unwrap();

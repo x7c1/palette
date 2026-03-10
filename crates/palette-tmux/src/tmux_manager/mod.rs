@@ -11,7 +11,7 @@ mod send_raw_key;
 #[cfg(test)]
 pub(super) mod testing;
 
-use palette_domain::TerminalSessionName;
+use palette_domain::terminal::TerminalSessionName;
 use std::process::Command;
 
 pub struct TmuxManager {

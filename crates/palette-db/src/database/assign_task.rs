@@ -28,7 +28,8 @@ impl Database {
 #[cfg(test)]
 mod tests {
     use super::super::test_helpers::*;
-    use palette_domain::*;
+
+    use palette_domain::task::*;
 
     #[test]
     fn assign_task_sets_assignee_and_status() {

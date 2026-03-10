@@ -37,7 +37,8 @@ impl Database {
 #[cfg(test)]
 mod tests {
     use super::super::test_helpers::*;
-    use palette_domain::*;
+
+    use palette_domain::task::*;
 
     #[test]
     fn find_assignable_tasks_no_deps() {
