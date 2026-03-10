@@ -11,8 +11,8 @@ const READINESS_POLL_INTERVAL: std::time::Duration = std::time::Duration::from_s
 const READINESS_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(120);
 
 impl Orchestrator {
-    pub(super) fn spawn_readiness_watcher(this: &Arc<Self>, target_id: AgentId) {
-        let this = Arc::clone(this);
+    pub(super) fn spawn_readiness_watcher(self: &Arc<Self>, target_id: AgentId) {
+        let this = Arc::clone(self);
         let max_polls = READINESS_TIMEOUT.as_secs() / READINESS_POLL_INTERVAL.as_secs();
 
         tokio::spawn(async move {
@@ -66,7 +66,7 @@ impl Orchestrator {
                         infra.touch();
                     }
                     let _ = deliver_queued_messages(&target_id, &this.db, &mut infra, &this.tmux);
-                    Self::save_state(&this, &infra);
+                    this.save_state(&infra);
                 }
                 return;
             }

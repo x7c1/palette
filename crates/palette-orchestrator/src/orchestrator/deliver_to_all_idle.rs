@@ -5,9 +5,9 @@ use std::sync::Arc;
 use crate::deliver_queued_messages;
 
 impl Orchestrator {
-    pub(super) async fn deliver_to_all_idle(this: &Arc<Self>) {
+    pub(super) async fn deliver_to_all_idle(self: &Arc<Self>) {
         loop {
-            let mut infra = this.infra.lock().await;
+            let mut infra = self.infra.lock().await;
             let idle_targets: Vec<AgentId> = infra
                 .leaders
                 .iter()
@@ -18,7 +18,7 @@ impl Orchestrator {
 
             let mut any_delivered = false;
             for target_id in &idle_targets {
-                match deliver_queued_messages(target_id, &this.db, &mut infra, &this.tmux) {
+                match deliver_queued_messages(target_id, &self.db, &mut infra, &self.tmux) {
                     Ok(true) => any_delivered = true,
                     Ok(false) => {}
                     Err(e) => {

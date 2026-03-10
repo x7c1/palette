@@ -73,7 +73,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Resume readiness watchers for agents that were booting when we last shut down
     {
         let infra_guard = infra.lock().await;
-        Orchestrator::resume_booting_watchers(&orchestrator, &infra_guard);
+        orchestrator.resume_booting_watchers(&infra_guard);
     }
 
     orchestrator.start(event_rx);

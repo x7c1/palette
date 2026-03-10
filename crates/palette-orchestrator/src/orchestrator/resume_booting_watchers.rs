@@ -5,15 +5,15 @@ use std::sync::Arc;
 
 impl Orchestrator {
     /// Start readiness watchers for any agents currently in Booting state.
-    pub fn resume_booting_watchers(this: &Arc<Self>, infra: &PersistentState) {
+    pub fn resume_booting_watchers(self: &Arc<Self>, infra: &PersistentState) {
         for leader in &infra.leaders {
             if leader.status == AgentStatus::Booting {
-                Self::spawn_readiness_watcher(this, leader.id.clone());
+                self.spawn_readiness_watcher(leader.id.clone());
             }
         }
         for member in &infra.members {
             if member.status == AgentStatus::Booting {
-                Self::spawn_readiness_watcher(this, member.id.clone());
+                self.spawn_readiness_watcher(member.id.clone());
             }
         }
     }
