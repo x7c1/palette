@@ -94,8 +94,17 @@ impl DockerManager {
         }
 
         args.push(image.to_string());
-        args.push("sleep".to_string());
-        args.push("infinity".to_string());
+
+        // Fix workspace ownership then idle; named volumes may mount as root
+        // even though Dockerfile.base pre-creates the directory as agent user.
+        // Use semicolon (not &&) because chown fails on read-only mounts,
+        // which is expected for reviewer containers.
+        args.push("sh".to_string());
+        args.push("-c".to_string());
+        args.push(
+            "sudo chown agent:agent /home/agent/workspace 2>/dev/null; exec sleep infinity"
+                .to_string(),
+        );
 
         let output = run_docker(&args)?;
         if !output.status.success() {

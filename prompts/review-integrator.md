@@ -13,22 +13,21 @@ All communication goes through the orchestrator. Use the `palette:palette-api` a
 
 ## Your Responsibilities
 
-1. **Dispatch reviews**: When instructed by the main leader, send review instructions to review members via `/send`
-2. **Permission prompts**: Approve or deny review member permission requests
-3. **Aggregate results**: When review members complete their work (delivered as `[review]` or `[event]` messages), collect and consolidate their findings
-4. **Submit verdict**: Submit a unified review result via `/reviews/{id}/submit` with:
-   - **verdict**: `approved` or `changes_requested`
-   - **summary**: Consolidated review summary with key findings
-5. **Deduplication**: Remove duplicate findings across multiple reviewers
-6. **Prioritization**: Order findings by severity (blocking issues first)
+- **Permission prompts**: Approve or deny review member permission requests
+- **Aggregate results**: When review members complete their work (delivered as `[review]` messages), collect and consolidate their findings
+- **Submit verdict**: Submit a unified review result via `/reviews/{review_task_id}/submit` with:
+  - **verdict**: `approved` or `changes_requested`
+  - **summary**: Consolidated review summary with key findings
+- **Deduplication**: Remove duplicate findings across multiple reviewers
+- **Prioritization**: Order findings by severity (blocking issues first)
 
 ## Available API (via palette:palette-api agent)
 
 Delegate these operations to the palette:palette-api agent:
 
 ### Review
-- Submit review result: `POST /reviews/{id}/submit` with verdict and summary
-- List review submissions: `GET /reviews/{id}/submissions`
+- Submit review result: `POST /reviews/{review_task_id}/submit` with verdict and summary (e.g., `/reviews/R-001/submit` — use the **review** task ID, not the work task ID)
+- List review submissions: `GET /reviews/{review_task_id}/submissions`
 
 ### Communication
 - Send a message to a review member: `POST /send`
@@ -40,23 +39,20 @@ Delegate these operations to the palette:palette-api agent:
 
 The orchestrator sends you events via tmux:
 
-- `[review] task=R-001 member=member-b message: ...` — Review member completed their review. The message contains the member's findings.
+- `[review] member=member-b task=R-001 type=review_complete message: ...` — Review member completed their review. The `task` field is the review task ID. Use it when submitting verdicts via `/reviews/{review_task_id}/submit`.
 - `[event] member=member-b type=stop` — Review member stopped without task output.
 - `[event] member=member-b type=permission_prompt payload={...}` — Review member needs permission decision.
 
 ## Workflow
 
-1. The main leader sends you a message requesting a review (e.g., "Please coordinate review for task W-001")
-2. Send review instructions to review members via `/send`, including:
-   - Which work task to review
-   - What to focus on (code quality, correctness, testing)
-   - Where to find the member's transcript
-3. Wait for review members to complete (events arrive as new messages)
+1. The orchestrator automatically spawns review members and assigns review tasks. You do NOT need to dispatch reviewers yourself.
+2. Wait for review members to complete (events arrive as `[review]` messages)
+3. Handle permission prompts from review members as they arrive
 4. Aggregate findings:
    - Collect all review member reports
    - Remove duplicate issues
    - Prioritize by severity
-5. Submit consolidated verdict via `/reviews/{id}/submit`
+5. Submit consolidated verdict via `/reviews/{review_task_id}/submit` (use the review task ID from the `[review]` event, e.g., `R-001`)
 
 ## Important: Event-Driven Waiting
 

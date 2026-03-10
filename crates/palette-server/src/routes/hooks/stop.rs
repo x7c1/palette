@@ -59,12 +59,6 @@ pub async fn handle_stop(
             })
             .unwrap_or_default();
 
-        // Resolve review integrator for routing review instructions
-        let review_integrator_id = {
-            let infra = state.infra.lock().await;
-            infra.find_review_integrator().map(|ri| ri.id.clone())
-        };
-
         let last_message = payload
             .get("last_assistant_message")
             .and_then(|v| v.as_str())
@@ -73,7 +67,9 @@ pub async fn handle_stop(
         for task in &member_tasks {
             match task.task_type {
                 palette_domain::task::TaskType::Work => {
-                    // Work tasks: in_progress → in_review, then notify review integrator
+                    // Work tasks: in_progress → in_review.
+                    // The rule engine triggers AutoAssign for the review task,
+                    // so we only need the status transition here.
                     if let Err(e) = state.db.update_task_status(&task.id, TaskStatus::InReview) {
                         tracing::error!(task_id = %task.id, error = %e, "failed to transition task to in_review");
                         continue;
@@ -89,20 +85,12 @@ pub async fn handle_stop(
                     if !effects.is_empty() {
                         let _ = state.event_tx.send(ServerEvent::ProcessEffects { effects });
                     }
-
-                    let review_target = review_integrator_id.as_ref().unwrap_or(leader_id);
-                    let review_msg = format!(
-                        "[review] task={} member={} message: {}",
-                        task.id, member_id, last_message,
-                    );
-                    if let Err(e) = state.db.enqueue_message(review_target, &review_msg) {
-                        tracing::error!(error = %e, "failed to enqueue review instruction");
-                    }
                 }
                 palette_domain::task::TaskType::Review => {
-                    // Review tasks: notify leader with member's findings (no status transition)
+                    // Review tasks: notify the member's leader (review integrator)
+                    // with findings so it can aggregate and submit a verdict.
                     let report_msg = format!(
-                        "[event] member={} task={} type=review_complete message: {}",
+                        "[review] member={} task={} type=review_complete message: {}",
                         member_id, task.id, last_message,
                     );
                     if let Err(e) = state.db.enqueue_message(leader_id, &report_msg) {
