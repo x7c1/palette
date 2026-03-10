@@ -1,3 +1,5 @@
-mod manager;
+mod error;
+pub use error::{Error, Result};
 
-pub use manager::{TmuxManager, TmuxManagerImpl};
+mod tmux_manager;
+pub use tmux_manager::TmuxManager;

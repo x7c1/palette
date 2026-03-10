@@ -13,11 +13,26 @@
 //!   inspection.
 
 use anyhow::{Context as _, Result};
-use palette_core::Config;
+use palette_domain::agent::AgentRole;
+use palette_orchestrator::DockerConfig;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
 const SESSION_NAME: &str = "palette-test";
+
+/// Minimal config struct for loading test configuration.
+#[derive(serde::Deserialize)]
+struct TestConfig {
+    docker: DockerConfig,
+}
+
+impl TestConfig {
+    fn load(path: &Path) -> Result<Self> {
+        let content = std::fs::read_to_string(path)?;
+        let config: Self = toml::from_str(&content)?;
+        Ok(config)
+    }
+}
 
 /// Resolve a path relative to the workspace root (two levels up from palette-cli).
 fn workspace_path(relative: &str) -> PathBuf {
@@ -103,13 +118,13 @@ fn launch() -> Result<()> {
         .output()?;
 
     // --- Setup Docker containers ---
-    let config = Config::load(&workspace_path("config/palette.toml"))?;
-    let docker = palette_core::docker::DockerManager::new(config.docker.palette_url.clone());
+    let config = TestConfig::load(&workspace_path("config/palette.toml"))?;
+    let docker = palette_docker::DockerManager::new(config.docker.palette_url.clone());
 
     let leader_id = docker.create_container(
         "test-leader",
         &config.docker.leader_image,
-        "leader",
+        AgentRole::Leader,
         SESSION_NAME,
     )?;
     guard.track("palette-test-leader");
@@ -118,7 +133,7 @@ fn launch() -> Result<()> {
     let member_id = docker.create_container(
         "test-member-a",
         &config.docker.member_image,
-        "member",
+        AgentRole::Member,
         SESSION_NAME,
     )?;
     guard.track("palette-test-member-a");
@@ -126,7 +141,7 @@ fn launch() -> Result<()> {
 
     // --- Verify containers are running ---
     let leader_status = Command::new("docker")
-        .args(["inspect", "-f", "{{.State.Running}}", &leader_id])
+        .args(["inspect", "-f", "{{.State.Running}}", leader_id.as_ref()])
         .output()?;
     assert_eq!(
         String::from_utf8_lossy(&leader_status.stdout).trim(),
@@ -135,7 +150,7 @@ fn launch() -> Result<()> {
     );
 
     let member_status = Command::new("docker")
-        .args(["inspect", "-f", "{{.State.Running}}", &member_id])
+        .args(["inspect", "-f", "{{.State.Running}}", member_id.as_ref()])
         .output()?;
     assert_eq!(
         String::from_utf8_lossy(&member_status.stdout).trim(),
@@ -184,12 +199,12 @@ fn launch() -> Result<()> {
     );
 
     // --- Copy prompt files ---
-    palette_core::docker::DockerManager::copy_file_to_container(
+    palette_docker::DockerManager::copy_file_to_container(
         &leader_id,
         &workspace_path(&config.docker.leader_prompt),
         "/home/agent/prompt.md",
     )?;
-    palette_core::docker::DockerManager::copy_file_to_container(
+    palette_docker::DockerManager::copy_file_to_container(
         &member_id,
         &workspace_path(&config.docker.member_prompt),
         "/home/agent/prompt.md",
@@ -209,10 +224,10 @@ fn launch() -> Result<()> {
     );
 
     // --- Send Claude Code command to tmux panes ---
-    let leader_cmd = palette_core::docker::DockerManager::claude_exec_command(
+    let leader_cmd = palette_docker::DockerManager::claude_exec_command(
         &leader_id,
         "/home/agent/prompt.md",
-        "leader",
+        AgentRole::Leader,
     );
     let leader_target = format!("{SESSION_NAME}:leader");
     let output = Command::new("tmux")
@@ -224,10 +239,10 @@ fn launch() -> Result<()> {
         .args(["send-keys", "-t", &leader_target, "Enter"])
         .output()?;
 
-    let member_cmd = palette_core::docker::DockerManager::claude_exec_command(
+    let member_cmd = palette_docker::DockerManager::claude_exec_command(
         &member_id,
         "/home/agent/prompt.md",
-        "member",
+        AgentRole::Member,
     );
     let member_target = format!("{SESSION_NAME}:member-a");
     let output = Command::new("tmux")
@@ -307,13 +322,13 @@ fn claude_responds() -> Result<()> {
         .output()?;
 
     // --- Setup container ---
-    let config = Config::load(&workspace_path("config/palette.toml"))?;
-    let docker = palette_core::docker::DockerManager::new(config.docker.palette_url.clone());
+    let config = TestConfig::load(&workspace_path("config/palette.toml"))?;
+    let docker = palette_docker::DockerManager::new(config.docker.palette_url.clone());
 
     let container_id = docker.create_container(
         "test-claude",
         &config.docker.leader_image,
-        "leader",
+        AgentRole::Leader,
         SESSION_NAME,
     )?;
     guard.track("palette-test-claude");
@@ -325,7 +340,7 @@ fn claude_responds() -> Result<()> {
         &workspace_path(&config.docker.settings_template),
         "test-claude",
     )?;
-    palette_core::docker::DockerManager::copy_file_to_container(
+    palette_docker::DockerManager::copy_file_to_container(
         &container_id,
         &workspace_path(&config.docker.leader_prompt),
         "/home/agent/prompt.md",
@@ -333,10 +348,10 @@ fn claude_responds() -> Result<()> {
 
     // --- Launch Claude Code ---
     let target = format!("{SESSION_NAME}:claude-test");
-    let cmd = palette_core::docker::DockerManager::claude_exec_command(
+    let cmd = palette_docker::DockerManager::claude_exec_command(
         &container_id,
         "/home/agent/prompt.md",
-        "leader",
+        AgentRole::Leader,
     );
     let _ = Command::new("tmux")
         .args(["send-keys", "-t", &target, "-l", &cmd])

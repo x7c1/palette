@@ -1,0 +1,15 @@
+[package]
+name = "palette-orchestrator"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+palette-db = { path = "../palette-db" }
+palette-docker = { path = "../palette-docker" }
+palette-domain = { path = "../palette-domain" }
+palette-file-state = { path = "../palette-file-state" }
+palette-tmux = { path = "../palette-tmux" }
+serde.workspace = true
+tokio.workspace = true
+tracing.workspace = true

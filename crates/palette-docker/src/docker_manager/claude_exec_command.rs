@@ -1,0 +1,62 @@
+use super::DockerManager;
+use palette_domain::agent::{AgentRole, ContainerId};
+
+impl DockerManager {
+    /// Build the command string to launch Claude Code inside a container's tmux pane.
+    /// Leaders bypass permissions (they run in a sandbox container).
+    /// Members keep default permissions (the leader handles their permission prompts).
+    pub fn claude_exec_command(
+        container_id: &ContainerId,
+        prompt_file: &str,
+        role: AgentRole,
+    ) -> String {
+        let cid = container_id.as_ref();
+        let plugin_flag = " --plugin-dir /home/agent/claude-code-plugin";
+        match role {
+            AgentRole::Leader => {
+                format!(
+                    "docker exec -it {cid} claude --dangerously-skip-permissions --append-system-prompt-file {prompt_file}{plugin_flag}"
+                )
+            }
+            AgentRole::Member => {
+                format!(
+                    "docker exec -it {cid} claude --append-system-prompt-file {prompt_file}{plugin_flag}"
+                )
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::super::DockerManager;
+    use palette_domain::agent::{AgentRole, ContainerId};
+
+    #[test]
+    fn leader_bypasses_permissions() {
+        let cid = ContainerId::new("abc123");
+        let cmd = DockerManager::claude_exec_command(
+            &cid,
+            "/home/agent/prompts/leader.md",
+            AgentRole::Leader,
+        );
+        assert!(cmd.contains("docker exec -it abc123 claude"));
+        assert!(cmd.contains("--dangerously-skip-permissions"));
+        assert!(cmd.contains("--append-system-prompt-file /home/agent/prompts/leader.md"));
+        assert!(cmd.contains("--plugin-dir /home/agent/claude-code-plugin"));
+    }
+
+    #[test]
+    fn member_keeps_permissions() {
+        let cid = ContainerId::new("abc123");
+        let cmd = DockerManager::claude_exec_command(
+            &cid,
+            "/home/agent/prompts/member.md",
+            AgentRole::Member,
+        );
+        assert!(cmd.contains("docker exec -it abc123 claude"));
+        assert!(!cmd.contains("--dangerously-skip-permissions"));
+        assert!(cmd.contains("--append-system-prompt-file /home/agent/prompts/member.md"));
+        assert!(cmd.contains("--plugin-dir /home/agent/claude-code-plugin"));
+    }
+}

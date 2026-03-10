@@ -57,7 +57,7 @@ done
 echo ""
 echo "=== Palette running (PID=$PALETTE_PID) ==="
 
-LEADER_PANE=$(jq -r '.leaders[0].tmux_target' data/state.json)
+LEADER_PANE=$(jq -r '.leaders[0].terminal_target' data/state.json)
 echo "Leader pane: $LEADER_PANE"
 
 echo "--- containers ---"
@@ -115,7 +115,7 @@ for i in $(seq 1 120); do
     if [ "$MEMBER_COUNT" -gt 0 ]; then
         for j in $(seq 0 $((MEMBER_COUNT - 1))); do
             MID=$(echo "$STATE_JSON" | jq -r ".members[$j].id" 2>/dev/null)
-            MPANE=$(echo "$STATE_JSON" | jq -r ".members[$j].tmux_target" 2>/dev/null)
+            MPANE=$(echo "$STATE_JSON" | jq -r ".members[$j].terminal_target" 2>/dev/null)
             echo "  [$MID pane]"
             tmux capture-pane -t "$MPANE" -p 2>&1 | grep -v '^$' | tail -2
         done

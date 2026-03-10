@@ -5,18 +5,20 @@ edition.workspace = true
 license.workspace = true
 
 [dependencies]
-anyhow.workspace = true
 axum.workspace = true
-palette-core = { path = "../palette-core" }
+chrono.workspace = true
 palette-db = { path = "../palette-db" }
+palette-domain = { path = "../palette-domain" }
 palette-tmux = { path = "../palette-tmux" }
 serde.workspace = true
 serde_json.workspace = true
+serde_yaml.workspace = true
 tokio.workspace = true
 tracing.workspace = true
 
 [dev-dependencies]
-palette-core = { path = "../palette-core" }
+palette-docker = { path = "../palette-docker" }
+palette-orchestrator = { path = "../palette-orchestrator" }
 reqwest.workspace = true
 serde_json.workspace = true
 tokio.workspace = true

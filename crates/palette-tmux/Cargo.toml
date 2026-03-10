@@ -5,5 +5,5 @@ edition.workspace = true
 license.workspace = true
 
 [dependencies]
-anyhow.workspace = true
+palette-domain = { path = "../palette-domain" }
 tracing.workspace = true
