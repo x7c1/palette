@@ -1,7 +1,8 @@
 use super::Orchestrator;
+use palette_domain::agent::AgentId;
 use palette_domain::rule::{RuleEffect, RuleEngine};
 use palette_domain::server::{PendingDelivery, PersistentState};
-use palette_domain::task::Task;
+use palette_domain::task::{Task, TaskId, TaskStatus};
 
 impl Orchestrator {
     /// Processes rule engine effects: auto-assign tasks, spawn/destroy members.
@@ -19,65 +20,16 @@ impl Orchestrator {
         while let Some(effect) = pending.pop() {
             match &effect {
                 RuleEffect::AutoAssign { task_id } => {
-                    // Only assign if the task is truly assignable (ready + all deps done)
-                    let assignable = self.db.find_assignable_tasks()?;
-                    let task = match assignable.iter().find(|t| t.id == *task_id) {
-                        Some(t) => t.clone(),
-                        None => continue,
-                    };
-                    let active = self.db.count_active_members()?;
-                    if active >= self.docker_config.max_members {
-                        tracing::info!(
-                            task_id = %task_id,
-                            active = active,
-                            max = self.docker_config.max_members,
-                            "max members reached, task waits"
-                        );
-                        continue;
-                    }
-                    // Spawn a new member
-                    let member_id = infra.next_member_id();
-                    let member = self.spawn_member(&member_id, infra)?;
-                    let terminal_target = member.terminal_target.clone();
-                    infra.members.push(member);
-
-                    // Assign task
-                    self.db.assign_task(task_id, &member_id)?;
-                    tracing::info!(
-                        task_id = %task_id,
-                        member_id = %member_id,
-                        "auto-assigned task"
-                    );
-
-                    // Build task instruction message
-                    let instruction = format_task_instruction(&task);
-                    self.db.enqueue_message(&member_id, &instruction)?;
-
-                    deliveries.push(PendingDelivery {
-                        target_id: member_id,
-                        terminal_target,
-                    });
-
-                    infra.touch();
+                    self.handle_auto_assign(task_id, infra, &mut deliveries)?;
                 }
                 RuleEffect::DestroyMember { member_id } => {
-                    if let Some(member) = infra.remove_member(member_id) {
-                        tracing::info!(member_id = %member_id, "destroying member container");
-                        let _ = self.docker.stop_container(&member.container_id);
-                        let _ = self.docker.remove_container(&member.container_id);
-                        infra.touch();
-                    }
+                    self.handle_destroy_member(member_id, infra);
                 }
                 RuleEffect::StatusChanged {
                     task_id,
                     new_status,
                 } => {
-                    // Chain: re-evaluate rules for the new status
-                    let rules = RuleEngine::new(&*self.db, 0); // max_review_rounds unused for status changes
-                    let chained = rules.on_status_change(task_id, *new_status)?;
-                    for e in &chained {
-                        tracing::info!(?e, "chained rule engine effect");
-                    }
+                    let chained = self.handle_status_changed(task_id, *new_status)?;
                     pending.extend(chained);
                 }
                 _ => {}
@@ -85,6 +37,78 @@ impl Orchestrator {
         }
 
         Ok(deliveries)
+    }
+
+    fn handle_auto_assign(
+        &self,
+        task_id: &TaskId,
+        infra: &mut PersistentState,
+        deliveries: &mut Vec<PendingDelivery>,
+    ) -> crate::Result<()> {
+        // Only assign if the task is truly assignable (ready + all deps done)
+        let assignable = self.db.find_assignable_tasks()?;
+        let task = match assignable.iter().find(|t| t.id == *task_id) {
+            Some(t) => t.clone(),
+            None => return Ok(()),
+        };
+        let active = self.db.count_active_members()?;
+        if active >= self.docker_config.max_members {
+            tracing::info!(
+                task_id = %task_id,
+                active = active,
+                max = self.docker_config.max_members,
+                "max members reached, task waits"
+            );
+            return Ok(());
+        }
+
+        // Spawn a new member
+        let member_id = infra.next_member_id();
+        let member = self.spawn_member(&member_id, infra)?;
+        let terminal_target = member.terminal_target.clone();
+        infra.members.push(member);
+
+        // Assign task
+        self.db.assign_task(task_id, &member_id)?;
+        tracing::info!(
+            task_id = %task_id,
+            member_id = %member_id,
+            "auto-assigned task"
+        );
+
+        // Build task instruction message
+        let instruction = format_task_instruction(&task);
+        self.db.enqueue_message(&member_id, &instruction)?;
+
+        deliveries.push(PendingDelivery {
+            target_id: member_id,
+            terminal_target,
+        });
+
+        infra.touch();
+        Ok(())
+    }
+
+    fn handle_destroy_member(&self, member_id: &AgentId, infra: &mut PersistentState) {
+        if let Some(member) = infra.remove_member(member_id) {
+            tracing::info!(member_id = %member_id, "destroying member container");
+            let _ = self.docker.stop_container(&member.container_id);
+            let _ = self.docker.remove_container(&member.container_id);
+            infra.touch();
+        }
+    }
+
+    fn handle_status_changed(
+        &self,
+        task_id: &TaskId,
+        new_status: TaskStatus,
+    ) -> crate::Result<Vec<RuleEffect>> {
+        let rules = RuleEngine::new(&*self.db, 0); // max_review_rounds unused for status changes
+        let chained = rules.on_status_change(task_id, new_status)?;
+        for e in &chained {
+            tracing::info!(?e, "chained rule engine effect");
+        }
+        Ok(chained)
     }
 }
 
