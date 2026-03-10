@@ -2,29 +2,15 @@ use super::Orchestrator;
 use palette_domain::server::ServerEvent;
 use std::sync::Arc;
 
-use crate::{deliver_queued_messages, process_effects};
-
 impl Orchestrator {
     pub(super) async fn handle_event(self: &Arc<Self>, event: ServerEvent) {
         match event {
             ServerEvent::ProcessEffects { effects } => {
                 let mut infra = self.infra.lock().await;
-                match process_effects(
-                    &effects,
-                    &self.db,
-                    &mut infra,
-                    &self.docker,
-                    &self.tmux,
-                    &self.docker_config,
-                ) {
+                match self.process_effects(&effects, &mut infra) {
                     Ok(deliveries) => {
                         for d in &deliveries {
-                            let _ = deliver_queued_messages(
-                                &d.target_id,
-                                &self.db,
-                                &mut infra,
-                                &self.tmux,
-                            );
+                            let _ = self.deliver_queued_messages(&d.target_id, &mut infra);
                         }
                         self.save_state(&infra);
                         drop(infra);
@@ -39,7 +25,7 @@ impl Orchestrator {
             }
             ServerEvent::DeliverMessages { target_id } => {
                 let mut infra = self.infra.lock().await;
-                let _ = deliver_queued_messages(&target_id, &self.db, &mut infra, &self.tmux);
+                let _ = self.deliver_queued_messages(&target_id, &mut infra);
             }
             ServerEvent::NotifyDeliveryLoop => {
                 self.deliver_to_all_idle().await;

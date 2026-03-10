@@ -2,8 +2,6 @@ use super::Orchestrator;
 use palette_domain::agent::{AgentId, AgentStatus};
 use std::sync::Arc;
 
-use crate::deliver_queued_messages;
-
 /// Interval between readiness polls.
 const READINESS_POLL_INTERVAL: std::time::Duration = std::time::Duration::from_secs(3);
 
@@ -65,7 +63,7 @@ impl Orchestrator {
                         }
                         infra.touch();
                     }
-                    let _ = deliver_queued_messages(&target_id, &this.db, &mut infra, &this.tmux);
+                    let _ = this.deliver_queued_messages(&target_id, &mut infra);
                     this.save_state(&infra);
                 }
                 return;

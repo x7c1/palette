@@ -2,8 +2,6 @@ use super::Orchestrator;
 use palette_domain::agent::{AgentId, AgentStatus};
 use std::sync::Arc;
 
-use crate::deliver_queued_messages;
-
 impl Orchestrator {
     pub(super) async fn deliver_to_all_idle(self: &Arc<Self>) {
         loop {
@@ -18,7 +16,7 @@ impl Orchestrator {
 
             let mut any_delivered = false;
             for target_id in &idle_targets {
-                match deliver_queued_messages(target_id, &self.db, &mut infra, &self.tmux) {
+                match self.deliver_queued_messages(target_id, &mut infra) {
                     Ok(true) => any_delivered = true,
                     Ok(false) => {}
                     Err(e) => {
