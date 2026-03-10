@@ -48,7 +48,7 @@ pub async fn handle_stop(
         }
     };
 
-    // Transition member's in_progress tasks to in_review and notify leaders
+    // Transition member's in_progress tasks and notify leaders
     if let Some(ref leader_id) = leader_id {
         let member_tasks = state
             .db
@@ -65,36 +65,50 @@ pub async fn handle_stop(
             infra.find_review_integrator().map(|ri| ri.id.clone())
         };
 
+        let last_message = payload
+            .get("last_assistant_message")
+            .and_then(|v| v.as_str())
+            .unwrap_or("(work completed)");
+
         for task in &member_tasks {
-            if let Err(e) = state.db.update_task_status(&task.id, TaskStatus::InReview) {
-                tracing::error!(task_id = %task.id, error = %e, "failed to transition task to in_review");
-                continue;
-            }
-            let effects = state
-                .rules
-                .on_status_change(&task.id, TaskStatus::InReview)
-                .unwrap_or_default();
-            for effect in &effects {
-                tracing::info!(?effect, "rule engine effect (member stop)");
-            }
+            match task.task_type {
+                palette_domain::task::TaskType::Work => {
+                    // Work tasks: in_progress → in_review, then notify review integrator
+                    if let Err(e) = state.db.update_task_status(&task.id, TaskStatus::InReview) {
+                        tracing::error!(task_id = %task.id, error = %e, "failed to transition task to in_review");
+                        continue;
+                    }
+                    let effects = state
+                        .rules
+                        .on_status_change(&task.id, TaskStatus::InReview)
+                        .unwrap_or_default();
+                    for effect in &effects {
+                        tracing::info!(?effect, "rule engine effect (member stop)");
+                    }
 
-            if !effects.is_empty() {
-                let _ = state.event_tx.send(ServerEvent::ProcessEffects { effects });
-            }
+                    if !effects.is_empty() {
+                        let _ = state.event_tx.send(ServerEvent::ProcessEffects { effects });
+                    }
 
-            // Send review instruction to review integrator (or fallback to leader)
-            let review_target = review_integrator_id.as_ref().unwrap_or(leader_id);
-            let review_msg = format!(
-                "[review] task={} member={} message: {}",
-                task.id,
-                member_id,
-                payload
-                    .get("last_assistant_message")
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("(work completed)")
-            );
-            if let Err(e) = state.db.enqueue_message(review_target, &review_msg) {
-                tracing::error!(error = %e, "failed to enqueue review instruction");
+                    let review_target = review_integrator_id.as_ref().unwrap_or(leader_id);
+                    let review_msg = format!(
+                        "[review] task={} member={} message: {}",
+                        task.id, member_id, last_message,
+                    );
+                    if let Err(e) = state.db.enqueue_message(review_target, &review_msg) {
+                        tracing::error!(error = %e, "failed to enqueue review instruction");
+                    }
+                }
+                palette_domain::task::TaskType::Review => {
+                    // Review tasks: notify leader with member's findings (no status transition)
+                    let report_msg = format!(
+                        "[event] member={} task={} type=review_complete message: {}",
+                        member_id, task.id, last_message,
+                    );
+                    if let Err(e) = state.db.enqueue_message(leader_id, &report_msg) {
+                        tracing::error!(error = %e, "failed to enqueue review report");
+                    }
+                }
             }
         }
 
