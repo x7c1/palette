@@ -97,6 +97,8 @@ for i in $(seq 1 36); do
     fi
 done
 
+save_transcripts
+
 echo ""
 echo "=== Verification ==="
 RESULT=PASSED

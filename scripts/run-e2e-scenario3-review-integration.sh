@@ -130,7 +130,6 @@ for i in $(seq 1 144); do
     if [ "$STALL_COUNT" -ge "$STALL_THRESHOLD" ]; then
         echo ""
         echo "=== STALL DETECTED ==="
-        save_transcripts
         STALL_ABORT=1
         break
     fi
@@ -167,6 +166,8 @@ echo "Review rounds: ${REVIEW_ROUNDS:-0}"
 STATE_JSON=$(cat data/state.json 2>/dev/null || echo "{}")
 REVIEW_MEMBERS=$(echo "$STATE_JSON" | jq '[.members[] | select(.leader_id != null)] | length' 2>/dev/null || echo 0)
 echo "Members spawned: $REVIEW_MEMBERS"
+
+save_transcripts
 
 RESULT=PASSED
 if [ "${STALL_ABORT:-0}" = "1" ]; then RESULT="FAILED (stall)"; fi
