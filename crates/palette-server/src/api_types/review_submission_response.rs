@@ -1,9 +1,9 @@
 use super::Verdict;
 use chrono::{DateTime, Utc};
 use palette_domain as domain;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct ReviewSubmissionResponse {
     pub id: i64,
     pub review_task_id: String,

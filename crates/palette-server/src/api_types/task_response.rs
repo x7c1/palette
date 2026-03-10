@@ -4,9 +4,9 @@ use super::TaskStatus;
 use super::TaskType;
 use chrono::{DateTime, Utc};
 use palette_domain as domain;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct TaskResponse {
     pub id: String,
     #[serde(rename = "type")]

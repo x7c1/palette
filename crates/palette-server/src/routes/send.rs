@@ -1,15 +1,10 @@
-use crate::api_types::SendRequest;
+use crate::api_types::{SendRequest, SendResponse};
 use crate::{AppState, EventRecord};
 use axum::{Json, extract::State, http::StatusCode};
 use palette_domain::{AgentId, AgentStatus, TerminalTarget};
 use std::sync::Arc;
 
 use super::now;
-
-#[derive(serde::Serialize)]
-pub(crate) struct SendResponse {
-    queued: bool,
-}
 
 pub async fn handle_send(
     State(state): State<Arc<AppState>>,
