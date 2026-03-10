@@ -11,6 +11,12 @@ use std::sync::Arc;
 use super::HookQuery;
 use crate::routes::now;
 
+/// Payload sent by Claude Code's notification hook.
+#[derive(serde::Deserialize)]
+struct NotificationPayload {
+    transcript_path: Option<String>,
+}
+
 pub async fn handle_notification(
     State(state): State<Arc<AppState>>,
     Query(query): Query<HookQuery>,
@@ -29,6 +35,11 @@ pub async fn handle_notification(
         }),
     };
     state.event_log.lock().await.push(record);
+
+    let notification_payload: NotificationPayload =
+        serde_json::from_value(payload).unwrap_or(NotificationPayload {
+            transcript_path: None,
+        });
 
     // Update member status to WaitingPermission and resolve context
     let member_context = {
@@ -53,14 +64,9 @@ pub async fn handle_notification(
     };
 
     // Extract the pending tool call from the member's JSONL transcript
-    let transcript_path = payload
-        .get("transcript_path")
-        .and_then(|v| v.as_str())
-        .unwrap_or("");
-    let pending_tool = if !transcript_path.is_empty() {
-        extract_pending_tool(&ctx.container_id, transcript_path)
-    } else {
-        None
+    let pending_tool = match notification_payload.transcript_path {
+        Some(ref path) if !path.is_empty() => extract_pending_tool(&ctx.container_id, path),
+        _ => None,
     };
 
     // Capture the member's pane content (last 10 non-empty lines, joined as single line)
@@ -103,6 +109,31 @@ struct PendingTool {
     input: String,
 }
 
+/// A single entry in a Claude Code JSONL transcript.
+#[derive(serde::Deserialize)]
+struct TranscriptEntry {
+    #[serde(rename = "type")]
+    entry_type: String,
+    message: Option<TranscriptMessage>,
+}
+
+#[derive(serde::Deserialize)]
+struct TranscriptMessage {
+    content: Vec<ContentBlock>,
+}
+
+#[derive(serde::Deserialize)]
+#[serde(tag = "type")]
+enum ContentBlock {
+    #[serde(rename = "tool_use")]
+    ToolUse {
+        name: String,
+        input: serde_json::Value,
+    },
+    #[serde(other)]
+    Other,
+}
+
 /// Read the member's transcript and extract the last tool_use entry.
 fn extract_pending_tool(
     container_id: &palette_domain::agent::ContainerId,
@@ -111,21 +142,23 @@ fn extract_pending_tool(
     let content = palette_docker::read_container_file(container_id, transcript_path, 5).ok()?;
 
     for line in content.lines().rev() {
-        let entry: serde_json::Value = serde_json::from_str(line).ok()?;
-        if entry.get("type")?.as_str()? != "assistant" {
+        let entry: TranscriptEntry = serde_json::from_str(line).ok()?;
+        if entry.entry_type != "assistant" {
             continue;
         }
-        let contents = entry.get("message")?.get("content")?.as_array()?;
-        for item in contents.iter().rev() {
-            if item.get("type")?.as_str()? == "tool_use" {
-                let name = item.get("name")?.as_str()?.to_string();
-                let input = item.get("input")?.to_string();
-                let input = if input.len() > 200 {
-                    format!("{}...", &input[..200])
+        let contents = entry.message?.content;
+        for block in contents.iter().rev() {
+            if let ContentBlock::ToolUse { name, input } = block {
+                let input_str = input.to_string();
+                let input_str = if input_str.len() > 200 {
+                    format!("{}...", &input_str[..200])
                 } else {
-                    input
+                    input_str
                 };
-                return Some(PendingTool { name, input });
+                return Some(PendingTool {
+                    name: name.clone(),
+                    input: input_str,
+                });
             }
         }
     }
