@@ -32,7 +32,7 @@ mod tests {
     use super::super::testing;
 
     #[test]
-    fn send_keys_literal_mode() {
+    fn preserves_special_characters() {
         let (tmux, session) = testing::setup("literal");
 
         tmux.create_session(&session).unwrap();
