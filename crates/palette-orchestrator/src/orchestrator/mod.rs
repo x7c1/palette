@@ -7,7 +7,6 @@ mod start;
 
 use palette_db::Database;
 use palette_docker::DockerManager;
-use palette_domain::rule::RuleEngine;
 use palette_domain::server::PersistentState;
 use std::sync::Arc;
 
@@ -20,5 +19,4 @@ pub struct Orchestrator {
     pub tmux: Arc<palette_tmux::TmuxManager>,
     pub infra: Arc<tokio::sync::Mutex<PersistentState>>,
     pub state_path: String,
-    pub rules: RuleEngine,
 }

@@ -98,7 +98,7 @@ async fn spawn_server(
     let state = Arc::new(AppState {
         tmux: Arc::clone(&tmux),
         db: Arc::clone(&db),
-        rules: RuleEngine::new(5),
+        rules: RuleEngine::new(Arc::clone(&db), 5),
         infra: Arc::clone(&infra),
         event_log: tokio::sync::Mutex::new(Vec::new()),
         event_tx,
@@ -112,7 +112,6 @@ async fn spawn_server(
         tmux: Arc::clone(&tmux),
         infra: Arc::clone(&infra),
         state_path: String::new(),
-        rules: RuleEngine::new(5),
     });
     orchestrator.start(event_rx);
 

@@ -1,7 +1,7 @@
 use crate::AppState;
 use crate::api_types::{TaskResponse, UpdateTaskRequest};
 use axum::{Json, extract::State, http::StatusCode};
-use palette_domain::rule::RuleEngine;
+use palette_domain::rule::validate_transition;
 use palette_domain::server::ServerEvent;
 use std::sync::Arc;
 
@@ -21,7 +21,7 @@ pub async fn handle_update_task(
             })
         })?;
 
-    RuleEngine::validate_transition(current.task_type, current.status, req.status)
+    validate_transition(current.task_type, current.status, req.status)
         .map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))?;
 
     let task = state
@@ -32,7 +32,7 @@ pub async fn handle_update_task(
     // Apply rule engine side effects
     let effects = state
         .rules
-        .on_status_change(state.db.as_ref(), &req.id, req.status)
+        .on_status_change(&req.id, req.status)
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     for effect in &effects {

@@ -12,7 +12,7 @@ use std::sync::Arc;
 pub struct AppState {
     pub tmux: Arc<TmuxManager>,
     pub db: Arc<Database>,
-    pub rules: RuleEngine,
+    pub rules: RuleEngine<Arc<Database>>,
     pub infra: Arc<tokio::sync::Mutex<PersistentState>>,
     pub event_log: tokio::sync::Mutex<Vec<EventRecord>>,
     pub event_tx: tokio::sync::mpsc::UnboundedSender<ServerEvent>,

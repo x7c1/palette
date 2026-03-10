@@ -66,7 +66,7 @@ pub async fn handle_stop(
             }
             let effects = state
                 .rules
-                .on_status_change(state.db.as_ref(), &task.id, TaskStatus::InReview)
+                .on_status_change(&task.id, TaskStatus::InReview)
                 .unwrap_or_default();
             for effect in &effects {
                 tracing::info!(?effect, "rule engine effect (member stop)");

@@ -45,7 +45,7 @@ pub async fn handle_submit_review(
     // Apply rule engine
     let effects = state
         .rules
-        .on_review_submitted(state.db.as_ref(), &review_task_id, &submission)
+        .on_review_submitted(&review_task_id, &submission)
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     for effect in &effects {

@@ -37,7 +37,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let db = Arc::new(Database::open(Path::new(&config.db_path))?);
     tracing::info!(db_path = %config.db_path, "database initialized");
 
-    let rules = RuleEngine::new(config.rules.max_review_rounds);
     let docker = DockerManager::new(config.docker.palette_url.clone());
 
     let state_path = PathBuf::from(&config.state_path);
@@ -55,7 +54,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let state = Arc::new(AppState {
         tmux: Arc::clone(&tmux),
         db: Arc::clone(&db),
-        rules: RuleEngine::new(config.rules.max_review_rounds),
+        rules: RuleEngine::new(Arc::clone(&db), config.rules.max_review_rounds),
         infra: Arc::clone(&infra),
         event_log: tokio::sync::Mutex::new(Vec::new()),
         event_tx,
@@ -69,7 +68,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         tmux: Arc::clone(&tmux),
         infra: Arc::clone(&infra),
         state_path: config.state_path.clone(),
-        rules,
     });
 
     // Resume readiness watchers for agents that were booting when we last shut down

@@ -1,7 +1,7 @@
 use crate::AppState;
 use crate::api_types::{TaskFile, TaskResponse};
 use axum::{Json, extract::State, http::StatusCode};
-use palette_domain::rule::RuleEngine;
+use palette_domain::rule::validate_transition;
 use palette_domain::server::ServerEvent;
 use palette_domain::task::{TaskId, TaskStatus, TaskType};
 use std::sync::Arc;
@@ -34,7 +34,7 @@ pub async fn handle_load_tasks(
         .collect();
 
     for work_id in &work_ids {
-        RuleEngine::validate_transition(TaskType::Work, TaskStatus::Draft, TaskStatus::Ready)
+        validate_transition(TaskType::Work, TaskStatus::Draft, TaskStatus::Ready)
             .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
         state
@@ -44,7 +44,7 @@ pub async fn handle_load_tasks(
 
         let effects = state
             .rules
-            .on_status_change(state.db.as_ref(), work_id, TaskStatus::Ready)
+            .on_status_change(work_id, TaskStatus::Ready)
             .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
         for effect in &effects {

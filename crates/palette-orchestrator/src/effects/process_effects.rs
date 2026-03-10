@@ -78,8 +78,8 @@ pub fn process_effects(
                 new_status,
             } => {
                 // Chain: re-evaluate rules for the new status
-                let rules = RuleEngine::new(0); // max_review_rounds unused for status changes
-                let chained = rules.on_status_change(db, task_id, *new_status)?;
+                let rules = RuleEngine::new(db, 0); // max_review_rounds unused for status changes
+                let chained = rules.on_status_change(task_id, *new_status)?;
                 for e in &chained {
                     tracing::info!(?e, "chained rule engine effect");
                 }
@@ -101,10 +101,8 @@ mod tests {
 
     use palette_domain::task::*;
 
-    fn setup() -> (Database, RuleEngine) {
-        let db = Database::open_in_memory().unwrap();
-        let engine = RuleEngine::new(5);
-        (db, engine)
+    fn setup_db() -> Database {
+        Database::open_in_memory().unwrap()
     }
 
     fn tid(s: &str) -> TaskId {
@@ -139,7 +137,7 @@ mod tests {
 
     #[test]
     fn work_in_review_enables_reviews() {
-        let (db, engine) = setup();
+        let db = setup_db();
         create_work_review_pair(&db);
 
         db.update_task_status(&tid("W-001"), TaskStatus::Ready)
@@ -149,8 +147,9 @@ mod tests {
         db.update_task_status(&tid("W-001"), TaskStatus::InReview)
             .unwrap();
 
+        let engine = RuleEngine::new(&db, 5);
         let effects = engine
-            .on_status_change(&db, &tid("W-001"), TaskStatus::InReview)
+            .on_status_change(&tid("W-001"), TaskStatus::InReview)
             .unwrap();
 
         assert_eq!(effects.len(), 1);
@@ -165,7 +164,7 @@ mod tests {
 
     #[test]
     fn changes_requested_reverts_work() {
-        let (db, engine) = setup();
+        let db = setup_db();
         create_work_review_pair(&db);
 
         db.update_task_status(&tid("W-001"), TaskStatus::Ready)
@@ -188,9 +187,8 @@ mod tests {
             )
             .unwrap();
 
-        let effects = engine
-            .on_review_submitted(&db, &tid("R-001"), &sub)
-            .unwrap();
+        let engine = RuleEngine::new(&db, 5);
+        let effects = engine.on_review_submitted(&tid("R-001"), &sub).unwrap();
 
         assert_eq!(effects.len(), 1);
         assert_eq!(
@@ -207,7 +205,7 @@ mod tests {
 
     #[test]
     fn approved_completes_work() {
-        let (db, engine) = setup();
+        let db = setup_db();
         create_work_review_pair(&db);
 
         db.update_task_status(&tid("W-001"), TaskStatus::Ready)
@@ -230,9 +228,8 @@ mod tests {
             )
             .unwrap();
 
-        let effects = engine
-            .on_review_submitted(&db, &tid("R-001"), &sub)
-            .unwrap();
+        let engine = RuleEngine::new(&db, 5);
+        let effects = engine.on_review_submitted(&tid("R-001"), &sub).unwrap();
 
         assert_eq!(effects.len(), 1);
         assert_eq!(
@@ -246,8 +243,7 @@ mod tests {
 
     #[test]
     fn escalation_on_max_rounds() {
-        let (db, _) = setup();
-        let engine = RuleEngine::new(2); // Low threshold for testing
+        let db = setup_db();
         create_work_review_pair(&db);
 
         db.update_task_status(&tid("W-001"), TaskStatus::Ready)
@@ -270,9 +266,8 @@ mod tests {
                 },
             )
             .unwrap();
-        engine
-            .on_review_submitted(&db, &tid("R-001"), &sub1)
-            .unwrap();
+        let engine = RuleEngine::new(&db, 2);
+        engine.on_review_submitted(&tid("R-001"), &sub1).unwrap();
 
         // Reset work to in_review for round 2
         db.update_task_status(&tid("W-001"), TaskStatus::InReview)
@@ -289,9 +284,8 @@ mod tests {
                 },
             )
             .unwrap();
-        let effects = engine
-            .on_review_submitted(&db, &tid("R-001"), &sub2)
-            .unwrap();
+        let engine = RuleEngine::new(&db, 2);
+        let effects = engine.on_review_submitted(&tid("R-001"), &sub2).unwrap();
 
         assert_eq!(effects.len(), 1);
         assert!(matches!(effects[0], RuleEffect::Escalated { .. }));
