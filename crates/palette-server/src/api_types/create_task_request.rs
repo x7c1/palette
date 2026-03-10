@@ -2,9 +2,9 @@ use super::Priority;
 use super::Repository;
 use super::TaskType;
 use palette_domain as domain;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct CreateTaskRequest {
     pub id: Option<String>,
     #[serde(rename = "type")]

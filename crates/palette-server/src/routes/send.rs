@@ -1,21 +1,10 @@
+use crate::api_types::SendRequest;
 use crate::{AppState, EventRecord};
 use axum::{Json, extract::State, http::StatusCode};
 use palette_domain::{AgentId, AgentStatus, TerminalTarget};
 use std::sync::Arc;
 
 use super::now;
-
-#[derive(serde::Deserialize)]
-pub(crate) struct SendRequest {
-    member_id: Option<String>,
-    #[serde(default)]
-    target: Option<String>,
-    message: String,
-    /// If true, send the message without appending Enter key.
-    /// Use for permission prompt responses (e.g., "2" to approve).
-    #[serde(default)]
-    no_enter: bool,
-}
 
 #[derive(serde::Serialize)]
 pub(crate) struct SendResponse {

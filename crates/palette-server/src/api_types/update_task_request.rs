@@ -1,8 +1,8 @@
 use super::TaskStatus;
 use palette_domain as domain;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct UpdateTaskRequest {
     pub id: String,
     pub status: TaskStatus,

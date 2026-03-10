@@ -1,9 +1,9 @@
 use super::ReviewCommentInput;
 use super::Verdict;
 use palette_domain as domain;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct SubmitReviewRequest {
     pub verdict: Verdict,
     pub summary: Option<String>,

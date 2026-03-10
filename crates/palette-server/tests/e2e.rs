@@ -5,6 +5,10 @@ use palette_domain::{
     TerminalSessionName, TerminalTarget,
 };
 use palette_orchestrator::{DockerConfig, Orchestrator};
+use palette_server::api_types::{
+    CreateTaskRequest, ReviewCommentInput, SendRequest, SubmitReviewRequest, TaskStatus, TaskType,
+    UpdateTaskRequest, Verdict,
+};
 use palette_server::{AppState, create_router};
 use palette_tmux::TmuxManager;
 use serde_json::json;
@@ -41,6 +45,39 @@ fn aid(s: &str) -> AgentId {
 
 fn tid(s: &str) -> TaskId {
     TaskId::new(s)
+}
+
+fn create_work(id: &str, title: &str) -> CreateTaskRequest {
+    CreateTaskRequest {
+        id: Some(id.to_string()),
+        task_type: TaskType::Work,
+        title: title.to_string(),
+        description: None,
+        assignee: None,
+        priority: None,
+        repositories: None,
+        depends_on: vec![],
+    }
+}
+
+fn create_review(id: &str, title: &str, depends_on: Vec<&str>) -> CreateTaskRequest {
+    CreateTaskRequest {
+        id: Some(id.to_string()),
+        task_type: TaskType::Review,
+        title: title.to_string(),
+        description: None,
+        assignee: None,
+        priority: None,
+        repositories: None,
+        depends_on: depends_on.into_iter().map(String::from).collect(),
+    }
+}
+
+fn update_status(id: &str, status: TaskStatus) -> UpdateTaskRequest {
+    UpdateTaskRequest {
+        id: id.to_string(),
+        status,
+    }
 }
 
 /// Spawn the server on an OS-assigned port and return (addr, state)
@@ -221,7 +258,12 @@ async fn send_keys_delivers_to_tmux_pane() {
 
     let resp = client
         .post(format!("{base_url}/send"))
-        .json(&json!({"member_id": "worker", "message": "echo hello-palette-test"}))
+        .json(&SendRequest {
+            member_id: Some("worker".to_string()),
+            target: None,
+            message: "echo hello-palette-test".to_string(),
+            no_enter: false,
+        })
         .send()
         .await
         .unwrap();
@@ -252,7 +294,12 @@ async fn send_keys_with_direct_target() {
 
     let resp = client
         .post(format!("{base_url}/send"))
-        .json(&json!({"target": target.to_string(), "message": "echo direct-test"}))
+        .json(&SendRequest {
+            member_id: None,
+            target: Some(target.to_string()),
+            message: "echo direct-test".to_string(),
+            no_enter: false,
+        })
         .send()
         .await
         .unwrap();
@@ -280,14 +327,16 @@ async fn task_api_create_and_list() {
     // Create a work task
     let resp = client
         .post(format!("{base_url}/tasks/create"))
-        .json(&json!({
-            "id": "W-001",
-            "type": "work",
-            "title": "Implement feature",
-            "description": "Details here",
-            "assignee": "member-a",
-            "priority": "high",
-        }))
+        .json(&CreateTaskRequest {
+            id: Some("W-001".to_string()),
+            task_type: TaskType::Work,
+            title: "Implement feature".to_string(),
+            description: Some("Details here".to_string()),
+            assignee: Some("member-a".to_string()),
+            priority: Some(palette_server::api_types::Priority::High),
+            repositories: None,
+            depends_on: vec![],
+        })
         .send()
         .await
         .unwrap();
@@ -300,12 +349,16 @@ async fn task_api_create_and_list() {
     // Create a review task depending on W-001
     let resp = client
         .post(format!("{base_url}/tasks/create"))
-        .json(&json!({
-            "id": "R-001",
-            "type": "review",
-            "title": "Review feature",
-            "depends_on": ["W-001"],
-        }))
+        .json(&CreateTaskRequest {
+            id: Some("R-001".to_string()),
+            task_type: TaskType::Review,
+            title: "Review feature".to_string(),
+            description: None,
+            assignee: None,
+            priority: None,
+            repositories: None,
+            depends_on: vec!["W-001".to_string()],
+        })
         .send()
         .await
         .unwrap();
@@ -350,14 +403,14 @@ async fn task_api_update_with_rules() {
     // Create work + review
     client
         .post(format!("{base_url}/tasks/create"))
-        .json(&json!({"id": "W-001", "type": "work", "title": "Work"}))
+        .json(&create_work("W-001", "Work"))
         .send()
         .await
         .unwrap();
 
     client
         .post(format!("{base_url}/tasks/create"))
-        .json(&json!({"id": "R-001", "type": "review", "title": "Review", "depends_on": ["W-001"]}))
+        .json(&create_review("R-001", "Review", vec!["W-001"]))
         .send()
         .await
         .unwrap();
@@ -365,21 +418,21 @@ async fn task_api_update_with_rules() {
     // Transition W-001: draft -> ready -> in_progress -> in_review
     client
         .post(format!("{base_url}/tasks/update"))
-        .json(&json!({"id": "W-001", "status": "ready"}))
+        .json(&update_status("W-001", TaskStatus::Ready))
         .send()
         .await
         .unwrap();
 
     client
         .post(format!("{base_url}/tasks/update"))
-        .json(&json!({"id": "W-001", "status": "in_progress"}))
+        .json(&update_status("W-001", TaskStatus::InProgress))
         .send()
         .await
         .unwrap();
 
     client
         .post(format!("{base_url}/tasks/update"))
-        .json(&json!({"id": "W-001", "status": "in_review"}))
+        .json(&update_status("W-001", TaskStatus::InReview))
         .send()
         .await
         .unwrap();
@@ -387,7 +440,7 @@ async fn task_api_update_with_rules() {
     // Invalid transition should fail (in_review -> draft)
     let resp = client
         .post(format!("{base_url}/tasks/update"))
-        .json(&json!({"id": "W-001", "status": "draft"}))
+        .json(&update_status("W-001", TaskStatus::Draft))
         .send()
         .await
         .unwrap();
@@ -407,14 +460,14 @@ async fn review_api_submit_and_get() {
     // Setup: create work + review tasks
     client
         .post(format!("{base_url}/tasks/create"))
-        .json(&json!({"id": "W-001", "type": "work", "title": "Work"}))
+        .json(&create_work("W-001", "Work"))
         .send()
         .await
         .unwrap();
 
     client
         .post(format!("{base_url}/tasks/create"))
-        .json(&json!({"id": "R-001", "type": "review", "title": "Review", "depends_on": ["W-001"]}))
+        .json(&create_review("R-001", "Review", vec!["W-001"]))
         .send()
         .await
         .unwrap();
@@ -422,19 +475,19 @@ async fn review_api_submit_and_get() {
     // Transition work to in_review
     client
         .post(format!("{base_url}/tasks/update"))
-        .json(&json!({"id": "W-001", "status": "ready"}))
+        .json(&update_status("W-001", TaskStatus::Ready))
         .send()
         .await
         .unwrap();
     client
         .post(format!("{base_url}/tasks/update"))
-        .json(&json!({"id": "W-001", "status": "in_progress"}))
+        .json(&update_status("W-001", TaskStatus::InProgress))
         .send()
         .await
         .unwrap();
     client
         .post(format!("{base_url}/tasks/update"))
-        .json(&json!({"id": "W-001", "status": "in_review"}))
+        .json(&update_status("W-001", TaskStatus::InReview))
         .send()
         .await
         .unwrap();
@@ -442,13 +495,15 @@ async fn review_api_submit_and_get() {
     // Submit review with changes_requested
     let resp = client
         .post(format!("{base_url}/reviews/R-001/submit"))
-        .json(&json!({
-            "verdict": "changes_requested",
-            "summary": "Needs fixes",
-            "comments": [
-                {"file": "src/main.rs", "line": 10, "body": "Fix this"}
-            ]
-        }))
+        .json(&SubmitReviewRequest {
+            verdict: Verdict::ChangesRequested,
+            summary: Some("Needs fixes".to_string()),
+            comments: vec![ReviewCommentInput {
+                file: "src/main.rs".to_string(),
+                line: 10,
+                body: "Fix this".to_string(),
+            }],
+        })
         .send()
         .await
         .unwrap();
@@ -494,13 +549,13 @@ async fn full_cycle_work_review_approved() {
     // Create work + review
     client
         .post(format!("{base_url}/tasks/create"))
-        .json(&json!({"id": "W-001", "type": "work", "title": "Work"}))
+        .json(&create_work("W-001", "Work"))
         .send()
         .await
         .unwrap();
     client
         .post(format!("{base_url}/tasks/create"))
-        .json(&json!({"id": "R-001", "type": "review", "title": "Review", "depends_on": ["W-001"]}))
+        .json(&create_review("R-001", "Review", vec!["W-001"]))
         .send()
         .await
         .unwrap();
@@ -508,19 +563,19 @@ async fn full_cycle_work_review_approved() {
     // Work: draft -> ready -> in_progress -> in_review
     client
         .post(format!("{base_url}/tasks/update"))
-        .json(&json!({"id": "W-001", "status": "ready"}))
+        .json(&update_status("W-001", TaskStatus::Ready))
         .send()
         .await
         .unwrap();
     client
         .post(format!("{base_url}/tasks/update"))
-        .json(&json!({"id": "W-001", "status": "in_progress"}))
+        .json(&update_status("W-001", TaskStatus::InProgress))
         .send()
         .await
         .unwrap();
     client
         .post(format!("{base_url}/tasks/update"))
-        .json(&json!({"id": "W-001", "status": "in_review"}))
+        .json(&update_status("W-001", TaskStatus::InReview))
         .send()
         .await
         .unwrap();
@@ -528,7 +583,11 @@ async fn full_cycle_work_review_approved() {
     // Review: approve
     let resp = client
         .post(format!("{base_url}/reviews/R-001/submit"))
-        .json(&json!({"verdict": "approved", "summary": "LGTM"}))
+        .json(&SubmitReviewRequest {
+            verdict: Verdict::Approved,
+            summary: Some("LGTM".to_string()),
+            comments: vec![],
+        })
         .send()
         .await
         .unwrap();
@@ -572,7 +631,12 @@ async fn send_queues_when_member_is_working() {
     // Send while Working — should be queued
     let resp = client
         .post(format!("{base_url}/send"))
-        .json(&json!({"member_id": "worker", "message": "queued message"}))
+        .json(&SendRequest {
+            member_id: Some("worker".to_string()),
+            target: None,
+            message: "queued message".to_string(),
+            no_enter: false,
+        })
         .send()
         .await
         .unwrap();
@@ -647,13 +711,13 @@ async fn scenario3_message_queuing_to_leader() {
     // Create tasks and assign them (simulating auto-assign)
     client
         .post(format!("{base_url}/tasks/create"))
-        .json(&json!({"id": "W-A", "type": "work", "title": "Task A"}))
+        .json(&create_work("W-A", "Task A"))
         .send()
         .await
         .unwrap();
     client
         .post(format!("{base_url}/tasks/create"))
-        .json(&json!({"id": "W-B", "type": "work", "title": "Task B"}))
+        .json(&create_work("W-B", "Task B"))
         .send()
         .await
         .unwrap();

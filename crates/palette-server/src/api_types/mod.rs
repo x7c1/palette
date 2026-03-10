@@ -4,6 +4,9 @@ pub use create_task_request::CreateTaskRequest;
 mod update_task_request;
 pub use update_task_request::UpdateTaskRequest;
 
+mod send_request;
+pub use send_request::SendRequest;
+
 mod submit_review_request;
 pub use submit_review_request::SubmitReviewRequest;
 

@@ -1,7 +1,7 @@
 use palette_domain as domain;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct ReviewCommentInput {
     pub file: String,
     pub line: i32,
