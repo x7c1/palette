@@ -40,13 +40,12 @@ save_transcripts() {
     for container in $(docker ps -a --filter label=palette.managed=true --format '{{.Names}}'); do
         local dest="$transcript_dir/$container"
         mkdir -p "$dest"
-        docker cp "$container:/home/agent/.claude/projects/-home-agent/." "$dest/" 2>/dev/null || true
-        echo "  $container: $(ls "$dest"/*.jsonl 2>/dev/null | wc -l) transcript(s)"
+        docker cp "$container:/home/agent/.claude/projects/" "$dest/" 2>&1 || echo "    (no transcripts found)"
+        echo "  $container: $(find "$dest" -name '*.jsonl' 2>/dev/null | wc -l) transcript(s)"
     done
 }
 
 cleanup() {
-    save_transcripts
     echo "=== Stopping palette (PID=$PALETTE_PID) ==="
     kill $PALETTE_PID 2>/dev/null || true
     wait $PALETTE_PID 2>/dev/null || true
@@ -131,6 +130,7 @@ for i in $(seq 1 144); do
     if [ "$STALL_COUNT" -ge "$STALL_THRESHOLD" ]; then
         echo ""
         echo "=== STALL DETECTED ==="
+        save_transcripts
         STALL_ABORT=1
         break
     fi
