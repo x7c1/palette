@@ -150,8 +150,9 @@ fn extract_pending_tool(
         for block in contents.iter().rev() {
             if let ContentBlock::ToolUse { name, input } = block {
                 let input_str = input.to_string();
-                let input_str = if input_str.len() > 200 {
-                    format!("{}...", &input_str[..200])
+                let input_str = if input_str.chars().count() > 200 {
+                    let truncated: String = input_str.chars().take(200).collect();
+                    format!("{truncated}...")
                 } else {
                     input_str
                 };
