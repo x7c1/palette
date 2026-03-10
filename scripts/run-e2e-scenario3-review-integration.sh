@@ -7,6 +7,7 @@
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
+source scripts/e2e-helpers.sh
 
 PALETTE_PORT=7100
 BASE_URL="http://127.0.0.1:${PALETTE_PORT}"
@@ -19,13 +20,7 @@ exec > >(tee "$LOG_FILE") 2>&1
 echo "Logging to $LOG_FILE"
 
 # Clean up previous state
-echo "=== Cleanup ==="
-lsof -ti:${PALETTE_PORT} | xargs -r kill 2>/dev/null || true
-docker ps -q --filter label=palette.managed=true | xargs -r docker rm -f 2>/dev/null || true
-tmux kill-session -t palette 2>/dev/null || true
-rm -f data/state.json data/palette.db data/palette.db-shm data/palette.db-wal
-docker volume ls -q --filter name=palette- | xargs -r docker volume rm 2>/dev/null || true
-mkdir -p data
+e2e_cleanup $PALETTE_PORT
 
 echo "=== Building ==="
 cargo build 2>&1 | tail -3
@@ -90,40 +85,13 @@ echo "=== Monitoring agents (max 12 minutes) ==="
 echo "    Watch live: tmux attach -t palette"
 echo ""
 
-STALL_THRESHOLD=12
-STALL_COUNT=0
-PREV_SNAPSHOT=""
-
 for i in $(seq 1 144); do
     sleep 5
 
-    TASKS_JSON=$(curl -s ${BASE_URL}/tasks 2>/dev/null || echo "[]")
-    STATE_JSON=$(cat data/state.json 2>/dev/null || echo "{}")
-    TASK_SNAPSHOT=$(echo "$TASKS_JSON" | jq -r '[.[] | "\(.id):\(.status):\(.assignee // "")"] | sort | join(",")' 2>/dev/null || echo "")
-    MEMBER_SNAPSHOT=$(echo "$STATE_JSON" | jq -r '[(.leaders + .members)[] | "\(.id):\(.status)"] | sort | join(",")' 2>/dev/null || echo "")
-    # Capture last non-empty line from each agent's pane to detect activity
-    PANE_SNAPSHOT=""
-    for pane_target in $(echo "$STATE_JSON" | jq -r '(.leaders + .members)[] | .terminal_target' 2>/dev/null); do
-        last_line=$(tmux capture-pane -t "$pane_target" -p 2>/dev/null | grep -v '^$' | tail -1)
-        PANE_SNAPSHOT="${PANE_SNAPSHOT}|${last_line}"
-    done
-    CURRENT_SNAPSHOT="${TASK_SNAPSHOT}|${MEMBER_SNAPSHOT}|${PANE_SNAPSHOT}"
-
-    if [ "$CURRENT_SNAPSHOT" = "$PREV_SNAPSHOT" ]; then
-        STALL_COUNT=$((STALL_COUNT + 1))
-    else
-        STALL_COUNT=0
-        PREV_SNAPSHOT="$CURRENT_SNAPSHOT"
-    fi
+    collect_snapshot
 
     ELAPSED=$((i * 5))
-    echo "--- ${ELAPSED}s (stall: ${STALL_COUNT}/${STALL_THRESHOLD}) ---"
-
-    echo "  [tasks]"
-    echo "$TASKS_JSON" | jq -r '.[] | "    \(.id) \(.status) \(.assignee // "")"' 2>/dev/null
-
-    echo "  [agents]"
-    echo "$STATE_JSON" | jq -r '(.leaders + .members)[] | "    \(.id) role=\(.role) status=\(.status)"' 2>/dev/null
+    print_status $ELAPSED
 
     # Check completion
     DONE_COUNT=$(echo "$TASKS_JSON" | jq '[.[] | select(.type == "work" and .status == "done")] | length' 2>/dev/null || echo 0)
@@ -134,7 +102,7 @@ for i in $(seq 1 144); do
         break
     fi
 
-    if [ "$STALL_COUNT" -ge "$STALL_THRESHOLD" ]; then
+    if is_stalled; then
         echo ""
         echo "=== STALL DETECTED ==="
         STALL_ABORT=1

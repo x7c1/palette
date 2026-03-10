@@ -6,6 +6,7 @@
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
+source scripts/e2e-helpers.sh
 
 PALETTE_PORT=7100
 BASE_URL="http://127.0.0.1:${PALETTE_PORT}"
@@ -18,13 +19,7 @@ exec > >(tee "$LOG_FILE") 2>&1
 echo "Logging to $LOG_FILE"
 
 # Clean up previous state
-echo "=== Cleanup ==="
-lsof -ti:${PALETTE_PORT} | xargs -r kill 2>/dev/null || true
-docker ps -q --filter label=palette.managed=true | xargs -r docker rm -f 2>/dev/null || true
-tmux kill-session -t palette 2>/dev/null || true
-rm -f data/state.json data/palette.db data/palette.db-shm data/palette.db-wal
-docker volume ls -q --filter name=palette- | xargs -r docker volume rm 2>/dev/null || true
-mkdir -p data
+e2e_cleanup $PALETTE_PORT
 
 echo "=== Building ==="
 cargo build 2>&1 | tail -3

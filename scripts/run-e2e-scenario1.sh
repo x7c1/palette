@@ -6,6 +6,7 @@
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
+source scripts/e2e-helpers.sh
 
 PALETTE_PORT=7100
 BASE_URL="http://127.0.0.1:${PALETTE_PORT}"
@@ -18,13 +19,7 @@ exec > >(tee "$LOG_FILE") 2>&1
 echo "Logging to $LOG_FILE"
 
 # Clean up previous state
-echo "=== Cleanup ==="
-lsof -ti:${PALETTE_PORT} | xargs -r kill 2>/dev/null || true
-docker ps -q --filter label=palette.managed=true | xargs -r docker rm -f 2>/dev/null || true
-tmux kill-session -t palette 2>/dev/null || true
-rm -f data/state.json data/palette.db data/palette.db-shm data/palette.db-wal
-docker volume ls -q --filter name=palette- | xargs -r docker volume rm 2>/dev/null || true
-mkdir -p data
+e2e_cleanup $PALETTE_PORT
 
 echo "=== Building ==="
 cargo build 2>&1 | tail -3
@@ -76,43 +71,13 @@ echo "=== Monitoring agents (max 8 minutes) ==="
 echo "    Watch live: tmux attach -t palette"
 echo ""
 
-STALL_THRESHOLD=12  # 12 iterations x 5s = 60s without progress
-STALL_COUNT=0
-PREV_SNAPSHOT=""
-
 for i in $(seq 1 96); do
     sleep 5
 
-    # Collect current state snapshot for stall detection
-    TASKS_JSON=$(curl -s ${BASE_URL}/tasks 2>/dev/null || echo "[]")
-    STATE_JSON=$(cat data/state.json 2>/dev/null || echo "{}")
-    TASK_SNAPSHOT=$(echo "$TASKS_JSON" | jq -r '[.[] | "\(.id):\(.status):\(.assignee // "")"] | sort | join(",")' 2>/dev/null || echo "")
-    MEMBER_SNAPSHOT=$(echo "$STATE_JSON" | jq -r '[(.leaders + .members)[] | "\(.id):\(.status)"] | sort | join(",")' 2>/dev/null || echo "")
-    # Capture last non-empty line from each agent's pane to detect activity
-    PANE_SNAPSHOT=""
-    for pane_target in $(echo "$STATE_JSON" | jq -r '(.leaders + .members)[] | .terminal_target' 2>/dev/null); do
-        last_line=$(tmux capture-pane -t "$pane_target" -p 2>/dev/null | grep -v '^$' | tail -1)
-        PANE_SNAPSHOT="${PANE_SNAPSHOT}|${last_line}"
-    done
-    CURRENT_SNAPSHOT="${TASK_SNAPSHOT}|${MEMBER_SNAPSHOT}|${PANE_SNAPSHOT}"
-
-    if [ "$CURRENT_SNAPSHOT" = "$PREV_SNAPSHOT" ]; then
-        STALL_COUNT=$((STALL_COUNT + 1))
-    else
-        STALL_COUNT=0
-        PREV_SNAPSHOT="$CURRENT_SNAPSHOT"
-    fi
+    collect_snapshot
 
     ELAPSED=$((i * 5))
-    echo "--- ${ELAPSED}s (stall: ${STALL_COUNT}/${STALL_THRESHOLD}) ---"
-
-    # Show task statuses
-    echo "  [tasks]"
-    echo "$TASKS_JSON" | jq -r '.[] | "    \(.id) \(.status) \(.assignee // "")"' 2>/dev/null
-
-    # Show agent statuses
-    echo "  [agents]"
-    echo "$STATE_JSON" | jq -r '(.leaders + .members)[] | "    \(.id) \(.status)"' 2>/dev/null
+    print_status $ELAPSED
 
     echo "  [leader pane]"
     tmux capture-pane -t "$LEADER_PANE" -p 2>&1 | grep -v '^$' | tail -2
@@ -137,20 +102,9 @@ for i in $(seq 1 96); do
         break
     fi
 
-    # Stall detection
-    if [ "$STALL_COUNT" -ge "$STALL_THRESHOLD" ]; then
+    if is_stalled; then
         echo ""
-        echo "=== STALL DETECTED: no state change for ${STALL_THRESHOLD}x5s ==="
-        echo "  Snapshot: $CURRENT_SNAPSHOT"
-
-        IDLE_AGENTS=$(echo "$STATE_JSON" | jq -r '[(.leaders + .members)[] | select(.status == "idle")] | length' 2>/dev/null || echo 0)
-        READY_TASKS=$(echo "$TASKS_JSON" | jq '[.[] | select(.status == "ready")] | length' 2>/dev/null || echo 0)
-        echo "  Idle agents: $IDLE_AGENTS, Ready tasks: $READY_TASKS"
-
-        if [ "$IDLE_AGENTS" -gt 0 ] && [ "$READY_TASKS" -gt 0 ]; then
-            echo "  HINT: Idle agents exist but ready tasks are not being assigned"
-        fi
-        echo "  Aborting. Inspect with: tmux attach -t palette"
+        echo "=== STALL DETECTED ==="
         STALL_ABORT=1
         break
     fi
