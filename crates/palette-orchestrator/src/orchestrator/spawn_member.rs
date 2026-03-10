@@ -1,27 +1,30 @@
 use super::Orchestrator;
-use palette_docker::DockerManager;
+use palette_docker::{DockerManager, WorkspaceVolume};
 use palette_domain::agent::{AgentId, AgentRole, AgentState, AgentStatus};
 use palette_domain::server::PersistentState;
+use palette_domain::task::TaskType;
 
 impl Orchestrator {
     pub(super) fn spawn_member(
         &self,
         member_id: &AgentId,
+        task_type: TaskType,
         infra: &PersistentState,
+        workspace: Option<WorkspaceVolume>,
     ) -> crate::Result<AgentState> {
         let session_name = &infra.session_name;
+        let leader_id = infra.leader_id_for_task_type(task_type);
 
-        // Create a new tmux pane by splitting from the leader's pane
-        let leader_target = infra
-            .leaders
-            .first()
-            .map(|l| &l.terminal_target)
+        // Create a new tmux pane by splitting from the assigned leader's pane
+        let leader_state = infra
+            .find_leader(&leader_id)
+            .or_else(|| infra.leaders.first())
             .ok_or_else(|| {
                 crate::Error::Internal(
                     "no leader found; cannot spawn member without a leader pane".into(),
                 )
             })?;
-        let terminal_target = self.tmux.create_pane(leader_target)?;
+        let terminal_target = self.tmux.create_pane(&leader_state.terminal_target)?;
 
         let member_id_str = member_id.as_ref();
         let container_id = self.docker.create_container(
@@ -29,6 +32,7 @@ impl Orchestrator {
             &self.docker_config.member_image,
             AgentRole::Member,
             session_name,
+            workspace,
         )?;
         self.docker.start_container(&container_id)?;
         self.docker.write_settings(
@@ -58,7 +62,7 @@ impl Orchestrator {
         Ok(AgentState {
             id: member_id.clone(),
             role: AgentRole::Member,
-            leader_id: AgentId::new("leader-1"),
+            leader_id,
             container_id,
             terminal_target,
             status: AgentStatus::Booting,

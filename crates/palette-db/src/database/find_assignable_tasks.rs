@@ -1,21 +1,27 @@
 use super::*;
 
 impl Database {
-    /// Find work tasks that are ready and have all work dependencies done.
+    /// Find tasks that are assignable:
+    /// - Work tasks: status = 'ready' with all work dependencies done
+    /// - Review tasks: status = 'todo' (dependency already verified by rule engine)
+    ///
     /// Returns tasks ordered by priority (high > medium > low > null).
     pub fn find_assignable_tasks(&self) -> crate::Result<Vec<Task>> {
         let conn = lock!(self.conn);
         let mut stmt = conn.prepare(
             "SELECT t.id, t.type, t.title, t.description, t.assignee, t.status, t.priority, t.repositories, t.pr_url, t.created_at, t.updated_at, t.notes, t.assigned_at
              FROM tasks t
-             WHERE t.type = 'work'
-             AND t.status = 'ready'
-             AND NOT EXISTS (
-               SELECT 1 FROM dependencies d
-               JOIN tasks dep ON d.depends_on = dep.id
-               WHERE d.task_id = t.id
-               AND dep.type = 'work'
-               AND dep.status != 'done'
+             WHERE (
+               (t.type = 'work' AND t.status = 'ready'
+                AND NOT EXISTS (
+                  SELECT 1 FROM dependencies d
+                  JOIN tasks dep ON d.depends_on = dep.id
+                  WHERE d.task_id = t.id
+                  AND dep.type = 'work'
+                  AND dep.status != 'done'
+                ))
+               OR
+               (t.type = 'review' AND t.status = 'todo' AND t.assignee IS NULL)
              )
              ORDER BY
                CASE t.priority
@@ -89,6 +95,32 @@ mod tests {
         let assignable = db.find_assignable_tasks().unwrap();
         assert_eq!(assignable.len(), 1);
         assert_eq!(assignable[0].id, tid("W-002"));
+    }
+
+    #[test]
+    fn find_assignable_tasks_review_todo() {
+        let db = test_db();
+        create_work(&db, "W-001", None, vec![]);
+        create_review(&db, "R-001", vec![tid("W-001")]);
+
+        // Review starts as Todo (initial status for review tasks)
+        // Both work (draft) and review (todo, unassigned) are in the DB
+        // Work is not ready yet, but review is todo and unassigned → assignable
+        let assignable = db.find_assignable_tasks().unwrap();
+        assert_eq!(assignable.len(), 1);
+        assert_eq!(assignable[0].id, tid("R-001"));
+
+        // Set work to ready — both are now assignable
+        db.update_task_status(&tid("W-001"), TaskStatus::Ready)
+            .unwrap();
+        let assignable = db.find_assignable_tasks().unwrap();
+        assert_eq!(assignable.len(), 2);
+
+        // Assign review — only work remains assignable
+        db.assign_task(&tid("R-001"), &aid("m-r")).unwrap();
+        let assignable = db.find_assignable_tasks().unwrap();
+        assert_eq!(assignable.len(), 1);
+        assert_eq!(assignable[0].id, tid("W-001"));
     }
 
     #[test]

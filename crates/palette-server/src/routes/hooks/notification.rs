@@ -11,6 +11,12 @@ use std::sync::Arc;
 use super::HookQuery;
 use crate::routes::now;
 
+/// Payload sent by Claude Code's notification hook.
+#[derive(serde::Deserialize)]
+struct NotificationPayload {
+    transcript_path: Option<String>,
+}
+
 pub async fn handle_notification(
     State(state): State<Arc<AppState>>,
     Query(query): Query<HookQuery>,
@@ -30,33 +36,132 @@ pub async fn handle_notification(
     };
     state.event_log.lock().await.push(record);
 
-    // Update member status to WaitingPermission and resolve leader ID
-    let leader_id = {
+    let notification_payload: NotificationPayload =
+        serde_json::from_value(payload).unwrap_or(NotificationPayload {
+            transcript_path: None,
+        });
+
+    // Update member status to WaitingPermission and resolve context
+    let member_context = {
         let mut infra = state.infra.lock().await;
         if let Some(member) = infra.find_member_mut(&member_id) {
             member.status = AgentStatus::WaitingPermission;
-            let leader_id = member.leader_id.clone();
+            let ctx = MemberContext {
+                leader_id: member.leader_id.clone(),
+                terminal_target: member.terminal_target.clone(),
+                container_id: member.container_id.clone(),
+            };
             infra.touch();
-            Some(leader_id)
+            Some(ctx)
         } else {
             None
         }
     };
 
-    // Enqueue event notification to leader
-    if let Some(ref leader_id) = leader_id {
-        let notification = format!(
-            "[event] member={} type=permission_prompt payload={}",
-            member_id,
-            serde_json::to_string(&payload).unwrap_or_default()
-        );
-        if let Err(e) = state.db.enqueue_message(leader_id, &notification) {
-            tracing::error!(error = %e, "failed to enqueue notification for leader");
-        }
+    let Some(ctx) = member_context else {
+        let _ = state.event_tx.send(ServerEvent::NotifyDeliveryLoop);
+        return StatusCode::OK;
+    };
+
+    // Extract the pending tool call from the member's JSONL transcript
+    let pending_tool = match notification_payload.transcript_path {
+        Some(ref path) if !path.is_empty() => extract_pending_tool(&ctx.container_id, path),
+        _ => None,
+    };
+
+    // Capture the member's pane content (last 10 non-empty lines, joined as single line)
+    let pane_content = state
+        .tmux
+        .capture_pane(&ctx.terminal_target)
+        .ok()
+        .map(|content| {
+            let lines: Vec<&str> = content.lines().filter(|l| !l.trim().is_empty()).collect();
+            let start = lines.len().saturating_sub(10);
+            lines[start..].join(" | ")
+        });
+
+    // Build notification message
+    let mut notification = format!("[event] member={member_id} type=permission_prompt");
+    if let Some(ref tool) = pending_tool {
+        notification.push_str(&format!(" tool={} input={}", tool.name, tool.input));
+    }
+    if let Some(ref pane) = pane_content {
+        notification.push_str(&format!(" pane=[{pane}]"));
     }
 
-    // Fire-and-forget: notify delivery loop
+    if let Err(e) = state.db.enqueue_message(&ctx.leader_id, &notification) {
+        tracing::error!(error = %e, "failed to enqueue notification for leader");
+    }
+
     let _ = state.event_tx.send(ServerEvent::NotifyDeliveryLoop);
 
     StatusCode::OK
+}
+
+struct MemberContext {
+    leader_id: AgentId,
+    terminal_target: palette_domain::terminal::TerminalTarget,
+    container_id: palette_domain::agent::ContainerId,
+}
+
+struct PendingTool {
+    name: String,
+    input: String,
+}
+
+/// A single entry in a Claude Code JSONL transcript.
+#[derive(serde::Deserialize)]
+struct TranscriptEntry {
+    #[serde(rename = "type")]
+    entry_type: String,
+    message: Option<TranscriptMessage>,
+}
+
+#[derive(serde::Deserialize)]
+struct TranscriptMessage {
+    content: Vec<ContentBlock>,
+}
+
+#[derive(serde::Deserialize)]
+#[serde(tag = "type")]
+enum ContentBlock {
+    #[serde(rename = "tool_use")]
+    ToolUse {
+        name: String,
+        input: serde_json::Value,
+    },
+    #[serde(other)]
+    Other,
+}
+
+/// Read the member's transcript and extract the last tool_use entry.
+fn extract_pending_tool(
+    container_id: &palette_domain::agent::ContainerId,
+    transcript_path: &str,
+) -> Option<PendingTool> {
+    let content = palette_docker::read_container_file(container_id, transcript_path, 5).ok()?;
+
+    for line in content.lines().rev() {
+        let entry: TranscriptEntry = serde_json::from_str(line).ok()?;
+        if entry.entry_type != "assistant" {
+            continue;
+        }
+        let contents = entry.message?.content;
+        for block in contents.iter().rev() {
+            if let ContentBlock::ToolUse { name, input } = block {
+                let input_str = input.to_string();
+                let input_str = if input_str.chars().count() > 200 {
+                    let truncated: String = input_str.chars().take(200).collect();
+                    format!("{truncated}...")
+                } else {
+                    input_str
+                };
+                return Some(PendingTool {
+                    name: name.clone(),
+                    input: input_str,
+                });
+            }
+        }
+    }
+    None
 }

@@ -67,6 +67,7 @@ fn from_agent_record(record: AgentRecord) -> Result<AgentState, Error> {
 fn parse_role(s: &str) -> Result<AgentRole, Error> {
     match s {
         "leader" => Ok(AgentRole::Leader),
+        "review_integrator" => Ok(AgentRole::ReviewIntegrator),
         "member" => Ok(AgentRole::Member),
         other => Err(Error::InvalidData(format!("unknown role: {other}"))),
     }

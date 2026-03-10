@@ -62,6 +62,14 @@ palette_url = "http://127.0.0.1:7100"
         assert_eq!(config.docker.palette_url, "http://127.0.0.1:7100");
         assert_eq!(config.docker.leader_image, "palette-leader:latest");
         assert_eq!(config.docker.member_image, "palette-member:latest");
+        assert_eq!(
+            config.docker.review_integrator_image,
+            "palette-leader:latest"
+        );
+        assert_eq!(
+            config.docker.review_integrator_prompt,
+            "prompts/review-integrator.md"
+        );
     }
 
     #[test]

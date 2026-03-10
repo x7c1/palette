@@ -11,7 +11,23 @@ impl DockerManager {
                 "failed to start container {container_id}: {stderr}"
             )));
         }
-        tracing::info!(container_id = %container_id, "started container");
-        Ok(())
+
+        // Wait until the container is actually running before returning.
+        // `docker start` can return before the entrypoint process is ready,
+        // causing subsequent `docker exec` calls to fail.
+        let cid = container_id.as_ref();
+        for _ in 0..20 {
+            let inspect = run_docker(["inspect", "-f", "{{.State.Running}}", cid])?;
+            let running = String::from_utf8_lossy(&inspect.stdout).trim().to_string();
+            if running == "true" {
+                tracing::info!(container_id = %container_id, "started container");
+                return Ok(());
+            }
+            std::thread::sleep(std::time::Duration::from_millis(100));
+        }
+
+        Err(Error::Command(format!(
+            "container {container_id} did not reach running state"
+        )))
     }
 }

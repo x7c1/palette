@@ -45,7 +45,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             tracing::info!("restored previous state");
             state
         }
-        None => bootstrap_leader(&config, &tmux, &docker, &state_path)?,
+        None => bootstrap_leaders(&config, &tmux, &docker, &state_path)?,
     };
     let infra = Arc::new(tokio::sync::Mutex::new(infra));
 
@@ -105,7 +105,8 @@ fn spawn_agent(
     session_name: &str,
     settings_template: &Path,
 ) -> Result<AgentState, Box<dyn std::error::Error>> {
-    let container_id = docker.create_container(spec.name, spec.image, spec.role, session_name)?;
+    let container_id =
+        docker.create_container(spec.name, spec.image, spec.role, session_name, None)?;
     docker.start_container(&container_id)?;
     docker.write_settings(&container_id, settings_template, spec.id.as_ref())?;
     DockerManager::copy_file_to_container(
@@ -134,8 +135,9 @@ fn spawn_agent(
     })
 }
 
-/// Bootstrap only the leader. Members are spawned on-demand by the orchestrator.
-fn bootstrap_leader(
+/// Bootstrap leaders (main leader + optional review integrator).
+/// Members are spawned on-demand by the orchestrator.
+fn bootstrap_leaders(
     config: &Config,
     tmux: &TmuxManager,
     docker: &DockerManager,
@@ -144,11 +146,11 @@ fn bootstrap_leader(
     let session_name = &config.tmux.session_name;
     let settings_template = Path::new(&config.docker.settings_template);
     let mut state = PersistentState::new(session_name.clone());
-
-    let leader_target = tmux.create_target("leader")?;
-
-    let leader_id = AgentId::new("leader-1");
     let empty_leader_id = AgentId::new("");
+
+    // Main leader
+    let leader_target = tmux.create_target("leader")?;
+    let leader_id = AgentId::new("leader-1");
     let leader = spawn_agent(
         &AgentSpec {
             id: &leader_id,
@@ -166,7 +168,29 @@ fn bootstrap_leader(
     )?;
     state.leaders.push(leader);
 
+    // Review integrator
+    let ri_target = tmux.create_target("review-integrator")?;
+    let ri_id = AgentId::new("review-integrator-1");
+    let ri = spawn_agent(
+        &AgentSpec {
+            id: &ri_id,
+            name: "review-integrator",
+            role: AgentRole::ReviewIntegrator,
+            image: &config.docker.review_integrator_image,
+            prompt: &config.docker.review_integrator_prompt,
+            leader_id: &empty_leader_id,
+        },
+        &ri_target,
+        docker,
+        tmux,
+        session_name,
+        settings_template,
+    )?;
+    state.leaders.push(ri);
+
     palette_file_state::save(&state, state_path)?;
-    tracing::info!("bootstrapped leader (members spawn on-demand)");
+    tracing::info!(
+        "bootstrapped leaders: main leader + review integrator (members spawn on-demand)"
+    );
     Ok(state)
 }

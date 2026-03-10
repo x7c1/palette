@@ -75,6 +75,34 @@ pub async fn handle_submit_review(
         }
     }
 
+    // Notify main leader about review results
+    {
+        let infra = state.infra.lock().await;
+        if let Some(main_leader) = infra.find_main_leader() {
+            let verdict_str = match submission.verdict {
+                Verdict::Approved => "approved",
+                Verdict::ChangesRequested => "changes_requested",
+            };
+            let work_ids: Vec<String> = state
+                .db
+                .find_works_for_review(&review_task_id)
+                .unwrap_or_default()
+                .iter()
+                .map(|w| w.id.to_string())
+                .collect();
+            let notification = format!(
+                "[event] review={review_task_id} works={} type={verdict_str}",
+                work_ids.join(","),
+            );
+            let _ = state.db.enqueue_message(&main_leader.id, &notification);
+            tracing::info!(
+                review_task_id = %review_task_id,
+                verdict = verdict_str,
+                "notified main leader of review result"
+            );
+        }
+    }
+
     // Fire-and-forget: orchestrator processes effects and delivers messages
     if !effects.is_empty() {
         let _ = state.event_tx.send(ServerEvent::ProcessEffects { effects });

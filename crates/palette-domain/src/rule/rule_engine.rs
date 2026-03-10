@@ -37,6 +37,12 @@ impl<S: TaskStore> RuleEngine<S> {
                     task_id: task_id.clone(),
                 });
             }
+            // review -> todo: trigger auto-assign for reviewer member
+            (TaskType::Review, TaskStatus::Todo) => {
+                effects.push(RuleEffect::AutoAssign {
+                    task_id: task_id.clone(),
+                });
+            }
             // work -> in_review: enable related reviews
             (TaskType::Work, TaskStatus::InReview) => {
                 let reviews = self.store.find_reviews_for_work(task_id)?;

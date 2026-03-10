@@ -2,6 +2,14 @@ use super::{DockerManager, run_docker};
 use crate::Error;
 use palette_domain::agent::{AgentRole, ContainerId};
 
+/// Workspace volume to mount in the container.
+pub struct WorkspaceVolume {
+    /// Docker named volume name (e.g., "palette-workspace-W-001").
+    pub name: String,
+    /// If true, mount as read-only.
+    pub read_only: bool,
+}
+
 impl DockerManager {
     /// Create and start a container for an agent.
     /// Returns the container ID.
@@ -11,6 +19,7 @@ impl DockerManager {
         image: &str,
         role: AgentRole,
         session_name: &str,
+        workspace: Option<WorkspaceVolume>,
     ) -> crate::Result<ContainerId> {
         let role_str = role.as_str();
         let labels = [
@@ -72,24 +81,30 @@ impl DockerManager {
             args.push("/var/run/docker.sock:/var/run/docker.sock".to_string());
         }
 
-        // Transcript volume: members write, leaders read
+        // Transcript volume: all agents write their transcripts here
         let transcript_volume = format!("palette-transcripts-{session_name}");
-        match role {
-            AgentRole::Member => {
-                args.push("-v".to_string());
-                args.push(format!("{transcript_volume}:/home/agent/.claude/projects"));
-            }
-            AgentRole::Leader => {
-                args.push("-v".to_string());
-                args.push(format!(
-                    "{transcript_volume}:/home/agent/.claude/projects:ro"
-                ));
-            }
+        args.push("-v".to_string());
+        args.push(format!("{transcript_volume}:/home/agent/.claude/projects"));
+
+        // Workspace volume: shared between worker and reviewer for the same task
+        if let Some(ws) = workspace {
+            let suffix = if ws.read_only { ":ro" } else { "" };
+            args.push("-v".to_string());
+            args.push(format!("{}:/home/agent/workspace{suffix}", ws.name));
         }
 
         args.push(image.to_string());
-        args.push("sleep".to_string());
-        args.push("infinity".to_string());
+
+        // Fix workspace ownership then idle; named volumes may mount as root
+        // even though Dockerfile.base pre-creates the directory as agent user.
+        // Use semicolon (not &&) because chown fails on read-only mounts,
+        // which is expected for reviewer containers.
+        args.push("sh".to_string());
+        args.push("-c".to_string());
+        args.push(
+            "sudo chown agent:agent /home/agent/workspace 2>/dev/null; exec sleep infinity"
+                .to_string(),
+        );
 
         let output = run_docker(&args)?;
         if !output.status.success() {

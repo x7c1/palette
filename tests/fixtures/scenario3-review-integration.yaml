@@ -1,0 +1,16 @@
+repositories:
+  - name: x7c1/palette
+    branch: e2e-scenario3
+
+tasks:
+  - id: W-001
+    type: work
+    title: Create greeting file
+    description: Create /home/agent/workspace/greeting.txt with content "Hello, world!"
+    priority: high
+
+  - id: R-001
+    type: review
+    title: Review greeting file
+    description: Verify /home/agent/workspace/greeting.txt exists and contains "Hello, world!"
+    depends_on: [W-001]

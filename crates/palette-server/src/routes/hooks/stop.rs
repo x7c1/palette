@@ -48,7 +48,7 @@ pub async fn handle_stop(
         }
     };
 
-    // Transition member's in_progress tasks to in_review and notify leader
+    // Transition member's in_progress tasks and notify leaders
     if let Some(ref leader_id) = leader_id {
         let member_tasks = state
             .db
@@ -59,35 +59,44 @@ pub async fn handle_stop(
             })
             .unwrap_or_default();
 
+        let last_message = payload
+            .get("last_assistant_message")
+            .and_then(|v| v.as_str())
+            .unwrap_or("(work completed)");
+
         for task in &member_tasks {
-            if let Err(e) = state.db.update_task_status(&task.id, TaskStatus::InReview) {
-                tracing::error!(task_id = %task.id, error = %e, "failed to transition task to in_review");
-                continue;
-            }
-            let effects = state
-                .rules
-                .on_status_change(&task.id, TaskStatus::InReview)
-                .unwrap_or_default();
-            for effect in &effects {
-                tracing::info!(?effect, "rule engine effect (member stop)");
-            }
+            match task.task_type {
+                palette_domain::task::TaskType::Work => {
+                    // Work tasks: in_progress → in_review.
+                    // The rule engine triggers AutoAssign for the review task,
+                    // so we only need the status transition here.
+                    if let Err(e) = state.db.update_task_status(&task.id, TaskStatus::InReview) {
+                        tracing::error!(task_id = %task.id, error = %e, "failed to transition task to in_review");
+                        continue;
+                    }
+                    let effects = state
+                        .rules
+                        .on_status_change(&task.id, TaskStatus::InReview)
+                        .unwrap_or_default();
+                    for effect in &effects {
+                        tracing::info!(?effect, "rule engine effect (member stop)");
+                    }
 
-            if !effects.is_empty() {
-                let _ = state.event_tx.send(ServerEvent::ProcessEffects { effects });
-            }
-
-            // Enqueue review instruction to leader
-            let review_msg = format!(
-                "[review] task={} member={} message: {}",
-                task.id,
-                member_id,
-                payload
-                    .get("last_assistant_message")
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("(work completed)")
-            );
-            if let Err(e) = state.db.enqueue_message(leader_id, &review_msg) {
-                tracing::error!(error = %e, "failed to enqueue review notification for leader");
+                    if !effects.is_empty() {
+                        let _ = state.event_tx.send(ServerEvent::ProcessEffects { effects });
+                    }
+                }
+                palette_domain::task::TaskType::Review => {
+                    // Review tasks: notify the member's leader (review integrator)
+                    // with findings so it can aggregate and submit a verdict.
+                    let report_msg = format!(
+                        "[review] member={} task={} type=review_complete message: {}",
+                        member_id, task.id, last_message,
+                    );
+                    if let Err(e) = state.db.enqueue_message(leader_id, &report_msg) {
+                        tracing::error!(error = %e, "failed to enqueue review report");
+                    }
+                }
             }
         }
 

@@ -12,17 +12,14 @@ impl DockerManager {
     ) -> String {
         let cid = container_id.as_ref();
         let plugin_flag = " --plugin-dir /home/agent/claude-code-plugin";
-        match role {
-            AgentRole::Leader => {
-                format!(
-                    "docker exec -it {cid} claude --dangerously-skip-permissions --append-system-prompt-file {prompt_file}{plugin_flag}"
-                )
-            }
-            AgentRole::Member => {
-                format!(
-                    "docker exec -it {cid} claude --append-system-prompt-file {prompt_file}{plugin_flag}"
-                )
-            }
+        if role.is_leader() {
+            format!(
+                "docker exec -it {cid} claude --dangerously-skip-permissions --append-system-prompt-file {prompt_file}{plugin_flag}"
+            )
+        } else {
+            format!(
+                "docker exec -it {cid} claude --append-system-prompt-file {prompt_file}{plugin_flag}"
+            )
         }
     }
 }
@@ -58,5 +55,20 @@ mod tests {
         assert!(!cmd.contains("--dangerously-skip-permissions"));
         assert!(cmd.contains("--append-system-prompt-file /home/agent/prompts/member.md"));
         assert!(cmd.contains("--plugin-dir /home/agent/claude-code-plugin"));
+    }
+
+    #[test]
+    fn review_integrator_bypasses_permissions() {
+        let cid = ContainerId::new("abc123");
+        let cmd = DockerManager::claude_exec_command(
+            &cid,
+            "/home/agent/prompts/review-integrator.md",
+            AgentRole::ReviewIntegrator,
+        );
+        assert!(cmd.contains("docker exec -it abc123 claude"));
+        assert!(cmd.contains("--dangerously-skip-permissions"));
+        assert!(
+            cmd.contains("--append-system-prompt-file /home/agent/prompts/review-integrator.md")
+        );
     }
 }
