@@ -71,7 +71,7 @@ pub async fn handle_send(
                 })?
         };
 
-        tracing::info!(target = %terminal_target, message = %req.message, "sending keys via tmux");
+        tracing::info!(target = %terminal_target, message = %req.message, no_enter = req.no_enter, "sending keys via tmux");
         send_tmux_keys(&state.tmux, &terminal_target, &req.message, req.no_enter)
             .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 

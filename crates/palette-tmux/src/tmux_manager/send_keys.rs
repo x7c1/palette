@@ -22,6 +22,15 @@ impl TmuxManager {
             )));
         }
 
+        // Wait briefly for the terminal to process, then check for bracketed paste
+        std::thread::sleep(std::time::Duration::from_millis(500));
+        if let Ok(pane) = self.capture_pane(target) {
+            if pane.contains("[Pasted text") {
+                tracing::info!(target = %target, "bracketed paste detected, sending extra Enter");
+                let _ = self.send_raw_key(target, "Enter");
+            }
+        }
+
         tracing::debug!(target = %target, "sent keys");
         Ok(())
     }

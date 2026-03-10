@@ -23,6 +23,9 @@ WORKDIR /home/agent
 RUN curl -fsSL https://claude.ai/install.sh | bash
 ENV PATH="/home/agent/.local/bin:$PATH"
 
+# Pre-create transcript directory so named volumes inherit agent ownership
+RUN mkdir -p /home/agent/.claude/projects
+
 # Skip first-run onboarding, trust dialog, and bypass permissions confirmation
 RUN echo '{"hasCompletedOnboarding":true,"bypassPermissionsModeAccepted":true,"projects":{"/home/agent":{"hasTrustDialogAccepted":true}}}' > /home/agent/.claude.json
 

@@ -8,6 +8,7 @@ license.workspace = true
 axum.workspace = true
 chrono.workspace = true
 palette-db = { path = "../palette-db" }
+palette-docker = { path = "../palette-docker" }
 palette-domain = { path = "../palette-domain" }
 palette-tmux = { path = "../palette-tmux" }
 serde.workspace = true
@@ -17,7 +18,6 @@ tokio.workspace = true
 tracing.workspace = true
 
 [dev-dependencies]
-palette-docker = { path = "../palette-docker" }
 palette-orchestrator = { path = "../palette-orchestrator" }
 reqwest.workspace = true
 serde_json.workspace = true

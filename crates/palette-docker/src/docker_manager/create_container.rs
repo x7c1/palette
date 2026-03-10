@@ -72,17 +72,12 @@ impl DockerManager {
             args.push("/var/run/docker.sock:/var/run/docker.sock".to_string());
         }
 
-        // Transcript volume: members write, leaders read
+        // Transcript volume: all agents write their transcripts here
         let transcript_volume = format!("palette-transcripts-{session_name}");
-        if role.is_leader() {
-            args.push("-v".to_string());
-            args.push(format!(
-                "{transcript_volume}:/home/agent/.claude/projects:ro"
-            ));
-        } else {
-            args.push("-v".to_string());
-            args.push(format!("{transcript_volume}:/home/agent/.claude/projects"));
-        }
+        args.push("-v".to_string());
+        args.push(format!(
+            "{transcript_volume}:/home/agent/.claude/projects"
+        ));
 
         args.push(image.to_string());
         args.push("sleep".to_string());

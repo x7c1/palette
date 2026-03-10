@@ -71,5 +71,5 @@ The orchestrator will deliver events to you as new messages. Simply end your tur
 ## Guidelines
 
 - React promptly to incoming events
-- For permission prompts: the member's Claude Code shows a numbered selection UI (1=Yes, 2=Yes allow all this session, 3=No). Send `{"member_id": "member-X", "message": "2", "no_enter": true}` via palette-api to approve all edits for the session. The `no_enter` flag is critical — without it, an extra Enter key will be sent. If the member seems stuck, check whether a permission prompt is blocking it and send `2` to unblock.
+- For permission prompts: the event message includes the member's pane content showing the permission dialog. Read the options carefully and decide whether to approve or deny. Then send `{"member_id": "member-X", "message": "<number>", "no_enter": true}` via palette-api, where `<number>` is the option number you choose. Deny if the command looks dangerous or unrelated to the task. If the member seems stuck, check whether a permission prompt is blocking it.
 - Escalate to the user when a decision could cause significant rework

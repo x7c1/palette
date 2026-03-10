@@ -76,5 +76,5 @@ The orchestrator will deliver events to you as new messages. Simply end your tur
 
 - Wait for ALL review members to report before submitting a verdict
 - Be concise in summaries — focus on actionable findings
-- For permission prompts: send `{"member_id": "member-X", "message": "2", "no_enter": true}` via palette-api to approve all edits for the session
+- For permission prompts: the event message includes the member's pane content showing the permission dialog. Read the options carefully and decide whether to approve or deny. Then send `{"member_id": "member-X", "message": "<number>", "no_enter": true}` via palette-api, where `<number>` is the option number you choose. Deny if the command looks dangerous or unrelated to the task.
 - If a review member seems stuck, check whether a permission prompt is blocking it

@@ -23,6 +23,7 @@ lsof -ti:${PALETTE_PORT} | xargs -r kill 2>/dev/null || true
 docker ps -q --filter label=palette.managed=true | xargs -r docker rm -f 2>/dev/null || true
 tmux kill-session -t palette 2>/dev/null || true
 rm -f data/state.json data/palette.db data/palette.db-shm data/palette.db-wal
+docker volume ls -q --filter name=palette-transcripts | xargs -r docker volume rm 2>/dev/null || true
 mkdir -p data
 
 echo "=== Building ==="
@@ -87,7 +88,13 @@ for i in $(seq 1 120); do
     STATE_JSON=$(cat data/state.json 2>/dev/null || echo "{}")
     TASK_SNAPSHOT=$(echo "$TASKS_JSON" | jq -r '[.[] | "\(.id):\(.status):\(.assignee // "")"] | sort | join(",")' 2>/dev/null || echo "")
     MEMBER_SNAPSHOT=$(echo "$STATE_JSON" | jq -r '[(.leaders + .members)[] | "\(.id):\(.status)"] | sort | join(",")' 2>/dev/null || echo "")
-    CURRENT_SNAPSHOT="${TASK_SNAPSHOT}|${MEMBER_SNAPSHOT}"
+    # Capture last non-empty line from each agent's pane to detect activity
+    PANE_SNAPSHOT=""
+    for pane_target in $(echo "$STATE_JSON" | jq -r '(.leaders + .members)[] | .terminal_target' 2>/dev/null); do
+        last_line=$(tmux capture-pane -t "$pane_target" -p 2>/dev/null | grep -v '^$' | tail -1)
+        PANE_SNAPSHOT="${PANE_SNAPSHOT}|${last_line}"
+    done
+    CURRENT_SNAPSHOT="${TASK_SNAPSHOT}|${MEMBER_SNAPSHOT}|${PANE_SNAPSHOT}"
 
     if [ "$CURRENT_SNAPSHOT" = "$PREV_SNAPSHOT" ]; then
         STALL_COUNT=$((STALL_COUNT + 1))
