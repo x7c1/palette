@@ -132,7 +132,7 @@ fn send_tmux_keys(
     no_enter: bool,
 ) -> palette_tmux::Result<()> {
     if no_enter {
-        tmux.send_keys_literal(target, message)
+        tmux.send_keys_no_enter(target, message)
     } else {
         tmux.send_keys(target, message)
     }

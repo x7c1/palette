@@ -5,7 +5,7 @@ mod create_target;
 mod is_session_alive;
 mod is_terminal_alive;
 mod send_keys;
-mod send_keys_literal;
+mod send_keys_no_enter;
 mod send_raw_key;
 
 #[cfg(test)]
