@@ -62,9 +62,9 @@ impl Orchestrator {
             return Ok(());
         }
 
-        // Spawn a new member
+        // Spawn a new member with leader_id based on task type
         let member_id = infra.next_member_id();
-        let member = self.spawn_member(&member_id, infra)?;
+        let member = self.spawn_member(&member_id, task.task_type, infra)?;
         let terminal_target = member.terminal_target.clone();
         infra.members.push(member);
 

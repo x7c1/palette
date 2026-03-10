@@ -74,17 +74,14 @@ impl DockerManager {
 
         // Transcript volume: members write, leaders read
         let transcript_volume = format!("palette-transcripts-{session_name}");
-        match role {
-            AgentRole::Member => {
-                args.push("-v".to_string());
-                args.push(format!("{transcript_volume}:/home/agent/.claude/projects"));
-            }
-            AgentRole::Leader => {
-                args.push("-v".to_string());
-                args.push(format!(
-                    "{transcript_volume}:/home/agent/.claude/projects:ro"
-                ));
-            }
+        if role.is_leader() {
+            args.push("-v".to_string());
+            args.push(format!(
+                "{transcript_volume}:/home/agent/.claude/projects:ro"
+            ));
+        } else {
+            args.push("-v".to_string());
+            args.push(format!("{transcript_volume}:/home/agent/.claude/projects"));
         }
 
         args.push(image.to_string());

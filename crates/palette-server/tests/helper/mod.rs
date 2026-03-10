@@ -31,6 +31,8 @@ pub fn test_docker_config() -> DockerConfig {
         member_image: "palette-member:latest".to_string(),
         settings_template: "config/hooks/member-settings.json".to_string(),
         leader_prompt: "prompts/leader.md".to_string(),
+        review_integrator_image: "palette-leader:latest".to_string(),
+        review_integrator_prompt: "prompts/review-integrator.md".to_string(),
         member_prompt: "prompts/member.md".to_string(),
         max_members: 3,
     }

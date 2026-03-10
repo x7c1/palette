@@ -1,0 +1,107 @@
+#!/bin/bash
+# E2E Scenario 4: Multi-leader routing verification (005-multi-leader)
+#   Load a work task and a review task.
+#   Verify that work member's stop hook routes to main leader,
+#   and review member's stop hook routes to review integrator.
+set -euo pipefail
+
+cd "$(dirname "$0")/.."
+
+PALETTE_PORT=7100
+BASE_URL="http://127.0.0.1:${PALETTE_PORT}"
+
+# Log output to timestamped file
+LOG_DIR="data/logs"
+mkdir -p "$LOG_DIR"
+LOG_FILE="$LOG_DIR/scenario4-$(date +%Y%m%d-%H%M%S).log"
+exec > >(tee "$LOG_FILE") 2>&1
+echo "Logging to $LOG_FILE"
+
+# Clean up previous state
+echo "=== Cleanup ==="
+lsof -ti:${PALETTE_PORT} | xargs -r kill 2>/dev/null || true
+docker ps -q --filter label=palette.managed=true | xargs -r docker rm -f 2>/dev/null || true
+tmux kill-session -t palette 2>/dev/null || true
+rm -f data/state.json data/palette.db data/palette.db-shm data/palette.db-wal
+mkdir -p data
+
+echo "=== Building ==="
+cargo build 2>&1 | tail -3
+
+echo "=== Starting palette ==="
+cargo run 2>&1 &
+PALETTE_PID=$!
+
+cleanup() {
+    echo "=== Stopping palette (PID=$PALETTE_PID) ==="
+    kill $PALETTE_PID 2>/dev/null || true
+    wait $PALETTE_PID 2>/dev/null || true
+    docker ps -q --filter label=palette.managed=true | xargs -r docker rm -f 2>/dev/null || true
+    tmux kill-session -t palette 2>/dev/null || true
+}
+trap cleanup EXIT
+
+echo "Waiting for server to start..."
+for i in $(seq 1 60); do
+    if curl -sf ${BASE_URL}/tasks >/dev/null 2>&1; then
+        echo "  server ready (${i}s)"
+        break
+    fi
+    if ! kill -0 $PALETTE_PID 2>/dev/null; then
+        echo "ERROR: palette exited unexpectedly"
+        exit 1
+    fi
+    sleep 1
+done
+
+echo ""
+echo "=== Palette running (PID=$PALETTE_PID) ==="
+
+STATE_JSON=$(cat data/state.json 2>/dev/null || echo "{}")
+echo "--- leaders ---"
+echo "$STATE_JSON" | jq -r '.leaders[] | "  \(.id) role=\(.role)"'
+
+echo ""
+echo "=== Verifying bootstrap: two leaders present ==="
+LEADER_COUNT=$(echo "$STATE_JSON" | jq '.leaders | length')
+echo "Leader count: $LEADER_COUNT (expected: 2)"
+
+MAIN_LEADER=$(echo "$STATE_JSON" | jq -r '.leaders[] | select(.role == "leader") | .id')
+REVIEW_INTEGRATOR=$(echo "$STATE_JSON" | jq -r '.leaders[] | select(.role == "review_integrator") | .id')
+echo "Main leader: $MAIN_LEADER"
+echo "Review integrator: $REVIEW_INTEGRATOR"
+
+# Wait for agents to boot and become idle, then check member routing
+echo ""
+echo "=== Waiting for leaders to become idle (max 3 minutes) ==="
+for i in $(seq 1 36); do
+    sleep 5
+    STATE_JSON=$(cat data/state.json 2>/dev/null || echo "{}")
+    IDLE_LEADERS=$(echo "$STATE_JSON" | jq '[.leaders[] | select(.status == "Idle")] | length')
+    echo "  ${i}: idle leaders = $IDLE_LEADERS/2"
+    if [ "$IDLE_LEADERS" = "2" ]; then
+        echo "  Both leaders idle"
+        break
+    fi
+done
+
+echo ""
+echo "=== Verification ==="
+RESULT=PASSED
+
+if [ "$LEADER_COUNT" != "2" ]; then
+    echo "FAIL: Expected 2 leaders, got $LEADER_COUNT"
+    RESULT=FAILED
+fi
+
+if [ -z "$MAIN_LEADER" ]; then
+    echo "FAIL: No main leader found"
+    RESULT=FAILED
+fi
+
+if [ -z "$REVIEW_INTEGRATOR" ]; then
+    echo "FAIL: No review integrator found"
+    RESULT=FAILED
+fi
+
+echo "=== SCENARIO 4 $RESULT ==="

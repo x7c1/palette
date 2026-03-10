@@ -11,6 +11,10 @@ pub struct DockerConfig {
     pub settings_template: String,
     #[serde(default = "default_leader_prompt")]
     pub leader_prompt: String,
+    #[serde(default = "default_review_integrator_image")]
+    pub review_integrator_image: String,
+    #[serde(default = "default_review_integrator_prompt")]
+    pub review_integrator_prompt: String,
     #[serde(default = "default_member_prompt")]
     pub member_prompt: String,
     #[serde(default = "default_max_members")]
@@ -35,6 +39,14 @@ fn default_settings_template() -> String {
 
 fn default_leader_prompt() -> String {
     "prompts/leader.md".to_string()
+}
+
+fn default_review_integrator_image() -> String {
+    "palette-leader:latest".to_string()
+}
+
+fn default_review_integrator_prompt() -> String {
+    "prompts/review-integrator.md".to_string()
 }
 
 fn default_member_prompt() -> String {
