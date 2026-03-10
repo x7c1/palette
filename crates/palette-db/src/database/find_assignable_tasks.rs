@@ -4,6 +4,7 @@ impl Database {
     /// Find tasks that are assignable:
     /// - Work tasks: status = 'ready' with all work dependencies done
     /// - Review tasks: status = 'todo' (dependency already verified by rule engine)
+    ///
     /// Returns tasks ordered by priority (high > medium > low > null).
     pub fn find_assignable_tasks(&self) -> crate::Result<Vec<Task>> {
         let conn = lock!(self.conn);
