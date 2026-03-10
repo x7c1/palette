@@ -48,7 +48,7 @@ pub async fn handle_stop(
         }
     };
 
-    // Transition member's in_progress tasks to in_review and notify leader
+    // Transition member's in_progress tasks to in_review and notify leaders
     if let Some(ref leader_id) = leader_id {
         let member_tasks = state
             .db
@@ -58,6 +58,12 @@ pub async fn handle_stop(
                 ..Default::default()
             })
             .unwrap_or_default();
+
+        // Resolve review integrator for routing review instructions
+        let review_integrator_id = {
+            let infra = state.infra.lock().await;
+            infra.find_review_integrator().map(|ri| ri.id.clone())
+        };
 
         for task in &member_tasks {
             if let Err(e) = state.db.update_task_status(&task.id, TaskStatus::InReview) {
@@ -76,7 +82,8 @@ pub async fn handle_stop(
                 let _ = state.event_tx.send(ServerEvent::ProcessEffects { effects });
             }
 
-            // Enqueue review instruction to leader
+            // Send review instruction to review integrator (or fallback to leader)
+            let review_target = review_integrator_id.as_ref().unwrap_or(leader_id);
             let review_msg = format!(
                 "[review] task={} member={} message: {}",
                 task.id,
@@ -86,8 +93,8 @@ pub async fn handle_stop(
                     .and_then(|v| v.as_str())
                     .unwrap_or("(work completed)")
             );
-            if let Err(e) = state.db.enqueue_message(leader_id, &review_msg) {
-                tracing::error!(error = %e, "failed to enqueue review notification for leader");
+            if let Err(e) = state.db.enqueue_message(review_target, &review_msg) {
+                tracing::error!(error = %e, "failed to enqueue review instruction");
             }
         }
 

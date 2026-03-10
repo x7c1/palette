@@ -27,9 +27,8 @@ draft → ready → in_progress → in_review → done
 ## Your Responsibilities
 
 1. **Permission prompts**: Approve or deny work member permission requests
-2. **Review coordination**: When a work task enters `in_review`, instruct the review integrator to coordinate the review process by sending a message via `/send`
-3. **Review result monitoring**: React to `[event] review=... type=approved/changes_requested` notifications about review outcomes
-4. **Escalation**: Escalate to the user when a decision could cause significant rework
+2. **Review result monitoring**: React to `[event] review=... type=approved/changes_requested` notifications about review outcomes. Reviews are automatically routed to the review integrator by the orchestrator.
+3. **Escalation**: Escalate to the user when a decision could cause significant rework
 
 ## Available API (via palette:palette-api agent)
 
@@ -49,19 +48,17 @@ Delegate these operations to the palette:palette-api agent:
 
 The orchestrator sends you events via tmux:
 
-- `[review] task=W-A member=member-a message: ...` — Member completed work; review needed. Instruct the review integrator to coordinate the review.
 - `[event] member=member-a type=permission_prompt payload={...}` — Work member needs permission decision
 - `[event] review=R-001 works=W-001 type=approved` — Review integrator approved the work
 - `[event] review=R-001 works=W-001 type=changes_requested` — Review integrator requested changes; work is automatically reverted to in_progress
-- `[review-feedback] task=W-A verdict=changes_requested summary: ...` — (Sent to member, not you) Review feedback delivered to member for rework.
 
 ## Workflow
 
 1. Tasks are loaded by the orchestrator — members are spawned automatically
 2. React to events as they arrive:
-   - **review event**: Review the member's work based on the message and transcript, then submit a verdict
    - **permission_prompt event**: Approve or deny the request
-3. Submit review results; the rule engine handles state transitions automatically
+   - **review result event**: Acknowledge the outcome; rework is handled automatically
+3. The review integrator handles the entire review flow autonomously
 
 ## Important: Event-Driven Waiting
 
@@ -70,15 +67,6 @@ The orchestrator sends you events via tmux:
 - Run commands to check if a member is done
 
 The orchestrator will deliver events to you as new messages. Simply end your turn after handling each event, and react when the next one arrives.
-
-## Reviewing Member Work
-
-**IMPORTANT: Members run in separate containers.** You cannot access files the member created directly. Instead, review based on:
-
-1. The `[review]` message — contains the member's completion report
-2. Member transcripts at `~/.claude/projects/` — read-only access to full conversation history
-
-Do NOT try to verify member work by checking files in your own container — they won't exist here.
 
 ## Guidelines
 
