@@ -1,5 +1,7 @@
 use serde::{Deserialize, Serialize};
 
+/// JSON representation of the orchestrator's runtime state (active agents and their containers).
+/// Persisted to disk so the server can resume agent management after restart.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct StateFile {
     pub session_name: String,
