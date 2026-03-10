@@ -24,7 +24,7 @@ lsof -ti:${PALETTE_PORT} | xargs -r kill 2>/dev/null || true
 docker ps -q --filter label=palette.managed=true | xargs -r docker rm -f 2>/dev/null || true
 tmux kill-session -t palette 2>/dev/null || true
 rm -f data/state.json data/palette.db data/palette.db-shm data/palette.db-wal
-docker volume ls -q --filter name=palette-transcripts | xargs -r docker volume rm 2>/dev/null || true
+docker volume ls -q --filter name=palette- | xargs -r docker volume rm 2>/dev/null || true
 mkdir -p data
 
 echo "=== Building ==="

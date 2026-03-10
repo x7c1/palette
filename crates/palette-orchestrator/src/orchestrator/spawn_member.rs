@@ -1,5 +1,5 @@
 use super::Orchestrator;
-use palette_docker::DockerManager;
+use palette_docker::{DockerManager, WorkspaceVolume};
 use palette_domain::agent::{AgentId, AgentRole, AgentState, AgentStatus};
 use palette_domain::server::PersistentState;
 use palette_domain::task::TaskType;
@@ -10,6 +10,7 @@ impl Orchestrator {
         member_id: &AgentId,
         task_type: TaskType,
         infra: &PersistentState,
+        workspace: Option<WorkspaceVolume>,
     ) -> crate::Result<AgentState> {
         let session_name = &infra.session_name;
         let leader_id = infra.leader_id_for_task_type(task_type);
@@ -31,6 +32,7 @@ impl Orchestrator {
             &self.docker_config.member_image,
             AgentRole::Member,
             session_name,
+            workspace,
         )?;
         self.docker.start_container(&container_id)?;
         self.docker.write_settings(

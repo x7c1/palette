@@ -1,8 +1,9 @@
 use super::Orchestrator;
+use palette_docker::WorkspaceVolume;
 use palette_domain::agent::AgentId;
 use palette_domain::rule::{RuleEffect, RuleEngine};
 use palette_domain::server::{PendingDelivery, PersistentState};
-use palette_domain::task::{Task, TaskId, TaskStatus};
+use palette_domain::task::{Task, TaskId, TaskStatus, TaskType};
 
 impl Orchestrator {
     /// Processes rule engine effects: auto-assign tasks, spawn/destroy members.
@@ -62,9 +63,12 @@ impl Orchestrator {
             return Ok(());
         }
 
+        // Determine workspace volume based on task type
+        let workspace = self.resolve_workspace(task_id, task.task_type)?;
+
         // Spawn a new member with leader_id based on task type
         let member_id = infra.next_member_id();
-        let member = self.spawn_member(&member_id, task.task_type, infra)?;
+        let member = self.spawn_member(&member_id, task.task_type, infra, workspace)?;
         let terminal_target = member.terminal_target.clone();
         infra.members.push(member);
 
@@ -95,6 +99,26 @@ impl Orchestrator {
             let _ = self.docker.stop_container(&member.container_id);
             let _ = self.docker.remove_container(&member.container_id);
             infra.touch();
+        }
+    }
+
+    fn resolve_workspace(
+        &self,
+        task_id: &TaskId,
+        task_type: TaskType,
+    ) -> crate::Result<Option<WorkspaceVolume>> {
+        match task_type {
+            TaskType::Work => Ok(Some(WorkspaceVolume {
+                name: format!("palette-workspace-{task_id}"),
+                read_only: false,
+            })),
+            TaskType::Review => {
+                let works = self.db.find_works_for_review(task_id)?;
+                Ok(works.first().map(|w| WorkspaceVolume {
+                    name: format!("palette-workspace-{}", w.id),
+                    read_only: true,
+                }))
+            }
         }
     }
 
