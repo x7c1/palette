@@ -136,7 +136,7 @@ for i in $(seq 1 96); do
         echo "=== STALL DETECTED: no state change for ${STALL_THRESHOLD}x5s ==="
         echo "  Snapshot: $CURRENT_SNAPSHOT"
 
-        IDLE_AGENTS=$(echo "$STATE_JSON" | jq -r '[(.leaders + .members)[] | select(.status == "Idle")] | length' 2>/dev/null || echo 0)
+        IDLE_AGENTS=$(echo "$STATE_JSON" | jq -r '[(.leaders + .members)[] | select(.status == "idle")] | length' 2>/dev/null || echo 0)
         READY_TASKS=$(echo "$TASKS_JSON" | jq '[.[] | select(.status == "ready")] | length' 2>/dev/null || echo 0)
         echo "  Idle agents: $IDLE_AGENTS, Ready tasks: $READY_TASKS"
 

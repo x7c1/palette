@@ -137,7 +137,7 @@ for i in $(seq 1 120); do
         echo "  Snapshot: $CURRENT_SNAPSHOT"
 
         # Diagnose: check for idle agents with empty queues
-        IDLE_AGENTS=$(echo "$STATE_JSON" | jq -r '[(.leaders + .members)[] | select(.status == "Idle")] | length' 2>/dev/null || echo 0)
+        IDLE_AGENTS=$(echo "$STATE_JSON" | jq -r '[(.leaders + .members)[] | select(.status == "idle")] | length' 2>/dev/null || echo 0)
         READY_TASKS=$(echo "$TASKS_JSON" | jq '[.[] | select(.status == "ready")] | length' 2>/dev/null || echo 0)
         echo "  Idle agents: $IDLE_AGENTS, Ready tasks: $READY_TASKS"
 

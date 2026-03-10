@@ -77,7 +77,7 @@ echo "=== Waiting for leaders to become idle (max 3 minutes) ==="
 for i in $(seq 1 36); do
     sleep 5
     STATE_JSON=$(cat data/state.json 2>/dev/null || echo "{}")
-    IDLE_LEADERS=$(echo "$STATE_JSON" | jq '[.leaders[] | select(.status == "Idle")] | length')
+    IDLE_LEADERS=$(echo "$STATE_JSON" | jq '[.leaders[] | select(.status == "idle")] | length')
     echo "  ${i}: idle leaders = $IDLE_LEADERS/2"
     if [ "$IDLE_LEADERS" = "2" ]; then
         echo "  Both leaders idle"
