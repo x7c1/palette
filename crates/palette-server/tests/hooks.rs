@@ -1,6 +1,6 @@
-mod common;
+mod helper;
 
-use common::{spawn_server, test_session_name_with_guard};
+use helper::{spawn_server, test_session_name_with_guard};
 use palette_tmux::TmuxManager;
 use serde_json::json;
 

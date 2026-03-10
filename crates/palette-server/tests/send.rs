@@ -1,6 +1,6 @@
-mod common;
+mod helper;
 
-use common::{aid, capture_pane, spawn_server, test_session_name_with_guard};
+use helper::{aid, capture_pane, spawn_server, test_session_name_with_guard};
 use palette_domain::agent::{AgentRole, AgentState, AgentStatus, ContainerId};
 use palette_server::api_types::SendRequest;
 use palette_tmux::TmuxManager;

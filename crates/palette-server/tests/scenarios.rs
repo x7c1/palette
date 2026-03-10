@@ -1,6 +1,6 @@
-mod common;
+mod helper;
 
-use common::{aid, capture_pane, create_work, spawn_server, test_session_name_with_guard, tid};
+use helper::{aid, capture_pane, create_work, spawn_server, test_session_name_with_guard, tid};
 use palette_domain::agent::{AgentRole, AgentState, AgentStatus, ContainerId};
 use palette_tmux::TmuxManager;
 use serde_json::json;

@@ -1,6 +1,6 @@
-mod common;
+mod helper;
 
-use common::{
+use helper::{
     create_review, create_work, spawn_server, test_session_name_with_guard, update_status,
 };
 use palette_server::api_types::{CreateTaskRequest, TaskStatus, TaskType};
