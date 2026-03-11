@@ -1,6 +1,6 @@
 #!/bin/bash
-# E2E Scenario 2: Sequential tasks with DAG dependency (003-multi-member)
-#   Load tasks from YAML where W-B depends on W-A.
+# E2E Scenario 2: Sequential jobs with DAG dependency (003-multi-member)
+#   Load jobs from YAML where W-B depends on W-A.
 #   Orchestrator assigns W-A first. After W-A is done, W-B becomes assignable.
 #   Verifies B's assigned_at is after A's done timestamp.
 set -euo pipefail
@@ -39,7 +39,7 @@ trap cleanup EXIT
 
 echo "Waiting for server to start..."
 for i in $(seq 1 60); do
-    if curl -sf ${BASE_URL}/tasks >/dev/null 2>&1; then
+    if curl -sf ${BASE_URL}/jobs >/dev/null 2>&1; then
         echo "  server ready (${i}s)"
         break
     fi
@@ -53,15 +53,15 @@ done
 echo ""
 echo "=== Palette running (PID=$PALETTE_PID) ==="
 
-LEADER_PANE=$(jq -r '.leaders[0].terminal_target' data/state.json)
+LEADER_PANE=$(jq -r '.supervisors[0].terminal_target' data/state.json)
 echo "Leader pane: $LEADER_PANE"
 
 echo "--- containers ---"
 docker ps --filter label=palette.managed=true --format '{{.Names}} {{.Status}}' 2>&1
 
 echo ""
-echo "=== Loading tasks from YAML (W-B depends on W-A) ==="
-LOAD_RESP=$(curl -s -X POST ${BASE_URL}/tasks/load \
+echo "=== Loading jobs from YAML (W-B depends on W-A) ==="
+LOAD_RESP=$(curl -s -X POST ${BASE_URL}/jobs/load \
   -H "Content-Type: text/plain" \
   --data-binary @tests/fixtures/scenario2-sequential.yaml)
 echo "$LOAD_RESP" | jq -r '.[] | "\(.id) \(.status)"'
@@ -94,11 +94,11 @@ for i in $(seq 1 120); do
     fi
 
     # Check completion
-    DONE_COUNT=$(echo "$TASKS_JSON" | jq '[.[] | select(.type == "work" and .status == "done")] | length' 2>/dev/null || echo 0)
-    echo "  [work done: $DONE_COUNT/2]"
+    DONE_COUNT=$(echo "$JOBS_JSON" | jq '[.[] | select(.type == "craft" and .status == "done")] | length' 2>/dev/null || echo 0)
+    echo "  [craft done: $DONE_COUNT/2]"
     if [ "$DONE_COUNT" = "2" ]; then
         echo ""
-        echo "=== Both work tasks done! ==="
+        echo "=== Both craft jobs done! ==="
         break
     fi
 
@@ -116,27 +116,27 @@ echo "=== Leader pane full capture ==="
 tmux capture-pane -t "$LEADER_PANE" -p -S -500 2>&1
 
 echo "=== Final state ==="
-echo "--- tasks ---"
-curl -s ${BASE_URL}/tasks 2>&1 | jq .
+echo "--- jobs ---"
+curl -s ${BASE_URL}/jobs 2>&1 | jq .
 echo "--- review submissions ---"
-for task_id in $(curl -s '${BASE_URL}/tasks?type=review' 2>/dev/null | jq -r '.[].id' 2>/dev/null); do
-    echo "--- submissions for $task_id ---"
-    curl -s "${BASE_URL}/reviews/$task_id/submissions" 2>&1 | jq .
+for job_id in $(curl -s '${BASE_URL}/jobs?type=review' 2>/dev/null | jq -r '.[].id' 2>/dev/null); do
+    echo "--- submissions for $job_id ---"
+    curl -s "${BASE_URL}/reviews/$job_id/submissions" 2>&1 | jq .
 done
 echo "--- state.json ---"
 jq . data/state.json | head -40
 
 echo ""
 echo "=== Verification ==="
-WA_DONE_AT=$(curl -s ${BASE_URL}/tasks | jq -r '.[] | select(.id == "W-A") | .updated_at')
-WB_ASSIGNED_AT=$(curl -s ${BASE_URL}/tasks | jq -r '.[] | select(.id == "W-B") | .assigned_at')
-WA_STATUS=$(curl -s ${BASE_URL}/tasks | jq -r '.[] | select(.id == "W-A") | .status')
-WB_STATUS=$(curl -s ${BASE_URL}/tasks | jq -r '.[] | select(.id == "W-B") | .status')
+WA_DONE_AT=$(curl -s ${BASE_URL}/jobs | jq -r '.[] | select(.id == "W-A") | .updated_at')
+WB_ASSIGNED_AT=$(curl -s ${BASE_URL}/jobs | jq -r '.[] | select(.id == "W-B") | .assigned_at')
+WA_STATUS=$(curl -s ${BASE_URL}/jobs | jq -r '.[] | select(.id == "W-A") | .status')
+WB_STATUS=$(curl -s ${BASE_URL}/jobs | jq -r '.[] | select(.id == "W-B") | .status')
 
-echo "Task A status: $WA_STATUS (expected: done)"
-echo "Task B status: $WB_STATUS (expected: done)"
-echo "Task A done at:    $WA_DONE_AT"
-echo "Task B assigned at: $WB_ASSIGNED_AT"
+echo "Job A status: $WA_STATUS (expected: done)"
+echo "Job B status: $WB_STATUS (expected: done)"
+echo "Job A done at:    $WA_DONE_AT"
+echo "Job B assigned at: $WB_ASSIGNED_AT"
 echo "Sequential check: B assigned_at should be after A done_at"
 
 RESULT=PASSED

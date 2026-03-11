@@ -3,7 +3,7 @@ use super::*;
 impl Database {
     pub fn submit_review(
         &self,
-        review_task_id: &TaskId,
+        review_job_id: &JobId,
         req: &SubmitReviewRequest,
     ) -> crate::Result<ReviewSubmission> {
         let mut conn = lock!(self.conn);
@@ -15,18 +15,18 @@ impl Database {
         // Determine round number
         let round: i32 = tx
             .query_row(
-                "SELECT COALESCE(MAX(round), 0) FROM review_submissions WHERE review_task_id = ?1",
-                params![review_task_id.as_ref()],
+                "SELECT COALESCE(MAX(round), 0) FROM review_submissions WHERE review_job_id = ?1",
+                params![review_job_id.as_ref()],
                 |row| row.get(0),
             )
             .unwrap_or(0)
             + 1;
 
         tx.execute(
-            "INSERT INTO review_submissions (review_task_id, round, verdict, summary, created_at)
+            "INSERT INTO review_submissions (review_job_id, round, verdict, summary, created_at)
              VALUES (?1, ?2, ?3, ?4, ?5)",
             params![
-                review_task_id.as_ref(),
+                review_job_id.as_ref(),
                 round,
                 req.verdict.as_str(),
                 req.summary,
@@ -48,7 +48,7 @@ impl Database {
 
         Ok(ReviewSubmission {
             id: submission_id,
-            review_task_id: review_task_id.clone(),
+            review_job_id: review_job_id.clone(),
             round,
             verdict: req.verdict,
             summary: req.summary.clone(),
@@ -61,17 +61,16 @@ impl Database {
 mod tests {
     use super::super::test_helpers::*;
 
+    use palette_domain::job::*;
     use palette_domain::review::*;
-
-    use palette_domain::task::*;
 
     #[test]
     fn submit_and_get_review() {
         let db = test_db();
-        db.create_task(&CreateTaskRequest {
-            id: Some(tid("W-001")),
-            task_type: TaskType::Work,
-            title: "Work".to_string(),
+        db.create_job(&CreateJobRequest {
+            id: Some(jid("C-001")),
+            job_type: JobType::Craft,
+            title: "Craft".to_string(),
             description: None,
             assignee: None,
             priority: None,
@@ -80,21 +79,21 @@ mod tests {
         })
         .unwrap();
 
-        db.create_task(&CreateTaskRequest {
-            id: Some(tid("R-001")),
-            task_type: TaskType::Review,
+        db.create_job(&CreateJobRequest {
+            id: Some(jid("R-001")),
+            job_type: JobType::Review,
             title: "Review".to_string(),
             description: None,
             assignee: None,
             priority: None,
             repositories: None,
-            depends_on: vec![tid("W-001")],
+            depends_on: vec![jid("C-001")],
         })
         .unwrap();
 
         let sub = db
             .submit_review(
-                &tid("R-001"),
+                &jid("R-001"),
                 &SubmitReviewRequest {
                     verdict: Verdict::ChangesRequested,
                     summary: Some("Needs fixes".to_string()),
@@ -111,7 +110,7 @@ mod tests {
 
         let sub2 = db
             .submit_review(
-                &tid("R-001"),
+                &jid("R-001"),
                 &SubmitReviewRequest {
                     verdict: Verdict::Approved,
                     summary: Some("LGTM".to_string()),
@@ -121,7 +120,7 @@ mod tests {
             .unwrap();
         assert_eq!(sub2.round, 2);
 
-        let submissions = db.get_review_submissions(&tid("R-001")).unwrap();
+        let submissions = db.get_review_submissions(&jid("R-001")).unwrap();
         assert_eq!(submissions.len(), 2);
 
         let comments = db.get_review_comments(sub.id).unwrap();

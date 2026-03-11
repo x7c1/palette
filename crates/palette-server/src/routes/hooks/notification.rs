@@ -47,7 +47,7 @@ pub async fn handle_notification(
         if let Some(member) = infra.find_member_mut(&member_id) {
             member.status = AgentStatus::WaitingPermission;
             let ctx = MemberContext {
-                leader_id: member.leader_id.clone(),
+                supervisor_id: member.supervisor_id.clone(),
                 terminal_target: member.terminal_target.clone(),
                 container_id: member.container_id.clone(),
             };
@@ -89,8 +89,8 @@ pub async fn handle_notification(
         notification.push_str(&format!(" pane=[{pane}]"));
     }
 
-    if let Err(e) = state.db.enqueue_message(&ctx.leader_id, &notification) {
-        tracing::error!(error = %e, "failed to enqueue notification for leader");
+    if let Err(e) = state.db.enqueue_message(&ctx.supervisor_id, &notification) {
+        tracing::error!(error = %e, "failed to enqueue notification for supervisor");
     }
 
     let _ = state.event_tx.send(ServerEvent::NotifyDeliveryLoop);
@@ -99,7 +99,7 @@ pub async fn handle_notification(
 }
 
 struct MemberContext {
-    leader_id: AgentId,
+    supervisor_id: AgentId,
     terminal_target: palette_domain::terminal::TerminalTarget,
     container_id: palette_domain::agent::ContainerId,
 }

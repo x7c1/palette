@@ -1,7 +1,7 @@
 #!/bin/bash
 # E2E Scenario 4: Multi-leader routing verification (005-multi-leader)
-#   Load a work task and a review task.
-#   Verify that work member's stop hook routes to main leader,
+#   Load a craft job and a review job.
+#   Verify that craft member's stop hook routes to main leader,
 #   and review member's stop hook routes to review integrator.
 set -euo pipefail
 
@@ -51,7 +51,7 @@ trap cleanup EXIT
 
 echo "Waiting for server to start..."
 for i in $(seq 1 60); do
-    if curl -sf ${BASE_URL}/tasks >/dev/null 2>&1; then
+    if curl -sf ${BASE_URL}/jobs >/dev/null 2>&1; then
         echo "  server ready (${i}s)"
         break
     fi
@@ -66,29 +66,29 @@ echo ""
 echo "=== Palette running (PID=$PALETTE_PID) ==="
 
 STATE_JSON=$(cat data/state.json 2>/dev/null || echo "{}")
-echo "--- leaders ---"
-echo "$STATE_JSON" | jq -r '.leaders[] | "  \(.id) role=\(.role)"'
+echo "--- supervisors ---"
+echo "$STATE_JSON" | jq -r '.supervisors[] | "  \(.id) role=\(.role)"'
 
 echo ""
-echo "=== Verifying bootstrap: two leaders present ==="
-LEADER_COUNT=$(echo "$STATE_JSON" | jq '.leaders | length')
-echo "Leader count: $LEADER_COUNT (expected: 2)"
+echo "=== Verifying bootstrap: two supervisors present ==="
+SUPERVISOR_COUNT=$(echo "$STATE_JSON" | jq '.supervisors | length')
+echo "Supervisor count: $SUPERVISOR_COUNT (expected: 2)"
 
-MAIN_LEADER=$(echo "$STATE_JSON" | jq -r '.leaders[] | select(.role == "leader") | .id')
-REVIEW_INTEGRATOR=$(echo "$STATE_JSON" | jq -r '.leaders[] | select(.role == "review_integrator") | .id')
+MAIN_LEADER=$(echo "$STATE_JSON" | jq -r '.supervisors[] | select(.role == "leader") | .id')
+REVIEW_INTEGRATOR=$(echo "$STATE_JSON" | jq -r '.supervisors[] | select(.role == "review_integrator") | .id')
 echo "Main leader: $MAIN_LEADER"
 echo "Review integrator: $REVIEW_INTEGRATOR"
 
 # Wait for agents to boot and become idle, then check member routing
 echo ""
-echo "=== Waiting for leaders to become idle (max 3 minutes) ==="
+echo "=== Waiting for supervisors to become idle (max 3 minutes) ==="
 for i in $(seq 1 36); do
     sleep 5
     STATE_JSON=$(cat data/state.json 2>/dev/null || echo "{}")
-    IDLE_LEADERS=$(echo "$STATE_JSON" | jq '[.leaders[] | select(.status == "idle")] | length')
-    echo "  ${i}: idle leaders = $IDLE_LEADERS/2"
-    if [ "$IDLE_LEADERS" = "2" ]; then
-        echo "  Both leaders idle"
+    IDLE_SUPERVISORS=$(echo "$STATE_JSON" | jq '[.supervisors[] | select(.status == "idle")] | length')
+    echo "  ${i}: idle supervisors = $IDLE_SUPERVISORS/2"
+    if [ "$IDLE_SUPERVISORS" = "2" ]; then
+        echo "  Both supervisors idle"
         break
     fi
 done
@@ -99,8 +99,8 @@ echo ""
 echo "=== Verification ==="
 RESULT=PASSED
 
-if [ "$LEADER_COUNT" != "2" ]; then
-    echo "FAIL: Expected 2 leaders, got $LEADER_COUNT"
+if [ "$SUPERVISOR_COUNT" != "2" ]; then
+    echo "FAIL: Expected 2 supervisors, got $SUPERVISOR_COUNT"
     RESULT=FAILED
 fi
 

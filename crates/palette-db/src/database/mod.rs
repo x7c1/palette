@@ -3,8 +3,8 @@ mod repository_row;
 use crate::schema;
 use chrono::{DateTime, Utc};
 use palette_domain::agent::*;
+use palette_domain::job::*;
 use palette_domain::review::*;
-use palette_domain::task::*;
 use rusqlite::{Connection, params};
 use std::path::Path;
 use std::sync::Mutex;
@@ -20,23 +20,23 @@ macro_rules! lock {
     };
 }
 
-mod assign_task;
+mod assign_job;
 mod count_active_members;
-mod create_task;
+mod create_job;
 mod dequeue_message;
 mod enqueue_message;
-mod find_assignable_tasks;
-mod find_reviews_for_work;
-mod find_works_for_review;
+mod find_assignable_jobs;
+mod find_crafts_for_review;
+mod find_reviews_for_craft;
 mod get_dependencies;
 mod get_dependents;
+mod get_job;
 mod get_review_comments;
 mod get_review_submissions;
-mod get_task;
 mod has_pending_messages;
-mod list_tasks;
+mod list_jobs;
 mod submit_review;
-mod update_task_status;
+mod update_job_status;
 
 impl Database {
     pub fn open(path: &Path) -> crate::Result<Self> {
@@ -73,28 +73,28 @@ fn parse_datetime(s: &str) -> DateTime<Utc> {
         .unwrap_or_else(|_| Utc::now())
 }
 
-/// Query a single task by ID from a connection or transaction.
-fn query_task(conn: &Connection, id: &TaskId) -> crate::Result<Option<Task>> {
+/// Query a single job by ID from a connection or transaction.
+fn query_job(conn: &Connection, id: &JobId) -> crate::Result<Option<Job>> {
     let mut stmt = conn.prepare(
         "SELECT id, type, title, description, assignee, status, priority, repositories, pr_url, created_at, updated_at, notes, assigned_at
-         FROM tasks WHERE id = ?1",
+         FROM jobs WHERE id = ?1",
     )?;
-    let mut rows = stmt.query_map(params![id.as_ref()], |row| Ok(row_to_task(row)))?;
+    let mut rows = stmt.query_map(params![id.as_ref()], |row| Ok(row_to_job(row)))?;
     match rows.next() {
-        Some(Ok(task)) => Ok(Some(task)),
+        Some(Ok(job)) => Ok(Some(job)),
         Some(Err(e)) => Err(e.into()),
         None => Ok(None),
     }
 }
 
-fn row_to_task(row: &rusqlite::Row) -> Task {
+fn row_to_job(row: &rusqlite::Row) -> Job {
     let repos_str: Option<String> = row.get(7).unwrap();
     let repositories: Option<Vec<Repository>> =
         repos_str.and_then(|s| repository_row::repositories_from_json(&s));
 
-    Task {
-        id: TaskId::new(row.get::<_, String>(0).unwrap()),
-        task_type: row.get::<_, String>(1).unwrap().parse().unwrap(),
+    Job {
+        id: JobId::new(row.get::<_, String>(0).unwrap()),
+        job_type: row.get::<_, String>(1).unwrap().parse().unwrap(),
         title: row.get(2).unwrap(),
         description: row.get(3).unwrap(),
         assignee: row.get::<_, Option<String>>(4).unwrap().map(AgentId::new),
@@ -123,19 +123,19 @@ pub(crate) mod test_helpers {
         Database::open_in_memory().unwrap()
     }
 
-    pub fn tid(s: &str) -> TaskId {
-        TaskId::new(s)
+    pub fn jid(s: &str) -> JobId {
+        JobId::new(s)
     }
 
     pub fn aid(s: &str) -> AgentId {
         AgentId::new(s)
     }
 
-    pub fn create_work(db: &Database, id: &str, priority: Option<Priority>, deps: Vec<TaskId>) {
-        db.create_task(&CreateTaskRequest {
-            id: Some(tid(id)),
-            task_type: TaskType::Work,
-            title: format!("Task {id}"),
+    pub fn create_craft(db: &Database, id: &str, priority: Option<Priority>, deps: Vec<JobId>) {
+        db.create_job(&CreateJobRequest {
+            id: Some(jid(id)),
+            job_type: JobType::Craft,
+            title: format!("Job {id}"),
             description: None,
             assignee: None,
             priority,
@@ -145,10 +145,10 @@ pub(crate) mod test_helpers {
         .unwrap();
     }
 
-    pub fn create_review(db: &Database, id: &str, deps: Vec<TaskId>) {
-        db.create_task(&CreateTaskRequest {
-            id: Some(tid(id)),
-            task_type: TaskType::Review,
+    pub fn create_review(db: &Database, id: &str, deps: Vec<JobId>) {
+        db.create_job(&CreateJobRequest {
+            id: Some(jid(id)),
+            job_type: JobType::Review,
             title: format!("Review {id}"),
             description: None,
             assignee: None,

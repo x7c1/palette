@@ -1,6 +1,6 @@
 #!/bin/bash
 # E2E Scenario 3: Review integration flow (005-multi-leader)
-#   Load a work task and its review task from YAML.
+#   Load a craft job and its review job from YAML.
 #   Main leader coordinates with review integrator.
 #   Review integrator dispatches reviewer members, aggregates findings, submits verdict.
 #   Verifies: changes_requested → rework → approved → done.
@@ -52,7 +52,7 @@ trap cleanup EXIT
 
 echo "Waiting for server to start..."
 for i in $(seq 1 60); do
-    if curl -sf ${BASE_URL}/tasks >/dev/null 2>&1; then
+    if curl -sf ${BASE_URL}/jobs >/dev/null 2>&1; then
         echo "  server ready (${i}s)"
         break
     fi
@@ -67,15 +67,15 @@ echo ""
 echo "=== Palette running (PID=$PALETTE_PID) ==="
 
 STATE_JSON=$(cat data/state.json 2>/dev/null || echo "{}")
-echo "--- leaders ---"
-echo "$STATE_JSON" | jq -r '.leaders[] | "  \(.id) role=\(.role) status=\(.status)"'
+echo "--- supervisors ---"
+echo "$STATE_JSON" | jq -r '.supervisors[] | "  \(.id) role=\(.role) status=\(.status)"'
 
 echo "--- containers ---"
 docker ps --filter label=palette.managed=true --format '{{.Names}} {{.Status}}' 2>&1
 
 echo ""
-echo "=== Loading tasks from YAML ==="
-LOAD_RESP=$(curl -s -X POST ${BASE_URL}/tasks/load \
+echo "=== Loading jobs from YAML ==="
+LOAD_RESP=$(curl -s -X POST ${BASE_URL}/jobs/load \
   -H "Content-Type: text/plain" \
   --data-binary @tests/fixtures/scenario3-review-integration.yaml)
 echo "$LOAD_RESP" | jq -r '.[] | "\(.id) \(.status)"'
@@ -94,11 +94,11 @@ for i in $(seq 1 144); do
     print_status $ELAPSED
 
     # Check completion
-    DONE_COUNT=$(echo "$TASKS_JSON" | jq '[.[] | select(.type == "work" and .status == "done")] | length' 2>/dev/null || echo 0)
-    echo "  [work done: $DONE_COUNT/1]"
+    DONE_COUNT=$(echo "$JOBS_JSON" | jq '[.[] | select(.type == "craft" and .status == "done")] | length' 2>/dev/null || echo 0)
+    echo "  [craft done: $DONE_COUNT/1]"
     if [ "$DONE_COUNT" = "1" ]; then
         echo ""
-        echo "=== Work task done! ==="
+        echo "=== Craft job done! ==="
         break
     fi
 
@@ -113,33 +113,33 @@ done
 
 echo ""
 echo "=== Final state ==="
-echo "--- tasks ---"
-curl -s ${BASE_URL}/tasks 2>&1 | jq .
+echo "--- jobs ---"
+curl -s ${BASE_URL}/jobs 2>&1 | jq .
 echo "--- review submissions ---"
-for task_id in $(curl -s ${BASE_URL}/tasks 2>/dev/null | jq -r '.[] | select(.type == "review") | .id' 2>/dev/null); do
-    echo "--- submissions for $task_id ---"
-    curl -s "${BASE_URL}/reviews/$task_id/submissions" 2>&1 | jq .
+for job_id in $(curl -s ${BASE_URL}/jobs 2>/dev/null | jq -r '.[] | select(.type == "review") | .id' 2>/dev/null); do
+    echo "--- submissions for $job_id ---"
+    curl -s "${BASE_URL}/reviews/$job_id/submissions" 2>&1 | jq .
 done
 echo "--- state.json ---"
 jq . data/state.json | head -60
 
 echo ""
 echo "=== Verification ==="
-W_STATUS=$(curl -s ${BASE_URL}/tasks | jq -r '.[] | select(.type == "work") | .status')
-R_STATUS=$(curl -s ${BASE_URL}/tasks | jq -r '.[] | select(.type == "review") | .status')
-R_ASSIGNEE=$(curl -s ${BASE_URL}/tasks | jq -r '.[] | select(.type == "review") | .assignee // "none"')
-REVIEW_ROUNDS=$(curl -s ${BASE_URL}/tasks | jq -r '.[] | select(.type == "review") | .id' | while read rid; do
+W_STATUS=$(curl -s ${BASE_URL}/jobs | jq -r '.[] | select(.type == "craft") | .status')
+R_STATUS=$(curl -s ${BASE_URL}/jobs | jq -r '.[] | select(.type == "review") | .status')
+R_ASSIGNEE=$(curl -s ${BASE_URL}/jobs | jq -r '.[] | select(.type == "review") | .assignee // "none"')
+REVIEW_ROUNDS=$(curl -s ${BASE_URL}/jobs | jq -r '.[] | select(.type == "review") | .id' | while read rid; do
     curl -s "${BASE_URL}/reviews/$rid/submissions" | jq 'length'
 done | head -1)
 
-echo "Work status: $W_STATUS (expected: done)"
+echo "Craft status: $W_STATUS (expected: done)"
 echo "Review status: $R_STATUS"
 echo "Review assignee: $R_ASSIGNEE (expected: auto-assigned member)"
 echo "Review rounds: ${REVIEW_ROUNDS:-0}"
 
 # Verify review member was auto-spawned under review integrator
 STATE_JSON=$(cat data/state.json 2>/dev/null || echo "{}")
-REVIEW_MEMBERS=$(echo "$STATE_JSON" | jq '[.members[] | select(.leader_id != null)] | length' 2>/dev/null || echo 0)
+REVIEW_MEMBERS=$(echo "$STATE_JSON" | jq '[.members[] | select(.supervisor_id != null)] | length' 2>/dev/null || echo 0)
 echo "Members spawned: $REVIEW_MEMBERS"
 
 save_transcripts
@@ -147,6 +147,6 @@ save_transcripts
 RESULT=PASSED
 if [ "${STALL_ABORT:-0}" = "1" ]; then RESULT="FAILED (stall)"; fi
 if [ "$W_STATUS" != "done" ]; then RESULT=FAILED; fi
-if [ "$R_ASSIGNEE" = "none" ]; then echo "WARN: Review task was not auto-assigned"; fi
+if [ "$R_ASSIGNEE" = "none" ]; then echo "WARN: Review job was not auto-assigned"; fi
 
 echo "=== SCENARIO 3 $RESULT ==="

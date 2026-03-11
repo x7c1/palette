@@ -15,7 +15,7 @@ fn save_and_load_state() {
     state.members.push(AgentState {
         id: aid("member-a"),
         role: AgentRole::Member,
-        leader_id: aid("leader-1"),
+        supervisor_id: aid("leader-1"),
         container_id: ContainerId::new("abc123"),
         terminal_target: TerminalTarget::new("test-session:member-a"),
         status: AgentStatus::Idle,

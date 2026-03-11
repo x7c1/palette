@@ -6,7 +6,7 @@ A Member is a [Worker](../) that executes a single [Job](../../job/) under the o
 
 There are two kinds of Members:
 
-- [Crafter](crafter/) — executes Work Jobs, producing deliverables such as code changes or plans.
+- [Crafter](crafter/) — executes Craft Jobs, producing deliverables such as code changes or plans.
 - [Reviewer](reviewer/) — executes Review Jobs, inspecting a Crafter's deliverables and reporting findings.
 
 ## Examples

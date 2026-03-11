@@ -7,7 +7,7 @@ impl Orchestrator {
         loop {
             let mut infra = self.infra.lock().await;
             let idle_targets: Vec<AgentId> = infra
-                .leaders
+                .supervisors
                 .iter()
                 .chain(infra.members.iter())
                 .filter(|m| m.status == AgentStatus::Idle)

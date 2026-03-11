@@ -35,7 +35,7 @@ impl Orchestrator {
             let infra = self.infra.lock().await;
             let agent = infra
                 .find_member(target_id)
-                .or_else(|| infra.find_leader(target_id));
+                .or_else(|| infra.find_supervisor(target_id));
             match agent {
                 Some(m) => m.terminal_target.clone(),
                 None => return ControlFlow::Break(()),
@@ -71,12 +71,12 @@ impl Orchestrator {
         let mut infra = self.infra.lock().await;
         let is_booting = infra
             .find_member(target_id)
-            .or_else(|| infra.find_leader(target_id))
+            .or_else(|| infra.find_supervisor(target_id))
             .is_some_and(|m| m.status == AgentStatus::Booting);
         if is_booting {
             if let Some(m) = infra.find_member_mut(target_id) {
                 m.status = AgentStatus::Idle;
-            } else if let Some(m) = infra.find_leader_mut(target_id) {
+            } else if let Some(m) = infra.find_supervisor_mut(target_id) {
                 m.status = AgentStatus::Idle;
             }
             infra.touch();

@@ -1,6 +1,6 @@
 #!/bin/bash
-# E2E Scenario 1: Parallel tasks with auto-assign (003-multi-member)
-#   Load two independent work tasks from YAML via /tasks/load.
+# E2E Scenario 1: Parallel jobs with auto-assign (003-multi-member)
+#   Load two independent craft jobs from YAML via /jobs/load.
 #   Orchestrator auto-spawns two members in parallel.
 #   Leader handles permission prompts, reviews, and approves.
 set -euo pipefail
@@ -39,7 +39,7 @@ trap cleanup EXIT
 
 echo "Waiting for server to start..."
 for i in $(seq 1 60); do
-    if curl -sf ${BASE_URL}/tasks >/dev/null 2>&1; then
+    if curl -sf ${BASE_URL}/jobs >/dev/null 2>&1; then
         echo "  server ready (${i}s)"
         break
     fi
@@ -53,15 +53,15 @@ done
 echo ""
 echo "=== Palette running (PID=$PALETTE_PID) ==="
 
-LEADER_PANE=$(jq -r '.leaders[0].terminal_target' data/state.json)
+LEADER_PANE=$(jq -r '.supervisors[0].terminal_target' data/state.json)
 echo "Leader pane: $LEADER_PANE"
 
 echo "--- containers ---"
 docker ps --filter label=palette.managed=true --format '{{.Names}} {{.Status}}' 2>&1
 
 echo ""
-echo "=== Loading tasks from YAML ==="
-LOAD_RESP=$(curl -s -X POST ${BASE_URL}/tasks/load \
+echo "=== Loading jobs from YAML ==="
+LOAD_RESP=$(curl -s -X POST ${BASE_URL}/jobs/load \
   -H "Content-Type: text/plain" \
   --data-binary @tests/fixtures/scenario1-parallel.yaml)
 echo "$LOAD_RESP" | jq -r '.[] | "\(.id) \(.status)"'
@@ -94,11 +94,11 @@ for i in $(seq 1 96); do
     fi
 
     # Check completion
-    DONE_COUNT=$(echo "$TASKS_JSON" | jq '[.[] | select(.type == "work" and .status == "done")] | length' 2>/dev/null || echo 0)
-    echo "  [work done: $DONE_COUNT/2]"
+    DONE_COUNT=$(echo "$JOBS_JSON" | jq '[.[] | select(.type == "craft" and .status == "done")] | length' 2>/dev/null || echo 0)
+    echo "  [craft done: $DONE_COUNT/2]"
     if [ "$DONE_COUNT" = "2" ]; then
         echo ""
-        echo "=== Both work tasks done! ==="
+        echo "=== Both craft jobs done! ==="
         break
     fi
 
@@ -116,29 +116,29 @@ echo "=== Leader pane full capture ==="
 tmux capture-pane -t "$LEADER_PANE" -p -S -500 2>&1
 
 echo "=== Final state ==="
-echo "--- tasks ---"
-curl -s ${BASE_URL}/tasks 2>&1 | jq .
+echo "--- jobs ---"
+curl -s ${BASE_URL}/jobs 2>&1 | jq .
 echo "--- review submissions ---"
-for task_id in $(curl -s '${BASE_URL}/tasks?type=review' 2>/dev/null | jq -r '.[].id' 2>/dev/null); do
-    echo "--- submissions for $task_id ---"
-    curl -s "${BASE_URL}/reviews/$task_id/submissions" 2>&1 | jq .
+for job_id in $(curl -s '${BASE_URL}/jobs?type=review' 2>/dev/null | jq -r '.[].id' 2>/dev/null); do
+    echo "--- submissions for $job_id ---"
+    curl -s "${BASE_URL}/reviews/$job_id/submissions" 2>&1 | jq .
 done
 echo "--- state.json ---"
 jq . data/state.json | head -40
 
 echo ""
 echo "=== Verification ==="
-WA_STATUS=$(curl -s ${BASE_URL}/tasks | jq -r '[.[] | select(.type == "work")] | sort_by(.created_at) | .[0].status')
-WB_STATUS=$(curl -s ${BASE_URL}/tasks | jq -r '[.[] | select(.type == "work")] | sort_by(.created_at) | .[1].status')
-WA_ASSIGNED=$(curl -s ${BASE_URL}/tasks | jq -r '[.[] | select(.type == "work")] | sort_by(.created_at) | .[0].assigned_at')
-WB_ASSIGNED=$(curl -s ${BASE_URL}/tasks | jq -r '[.[] | select(.type == "work")] | sort_by(.created_at) | .[1].assigned_at')
-WA_DONE=$(curl -s ${BASE_URL}/tasks | jq -r '[.[] | select(.type == "work")] | sort_by(.created_at) | .[0].updated_at')
-WB_DONE=$(curl -s ${BASE_URL}/tasks | jq -r '[.[] | select(.type == "work")] | sort_by(.created_at) | .[1].updated_at')
+WA_STATUS=$(curl -s ${BASE_URL}/jobs | jq -r '[.[] | select(.type == "craft")] | sort_by(.created_at) | .[0].status')
+WB_STATUS=$(curl -s ${BASE_URL}/jobs | jq -r '[.[] | select(.type == "craft")] | sort_by(.created_at) | .[1].status')
+WA_ASSIGNED=$(curl -s ${BASE_URL}/jobs | jq -r '[.[] | select(.type == "craft")] | sort_by(.created_at) | .[0].assigned_at')
+WB_ASSIGNED=$(curl -s ${BASE_URL}/jobs | jq -r '[.[] | select(.type == "craft")] | sort_by(.created_at) | .[1].assigned_at')
+WA_DONE=$(curl -s ${BASE_URL}/jobs | jq -r '[.[] | select(.type == "craft")] | sort_by(.created_at) | .[0].updated_at')
+WB_DONE=$(curl -s ${BASE_URL}/jobs | jq -r '[.[] | select(.type == "craft")] | sort_by(.created_at) | .[1].updated_at')
 
-echo "Task A status: $WA_STATUS (expected: done)"
-echo "Task B status: $WB_STATUS (expected: done)"
-echo "Task A assigned_at: $WA_ASSIGNED"
-echo "Task B assigned_at: $WB_ASSIGNED"
+echo "Job A status: $WA_STATUS (expected: done)"
+echo "Job B status: $WB_STATUS (expected: done)"
+echo "Job A assigned_at: $WA_ASSIGNED"
+echo "Job B assigned_at: $WB_ASSIGNED"
 echo "Parallel check: A assigned before B done, B assigned before A done"
 
 RESULT=PASSED

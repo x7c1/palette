@@ -1,13 +1,13 @@
 use super::RuleEffect;
+use crate::job::{JobError, JobId, JobStatus, JobStore, JobType, TransitionError};
 use crate::review::{ReviewSubmission, Verdict};
-use crate::task::{TaskError, TaskId, TaskStatus, TaskStore, TaskType, TransitionError};
 
 pub struct RuleEngine<S> {
     store: S,
     max_review_rounds: u32,
 }
 
-impl<S: TaskStore> RuleEngine<S> {
+impl<S: JobStore> RuleEngine<S> {
     pub fn new(store: S, max_review_rounds: u32) -> Self {
         Self {
             store,
@@ -15,60 +15,59 @@ impl<S: TaskStore> RuleEngine<S> {
         }
     }
 
-    /// Apply rules after a task status change. Returns side effects.
+    /// Apply rules after a job status change. Returns side effects.
     pub fn on_status_change(
         &self,
-        task_id: &TaskId,
-        new_status: TaskStatus,
+        job_id: &JobId,
+        new_status: JobStatus,
     ) -> Result<Vec<RuleEffect>, S::Error> {
-        let task = self
+        let job = self
             .store
-            .get_task(task_id)?
-            .ok_or_else(|| TaskError::NotFound {
-                task_id: task_id.clone(),
+            .get_job(job_id)?
+            .ok_or_else(|| JobError::NotFound {
+                job_id: job_id.clone(),
             })?;
 
         let mut effects = Vec::new();
 
-        match (task.task_type, new_status) {
-            // work -> ready: trigger auto-assign evaluation
-            (TaskType::Work, TaskStatus::Ready) => {
+        match (job.job_type, new_status) {
+            // craft -> ready: trigger auto-assign evaluation
+            (JobType::Craft, JobStatus::Ready) => {
                 effects.push(RuleEffect::AutoAssign {
-                    task_id: task_id.clone(),
+                    job_id: job_id.clone(),
                 });
             }
             // review -> todo: trigger auto-assign for reviewer member
-            (TaskType::Review, TaskStatus::Todo) => {
+            (JobType::Review, JobStatus::Todo) => {
                 effects.push(RuleEffect::AutoAssign {
-                    task_id: task_id.clone(),
+                    job_id: job_id.clone(),
                 });
             }
-            // work -> in_review: enable related reviews
-            (TaskType::Work, TaskStatus::InReview) => {
-                let reviews = self.store.find_reviews_for_work(task_id)?;
+            // craft -> in_review: enable related reviews
+            (JobType::Craft, JobStatus::InReview) => {
+                let reviews = self.store.find_reviews_for_craft(job_id)?;
                 for review in reviews {
-                    if review.status == TaskStatus::Todo || review.status == TaskStatus::Blocked {
-                        self.store
-                            .update_task_status(&review.id, TaskStatus::Todo)?;
+                    if review.status == JobStatus::Todo || review.status == JobStatus::Blocked {
+                        self.store.update_job_status(&review.id, JobStatus::Todo)?;
                         effects.push(RuleEffect::StatusChanged {
-                            task_id: review.id,
-                            new_status: TaskStatus::Todo,
+                            job_id: review.id,
+                            new_status: JobStatus::Todo,
                         });
                     }
                 }
             }
-            // work -> done: destroy member container, trigger auto-assign for waiting tasks
-            (TaskType::Work, TaskStatus::Done) => {
-                if let Some(ref assignee) = task.assignee {
+            // craft -> done: destroy member container, trigger auto-assign for waiting jobs
+            (JobType::Craft, JobStatus::Done) => {
+                if let Some(ref assignee) = job.assignee {
                     effects.push(RuleEffect::DestroyMember {
                         member_id: assignee.clone(),
                     });
                 }
-                // Check if any blocked tasks can now proceed
-                let assignable = self.store.find_assignable_tasks()?;
-                for t in assignable {
+                // Check if any blocked jobs can now proceed
+                let assignable = self.store.find_assignable_jobs()?;
+                for j in assignable {
                     effects.push(RuleEffect::AutoAssign {
-                        task_id: t.id.clone(),
+                        job_id: j.id.clone(),
                     });
                 }
             }
@@ -81,53 +80,53 @@ impl<S: TaskStore> RuleEngine<S> {
     /// Apply rules after a review submission. Returns side effects.
     pub fn on_review_submitted(
         &self,
-        review_task_id: &TaskId,
+        review_job_id: &JobId,
         submission: &ReviewSubmission,
     ) -> Result<Vec<RuleEffect>, S::Error> {
         let mut effects = Vec::new();
-        let work_tasks = self.store.find_works_for_review(review_task_id)?;
+        let craft_jobs = self.store.find_crafts_for_review(review_job_id)?;
 
         match submission.verdict {
             Verdict::ChangesRequested => {
                 // Check escalation threshold
                 if submission.round as u32 >= self.max_review_rounds {
-                    for work in &work_tasks {
+                    for craft in &craft_jobs {
                         self.store
-                            .update_task_status(&work.id, TaskStatus::Escalated)?;
+                            .update_job_status(&craft.id, JobStatus::Escalated)?;
                         effects.push(RuleEffect::Escalated {
-                            task_id: work.id.clone(),
+                            job_id: craft.id.clone(),
                             round: submission.round,
                         });
                     }
                     return Ok(effects);
                 }
 
-                // Revert work tasks to in_progress
-                for work in &work_tasks {
+                // Revert craft jobs to in_progress
+                for craft in &craft_jobs {
                     self.store
-                        .update_task_status(&work.id, TaskStatus::InProgress)?;
+                        .update_job_status(&craft.id, JobStatus::InProgress)?;
                     effects.push(RuleEffect::StatusChanged {
-                        task_id: work.id.clone(),
-                        new_status: TaskStatus::InProgress,
+                        job_id: craft.id.clone(),
+                        new_status: JobStatus::InProgress,
                     });
                 }
             }
             Verdict::Approved => {
-                // Check if ALL reviews for each work task are approved
-                for work in &work_tasks {
-                    let all_reviews = self.store.find_reviews_for_work(&work.id)?;
+                // Check if ALL reviews for each craft job are approved
+                for craft in &craft_jobs {
+                    let all_reviews = self.store.find_reviews_for_craft(&craft.id)?;
                     let all_approved = all_reviews.iter().all(|r| {
-                        if r.id == *review_task_id {
+                        if r.id == *review_job_id {
                             return true; // This one is being approved now
                         }
                         let subs = self.store.get_review_submissions(&r.id).unwrap_or_default();
                         subs.last().is_some_and(|s| s.verdict == Verdict::Approved)
                     });
                     if all_approved {
-                        self.store.update_task_status(&work.id, TaskStatus::Done)?;
+                        self.store.update_job_status(&craft.id, JobStatus::Done)?;
                         effects.push(RuleEffect::StatusChanged {
-                            task_id: work.id.clone(),
-                            new_status: TaskStatus::Done,
+                            job_id: craft.id.clone(),
+                            new_status: JobStatus::Done,
                         });
                     }
                 }
@@ -140,35 +139,31 @@ impl<S: TaskStore> RuleEngine<S> {
 
 /// Validate a status transition.
 pub fn validate_transition(
-    task_type: TaskType,
-    from: TaskStatus,
-    to: TaskStatus,
+    job_type: JobType,
+    from: JobStatus,
+    to: JobStatus,
 ) -> Result<(), TransitionError> {
-    let valid = match (task_type, from, to) {
-        // Work transitions
-        (TaskType::Work, TaskStatus::Draft, TaskStatus::Ready) => true,
-        (TaskType::Work, TaskStatus::Ready, TaskStatus::InProgress) => true,
-        (TaskType::Work, TaskStatus::InProgress, TaskStatus::InReview) => true,
-        (TaskType::Work, TaskStatus::InReview, TaskStatus::Done) => true,
-        (TaskType::Work, TaskStatus::InReview, TaskStatus::InProgress) => true, // changes_requested
-        (TaskType::Work, TaskStatus::InProgress, TaskStatus::Blocked) => true,
-        (TaskType::Work, TaskStatus::Blocked, TaskStatus::InProgress) => true,
-        (TaskType::Work, _, TaskStatus::Escalated) => true,
+    let valid = match (job_type, from, to) {
+        // Craft transitions
+        (JobType::Craft, JobStatus::Draft, JobStatus::Ready) => true,
+        (JobType::Craft, JobStatus::Ready, JobStatus::InProgress) => true,
+        (JobType::Craft, JobStatus::InProgress, JobStatus::InReview) => true,
+        (JobType::Craft, JobStatus::InReview, JobStatus::Done) => true,
+        (JobType::Craft, JobStatus::InReview, JobStatus::InProgress) => true, // changes_requested
+        (JobType::Craft, JobStatus::InProgress, JobStatus::Blocked) => true,
+        (JobType::Craft, JobStatus::Blocked, JobStatus::InProgress) => true,
+        (JobType::Craft, _, JobStatus::Escalated) => true,
 
         // Review transitions
-        (TaskType::Review, TaskStatus::Todo, TaskStatus::InProgress) => true,
-        (TaskType::Review, TaskStatus::Blocked, TaskStatus::Todo) => true,
-        (TaskType::Review, TaskStatus::InProgress, TaskStatus::Done) => true,
+        (JobType::Review, JobStatus::Todo, JobStatus::InProgress) => true,
+        (JobType::Review, JobStatus::Blocked, JobStatus::Todo) => true,
+        (JobType::Review, JobStatus::InProgress, JobStatus::Done) => true,
 
         _ => false,
     };
 
     if !valid {
-        return Err(TransitionError {
-            task_type,
-            from,
-            to,
-        });
+        return Err(TransitionError { job_type, from, to });
     }
 
     Ok(())
@@ -180,30 +175,26 @@ mod tests {
 
     #[test]
     fn valid_transitions() {
-        assert!(validate_transition(TaskType::Work, TaskStatus::Draft, TaskStatus::Ready).is_ok());
+        assert!(validate_transition(JobType::Craft, JobStatus::Draft, JobStatus::Ready).is_ok());
         assert!(
-            validate_transition(TaskType::Work, TaskStatus::Ready, TaskStatus::InProgress).is_ok()
+            validate_transition(JobType::Craft, JobStatus::Ready, JobStatus::InProgress).is_ok()
         );
         assert!(
-            validate_transition(TaskType::Work, TaskStatus::InProgress, TaskStatus::InReview)
-                .is_ok()
+            validate_transition(JobType::Craft, JobStatus::InProgress, JobStatus::InReview).is_ok()
         );
+        assert!(validate_transition(JobType::Craft, JobStatus::InReview, JobStatus::Done).is_ok());
         assert!(
-            validate_transition(TaskType::Work, TaskStatus::InReview, TaskStatus::Done).is_ok()
-        );
-        assert!(
-            validate_transition(TaskType::Work, TaskStatus::InReview, TaskStatus::InProgress)
-                .is_ok()
+            validate_transition(JobType::Craft, JobStatus::InReview, JobStatus::InProgress).is_ok()
         );
     }
 
     #[test]
     fn invalid_transitions() {
-        assert!(validate_transition(TaskType::Work, TaskStatus::Draft, TaskStatus::Done).is_err());
+        assert!(validate_transition(JobType::Craft, JobStatus::Draft, JobStatus::Done).is_err());
         assert!(
-            validate_transition(TaskType::Work, TaskStatus::Draft, TaskStatus::InProgress).is_err()
+            validate_transition(JobType::Craft, JobStatus::Draft, JobStatus::InProgress).is_err()
         );
-        assert!(validate_transition(TaskType::Work, TaskStatus::Done, TaskStatus::Draft).is_err());
-        assert!(validate_transition(TaskType::Review, TaskStatus::Done, TaskStatus::Todo).is_err());
+        assert!(validate_transition(JobType::Craft, JobStatus::Done, JobStatus::Draft).is_err());
+        assert!(validate_transition(JobType::Review, JobStatus::Done, JobStatus::Todo).is_err());
     }
 }

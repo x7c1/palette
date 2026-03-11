@@ -5,47 +5,47 @@ use axum::{
     extract::{Path, State},
     http::StatusCode,
 };
+use palette_domain::job::{JobId, JobType};
 use palette_domain::review::Verdict;
 use palette_domain::server::ServerEvent;
-use palette_domain::task::{TaskId, TaskType};
 use std::sync::Arc;
 
 pub async fn handle_submit_review(
     State(state): State<Arc<AppState>>,
-    Path(review_task_id): Path<String>,
+    Path(review_job_id): Path<String>,
     Json(api_req): Json<SubmitReviewRequest>,
 ) -> Result<(StatusCode, Json<ReviewSubmissionResponse>), (StatusCode, String)> {
-    let review_task_id = TaskId::new(review_task_id);
+    let review_job_id = JobId::new(review_job_id);
     let req: palette_domain::review::SubmitReviewRequest = api_req.into();
 
-    // Verify the task exists and is a review
-    let task = state
+    // Verify the job exists and is a review
+    let job = state
         .db
-        .get_task(&review_task_id)
+        .get_job(&review_job_id)
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
         .ok_or_else(|| {
             (
                 StatusCode::NOT_FOUND,
-                format!("review task not found: {review_task_id}"),
+                format!("review job not found: {review_job_id}"),
             )
         })?;
 
-    if task.task_type != TaskType::Review {
+    if job.job_type != JobType::Review {
         return Err((
             StatusCode::BAD_REQUEST,
-            format!("task {review_task_id} is not a review task"),
+            format!("job {review_job_id} is not a review job"),
         ));
     }
 
     let submission = state
         .db
-        .submit_review(&review_task_id, &req)
+        .submit_review(&review_job_id, &req)
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     // Apply rule engine
     let effects = state
         .rules
-        .on_review_submitted(&review_task_id, &submission)
+        .on_review_submitted(&review_job_id, &submission)
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     for effect in &effects {
@@ -54,20 +54,20 @@ pub async fn handle_submit_review(
 
     // If changes_requested, enqueue feedback to the assignee member
     if submission.verdict == Verdict::ChangesRequested {
-        let work_tasks = state
+        let craft_jobs = state
             .db
-            .find_works_for_review(&review_task_id)
+            .find_crafts_for_review(&review_job_id)
             .unwrap_or_default();
-        for work in &work_tasks {
-            if let Some(ref assignee) = work.assignee {
+        for craft in &craft_jobs {
+            if let Some(ref assignee) = craft.assignee {
                 let feedback = format!(
-                    "[review-feedback] task={} verdict=changes_requested summary: {}",
-                    work.id,
+                    "[review-feedback] job={} verdict=changes_requested summary: {}",
+                    craft.id,
                     submission.summary.as_deref().unwrap_or("(no summary)")
                 );
                 let _ = state.db.enqueue_message(assignee, &feedback);
                 tracing::info!(
-                    task_id = %work.id,
+                    job_id = %craft.id,
                     assignee = %assignee,
                     "enqueued review feedback to member"
                 );
@@ -75,30 +75,30 @@ pub async fn handle_submit_review(
         }
     }
 
-    // Notify main leader about review results
+    // Notify leader about review results
     {
         let infra = state.infra.lock().await;
-        if let Some(main_leader) = infra.find_main_leader() {
+        if let Some(leader) = infra.find_leader() {
             let verdict_str = match submission.verdict {
                 Verdict::Approved => "approved",
                 Verdict::ChangesRequested => "changes_requested",
             };
-            let work_ids: Vec<String> = state
+            let craft_ids: Vec<String> = state
                 .db
-                .find_works_for_review(&review_task_id)
+                .find_crafts_for_review(&review_job_id)
                 .unwrap_or_default()
                 .iter()
                 .map(|w| w.id.to_string())
                 .collect();
             let notification = format!(
-                "[event] review={review_task_id} works={} type={verdict_str}",
-                work_ids.join(","),
+                "[event] review={review_job_id} crafts={} type={verdict_str}",
+                craft_ids.join(","),
             );
-            let _ = state.db.enqueue_message(&main_leader.id, &notification);
+            let _ = state.db.enqueue_message(&leader.id, &notification);
             tracing::info!(
-                review_task_id = %review_task_id,
+                review_job_id = %review_job_id,
                 verdict = verdict_str,
-                "notified main leader of review result"
+                "notified leader of review result"
             );
         }
     }

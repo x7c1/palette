@@ -1,8 +1,8 @@
 mod helper;
 
-use helper::{aid, capture_pane, spawn_server, test_session_name_with_guard, tid};
+use helper::{aid, capture_pane, jid, spawn_server, test_session_name_with_guard};
 use palette_domain::agent::{AgentRole, AgentState, AgentStatus, ContainerId};
-use palette_domain::task::{CreateTaskRequest, TaskStatus, TaskType};
+use palette_domain::job::{CreateJobRequest, JobStatus, JobType};
 use palette_tmux::TmuxManager;
 use serde_json::json;
 
@@ -21,10 +21,10 @@ async fn scenario3_message_queuing_to_leader() {
     let (base_url, state) = spawn_server(tmux, &session).await;
     {
         let mut infra = state.infra.lock().await;
-        infra.leaders.push(AgentState {
+        infra.supervisors.push(AgentState {
             id: aid("review-integrator-1"),
             role: AgentRole::ReviewIntegrator,
-            leader_id: aid(""),
+            supervisor_id: aid(""),
             container_id: ContainerId::new(""),
             terminal_target: ri_pane.clone(),
             status: AgentStatus::Working,
@@ -33,7 +33,7 @@ async fn scenario3_message_queuing_to_leader() {
         infra.members.push(AgentState {
             id: aid("member-a"),
             role: AgentRole::Member,
-            leader_id: aid("review-integrator-1"),
+            supervisor_id: aid("review-integrator-1"),
             container_id: ContainerId::new(""),
             terminal_target: _member_a_pane.clone(),
             status: AgentStatus::Working,
@@ -42,7 +42,7 @@ async fn scenario3_message_queuing_to_leader() {
         infra.members.push(AgentState {
             id: aid("member-b"),
             role: AgentRole::Member,
-            leader_id: aid("review-integrator-1"),
+            supervisor_id: aid("review-integrator-1"),
             container_id: ContainerId::new(""),
             terminal_target: _member_b_pane.clone(),
             status: AgentStatus::Working,
@@ -52,12 +52,12 @@ async fn scenario3_message_queuing_to_leader() {
 
     let client = reqwest::Client::new();
 
-    // Create review tasks and assign them
+    // Create review jobs and assign them
     state
         .db
-        .create_task(&CreateTaskRequest {
-            id: Some(tid("R-A")),
-            task_type: TaskType::Review,
+        .create_job(&CreateJobRequest {
+            id: Some(jid("R-A")),
+            job_type: JobType::Review,
             title: "Review A".to_string(),
             description: None,
             assignee: None,
@@ -68,9 +68,9 @@ async fn scenario3_message_queuing_to_leader() {
         .unwrap();
     state
         .db
-        .create_task(&CreateTaskRequest {
-            id: Some(tid("R-B")),
-            task_type: TaskType::Review,
+        .create_job(&CreateJobRequest {
+            id: Some(jid("R-B")),
+            job_type: JobType::Review,
             title: "Review B".to_string(),
             description: None,
             assignee: None,
@@ -82,14 +82,14 @@ async fn scenario3_message_queuing_to_leader() {
 
     state
         .db
-        .update_task_status(&tid("R-A"), TaskStatus::Ready)
+        .update_job_status(&jid("R-A"), JobStatus::Ready)
         .unwrap();
-    state.db.assign_task(&tid("R-A"), &aid("member-a")).unwrap();
+    state.db.assign_job(&jid("R-A"), &aid("member-a")).unwrap();
     state
         .db
-        .update_task_status(&tid("R-B"), TaskStatus::Ready)
+        .update_job_status(&jid("R-B"), JobStatus::Ready)
         .unwrap();
-    state.db.assign_task(&tid("R-B"), &aid("member-b")).unwrap();
+    state.db.assign_job(&jid("R-B"), &aid("member-b")).unwrap();
 
     // --- Both review members stop while review integrator is Working ---
 
@@ -143,7 +143,7 @@ async fn scenario3_message_queuing_to_leader() {
 
     let content = capture_pane(&ri_pane);
     assert!(
-        content.contains("[review] member=member-a task=R-A type=review_complete"),
+        content.contains("[review] member=member-a job=R-A type=review_complete"),
         "first stop should deliver member-a review, got: {content}"
     );
 
@@ -171,7 +171,7 @@ async fn scenario3_message_queuing_to_leader() {
 
     let content = capture_pane(&ri_pane);
     assert!(
-        content.contains("[review] member=member-b task=R-B type=review_complete"),
+        content.contains("[review] member=member-b job=R-B type=review_complete"),
         "second stop should deliver member-b review, got: {content}"
     );
 

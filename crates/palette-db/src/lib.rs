@@ -6,5 +6,5 @@ pub mod models;
 mod database;
 pub use database::Database;
 
+mod job_store;
 mod schema;
-mod task_store;

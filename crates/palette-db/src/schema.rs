@@ -1,9 +1,9 @@
 use rusqlite::Connection;
 
 pub(crate) const SCHEMA: &str = r#"
-CREATE TABLE IF NOT EXISTS tasks (
+CREATE TABLE IF NOT EXISTS jobs (
     id TEXT PRIMARY KEY,
-    type TEXT NOT NULL CHECK(type IN ('work', 'review')),
+    type TEXT NOT NULL CHECK(type IN ('craft', 'review')),
     title TEXT NOT NULL,
     description TEXT,
     assignee TEXT,
@@ -18,21 +18,21 @@ CREATE TABLE IF NOT EXISTS tasks (
 );
 
 CREATE TABLE IF NOT EXISTS dependencies (
-    task_id TEXT NOT NULL,
+    job_id TEXT NOT NULL,
     depends_on TEXT NOT NULL,
-    PRIMARY KEY (task_id, depends_on),
-    FOREIGN KEY (task_id) REFERENCES tasks(id),
-    FOREIGN KEY (depends_on) REFERENCES tasks(id)
+    PRIMARY KEY (job_id, depends_on),
+    FOREIGN KEY (job_id) REFERENCES jobs(id),
+    FOREIGN KEY (depends_on) REFERENCES jobs(id)
 );
 
 CREATE TABLE IF NOT EXISTS review_submissions (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    review_task_id TEXT NOT NULL,
+    review_job_id TEXT NOT NULL,
     round INTEGER NOT NULL,
     verdict TEXT NOT NULL CHECK(verdict IN ('approved', 'changes_requested')),
     summary TEXT,
     created_at TEXT NOT NULL,
-    FOREIGN KEY (review_task_id) REFERENCES tasks(id)
+    FOREIGN KEY (review_job_id) REFERENCES jobs(id)
 );
 
 CREATE TABLE IF NOT EXISTS review_comments (
@@ -51,8 +51,8 @@ CREATE TABLE IF NOT EXISTS message_queue (
     created_at TEXT NOT NULL
 );
 
-CREATE INDEX IF NOT EXISTS idx_tasks_type_status ON tasks(type, status);
-CREATE INDEX IF NOT EXISTS idx_review_submissions_task ON review_submissions(review_task_id);
+CREATE INDEX IF NOT EXISTS idx_jobs_type_status ON jobs(type, status);
+CREATE INDEX IF NOT EXISTS idx_review_submissions_job ON review_submissions(review_job_id);
 CREATE INDEX IF NOT EXISTS idx_review_comments_submission ON review_comments(submission_id);
 CREATE INDEX IF NOT EXISTS idx_message_queue_target ON message_queue(target_id, id);
 "#;
@@ -86,7 +86,7 @@ mod tests {
             .collect::<Result<_, _>>()
             .unwrap();
 
-        assert!(tables.contains(&"tasks".to_string()));
+        assert!(tables.contains(&"jobs".to_string()));
         assert!(tables.contains(&"dependencies".to_string()));
         assert!(tables.contains(&"review_submissions".to_string()));
         assert!(tables.contains(&"review_comments".to_string()));

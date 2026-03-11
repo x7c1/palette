@@ -1,22 +1,22 @@
 use std::fmt;
 
-use crate::task::TaskId;
+use crate::job::JobId;
 
 /// Domain-level review errors.
 #[derive(Debug)]
 pub enum ReviewError {
-    TaskNotFound { review_task_id: TaskId },
-    NotReviewTask { task_id: TaskId },
+    JobNotFound { review_job_id: JobId },
+    NotReviewJob { job_id: JobId },
 }
 
 impl fmt::Display for ReviewError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            ReviewError::TaskNotFound { review_task_id } => {
-                write!(f, "review task not found: {review_task_id}")
+            ReviewError::JobNotFound { review_job_id } => {
+                write!(f, "review job not found: {review_job_id}")
             }
-            ReviewError::NotReviewTask { task_id } => {
-                write!(f, "task {task_id} is not a review task")
+            ReviewError::NotReviewJob { job_id } => {
+                write!(f, "job {job_id} is not a review job")
             }
         }
     }
