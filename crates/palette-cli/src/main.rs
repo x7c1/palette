@@ -41,14 +41,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let state_path = PathBuf::from(&config.state_path);
     let infra = match palette_file_state::load(&state_path)? {
-        Some(state) if supervisors_alive(&state) => {
+        Some(state) if supervisors_alive(&state, &tmux) => {
             tracing::info!("restored previous state (containers running)");
             state
         }
-        Some(_) => {
+        Some(stale) => {
             tracing::warn!(
-                "previous state found but supervisor containers are not running, re-bootstrapping"
+                "previous state found but supervisors are not fully alive, re-bootstrapping"
             );
+            cleanup_stale_containers(&stale, &docker);
             bootstrap_supervisors(&config, &tmux, &docker, &state_path)?
         }
         None => bootstrap_supervisors(&config, &tmux, &docker, &state_path)?,
@@ -141,15 +142,33 @@ fn spawn_agent(
     })
 }
 
-/// Check if all supervisor containers from a restored state are still running.
-fn supervisors_alive(state: &PersistentState) -> bool {
+/// Check if all supervisor containers and tmux panes from a restored state are still alive.
+fn supervisors_alive(state: &PersistentState, tmux: &TmuxManager) -> bool {
     state.supervisors.iter().all(|s| {
-        let running = palette_docker::is_container_running(s.container_id.as_ref());
-        if !running {
+        let container_running = palette_docker::is_container_running(s.container_id.as_ref());
+        if !container_running {
             tracing::warn!(id = %s.id, container = %s.container_id, "supervisor container not running");
+            return false;
         }
-        running
+        let pane_alive = tmux
+            .is_terminal_alive(&s.terminal_target)
+            .unwrap_or(false);
+        if !pane_alive {
+            tracing::warn!(id = %s.id, target = %s.terminal_target, "supervisor tmux pane not found");
+        }
+        pane_alive
     })
+}
+
+/// Stop and remove containers from a stale state before re-bootstrapping.
+fn cleanup_stale_containers(state: &PersistentState, docker: &DockerManager) {
+    for s in state.supervisors.iter().chain(state.members.iter()) {
+        if palette_docker::is_container_running(s.container_id.as_ref()) {
+            tracing::info!(id = %s.id, container = %s.container_id, "stopping stale container");
+            let _ = docker.stop_container(&s.container_id);
+        }
+        let _ = docker.remove_container(&s.container_id);
+    }
 }
 
 /// Bootstrap supervisors (main leader + optional review integrator).
