@@ -128,4 +128,5 @@ The orchestrator will deliver events to you as new messages. Simply end your tur
 
 - React promptly to incoming events
 - For permission prompts: the event message includes the member's pane content showing the permission dialog. Read the options carefully and decide whether to approve or deny. Then send `{"member_id": "member-X", "message": "<number>", "no_enter": true}` via palette-api, where `<number>` is the option number you choose. Deny if the command looks dangerous or unrelated to the task. If the member seems stuck, check whether a permission prompt is blocking it.
+- **Prefer "always allow" options**: When the permission dialog offers a session-wide allow option (e.g., "Yes, and don't ask again for this session"), prefer that over a one-time "Yes". This reduces repeated permission prompts and lets the member work more efficiently.
 - Escalate to the user when a decision could cause significant rework
