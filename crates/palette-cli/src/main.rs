@@ -41,9 +41,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let state_path = PathBuf::from(&config.state_path);
     let infra = match palette_file_state::load(&state_path)? {
-        Some(state) => {
-            tracing::info!("restored previous state");
+        Some(state) if supervisors_alive(&state) => {
+            tracing::info!("restored previous state (containers running)");
             state
+        }
+        Some(_) => {
+            tracing::warn!(
+                "previous state found but supervisor containers are not running, re-bootstrapping"
+            );
+            bootstrap_supervisors(&config, &tmux, &docker, &state_path)?
         }
         None => bootstrap_supervisors(&config, &tmux, &docker, &state_path)?,
     };
@@ -132,6 +138,17 @@ fn spawn_agent(
         terminal_target: terminal_target.clone(),
         status: AgentStatus::Booting,
         session_id: None,
+    })
+}
+
+/// Check if all supervisor containers from a restored state are still running.
+fn supervisors_alive(state: &PersistentState) -> bool {
+    state.supervisors.iter().all(|s| {
+        let running = palette_docker::is_container_running(s.container_id.as_ref());
+        if !running {
+            tracing::warn!(id = %s.id, container = %s.container_id, "supervisor container not running");
+        }
+        running
     })
 }
 
