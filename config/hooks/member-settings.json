@@ -1,4 +1,13 @@
 {
+  "permissions": {
+    "allow": [
+      "Bash(ls *)",
+      "Bash(cd *)",
+      "Bash(echo *)",
+      "Bash(cat *)",
+      "Bash(pwd)"
+    ]
+  },
   "hooks": {
     "Stop": [
       {
