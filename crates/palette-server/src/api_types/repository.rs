@@ -7,7 +7,7 @@ pub struct Repository {
     pub branch: Option<String>,
 }
 
-impl From<Repository> for domain::task::Repository {
+impl From<Repository> for domain::job::Repository {
     fn from(r: Repository) -> Self {
         Self {
             name: r.name,
@@ -16,8 +16,8 @@ impl From<Repository> for domain::task::Repository {
     }
 }
 
-impl From<domain::task::Repository> for Repository {
-    fn from(r: domain::task::Repository) -> Self {
+impl From<domain::job::Repository> for Repository {
+    fn from(r: domain::job::Repository) -> Self {
         Self {
             name: r.name,
             branch: r.branch,

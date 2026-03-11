@@ -21,7 +21,7 @@ async fn send_keys_delivers_to_tmux_pane() {
         infra.members.push(AgentState {
             id: aid("worker"),
             role: AgentRole::Member,
-            leader_id: aid(""),
+            supervisor_id: aid(""),
             container_id: ContainerId::new(""),
             terminal_target: target.clone(),
             status: AgentStatus::Idle,
@@ -102,7 +102,7 @@ async fn send_queues_when_member_is_working() {
         infra.members.push(AgentState {
             id: aid("worker"),
             role: AgentRole::Member,
-            leader_id: aid(""),
+            supervisor_id: aid(""),
             container_id: ContainerId::new(""),
             terminal_target: target.clone(),
             status: AgentStatus::Working,

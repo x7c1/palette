@@ -11,7 +11,7 @@ impl Orchestrator {
     ) -> crate::Result<bool> {
         let member = infra
             .find_member(target_id)
-            .or_else(|| infra.find_leader(target_id));
+            .or_else(|| infra.find_supervisor(target_id));
 
         let terminal_target = match member {
             Some(m) if m.status == AgentStatus::Idle => m.terminal_target.clone(),
@@ -23,7 +23,7 @@ impl Orchestrator {
             // Update status to Working
             if let Some(m) = infra.find_member_mut(target_id) {
                 m.status = AgentStatus::Working;
-            } else if let Some(l) = infra.find_leader_mut(target_id) {
+            } else if let Some(l) = infra.find_supervisor_mut(target_id) {
                 l.status = AgentStatus::Working;
             }
             infra.touch();

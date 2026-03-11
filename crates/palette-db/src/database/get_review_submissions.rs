@@ -3,17 +3,17 @@ use super::*;
 impl Database {
     pub fn get_review_submissions(
         &self,
-        review_task_id: &TaskId,
+        review_job_id: &JobId,
     ) -> crate::Result<Vec<ReviewSubmission>> {
         let conn = lock!(self.conn);
         let mut stmt = conn.prepare(
-            "SELECT id, review_task_id, round, verdict, summary, created_at
-             FROM review_submissions WHERE review_task_id = ?1 ORDER BY round",
+            "SELECT id, review_job_id, round, verdict, summary, created_at
+             FROM review_submissions WHERE review_job_id = ?1 ORDER BY round",
         )?;
-        let rows = stmt.query_map(params![review_task_id.as_ref()], |row| {
+        let rows = stmt.query_map(params![review_job_id.as_ref()], |row| {
             Ok(ReviewSubmission {
                 id: row.get(0)?,
-                review_task_id: TaskId::new(row.get::<_, String>(1)?),
+                review_job_id: JobId::new(row.get::<_, String>(1)?),
                 round: row.get(2)?,
                 verdict: row
                     .get::<_, String>(3)?

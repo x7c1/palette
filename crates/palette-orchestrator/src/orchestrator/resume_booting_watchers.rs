@@ -6,9 +6,9 @@ use std::sync::Arc;
 impl Orchestrator {
     /// Start readiness watchers for any agents currently in Booting state.
     pub fn resume_booting_watchers(self: &Arc<Self>, infra: &PersistentState) {
-        for leader in &infra.leaders {
-            if leader.status == AgentStatus::Booting {
-                self.spawn_readiness_watcher(leader.id.clone());
+        for supervisor in &infra.supervisors {
+            if supervisor.status == AgentStatus::Booting {
+                self.spawn_readiness_watcher(supervisor.id.clone());
             }
         }
         for member in &infra.members {

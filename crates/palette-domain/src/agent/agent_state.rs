@@ -5,7 +5,7 @@ use crate::terminal::TerminalTarget;
 pub struct AgentState {
     pub id: AgentId,
     pub role: AgentRole,
-    pub leader_id: AgentId,
+    pub supervisor_id: AgentId,
     pub container_id: ContainerId,
     pub terminal_target: TerminalTarget,
     pub status: AgentStatus,

@@ -9,7 +9,7 @@ use palette_domain::terminal::TerminalTarget;
 pub fn to_state_file(state: &PersistentState) -> StateFile {
     StateFile {
         session_name: state.session_name.clone(),
-        leaders: state.leaders.iter().map(to_agent_record).collect(),
+        supervisors: state.supervisors.iter().map(to_agent_record).collect(),
         members: state.members.iter().map(to_agent_record).collect(),
         created_at: state.created_at.to_rfc3339(),
         updated_at: state.updated_at.to_rfc3339(),
@@ -17,8 +17,8 @@ pub fn to_state_file(state: &PersistentState) -> StateFile {
 }
 
 pub fn from_state_file(file: StateFile) -> Result<PersistentState, Error> {
-    let leaders = file
-        .leaders
+    let supervisors = file
+        .supervisors
         .into_iter()
         .map(from_agent_record)
         .collect::<Result<Vec<_>, _>>()?;
@@ -33,7 +33,7 @@ pub fn from_state_file(file: StateFile) -> Result<PersistentState, Error> {
 
     Ok(PersistentState {
         session_name: file.session_name,
-        leaders,
+        supervisors,
         members,
         created_at,
         updated_at,
@@ -44,7 +44,7 @@ fn to_agent_record(agent: &AgentState) -> AgentRecord {
     AgentRecord {
         id: agent.id.as_ref().to_string(),
         role: agent.role.as_str().to_string(),
-        leader_id: agent.leader_id.as_ref().to_string(),
+        supervisor_id: agent.supervisor_id.as_ref().to_string(),
         container_id: agent.container_id.as_ref().to_string(),
         terminal_target: agent.terminal_target.as_ref().to_string(),
         status: status_to_str(agent.status),
@@ -56,7 +56,7 @@ fn from_agent_record(record: AgentRecord) -> Result<AgentState, Error> {
     Ok(AgentState {
         id: AgentId::new(record.id),
         role: parse_role(&record.role)?,
-        leader_id: AgentId::new(record.leader_id),
+        supervisor_id: AgentId::new(record.supervisor_id),
         container_id: ContainerId::new(record.container_id),
         terminal_target: TerminalTarget::new(record.terminal_target),
         status: parse_status(&record.status)?,

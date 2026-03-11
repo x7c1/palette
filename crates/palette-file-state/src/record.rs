@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Serialize, Deserialize)]
 pub struct StateFile {
     pub session_name: String,
-    pub leaders: Vec<AgentRecord>,
+    pub supervisors: Vec<AgentRecord>,
     pub members: Vec<AgentRecord>,
     pub created_at: String,
     pub updated_at: String,
@@ -15,7 +15,7 @@ pub struct StateFile {
 pub struct AgentRecord {
     pub id: String,
     pub role: String,
-    pub leader_id: String,
+    pub supervisor_id: String,
     pub container_id: String,
     pub terminal_target: String,
     pub status: String,

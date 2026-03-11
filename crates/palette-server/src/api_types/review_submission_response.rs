@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ReviewSubmissionResponse {
     pub id: i64,
-    pub review_task_id: String,
+    pub review_job_id: String,
     pub round: i32,
     pub verdict: Verdict,
     pub summary: Option<String>,
@@ -17,7 +17,7 @@ impl From<domain::review::ReviewSubmission> for ReviewSubmissionResponse {
     fn from(s: domain::review::ReviewSubmission) -> Self {
         Self {
             id: s.id,
-            review_task_id: s.review_task_id.to_string(),
+            review_job_id: s.review_job_id.to_string(),
             round: s.round,
             verdict: s.verdict.into(),
             summary: s.summary,

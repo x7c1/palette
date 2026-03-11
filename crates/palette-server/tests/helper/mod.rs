@@ -1,12 +1,12 @@
 use palette_db::Database;
 use palette_docker::DockerManager;
 use palette_domain::agent::AgentId;
+use palette_domain::job::JobId;
 use palette_domain::rule::RuleEngine;
 use palette_domain::server::PersistentState;
-use palette_domain::task::TaskId;
 use palette_domain::terminal::{TerminalSessionName, TerminalTarget};
 use palette_orchestrator::{DockerConfig, Orchestrator};
-use palette_server::api_types::{CreateTaskRequest, TaskStatus, TaskType, UpdateTaskRequest};
+use palette_server::api_types::{CreateJobRequest, JobStatus, JobType, UpdateJobRequest};
 use palette_server::{AppState, create_router};
 use palette_tmux::TmuxManager;
 use std::process::Command;
@@ -42,14 +42,14 @@ pub fn aid(s: &str) -> AgentId {
     AgentId::new(s)
 }
 
-pub fn tid(s: &str) -> TaskId {
-    TaskId::new(s)
+pub fn jid(s: &str) -> JobId {
+    JobId::new(s)
 }
 
-pub fn create_work(id: &str, title: &str) -> CreateTaskRequest {
-    CreateTaskRequest {
+pub fn create_craft(id: &str, title: &str) -> CreateJobRequest {
+    CreateJobRequest {
         id: Some(id.to_string()),
-        task_type: TaskType::Work,
+        job_type: JobType::Craft,
         title: title.to_string(),
         description: None,
         assignee: None,
@@ -59,10 +59,10 @@ pub fn create_work(id: &str, title: &str) -> CreateTaskRequest {
     }
 }
 
-pub fn create_review(id: &str, title: &str, depends_on: Vec<&str>) -> CreateTaskRequest {
-    CreateTaskRequest {
+pub fn create_review(id: &str, title: &str, depends_on: Vec<&str>) -> CreateJobRequest {
+    CreateJobRequest {
         id: Some(id.to_string()),
-        task_type: TaskType::Review,
+        job_type: JobType::Review,
         title: title.to_string(),
         description: None,
         assignee: None,
@@ -72,8 +72,8 @@ pub fn create_review(id: &str, title: &str, depends_on: Vec<&str>) -> CreateTask
     }
 }
 
-pub fn update_status(id: &str, status: TaskStatus) -> UpdateTaskRequest {
-    UpdateTaskRequest {
+pub fn update_status(id: &str, status: JobStatus) -> UpdateJobRequest {
+    UpdateJobRequest {
         id: id.to_string(),
         status,
     }

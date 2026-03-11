@@ -12,7 +12,7 @@ impl DockerManager {
     ) -> String {
         let cid = container_id.as_ref();
         let plugin_flag = " --plugin-dir /home/agent/claude-code-plugin";
-        if role.is_leader() {
+        if role.is_supervisor() {
             format!(
                 "docker exec -it {cid} claude --dangerously-skip-permissions --append-system-prompt-file {prompt_file}{plugin_flag}"
             )

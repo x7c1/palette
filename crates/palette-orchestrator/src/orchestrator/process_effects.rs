@@ -1,12 +1,12 @@
 use super::Orchestrator;
 use palette_docker::WorkspaceVolume;
 use palette_domain::agent::AgentId;
+use palette_domain::job::{Job, JobId, JobStatus, JobType};
 use palette_domain::rule::{RuleEffect, RuleEngine};
 use palette_domain::server::{PendingDelivery, PersistentState};
-use palette_domain::task::{Task, TaskId, TaskStatus, TaskType};
 
 impl Orchestrator {
-    /// Processes rule engine effects: auto-assign tasks, spawn/destroy members.
+    /// Processes rule engine effects: auto-assign jobs, spawn/destroy members.
     /// Returns a list of messages that need to be sent to members via tmux.
     ///
     /// The caller is responsible for saving state after this function returns.
@@ -20,17 +20,14 @@ impl Orchestrator {
 
         while let Some(effect) = pending.pop() {
             match &effect {
-                RuleEffect::AutoAssign { task_id } => {
-                    self.handle_auto_assign(task_id, infra, &mut deliveries)?;
+                RuleEffect::AutoAssign { job_id } => {
+                    self.handle_auto_assign(job_id, infra, &mut deliveries)?;
                 }
                 RuleEffect::DestroyMember { member_id } => {
                     self.handle_destroy_member(member_id, infra);
                 }
-                RuleEffect::StatusChanged {
-                    task_id,
-                    new_status,
-                } => {
-                    let chained = self.handle_status_changed(task_id, *new_status)?;
+                RuleEffect::StatusChanged { job_id, new_status } => {
+                    let chained = self.handle_status_changed(job_id, *new_status)?;
                     pending.extend(chained);
                 }
                 _ => {}
@@ -42,46 +39,46 @@ impl Orchestrator {
 
     fn handle_auto_assign(
         &self,
-        task_id: &TaskId,
+        job_id: &JobId,
         infra: &mut PersistentState,
         deliveries: &mut Vec<PendingDelivery>,
     ) -> crate::Result<()> {
-        // Only assign if the task is truly assignable (ready + all deps done)
-        let assignable = self.db.find_assignable_tasks()?;
-        let task = match assignable.iter().find(|t| t.id == *task_id) {
-            Some(t) => t.clone(),
+        // Only assign if the job is truly assignable (ready + all deps done)
+        let assignable_jobs = self.db.find_assignable_jobs()?;
+        let job = match assignable_jobs.iter().find(|j| j.id == *job_id) {
+            Some(j) => j.clone(),
             None => return Ok(()),
         };
         let active = self.db.count_active_members()?;
         if active >= self.docker_config.max_members {
             tracing::info!(
-                task_id = %task_id,
+                job_id = %job_id,
                 active = active,
                 max = self.docker_config.max_members,
-                "max members reached, task waits"
+                "max members reached, job waits"
             );
             return Ok(());
         }
 
-        // Determine workspace volume based on task type
-        let workspace = self.resolve_workspace(task_id, task.task_type)?;
+        // Determine workspace volume based on job type
+        let workspace = self.resolve_workspace(job_id, job.job_type)?;
 
-        // Spawn a new member with leader_id based on task type
+        // Spawn a new member with supervisor_id based on job type
         let member_id = infra.next_member_id();
-        let member = self.spawn_member(&member_id, task.task_type, infra, workspace)?;
+        let member = self.spawn_member(&member_id, job.job_type, infra, workspace)?;
         let terminal_target = member.terminal_target.clone();
         infra.members.push(member);
 
-        // Assign task
-        self.db.assign_task(task_id, &member_id)?;
+        // Assign job
+        self.db.assign_job(job_id, &member_id)?;
         tracing::info!(
-            task_id = %task_id,
+            job_id = %job_id,
             member_id = %member_id,
-            "auto-assigned task"
+            "auto-assigned job"
         );
 
-        // Build task instruction message
-        let instruction = format_task_instruction(&task);
+        // Build job instruction message
+        let instruction = format_job_instruction(&job);
         self.db.enqueue_message(&member_id, &instruction)?;
 
         deliveries.push(PendingDelivery {
@@ -104,17 +101,17 @@ impl Orchestrator {
 
     fn resolve_workspace(
         &self,
-        task_id: &TaskId,
-        task_type: TaskType,
+        job_id: &JobId,
+        job_type: JobType,
     ) -> crate::Result<Option<WorkspaceVolume>> {
-        match task_type {
-            TaskType::Work => Ok(Some(WorkspaceVolume {
-                name: format!("palette-workspace-{task_id}"),
+        match job_type {
+            JobType::Craft => Ok(Some(WorkspaceVolume {
+                name: format!("palette-workspace-{job_id}"),
                 read_only: false,
             })),
-            TaskType::Review => {
-                let works = self.db.find_works_for_review(task_id)?;
-                Ok(works.first().map(|w| WorkspaceVolume {
+            JobType::Review => {
+                let crafts = self.db.find_crafts_for_review(job_id)?;
+                Ok(crafts.first().map(|w| WorkspaceVolume {
                     name: format!("palette-workspace-{}", w.id),
                     read_only: true,
                 }))
@@ -124,11 +121,11 @@ impl Orchestrator {
 
     fn handle_status_changed(
         &self,
-        task_id: &TaskId,
-        new_status: TaskStatus,
+        job_id: &JobId,
+        new_status: JobStatus,
     ) -> crate::Result<Vec<RuleEffect>> {
         let rules = RuleEngine::new(&*self.db, 0); // max_review_rounds unused for status changes
-        let chained = rules.on_status_change(task_id, new_status)?;
+        let chained = rules.on_status_change(job_id, new_status)?;
         for e in &chained {
             tracing::info!(?e, "chained rule engine effect");
         }
@@ -136,13 +133,13 @@ impl Orchestrator {
     }
 }
 
-/// Format a task into an instruction message for a member.
-fn format_task_instruction(task: &Task) -> String {
-    let mut msg = format!("## Task: {}\n\nID: {}\n", task.title, task.id);
-    if let Some(ref desc) = task.description {
+/// Format a job into an instruction message for a member.
+fn format_job_instruction(job: &Job) -> String {
+    let mut msg = format!("## Task: {}\n\nID: {}\n", job.title, job.id);
+    if let Some(ref desc) = job.description {
         msg.push_str(&format!("\n{desc}\n"));
     }
-    if let Some(ref repos) = task.repositories {
+    if let Some(ref repos) = job.repositories {
         msg.push('\n');
         for repo in repos {
             if let Some(ref branch) = repo.branch {
@@ -163,20 +160,20 @@ mod tests {
     use palette_domain::review::*;
     use palette_domain::rule::*;
 
-    use palette_domain::task::*;
+    use palette_domain::job::*;
 
     fn setup_db() -> Database {
         Database::open_in_memory().unwrap()
     }
 
-    fn tid(s: &str) -> TaskId {
-        TaskId::new(s)
+    fn jid(s: &str) -> JobId {
+        JobId::new(s)
     }
 
-    fn create_work_review_pair(db: &Database) {
-        db.create_task(&CreateTaskRequest {
-            id: Some(tid("W-001")),
-            task_type: TaskType::Work,
+    fn create_craft_review_pair(db: &Database) {
+        db.create_job(&CreateJobRequest {
+            id: Some(jid("W-001")),
+            job_type: JobType::Craft,
             title: "Work".to_string(),
             description: None,
             assignee: Some(AgentId::new("member-a")),
@@ -186,42 +183,42 @@ mod tests {
         })
         .unwrap();
 
-        db.create_task(&CreateTaskRequest {
-            id: Some(tid("R-001")),
-            task_type: TaskType::Review,
+        db.create_job(&CreateJobRequest {
+            id: Some(jid("R-001")),
+            job_type: JobType::Review,
             title: "Review".to_string(),
             description: None,
             assignee: None,
             priority: None,
             repositories: None,
-            depends_on: vec![tid("W-001")],
+            depends_on: vec![jid("W-001")],
         })
         .unwrap();
     }
 
     #[test]
-    fn work_in_review_enables_reviews() {
+    fn craft_in_review_enables_reviews() {
         let db = setup_db();
-        create_work_review_pair(&db);
+        create_craft_review_pair(&db);
 
-        db.update_task_status(&tid("W-001"), TaskStatus::Ready)
+        db.update_job_status(&jid("W-001"), JobStatus::Ready)
             .unwrap();
-        db.update_task_status(&tid("W-001"), TaskStatus::InProgress)
+        db.update_job_status(&jid("W-001"), JobStatus::InProgress)
             .unwrap();
-        db.update_task_status(&tid("W-001"), TaskStatus::InReview)
+        db.update_job_status(&jid("W-001"), JobStatus::InReview)
             .unwrap();
 
         let engine = RuleEngine::new(&db, 5);
         let effects = engine
-            .on_status_change(&tid("W-001"), TaskStatus::InReview)
+            .on_status_change(&jid("W-001"), JobStatus::InReview)
             .unwrap();
 
         assert_eq!(effects.len(), 1);
         assert_eq!(
             effects[0],
             RuleEffect::StatusChanged {
-                task_id: tid("R-001"),
-                new_status: TaskStatus::Todo,
+                job_id: jid("R-001"),
+                new_status: JobStatus::Todo,
             }
         );
     }
@@ -229,89 +226,89 @@ mod tests {
     #[test]
     fn review_todo_triggers_auto_assign() {
         let db = setup_db();
-        create_work_review_pair(&db);
+        create_craft_review_pair(&db);
 
-        db.update_task_status(&tid("W-001"), TaskStatus::Ready)
+        db.update_job_status(&jid("W-001"), JobStatus::Ready)
             .unwrap();
-        db.update_task_status(&tid("W-001"), TaskStatus::InProgress)
+        db.update_job_status(&jid("W-001"), JobStatus::InProgress)
             .unwrap();
-        db.update_task_status(&tid("W-001"), TaskStatus::InReview)
+        db.update_job_status(&jid("W-001"), JobStatus::InReview)
             .unwrap();
-        db.update_task_status(&tid("R-001"), TaskStatus::Todo)
+        db.update_job_status(&jid("R-001"), JobStatus::Todo)
             .unwrap();
 
         let engine = RuleEngine::new(&db, 5);
         let effects = engine
-            .on_status_change(&tid("R-001"), TaskStatus::Todo)
+            .on_status_change(&jid("R-001"), JobStatus::Todo)
             .unwrap();
 
         assert_eq!(effects.len(), 1);
         assert_eq!(
             effects[0],
             RuleEffect::AutoAssign {
-                task_id: tid("R-001"),
+                job_id: jid("R-001"),
             }
         );
     }
 
     #[test]
-    fn review_auto_assign_chains_from_work_in_review() {
-        // Verify the full chain: work → in_review → review → todo → auto_assign
+    fn review_auto_assign_chains_from_craft_in_review() {
+        // Verify the full chain: craft -> in_review -> review -> todo -> auto_assign
         let db = setup_db();
-        create_work_review_pair(&db);
+        create_craft_review_pair(&db);
 
-        db.update_task_status(&tid("W-001"), TaskStatus::Ready)
+        db.update_job_status(&jid("W-001"), JobStatus::Ready)
             .unwrap();
-        db.update_task_status(&tid("W-001"), TaskStatus::InProgress)
+        db.update_job_status(&jid("W-001"), JobStatus::InProgress)
             .unwrap();
-        db.update_task_status(&tid("W-001"), TaskStatus::InReview)
+        db.update_job_status(&jid("W-001"), JobStatus::InReview)
             .unwrap();
 
         let engine = RuleEngine::new(&db, 5);
 
-        // Step 1: work → in_review produces StatusChanged for review
+        // Step 1: craft -> in_review produces StatusChanged for review
         let effects = engine
-            .on_status_change(&tid("W-001"), TaskStatus::InReview)
+            .on_status_change(&jid("W-001"), JobStatus::InReview)
             .unwrap();
         assert_eq!(effects.len(), 1);
         assert_eq!(
             effects[0],
             RuleEffect::StatusChanged {
-                task_id: tid("R-001"),
-                new_status: TaskStatus::Todo,
+                job_id: jid("R-001"),
+                new_status: JobStatus::Todo,
             }
         );
 
         // Step 2: chained StatusChanged(R-001, Todo) produces AutoAssign
         let chained = engine
-            .on_status_change(&tid("R-001"), TaskStatus::Todo)
+            .on_status_change(&jid("R-001"), JobStatus::Todo)
             .unwrap();
         assert_eq!(chained.len(), 1);
         assert_eq!(
             chained[0],
             RuleEffect::AutoAssign {
-                task_id: tid("R-001"),
+                job_id: jid("R-001"),
             }
         );
     }
 
     #[test]
-    fn changes_requested_reverts_work() {
+    fn changes_requested_reverts_craft() {
         let db = setup_db();
-        create_work_review_pair(&db);
+        create_craft_review_pair(&db);
 
-        db.update_task_status(&tid("W-001"), TaskStatus::Ready)
+        db.update_job_status(&jid("W-001"), JobStatus::Ready)
             .unwrap();
-        db.update_task_status(&tid("W-001"), TaskStatus::InProgress)
+        db.update_job_status(&jid("W-001"), JobStatus::InProgress)
             .unwrap();
-        db.update_task_status(&tid("W-001"), TaskStatus::InReview)
+        db.update_job_status(&jid("W-001"), JobStatus::InReview)
             .unwrap();
-        db.update_task_status(&tid("R-001"), TaskStatus::InProgress)
+        db.update_job_status(&jid("R-001"), JobStatus::InProgress)
             .unwrap();
 
         let sub = db
             .submit_review(
-                &tid("R-001"),
+                &jid("R-001"),
                 &SubmitReviewRequest {
                     verdict: Verdict::ChangesRequested,
                     summary: None,
@@ -321,38 +318,38 @@ mod tests {
             .unwrap();
 
         let engine = RuleEngine::new(&db, 5);
-        let effects = engine.on_review_submitted(&tid("R-001"), &sub).unwrap();
+        let effects = engine.on_review_submitted(&jid("R-001"), &sub).unwrap();
 
         assert_eq!(effects.len(), 1);
         assert_eq!(
             effects[0],
             RuleEffect::StatusChanged {
-                task_id: tid("W-001"),
-                new_status: TaskStatus::InProgress,
+                job_id: jid("W-001"),
+                new_status: JobStatus::InProgress,
             }
         );
 
-        let work = db.get_task(&tid("W-001")).unwrap().unwrap();
-        assert_eq!(work.status, TaskStatus::InProgress);
+        let craft = db.get_job(&jid("W-001")).unwrap().unwrap();
+        assert_eq!(craft.status, JobStatus::InProgress);
     }
 
     #[test]
-    fn approved_completes_work() {
+    fn approved_completes_craft() {
         let db = setup_db();
-        create_work_review_pair(&db);
+        create_craft_review_pair(&db);
 
-        db.update_task_status(&tid("W-001"), TaskStatus::Ready)
+        db.update_job_status(&jid("W-001"), JobStatus::Ready)
             .unwrap();
-        db.update_task_status(&tid("W-001"), TaskStatus::InProgress)
+        db.update_job_status(&jid("W-001"), JobStatus::InProgress)
             .unwrap();
-        db.update_task_status(&tid("W-001"), TaskStatus::InReview)
+        db.update_job_status(&jid("W-001"), JobStatus::InReview)
             .unwrap();
-        db.update_task_status(&tid("R-001"), TaskStatus::InProgress)
+        db.update_job_status(&jid("R-001"), JobStatus::InProgress)
             .unwrap();
 
         let sub = db
             .submit_review(
-                &tid("R-001"),
+                &jid("R-001"),
                 &SubmitReviewRequest {
                     verdict: Verdict::Approved,
                     summary: Some("LGTM".to_string()),
@@ -362,14 +359,14 @@ mod tests {
             .unwrap();
 
         let engine = RuleEngine::new(&db, 5);
-        let effects = engine.on_review_submitted(&tid("R-001"), &sub).unwrap();
+        let effects = engine.on_review_submitted(&jid("R-001"), &sub).unwrap();
 
         assert_eq!(effects.len(), 1);
         assert_eq!(
             effects[0],
             RuleEffect::StatusChanged {
-                task_id: tid("W-001"),
-                new_status: TaskStatus::Done,
+                job_id: jid("W-001"),
+                new_status: JobStatus::Done,
             }
         );
     }
@@ -377,21 +374,21 @@ mod tests {
     #[test]
     fn escalation_on_max_rounds() {
         let db = setup_db();
-        create_work_review_pair(&db);
+        create_craft_review_pair(&db);
 
-        db.update_task_status(&tid("W-001"), TaskStatus::Ready)
+        db.update_job_status(&jid("W-001"), JobStatus::Ready)
             .unwrap();
-        db.update_task_status(&tid("W-001"), TaskStatus::InProgress)
+        db.update_job_status(&jid("W-001"), JobStatus::InProgress)
             .unwrap();
-        db.update_task_status(&tid("W-001"), TaskStatus::InReview)
+        db.update_job_status(&jid("W-001"), JobStatus::InReview)
             .unwrap();
-        db.update_task_status(&tid("R-001"), TaskStatus::InProgress)
+        db.update_job_status(&jid("R-001"), JobStatus::InProgress)
             .unwrap();
 
         // Round 1
         let sub1 = db
             .submit_review(
-                &tid("R-001"),
+                &jid("R-001"),
                 &SubmitReviewRequest {
                     verdict: Verdict::ChangesRequested,
                     summary: None,
@@ -400,16 +397,16 @@ mod tests {
             )
             .unwrap();
         let engine = RuleEngine::new(&db, 2);
-        engine.on_review_submitted(&tid("R-001"), &sub1).unwrap();
+        engine.on_review_submitted(&jid("R-001"), &sub1).unwrap();
 
-        // Reset work to in_review for round 2
-        db.update_task_status(&tid("W-001"), TaskStatus::InReview)
+        // Reset craft to in_review for round 2
+        db.update_job_status(&jid("W-001"), JobStatus::InReview)
             .unwrap();
 
         // Round 2 - should escalate
         let sub2 = db
             .submit_review(
-                &tid("R-001"),
+                &jid("R-001"),
                 &SubmitReviewRequest {
                     verdict: Verdict::ChangesRequested,
                     summary: None,
@@ -418,7 +415,7 @@ mod tests {
             )
             .unwrap();
         let engine = RuleEngine::new(&db, 2);
-        let effects = engine.on_review_submitted(&tid("R-001"), &sub2).unwrap();
+        let effects = engine.on_review_submitted(&jid("R-001"), &sub2).unwrap();
 
         assert_eq!(effects.len(), 1);
         assert!(matches!(effects[0], RuleEffect::Escalated { .. }));

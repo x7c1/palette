@@ -1,7 +1,7 @@
 mod hooks;
+mod jobs;
 mod reviews;
 mod send;
-mod tasks;
 
 use crate::{AppState, EventRecord};
 use axum::{
@@ -20,11 +20,11 @@ pub fn create_router(state: Arc<AppState>) -> Router {
         .route("/send", post(send::handle_send))
         // Events
         .route("/events", get(handle_events))
-        // Task API
-        .route("/tasks/create", post(tasks::handle_create_task))
-        .route("/tasks/update", post(tasks::handle_update_task))
-        .route("/tasks/load", post(tasks::handle_load_tasks))
-        .route("/tasks", get(tasks::handle_list_tasks))
+        // Job API
+        .route("/jobs/create", post(jobs::handle_create_job))
+        .route("/jobs/update", post(jobs::handle_update_job))
+        .route("/jobs/load", post(jobs::handle_load_jobs))
+        .route("/jobs", get(jobs::handle_list_jobs))
         // Review API
         .route("/reviews/{id}/submit", post(reviews::handle_submit_review))
         .route(

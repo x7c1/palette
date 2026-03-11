@@ -5,8 +5,8 @@ use axum::{
     http::StatusCode,
 };
 use palette_domain::agent::{AgentId, AgentStatus};
+use palette_domain::job::{JobFilter, JobStatus};
 use palette_domain::server::ServerEvent;
-use palette_domain::task::{TaskFilter, TaskStatus};
 use std::sync::Arc;
 
 use super::HookQuery;
@@ -31,30 +31,30 @@ pub async fn handle_stop(
     };
     state.event_log.lock().await.push(record);
 
-    // Update member status to Idle and resolve leader ID
-    let leader_id = {
+    // Update member status to Idle and resolve supervisor ID
+    let supervisor_id = {
         let mut infra = state.infra.lock().await;
         if let Some(member) = infra.find_member_mut(&member_id) {
             member.status = AgentStatus::Idle;
-            let leader_id = member.leader_id.clone();
+            let supervisor_id = member.supervisor_id.clone();
             infra.touch();
-            Some(leader_id)
+            Some(supervisor_id)
         } else {
-            if let Some(leader) = infra.find_leader_mut(&member_id) {
-                leader.status = AgentStatus::Idle;
+            if let Some(supervisor) = infra.find_supervisor_mut(&member_id) {
+                supervisor.status = AgentStatus::Idle;
                 infra.touch();
             }
             None
         }
     };
 
-    // Transition member's in_progress tasks and notify leaders
-    if let Some(ref leader_id) = leader_id {
-        let member_tasks = state
+    // Transition member's in_progress jobs and notify supervisors
+    if let Some(ref supervisor_id) = supervisor_id {
+        let member_jobs = state
             .db
-            .list_tasks(&TaskFilter {
+            .list_jobs(&JobFilter {
                 assignee: Some(member_id.clone()),
-                status: Some(TaskStatus::InProgress),
+                status: Some(JobStatus::InProgress),
                 ..Default::default()
             })
             .unwrap_or_default();
@@ -64,19 +64,19 @@ pub async fn handle_stop(
             .and_then(|v| v.as_str())
             .unwrap_or("(work completed)");
 
-        for task in &member_tasks {
-            match task.task_type {
-                palette_domain::task::TaskType::Work => {
-                    // Work tasks: in_progress → in_review.
-                    // The rule engine triggers AutoAssign for the review task,
+        for job in &member_jobs {
+            match job.job_type {
+                palette_domain::job::JobType::Craft => {
+                    // Craft jobs: in_progress -> in_review.
+                    // The rule engine triggers AutoAssign for the review job,
                     // so we only need the status transition here.
-                    if let Err(e) = state.db.update_task_status(&task.id, TaskStatus::InReview) {
-                        tracing::error!(task_id = %task.id, error = %e, "failed to transition task to in_review");
+                    if let Err(e) = state.db.update_job_status(&job.id, JobStatus::InReview) {
+                        tracing::error!(job_id = %job.id, error = %e, "failed to transition job to in_review");
                         continue;
                     }
                     let effects = state
                         .rules
-                        .on_status_change(&task.id, TaskStatus::InReview)
+                        .on_status_change(&job.id, JobStatus::InReview)
                         .unwrap_or_default();
                     for effect in &effects {
                         tracing::info!(?effect, "rule engine effect (member stop)");
@@ -86,25 +86,25 @@ pub async fn handle_stop(
                         let _ = state.event_tx.send(ServerEvent::ProcessEffects { effects });
                     }
                 }
-                palette_domain::task::TaskType::Review => {
-                    // Review tasks: notify the member's leader (review integrator)
+                palette_domain::job::JobType::Review => {
+                    // Review jobs: notify the member's supervisor (review integrator)
                     // with findings so it can aggregate and submit a verdict.
                     let report_msg = format!(
-                        "[review] member={} task={} type=review_complete message: {}",
-                        member_id, task.id, last_message,
+                        "[review] member={} job={} type=review_complete message: {}",
+                        member_id, job.id, last_message,
                     );
-                    if let Err(e) = state.db.enqueue_message(leader_id, &report_msg) {
+                    if let Err(e) = state.db.enqueue_message(supervisor_id, &report_msg) {
                         tracing::error!(error = %e, "failed to enqueue review report");
                     }
                 }
             }
         }
 
-        if member_tasks.is_empty() {
-            // No tasks to transition; just send a stop event
+        if member_jobs.is_empty() {
+            // No jobs to transition; just send a stop event
             let notification = format!("[event] member={member_id} type=stop");
-            if let Err(e) = state.db.enqueue_message(leader_id, &notification) {
-                tracing::error!(error = %e, "failed to enqueue stop notification for leader");
+            if let Err(e) = state.db.enqueue_message(supervisor_id, &notification) {
+                tracing::error!(error = %e, "failed to enqueue stop notification for supervisor");
             }
         }
     }

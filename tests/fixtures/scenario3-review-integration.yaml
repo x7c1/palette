@@ -2,9 +2,9 @@ repositories:
   - name: x7c1/palette
     branch: e2e-scenario3
 
-tasks:
+jobs:
   - id: W-001
-    type: work
+    type: craft
     title: Create greeting file
     description: Create /home/agent/workspace/greeting.txt with content "Hello, world!"
     priority: high

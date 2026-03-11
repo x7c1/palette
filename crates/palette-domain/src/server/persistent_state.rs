@@ -1,10 +1,10 @@
 use crate::agent::{AgentId, AgentRole, AgentState, ContainerId};
-use crate::task::TaskType;
+use crate::job::JobType;
 use chrono::{DateTime, Utc};
 
 pub struct PersistentState {
     pub session_name: String,
-    pub leaders: Vec<AgentState>,
+    pub supervisors: Vec<AgentState>,
     pub members: Vec<AgentState>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
@@ -15,7 +15,7 @@ impl PersistentState {
         let now = Utc::now();
         Self {
             session_name,
-            leaders: Vec::new(),
+            supervisors: Vec::new(),
             members: Vec::new(),
             created_at: now,
             updated_at: now,
@@ -30,17 +30,17 @@ impl PersistentState {
         self.members.iter_mut().find(|m| m.id == *id)
     }
 
-    pub fn find_leader(&self, id: &AgentId) -> Option<&AgentState> {
-        self.leaders.iter().find(|m| m.id == *id)
+    pub fn find_supervisor(&self, id: &AgentId) -> Option<&AgentState> {
+        self.supervisors.iter().find(|m| m.id == *id)
     }
 
-    pub fn find_leader_mut(&mut self, id: &AgentId) -> Option<&mut AgentState> {
-        self.leaders.iter_mut().find(|m| m.id == *id)
+    pub fn find_supervisor_mut(&mut self, id: &AgentId) -> Option<&mut AgentState> {
+        self.supervisors.iter_mut().find(|m| m.id == *id)
     }
 
-    /// Find any agent (leader or member) by container_id.
+    /// Find any agent (supervisor or member) by container_id.
     pub fn find_by_container(&self, container_id: &ContainerId) -> Option<&AgentState> {
-        self.leaders
+        self.supervisors
             .iter()
             .chain(self.members.iter())
             .find(|m| m.container_id == *container_id)
@@ -60,29 +60,31 @@ impl PersistentState {
         AgentId::next_member(self.members.len())
     }
 
-    /// Find the main leader (AgentRole::Leader).
-    pub fn find_main_leader(&self) -> Option<&AgentState> {
-        self.leaders.iter().find(|l| l.role == AgentRole::Leader)
+    /// Find the leader (AgentRole::Leader).
+    pub fn find_leader(&self) -> Option<&AgentState> {
+        self.supervisors
+            .iter()
+            .find(|l| l.role == AgentRole::Leader)
     }
 
-    /// Find the review integrator leader.
+    /// Find the review integrator.
     pub fn find_review_integrator(&self) -> Option<&AgentState> {
-        self.leaders
+        self.supervisors
             .iter()
             .find(|l| l.role == AgentRole::ReviewIntegrator)
     }
 
-    /// Determine the leader_id for a new member based on task type.
-    /// Work tasks → main leader, Review tasks → review integrator (fallback to main leader).
-    pub fn leader_id_for_task_type(&self, task_type: TaskType) -> AgentId {
-        match task_type {
-            TaskType::Review => self
+    /// Determine the supervisor_id for a new member based on job type.
+    /// Craft jobs → leader, Review jobs → review integrator (fallback to leader).
+    pub fn supervisor_id_for_job_type(&self, job_type: JobType) -> AgentId {
+        match job_type {
+            JobType::Review => self
                 .find_review_integrator()
-                .or_else(|| self.find_main_leader())
+                .or_else(|| self.find_leader())
                 .map(|l| l.id.clone())
                 .unwrap_or_else(|| AgentId::new("")),
-            TaskType::Work => self
-                .find_main_leader()
+            JobType::Craft => self
+                .find_leader()
                 .map(|l| l.id.clone())
                 .unwrap_or_else(|| AgentId::new("")),
         }
@@ -99,11 +101,11 @@ mod tests {
     use crate::agent::AgentStatus;
     use crate::terminal::TerminalTarget;
 
-    fn make_leader(id: &str, role: AgentRole) -> AgentState {
+    fn make_supervisor(id: &str, role: AgentRole) -> AgentState {
         AgentState {
             id: AgentId::new(id),
             role,
-            leader_id: AgentId::new(""),
+            supervisor_id: AgentId::new(""),
             container_id: ContainerId::new(format!("container-{id}")),
             terminal_target: TerminalTarget::new(format!("pane-{id}")),
             status: AgentStatus::Idle,
@@ -112,64 +114,61 @@ mod tests {
     }
 
     #[test]
-    fn leader_id_for_work_returns_main_leader() {
+    fn supervisor_id_for_craft_returns_leader() {
         let mut state = PersistentState::new("test".to_string());
         state
-            .leaders
-            .push(make_leader("leader-1", AgentRole::Leader));
+            .supervisors
+            .push(make_supervisor("leader-1", AgentRole::Leader));
         state
-            .leaders
-            .push(make_leader("ri-1", AgentRole::ReviewIntegrator));
+            .supervisors
+            .push(make_supervisor("ri-1", AgentRole::ReviewIntegrator));
 
         assert_eq!(
-            state.leader_id_for_task_type(TaskType::Work),
+            state.supervisor_id_for_job_type(JobType::Craft),
             AgentId::new("leader-1")
         );
     }
 
     #[test]
-    fn leader_id_for_review_returns_review_integrator() {
+    fn supervisor_id_for_review_returns_review_integrator() {
         let mut state = PersistentState::new("test".to_string());
         state
-            .leaders
-            .push(make_leader("leader-1", AgentRole::Leader));
+            .supervisors
+            .push(make_supervisor("leader-1", AgentRole::Leader));
         state
-            .leaders
-            .push(make_leader("ri-1", AgentRole::ReviewIntegrator));
+            .supervisors
+            .push(make_supervisor("ri-1", AgentRole::ReviewIntegrator));
 
         assert_eq!(
-            state.leader_id_for_task_type(TaskType::Review),
+            state.supervisor_id_for_job_type(JobType::Review),
             AgentId::new("ri-1")
         );
     }
 
     #[test]
-    fn leader_id_for_review_falls_back_to_main_leader() {
+    fn supervisor_id_for_review_falls_back_to_leader() {
         let mut state = PersistentState::new("test".to_string());
         state
-            .leaders
-            .push(make_leader("leader-1", AgentRole::Leader));
+            .supervisors
+            .push(make_supervisor("leader-1", AgentRole::Leader));
 
         assert_eq!(
-            state.leader_id_for_task_type(TaskType::Review),
+            state.supervisor_id_for_job_type(JobType::Review),
             AgentId::new("leader-1")
         );
     }
 
     #[test]
-    fn find_main_leader_and_review_integrator() {
+    fn find_leader_and_review_integrator() {
         let mut state = PersistentState::new("test".to_string());
         state
-            .leaders
-            .push(make_leader("leader-1", AgentRole::Leader));
+            .supervisors
+            .push(make_supervisor("leader-1", AgentRole::Leader));
         state
-            .leaders
-            .push(make_leader("ri-1", AgentRole::ReviewIntegrator));
+            .supervisors
+            .push(make_supervisor("ri-1", AgentRole::ReviewIntegrator));
 
-        assert_eq!(
-            state.find_main_leader().unwrap().id,
-            AgentId::new("leader-1")
-        );
+        assert_eq!(state.find_leader().unwrap().id, AgentId::new("leader-1"));
         assert_eq!(
             state.find_review_integrator().unwrap().id,
             AgentId::new("ri-1")

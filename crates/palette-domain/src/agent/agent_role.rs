@@ -16,8 +16,8 @@ impl AgentRole {
         }
     }
 
-    /// Returns true if this role acts as a leader (can receive member events).
-    pub fn is_leader(&self) -> bool {
+    /// Returns true if this role acts as a supervisor (can receive member events).
+    pub fn is_supervisor(&self) -> bool {
         matches!(self, AgentRole::Leader | AgentRole::ReviewIntegrator)
     }
 }

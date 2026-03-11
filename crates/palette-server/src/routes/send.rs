@@ -44,7 +44,7 @@ pub async fn handle_send(
         let infra = state.infra.lock().await;
         infra
             .find_member(&member_id)
-            .or_else(|| infra.find_leader(&member_id))
+            .or_else(|| infra.find_supervisor(&member_id))
             .map(|m| m.status == AgentStatus::Idle || m.status == AgentStatus::WaitingPermission)
             .unwrap_or(false)
     };
@@ -61,7 +61,7 @@ pub async fn handle_send(
             let infra = state.infra.lock().await;
             infra
                 .find_member(&member_id)
-                .or_else(|| infra.find_leader(&member_id))
+                .or_else(|| infra.find_supervisor(&member_id))
                 .map(|m| m.terminal_target.clone())
                 .ok_or_else(|| {
                     (
@@ -80,8 +80,8 @@ pub async fn handle_send(
         if let Some(member) = infra.find_member_mut(&member_id) {
             member.status = AgentStatus::Working;
             infra.touch();
-        } else if let Some(leader) = infra.find_leader_mut(&member_id) {
-            leader.status = AgentStatus::Working;
+        } else if let Some(supervisor) = infra.find_supervisor_mut(&member_id) {
+            supervisor.status = AgentStatus::Working;
             infra.touch();
         }
 

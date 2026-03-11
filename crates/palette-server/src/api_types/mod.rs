@@ -1,8 +1,8 @@
-mod create_task_request;
-pub use create_task_request::CreateTaskRequest;
+mod create_job_request;
+pub use create_job_request::CreateJobRequest;
 
-mod update_task_request;
-pub use update_task_request::UpdateTaskRequest;
+mod update_job_request;
+pub use update_job_request::UpdateJobRequest;
 
 mod send_request;
 pub use send_request::SendRequest;
@@ -16,11 +16,11 @@ pub use submit_review_request::SubmitReviewRequest;
 mod review_comment_input;
 pub use review_comment_input::ReviewCommentInput;
 
-mod task_filter;
-pub use task_filter::TaskFilter;
+mod job_filter;
+pub use job_filter::JobFilter;
 
-mod task_response;
-pub use task_response::TaskResponse;
+mod job_response;
+pub use job_response::JobResponse;
 
 mod review_submission_response;
 pub use review_submission_response::ReviewSubmissionResponse;
@@ -28,11 +28,11 @@ pub use review_submission_response::ReviewSubmissionResponse;
 mod review_comment_response;
 pub use review_comment_response::ReviewCommentResponse;
 
-mod task_type;
-pub use task_type::TaskType;
+mod job_type;
+pub use job_type::JobType;
 
-mod task_status;
-pub use task_status::TaskStatus;
+mod job_status;
+pub use job_status::JobStatus;
 
 mod priority;
 pub use priority::Priority;
@@ -43,5 +43,5 @@ pub use verdict::Verdict;
 mod repository;
 pub use repository::Repository;
 
-mod task_file;
-pub use task_file::TaskFile;
+mod job_file;
+pub use job_file::JobFile;
