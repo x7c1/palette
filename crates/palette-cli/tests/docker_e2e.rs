@@ -208,7 +208,7 @@ fn launch() -> Result<()> {
     )?;
     palette_docker::DockerManager::copy_file_to_container(
         &member_id,
-        &workspace_path(&config.docker.member_prompt),
+        &workspace_path(&config.docker.crafter_prompt),
         "/home/agent/prompt.md",
     )?;
 
@@ -219,10 +219,10 @@ fn launch() -> Result<()> {
         "leader prompt should contain 'Leader Agent'"
     );
 
-    let member_prompt = docker_exec("palette-test-member-a", "cat /home/agent/prompt.md")?;
+    let crafter_prompt = docker_exec("palette-test-member-a", "cat /home/agent/prompt.md")?;
     assert!(
-        member_prompt.contains("Member Agent"),
-        "member prompt should contain 'Member Agent'"
+        crafter_prompt.contains("Crafter Agent"),
+        "crafter prompt should contain 'Crafter Agent'"
     );
 
     // --- Send Claude Code command to tmux panes ---

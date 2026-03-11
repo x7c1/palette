@@ -40,9 +40,13 @@ impl Orchestrator {
             std::path::Path::new(&self.docker_config.settings_template),
             member_id_str,
         )?;
+        let prompt_path = match job_type {
+            JobType::Craft => &self.docker_config.crafter_prompt,
+            JobType::Review => &self.docker_config.reviewer_prompt,
+        };
         DockerManager::copy_file_to_container(
             &container_id,
-            std::path::Path::new(&self.docker_config.member_prompt),
+            std::path::Path::new(prompt_path),
             "/home/agent/prompt.md",
         )?;
         DockerManager::copy_dir_to_container(

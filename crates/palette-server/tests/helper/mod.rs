@@ -33,7 +33,8 @@ pub fn test_docker_config() -> DockerConfig {
         leader_prompt: "prompts/leader.md".to_string(),
         review_integrator_image: "palette-leader:latest".to_string(),
         review_integrator_prompt: "prompts/review-integrator.md".to_string(),
-        member_prompt: "prompts/member.md".to_string(),
+        crafter_prompt: "prompts/crafter.md".to_string(),
+        reviewer_prompt: "prompts/reviewer.md".to_string(),
         max_members: 3,
     }
 }

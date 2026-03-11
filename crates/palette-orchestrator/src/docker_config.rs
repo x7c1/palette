@@ -15,8 +15,11 @@ pub struct DockerConfig {
     pub review_integrator_image: String,
     #[serde(default = "default_review_integrator_prompt")]
     pub review_integrator_prompt: String,
-    #[serde(default = "default_member_prompt")]
-    pub member_prompt: String,
+    #[serde(default = "default_crafter_prompt")]
+    pub crafter_prompt: String,
+
+    #[serde(default = "default_reviewer_prompt")]
+    pub reviewer_prompt: String,
     #[serde(default = "default_max_members")]
     pub max_members: usize,
 }
@@ -49,6 +52,10 @@ fn default_review_integrator_prompt() -> String {
     "prompts/review-integrator.md".to_string()
 }
 
-fn default_member_prompt() -> String {
-    "prompts/member.md".to_string()
+fn default_crafter_prompt() -> String {
+    "prompts/crafter.md".to_string()
+}
+
+fn default_reviewer_prompt() -> String {
+    "prompts/reviewer.md".to_string()
 }
