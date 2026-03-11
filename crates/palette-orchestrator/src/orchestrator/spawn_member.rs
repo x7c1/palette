@@ -7,7 +7,7 @@ use palette_domain::server::PersistentState;
 impl Orchestrator {
     pub(super) fn spawn_member(
         &self,
-        member_id: &AgentId,
+        agent_id: &AgentId,
         job_type: JobType,
         infra: &PersistentState,
         workspace: Option<WorkspaceVolume>,
@@ -26,9 +26,9 @@ impl Orchestrator {
             })?;
         let terminal_target = self.tmux.create_pane(&supervisor_state.terminal_target)?;
 
-        let member_id_str = member_id.as_ref();
+        let agent_id_str = agent_id.as_ref();
         let container_id = self.docker.create_container(
-            member_id_str,
+            agent_id_str,
             &self.docker_config.member_image,
             AgentRole::Member,
             session_name,
@@ -38,7 +38,7 @@ impl Orchestrator {
         self.docker.write_settings(
             &container_id,
             std::path::Path::new(&self.docker_config.settings_template),
-            member_id_str,
+            agent_id_str,
         )?;
         let prompt_path = match job_type {
             JobType::Craft => &self.docker_config.crafter_prompt,
@@ -61,10 +61,10 @@ impl Orchestrator {
             AgentRole::Member,
         );
         self.tmux.send_keys(&terminal_target, &cmd)?;
-        tracing::info!(member_id = %member_id, "spawned member");
+        tracing::info!(agent_id = %agent_id, "spawned member");
 
         Ok(AgentState {
-            id: member_id.clone(),
+            id: agent_id.clone(),
             role: AgentRole::Member,
             supervisor_id,
             container_id,
