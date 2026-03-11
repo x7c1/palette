@@ -11,9 +11,9 @@ impl Database {
             .unwrap_or_else(|| JobId::generate(req.job_type));
 
         let repos_json = req
-            .repositories
+            .repository
             .as_ref()
-            .map(|r| repository_row::repositories_to_json(r));
+            .map(repository_row::repository_to_json);
 
         // Craft jobs start as Draft; review jobs start as Todo
         let initial_status = match req.job_type {
@@ -72,10 +72,10 @@ mod tests {
                 description: Some("Details".to_string()),
                 assignee: Some(aid("member-a")),
                 priority: Some(Priority::High),
-                repositories: Some(vec![Repository {
+                repository: Some(Repository {
                     name: "x7c1/palette".to_string(),
                     branch: Some("feature/test".to_string()),
-                }]),
+                }),
                 depends_on: vec![],
             })
             .unwrap();
@@ -99,7 +99,7 @@ mod tests {
             description: None,
             assignee: None,
             priority: None,
-            repositories: None,
+            repository: None,
             depends_on: vec![],
         })
         .unwrap();
@@ -111,7 +111,7 @@ mod tests {
             description: None,
             assignee: None,
             priority: None,
-            repositories: None,
+            repository: None,
             depends_on: vec![jid("C-001")],
         })
         .unwrap();

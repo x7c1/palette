@@ -9,6 +9,6 @@ pub struct CreateJobRequest {
     pub description: Option<String>,
     pub assignee: Option<AgentId>,
     pub priority: Option<Priority>,
-    pub repositories: Option<Vec<Repository>>,
+    pub repository: Option<Repository>,
     pub depends_on: Vec<JobId>,
 }

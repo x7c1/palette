@@ -2,16 +2,15 @@ task:
   id: e2e/scenario3-review-integration
   title: "E2E Scenario 3: Review integration"
 
-repositories:
-  - name: x7c1/palette
-    branch: e2e-scenario3
-
 jobs:
   - id: W-001
     type: craft
     title: Create greeting file
     description: Create /home/agent/workspace/greeting.txt with content "Hello, world!"
     priority: high
+    repository:
+      name: x7c1/palette
+      branch: e2e-scenario3
 
   - id: R-001
     type: review

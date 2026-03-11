@@ -26,7 +26,7 @@ async fn job_api_create_and_list() {
             description: Some("Details here".to_string()),
             assignee: Some("member-a".to_string()),
             priority: Some(palette_server::api_types::Priority::High),
-            repositories: None,
+            repository: None,
             depends_on: vec![],
         })
         .send()
@@ -48,7 +48,7 @@ async fn job_api_create_and_list() {
             description: None,
             assignee: None,
             priority: None,
-            repositories: None,
+            repository: None,
             depends_on: vec!["W-001".to_string()],
         })
         .send()

@@ -8,15 +8,14 @@ task:
   id: 2026/feature-x
   title: Add feature X
 
-repositories:
-  - name: x7c1/palette
-    branch: feature/test
-
 jobs:
   - id: C-A
     type: craft
     title: Implement API
     priority: high
+    repository:
+      name: x7c1/palette
+      branch: feature/test
 
   - id: R-A
     type: review

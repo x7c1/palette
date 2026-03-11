@@ -2,16 +2,15 @@ task:
   id: e2e/scenario2-sequential
   title: "E2E Scenario 2: Sequential jobs"
 
-repositories:
-  - name: x7c1/palette
-    branch: e2e-scenario2
-
 jobs:
   - id: W-A
     type: craft
     title: Create file A
     description: Create /home/agent/file-a.txt with content "Hello from Job A"
     priority: high
+    repository:
+      name: x7c1/palette
+      branch: e2e-scenario2
 
   - id: R-A
     type: review
@@ -24,6 +23,9 @@ jobs:
     description: Create /home/agent/file-b.txt with content "Hello from Job B"
     priority: medium
     depends_on: [W-A]
+    repository:
+      name: x7c1/palette
+      branch: e2e-scenario2
 
   - id: R-B
     type: review

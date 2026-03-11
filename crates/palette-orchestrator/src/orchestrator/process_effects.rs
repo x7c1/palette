@@ -139,14 +139,12 @@ fn format_job_instruction(job: &Job) -> String {
     if let Some(ref desc) = job.description {
         msg.push_str(&format!("\n{desc}\n"));
     }
-    if let Some(ref repos) = job.repositories {
+    if let Some(ref repo) = job.repository {
         msg.push('\n');
-        for repo in repos {
-            if let Some(ref branch) = repo.branch {
-                msg.push_str(&format!("- {} (branch: {branch})\n", repo.name));
-            } else {
-                msg.push_str(&format!("- {}\n", repo.name));
-            }
+        if let Some(ref branch) = repo.branch {
+            msg.push_str(&format!("Repository: {} (branch: {branch})\n", repo.name));
+        } else {
+            msg.push_str(&format!("Repository: {}\n", repo.name));
         }
     }
     msg.push_str("\nPlease begin working on this task.");
@@ -178,7 +176,7 @@ mod tests {
             description: None,
             assignee: Some(AgentId::new("member-a")),
             priority: None,
-            repositories: None,
+            repository: None,
             depends_on: vec![],
         })
         .unwrap();
@@ -190,7 +188,7 @@ mod tests {
             description: None,
             assignee: None,
             priority: None,
-            repositories: None,
+            repository: None,
             depends_on: vec![jid("W-001")],
         })
         .unwrap();

@@ -62,7 +62,7 @@ async fn scenario3_message_queuing_to_leader() {
             description: None,
             assignee: None,
             priority: None,
-            repositories: None,
+            repository: None,
             depends_on: vec![],
         })
         .unwrap();
@@ -75,7 +75,7 @@ async fn scenario3_message_queuing_to_leader() {
             description: None,
             assignee: None,
             priority: None,
-            repositories: None,
+            repository: None,
             depends_on: vec![],
         })
         .unwrap();

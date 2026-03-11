@@ -55,7 +55,7 @@ pub fn create_craft(id: &str, title: &str) -> CreateJobRequest {
         description: None,
         assignee: None,
         priority: None,
-        repositories: None,
+        repository: None,
         depends_on: vec![],
     }
 }
@@ -68,7 +68,7 @@ pub fn create_review(id: &str, title: &str, depends_on: Vec<&str>) -> CreateJobR
         description: None,
         assignee: None,
         priority: None,
-        repositories: None,
+        repository: None,
         depends_on: depends_on.into_iter().map(String::from).collect(),
     }
 }

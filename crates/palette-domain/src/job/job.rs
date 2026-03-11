@@ -12,7 +12,7 @@ pub struct Job {
     pub assignee: Option<AgentId>,
     pub status: JobStatus,
     pub priority: Option<Priority>,
-    pub repositories: Option<Vec<Repository>>,
+    pub repository: Option<Repository>,
     pub pr_url: Option<String>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,

@@ -74,7 +74,7 @@ mod tests {
             description: None,
             assignee: None,
             priority: None,
-            repositories: None,
+            repository: None,
             depends_on: vec![],
         })
         .unwrap();
@@ -86,7 +86,7 @@ mod tests {
             description: None,
             assignee: None,
             priority: None,
-            repositories: None,
+            repository: None,
             depends_on: vec![jid("C-001")],
         })
         .unwrap();

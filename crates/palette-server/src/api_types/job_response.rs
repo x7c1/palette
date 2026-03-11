@@ -16,7 +16,7 @@ pub struct JobResponse {
     pub assignee: Option<String>,
     pub status: JobStatus,
     pub priority: Option<Priority>,
-    pub repositories: Option<Vec<Repository>>,
+    pub repository: Option<Repository>,
     pub pr_url: Option<String>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
@@ -34,9 +34,7 @@ impl From<domain::job::Job> for JobResponse {
             assignee: t.assignee.map(|a| a.to_string()),
             status: t.status.into(),
             priority: t.priority.map(Priority::from),
-            repositories: t
-                .repositories
-                .map(|repos| repos.into_iter().map(Into::into).collect()),
+            repository: t.repository.map(Into::into),
             pr_url: t.pr_url,
             created_at: t.created_at,
             updated_at: t.updated_at,

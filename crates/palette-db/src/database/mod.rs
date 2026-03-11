@@ -92,8 +92,8 @@ fn query_job(conn: &Connection, id: &JobId) -> crate::Result<Option<Job>> {
 
 fn row_to_job(row: &rusqlite::Row) -> Job {
     let repos_str: Option<String> = row.get(7).unwrap();
-    let repositories: Option<Vec<Repository>> =
-        repos_str.and_then(|s| repository_row::repositories_from_json(&s));
+    let repository: Option<Repository> =
+        repos_str.and_then(|s| repository_row::repository_from_json(&s));
 
     Job {
         id: JobId::new(row.get::<_, String>(0).unwrap()),
@@ -106,7 +106,7 @@ fn row_to_job(row: &rusqlite::Row) -> Job {
             .get::<_, Option<String>>(6)
             .unwrap()
             .and_then(|s| s.parse().ok()),
-        repositories,
+        repository,
         pr_url: row.get(8).unwrap(),
         created_at: parse_datetime(&row.get::<_, String>(9).unwrap()),
         updated_at: parse_datetime(&row.get::<_, String>(10).unwrap()),
@@ -142,7 +142,7 @@ pub(crate) mod test_helpers {
             description: None,
             assignee: None,
             priority,
-            repositories: None,
+            repository: None,
             depends_on: deps,
         })
         .unwrap();
@@ -156,7 +156,7 @@ pub(crate) mod test_helpers {
             description: None,
             assignee: None,
             priority: None,
-            repositories: None,
+            repository: None,
             depends_on: deps,
         })
         .unwrap();

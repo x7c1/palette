@@ -13,8 +13,7 @@ pub(super) struct JobEntry {
     pub title: String,
     pub description: Option<String>,
     pub priority: Option<PriorityInput>,
-    /// Per-job repositories override. If omitted, inherits from top-level.
-    pub repositories: Option<Vec<RepositoryEntry>>,
+    pub repository: Option<RepositoryEntry>,
     #[serde(default)]
     pub depends_on: Vec<JobIdInput>,
 }
