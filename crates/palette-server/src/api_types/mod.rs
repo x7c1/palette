@@ -43,5 +43,9 @@ pub use verdict::Verdict;
 mod repository;
 pub use repository::Repository;
 
-mod job_file;
-pub use job_file::JobFile;
+mod blueprint;
+pub use blueprint::Blueprint;
+pub use blueprint::TaskInfo;
+
+mod blueprint_response;
+pub use blueprint_response::BlueprintResponse;

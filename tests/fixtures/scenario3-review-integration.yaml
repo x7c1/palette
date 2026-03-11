@@ -1,3 +1,7 @@
+task:
+  id: e2e/scenario3-review-integration
+  title: "E2E Scenario 3: Review integration"
+
 repositories:
   - name: x7c1/palette
     branch: e2e-scenario3

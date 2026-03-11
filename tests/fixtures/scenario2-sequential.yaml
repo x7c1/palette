@@ -1,3 +1,7 @@
+task:
+  id: e2e/scenario2-sequential
+  title: "E2E Scenario 2: Sequential jobs"
+
 repositories:
   - name: x7c1/palette
     branch: e2e-scenario2

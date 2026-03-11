@@ -13,6 +13,12 @@ Get the API base URL by running `echo $PALETTE_URL`.
 
 ## Available Endpoints
 
+### Blueprint
+- **Submit blueprint**: `POST $PALETTE_URL/blueprints/submit` — Body: raw YAML (Content-Type: text/plain). Returns the stored blueprint with `task_id`.
+- **List blueprints**: `GET $PALETTE_URL/blueprints` — Returns all stored blueprints.
+- **Get blueprint**: `GET $PALETTE_URL/blueprints/{task_id}` — Returns a specific blueprint by task ID.
+- **Load blueprint**: `POST $PALETTE_URL/blueprints/{task_id}/load` — Creates jobs from the stored blueprint and starts execution. Returns created jobs.
+
 ### Task Management
 - **Create task**: `POST $PALETTE_URL/tasks/create` — Body: `{"type": "work"|"review", "title": "...", "description": "...", "priority": "high"|"medium"|"low", "depends_on": [...]}`
   - Work tasks are created with status `draft`

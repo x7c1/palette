@@ -1,3 +1,7 @@
+task:
+  id: e2e/scenario1-parallel
+  title: "E2E Scenario 1: Parallel jobs"
+
 repositories:
   - name: x7c1/palette
     branch: e2e-scenario1

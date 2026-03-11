@@ -55,6 +55,13 @@ CREATE INDEX IF NOT EXISTS idx_jobs_type_status ON jobs(type, status);
 CREATE INDEX IF NOT EXISTS idx_review_submissions_job ON review_submissions(review_job_id);
 CREATE INDEX IF NOT EXISTS idx_review_comments_submission ON review_comments(submission_id);
 CREATE INDEX IF NOT EXISTS idx_message_queue_target ON message_queue(target_id, id);
+
+CREATE TABLE IF NOT EXISTS blueprints (
+    task_id TEXT PRIMARY KEY,
+    title TEXT NOT NULL,
+    yaml TEXT NOT NULL,
+    created_at TEXT NOT NULL
+);
 "#;
 
 pub(crate) fn initialize(conn: &Connection) -> rusqlite::Result<()> {
@@ -65,7 +72,16 @@ pub(crate) fn initialize(conn: &Connection) -> rusqlite::Result<()> {
 }
 
 /// Apply migrations for existing databases that lack new columns/tables.
-fn migrate(_conn: &Connection) -> rusqlite::Result<()> {
+fn migrate(conn: &Connection) -> rusqlite::Result<()> {
+    // Add blueprints table if it doesn't exist (for databases created before this migration).
+    conn.execute_batch(
+        "CREATE TABLE IF NOT EXISTS blueprints (
+            task_id TEXT PRIMARY KEY,
+            title TEXT NOT NULL,
+            yaml TEXT NOT NULL,
+            created_at TEXT NOT NULL
+        );",
+    )?;
     Ok(())
 }
 

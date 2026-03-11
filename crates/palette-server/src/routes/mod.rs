@@ -1,3 +1,4 @@
+mod blueprints;
 mod hooks;
 mod jobs;
 mod reviews;
@@ -20,10 +21,23 @@ pub fn create_router(state: Arc<AppState>) -> Router {
         .route("/send", post(send::handle_send))
         // Events
         .route("/events", get(handle_events))
+        // Blueprint API
+        .route(
+            "/blueprints/submit",
+            post(blueprints::handle_submit_blueprint),
+        )
+        .route("/blueprints", get(blueprints::handle_list_blueprints))
+        .route(
+            "/blueprints/{task_id}/load",
+            post(blueprints::handle_load_blueprint),
+        )
+        .route(
+            "/blueprints/{task_id}",
+            get(blueprints::handle_get_blueprint),
+        )
         // Job API
         .route("/jobs/create", post(jobs::handle_create_job))
         .route("/jobs/update", post(jobs::handle_update_job))
-        .route("/jobs/load", post(jobs::handle_load_jobs))
         .route("/jobs", get(jobs::handle_list_jobs))
         // Review API
         .route("/reviews/{id}/submit", post(reviews::handle_submit_review))

@@ -28,13 +28,16 @@ mod enqueue_message;
 mod find_assignable_jobs;
 mod find_crafts_for_review;
 mod find_reviews_for_craft;
+mod get_blueprint;
 mod get_dependencies;
 mod get_dependents;
 mod get_job;
 mod get_review_comments;
 mod get_review_submissions;
 mod has_pending_messages;
+mod list_blueprints;
 mod list_jobs;
+mod save_blueprint;
 mod submit_review;
 mod update_job_status;
 

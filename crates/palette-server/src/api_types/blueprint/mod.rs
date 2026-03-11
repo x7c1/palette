@@ -3,22 +3,27 @@ mod job_id_input;
 mod job_type_input;
 mod priority_input;
 mod repository_entry;
+mod task_info;
 
 use job_entry::JobEntry;
 use palette_domain::job::{CreateJobRequest, JobId, Priority, Repository};
 use repository_entry::RepositoryEntry;
 use serde::Deserialize;
 
-/// Top-level YAML job definition file.
+pub use task_info::TaskInfo;
+
+/// A Blueprint defines a Task and its Jobs.
+/// Stored and loaded via the Blueprint API.
 #[derive(Debug, Deserialize)]
-pub struct JobFile {
+pub struct Blueprint {
+    pub task: TaskInfo,
     /// Default repositories inherited by all jobs unless overridden.
     #[serde(default)]
     repositories: Vec<RepositoryEntry>,
     jobs: Vec<JobEntry>,
 }
 
-impl JobFile {
+impl Blueprint {
     pub fn parse(yaml: &str) -> Result<Self, serde_yaml::Error> {
         serde_yaml::from_str(yaml)
     }
@@ -76,8 +81,12 @@ mod tests {
     use palette_domain::job::{JobId, JobType};
 
     #[test]
-    fn parse_basic_job_file() {
+    fn parse_basic_blueprint() {
         let yaml = r#"
+task:
+  id: 2026/feature-x
+  title: Add feature X
+
 repositories:
   - name: x7c1/palette
     branch: feature/test
@@ -94,12 +103,14 @@ jobs:
     title: Review file A
     depends_on: [C-A]
 "#;
-        let file = JobFile::parse(yaml).unwrap();
-        assert_eq!(file.repositories.len(), 1);
-        assert_eq!(file.repositories[0].name, "x7c1/palette");
-        assert_eq!(file.jobs.len(), 2);
+        let blueprint = Blueprint::parse(yaml).unwrap();
+        assert_eq!(blueprint.task.id, "2026/feature-x");
+        assert_eq!(blueprint.task.title, "Add feature X");
+        assert_eq!(blueprint.repositories.len(), 1);
+        assert_eq!(blueprint.repositories[0].name, "x7c1/palette");
+        assert_eq!(blueprint.jobs.len(), 2);
 
-        let requests = file.into_requests();
+        let requests = blueprint.into_requests();
         assert_eq!(requests.len(), 2);
         assert_eq!(requests[0].id, Some(JobId::new("C-A")));
         assert_eq!(requests[0].job_type, JobType::Craft);
@@ -119,6 +130,10 @@ jobs:
     #[test]
     fn per_job_repositories_override() {
         let yaml = r#"
+task:
+  id: test/override
+  title: Override test
+
 repositories:
   - name: x7c1/default-repo
     branch: main
@@ -131,8 +146,8 @@ jobs:
       - name: x7c1/special-repo
         branch: feature/special
 "#;
-        let file = JobFile::parse(yaml).unwrap();
-        let requests = file.into_requests();
+        let blueprint = Blueprint::parse(yaml).unwrap();
+        let requests = blueprint.into_requests();
 
         let repos = requests[0].repositories.as_ref().unwrap();
         assert_eq!(repos.len(), 1);
@@ -143,6 +158,10 @@ jobs:
     #[test]
     fn multi_repo_different_branches() {
         let yaml = r#"
+task:
+  id: test/multi-repo
+  title: Multi repo test
+
 repositories:
   - name: x7c1/frontend
     branch: feature/ui
@@ -154,8 +173,8 @@ jobs:
     type: craft
     title: Full stack job
 "#;
-        let file = JobFile::parse(yaml).unwrap();
-        let requests = file.into_requests();
+        let blueprint = Blueprint::parse(yaml).unwrap();
+        let requests = blueprint.into_requests();
 
         let repos = requests[0].repositories.as_ref().unwrap();
         assert_eq!(repos.len(), 2);
@@ -168,13 +187,17 @@ jobs:
     #[test]
     fn no_default_repositories() {
         let yaml = r#"
+task:
+  id: test/no-repos
+  title: No repos test
+
 jobs:
   - id: C-A
     type: craft
     title: Job without repos
 "#;
-        let file = JobFile::parse(yaml).unwrap();
-        let requests = file.into_requests();
+        let blueprint = Blueprint::parse(yaml).unwrap();
+        let requests = blueprint.into_requests();
 
         assert!(requests[0].repositories.is_none());
     }
