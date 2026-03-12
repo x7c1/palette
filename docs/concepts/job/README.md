@@ -6,8 +6,8 @@ A Job is a unit of work assigned to a single [Member](../worker/member/). Each J
 
 There are two kinds of Jobs:
 
-- **Craft Job**: Assigned to a [Crafter](../worker/member/crafter/). Produces a deliverable such as code changes or a plan.
-- **Review Job**: Assigned to a [Reviewer](../worker/member/reviewer/). Inspects the deliverable of a Craft Job and reports findings to the [Review Integrator](../worker/supervisor/review-integrator/).
+- **Craft Job**: Assigned to a [Crafter](../worker/member/crafter/). Produces a deliverable such as code changes or a [Blueprint](../blueprint/) (during the planning phase).
+- **Review Job**: Assigned to a [Reviewer](../worker/member/reviewer/). Inspects the deliverable of a Craft Job and reports findings to the [Review Integrator](../worker/supervisor/review-integrator/). During the planning phase, the Reviewer evaluates the Blueprint as a whole — whether the Job breakdown is appropriate and whether the Plans are adequate.
 
 A Task may involve multiple rounds of Craft Jobs and Review Jobs. When a Review Job results in a "changes requested" verdict, the Crafter revises the work and a new round of review begins.
 

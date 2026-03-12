@@ -27,7 +27,7 @@ A Job's `plan_path` might be `2026/feature-x/api-impl`, resolving to `docs/plans
 
 ## Lifecycle
 
-1. **Planning phase**: The [Leader](../worker/supervisor/leader/) determines the Job structure and generates a planning-phase [Blueprint](../blueprint/). [Crafters](../worker/member/crafter/) create Plans and [Reviewers](../worker/member/reviewer/) review them.
+1. **Planning phase**: The [Leader](../worker/supervisor/leader/) determines the Job structure and generates a planning-phase [Blueprint](../blueprint/). [Crafters](../worker/member/crafter/) produce the Blueprint — defining the Job breakdown and creating Plans for the Task and each Job. [Reviewers](../worker/member/reviewer/) evaluate the Blueprint as a whole, checking whether the Job breakdown is appropriate and whether the Plans are adequate.
 2. **Execution phase**: Workers receive the `plan_path` as part of their Job instruction and follow the Plan to complete the Job.
 
 ## Splitting work
