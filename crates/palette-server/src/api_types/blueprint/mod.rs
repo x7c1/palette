@@ -2,11 +2,10 @@ mod job_entry;
 mod job_id_input;
 mod job_type_input;
 mod priority_input;
-mod repository_entry;
 mod task;
 
 use job_entry::JobEntry;
-use palette_domain::job::{CreateJobRequest, JobId, Priority, Repository};
+use palette_domain::job::{CreateJobRequest, JobId, Priority};
 use serde::Deserialize;
 
 pub use task::Task;
@@ -28,22 +27,15 @@ impl Blueprint {
     pub fn into_requests(self) -> Vec<CreateJobRequest> {
         self.jobs
             .into_iter()
-            .map(|entry| {
-                let repository = entry.repository.map(|r| Repository {
-                    name: r.name,
-                    branch: r.branch,
-                });
-
-                CreateJobRequest {
-                    id: Some(entry.id.into()),
-                    job_type: entry.job_type.into(),
-                    title: entry.title,
-                    description: entry.description,
-                    assignee: None,
-                    priority: entry.priority.map(Priority::from),
-                    repository,
-                    depends_on: entry.depends_on.into_iter().map(JobId::from).collect(),
-                }
+            .map(|entry| CreateJobRequest {
+                id: Some(entry.id.into()),
+                job_type: entry.job_type.into(),
+                title: entry.title,
+                description: entry.description,
+                assignee: None,
+                priority: entry.priority.map(Priority::from),
+                repository: entry.repository.map(Into::into),
+                depends_on: entry.depends_on.into_iter().map(JobId::from).collect(),
             })
             .collect()
     }
