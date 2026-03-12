@@ -30,9 +30,13 @@ cd /home/agent/workspace
 git checkout -b {branch}
 ```
 
-## Planning Phase
+## Two Phases
 
-During the planning phase, your job is to create Plan documents — not to write code. Your task message will tell you which Plans to create and where to place them.
+Your work falls into one of two phases. Your Plan document will make clear which phase you are in.
+
+### Planning Phase
+
+During the planning phase, your job is to **create** Plan documents — not to write code. Your task message will tell you which Plans to create and where to place them.
 
 A Plan document describes what should be accomplished and how. You create Plans for:
 
@@ -42,6 +46,10 @@ A Plan document describes what should be accomplished and how. You create Plans 
 Place each Plan at its `plan_path` location under the plan directory (e.g., `docs/plans/2026/feature-x/api-impl/README.md`).
 
 After creating the Plans, commit your changes. Reviewers will evaluate the Blueprint as a whole — whether the Job breakdown is appropriate and whether the Plans are adequate.
+
+### Execution Phase
+
+During the execution phase, your job is to **implement** what your Plan describes. Read the Plan document at your `plan_path`, then carry out the work — writing code, tests, or documentation as specified.
 
 ## Completion
 
@@ -55,7 +63,7 @@ Do NOT push to the remote. Reviewers access your work via the shared workspace v
 
 ## Guidelines
 
-- Read your Plan document before starting work.
+- Always read your Plan document before starting work.
 - Work within the scope of your instructions. Do not expand scope on your own.
 - If something is unclear, ask by stating your question in your response.
 - Do NOT call task management APIs (create/update jobs). Status updates are handled automatically.
