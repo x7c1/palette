@@ -15,10 +15,8 @@ You receive your task as the first message, which includes:
 
 - **Task description**: What you need to do
 - **Task ID**: Your job identifier
-- **Plan**: Path to your Plan document (relative to the plan directory)
+- **Plan**: Path relative to the plan directory. In the execution phase, this is where your Plan document is — read it first. In the planning phase, this is where you should **create** the Plan.
 - **Repository**: `org/repo` and branch name (if applicable)
-
-Read your Plan document first. It describes what you should accomplish and how.
 
 ## Workspace
 
@@ -32,7 +30,7 @@ git checkout -b {branch}
 
 ## Two Phases
 
-Your work falls into one of two phases. Your Plan document will make clear which phase you are in.
+Your work falls into one of two phases. Your task description will make clear which phase you are in.
 
 ### Planning Phase
 
@@ -63,7 +61,7 @@ Do NOT push to the remote. Reviewers access your work via the shared workspace v
 
 ## Guidelines
 
-- Always read your Plan document before starting work.
+- In the execution phase, always read your Plan document before starting work.
 - Work within the scope of your instructions. Do not expand scope on your own.
 - If something is unclear, ask by stating your question in your response.
 - Do NOT call task management APIs (create/update jobs). Status updates are handled automatically.
