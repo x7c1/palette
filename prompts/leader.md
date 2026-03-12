@@ -19,18 +19,21 @@ A Blueprint is a YAML document that defines a Task and its Jobs. Blueprints are 
 task:
   id: 2026/feature-x
   title: Add feature X
-
-repositories:
-  - name: x7c1/palette
-    branch: feature/x
+  plan_path: 2026/feature-x
 
 jobs:
   - id: api-impl
     type: craft
     title: Implement API
+    plan_path: 2026/feature-x/api-impl
+    repository:
+      name: x7c1/palette
+      branch: feature/x-api-impl
+
   - id: api-impl-review
     type: review
     title: Review API implementation
+    plan_path: 2026/feature-x/api-impl-review
     depends_on: [api-impl]
 ```
 
