@@ -2,7 +2,7 @@
 
 ## Definition
 
-A Job is a unit of work assigned to a single [Member](../worker/member/). Each Job belongs to a [Task](../task/) and represents one concrete step toward completing that Task.
+A Job is a unit of work assigned to a single [Member](../worker/member/). Each Job belongs to a [Task](../task/) and represents one concrete step toward completing that Task. A Job has a [Plan](../plan/) that describes what should be accomplished and how.
 
 There are two kinds of Jobs:
 
@@ -35,3 +35,4 @@ A Task may involve multiple rounds of Craft Jobs and Review Jobs. When a Review 
 - [Crafter](../worker/member/crafter/) — executes Craft Jobs
 - [Reviewer](../worker/member/reviewer/) — executes Review Jobs
 - [Review Integrator](../worker/supervisor/review-integrator/) — consolidates findings from multiple Review Jobs
+- [Plan](../plan/) — describes what the Job should accomplish

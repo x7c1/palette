@@ -31,6 +31,7 @@ impl Blueprint {
                 id: Some(entry.id.into()),
                 job_type: entry.job_type.into(),
                 title: entry.title,
+                plan_path: entry.plan_path,
                 description: entry.description,
                 assignee: None,
                 priority: entry.priority.map(Priority::from),
@@ -52,11 +53,13 @@ mod tests {
 task:
   id: 2026/feature-x
   title: Add feature X
+  plan_path: 2026/feature-x
 
 jobs:
   - id: C-A
     type: craft
     title: Create file A
+    plan_path: 2026/feature-x/create-file-a
     description: Create /home/agent/file-a.txt
     priority: high
     repository:
@@ -66,6 +69,7 @@ jobs:
   - id: R-A
     type: review
     title: Review file A
+    plan_path: 2026/feature-x/review-file-a
     depends_on: [C-A]
 "#;
         let blueprint = Blueprint::parse(yaml).unwrap();
@@ -94,11 +98,13 @@ jobs:
 task:
   id: test/per-job
   title: Per-job repo test
+  plan_path: test/per-job
 
 jobs:
   - id: C-A
     type: craft
     title: Job A
+    plan_path: test/per-job/job-a
     repository:
       name: x7c1/special-repo
       branch: feature/special
@@ -117,11 +123,13 @@ jobs:
 task:
   id: test/no-repos
   title: No repos test
+  plan_path: test/no-repos
 
 jobs:
   - id: C-A
     type: craft
     title: Job without repos
+    plan_path: test/no-repos/job-a
 "#;
         let blueprint = Blueprint::parse(yaml).unwrap();
         let requests = blueprint.into_requests();

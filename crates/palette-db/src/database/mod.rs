@@ -79,7 +79,7 @@ fn parse_datetime(s: &str) -> DateTime<Utc> {
 /// Query a single job by ID from a connection or transaction.
 fn query_job(conn: &Connection, id: &JobId) -> crate::Result<Option<Job>> {
     let mut stmt = conn.prepare(
-        "SELECT id, type, title, description, assignee, status, priority, repository, pr_url, created_at, updated_at, notes, assigned_at
+        "SELECT id, type, title, plan_path, description, assignee, status, priority, repository, pr_url, created_at, updated_at, notes, assigned_at
          FROM jobs WHERE id = ?1",
     )?;
     let mut rows = stmt.query_map(params![id.as_ref()], |row| Ok(row_to_job(row)))?;
@@ -91,7 +91,7 @@ fn query_job(conn: &Connection, id: &JobId) -> crate::Result<Option<Job>> {
 }
 
 fn row_to_job(row: &rusqlite::Row) -> Job {
-    let repos_str: Option<String> = row.get(7).unwrap();
+    let repos_str: Option<String> = row.get(8).unwrap();
     let repository: Option<Repository> =
         repos_str.and_then(|s| repository_row::repository_from_json(&s));
 
@@ -99,20 +99,21 @@ fn row_to_job(row: &rusqlite::Row) -> Job {
         id: JobId::new(row.get::<_, String>(0).unwrap()),
         job_type: row.get::<_, String>(1).unwrap().parse().unwrap(),
         title: row.get(2).unwrap(),
-        description: row.get(3).unwrap(),
-        assignee: row.get::<_, Option<String>>(4).unwrap().map(AgentId::new),
-        status: row.get::<_, String>(5).unwrap().parse().unwrap(),
+        plan_path: row.get(3).unwrap(),
+        description: row.get(4).unwrap(),
+        assignee: row.get::<_, Option<String>>(5).unwrap().map(AgentId::new),
+        status: row.get::<_, String>(6).unwrap().parse().unwrap(),
         priority: row
-            .get::<_, Option<String>>(6)
+            .get::<_, Option<String>>(7)
             .unwrap()
             .and_then(|s| s.parse().ok()),
         repository,
-        pr_url: row.get(8).unwrap(),
-        created_at: parse_datetime(&row.get::<_, String>(9).unwrap()),
-        updated_at: parse_datetime(&row.get::<_, String>(10).unwrap()),
-        notes: row.get(11).unwrap(),
+        pr_url: row.get(9).unwrap(),
+        created_at: parse_datetime(&row.get::<_, String>(10).unwrap()),
+        updated_at: parse_datetime(&row.get::<_, String>(11).unwrap()),
+        notes: row.get(12).unwrap(),
         assigned_at: row
-            .get::<_, Option<String>>(12)
+            .get::<_, Option<String>>(13)
             .unwrap()
             .map(|s| parse_datetime(&s)),
     }
@@ -139,6 +140,7 @@ pub(crate) mod test_helpers {
             id: Some(jid(id)),
             job_type: JobType::Craft,
             title: format!("Job {id}"),
+            plan_path: format!("test/{id}"),
             description: None,
             assignee: None,
             priority,
@@ -153,6 +155,7 @@ pub(crate) mod test_helpers {
             id: Some(jid(id)),
             job_type: JobType::Review,
             title: format!("Review {id}"),
+            plan_path: format!("test/{id}"),
             description: None,
             assignee: None,
             priority: None,

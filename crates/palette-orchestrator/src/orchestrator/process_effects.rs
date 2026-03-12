@@ -135,7 +135,10 @@ impl Orchestrator {
 
 /// Format a job into an instruction message for a member.
 fn format_job_instruction(job: &Job) -> String {
-    let mut msg = format!("## Task: {}\n\nID: {}\n", job.title, job.id);
+    let mut msg = format!(
+        "## Task: {}\n\nID: {}\nPlan: {}\n",
+        job.title, job.id, job.plan_path
+    );
     if let Some(ref desc) = job.description {
         msg.push_str(&format!("\n{desc}\n"));
     }
@@ -171,6 +174,7 @@ mod tests {
             id: Some(jid("W-001")),
             job_type: JobType::Craft,
             title: "Work".to_string(),
+            plan_path: "test/W-001".to_string(),
             description: None,
             assignee: Some(AgentId::new("member-a")),
             priority: None,
@@ -183,6 +187,7 @@ mod tests {
             id: Some(jid("R-001")),
             job_type: JobType::Review,
             title: "Review".to_string(),
+            plan_path: "test/R-001".to_string(),
             description: None,
             assignee: None,
             priority: None,

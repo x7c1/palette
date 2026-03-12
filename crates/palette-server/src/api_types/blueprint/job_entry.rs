@@ -11,6 +11,7 @@ pub(super) struct JobEntry {
     #[serde(rename = "type")]
     pub job_type: JobTypeInput,
     pub title: String,
+    pub plan_path: String,
     pub description: Option<String>,
     pub priority: Option<PriorityInput>,
     pub repository: Option<Repository>,

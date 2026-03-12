@@ -10,6 +10,7 @@ pub struct CreateJobRequest {
     #[serde(rename = "type")]
     pub job_type: JobType,
     pub title: String,
+    pub plan_path: String,
     pub description: Option<String>,
     pub assignee: Option<String>,
     pub priority: Option<Priority>,
@@ -25,6 +26,7 @@ impl From<CreateJobRequest> for domain::job::CreateJobRequest {
             id: api.id.map(domain::job::JobId::new),
             job_type: api.job_type.into(),
             title: api.title,
+            plan_path: api.plan_path,
             description: api.description,
             assignee: api.assignee.map(domain::agent::AgentId::new),
             priority: api.priority.map(domain::job::Priority::from),

@@ -5,6 +5,7 @@ CREATE TABLE IF NOT EXISTS jobs (
     id TEXT PRIMARY KEY,
     type TEXT NOT NULL CHECK(type IN ('craft', 'review')),
     title TEXT NOT NULL,
+    plan_path TEXT NOT NULL,
     description TEXT,
     assignee TEXT,
     status TEXT NOT NULL,
@@ -82,6 +83,16 @@ fn migrate(conn: &Connection) -> rusqlite::Result<()> {
             created_at TEXT NOT NULL
         );",
     )?;
+
+    // Add plan_path column to jobs table if it doesn't exist.
+    let has_plan_path: bool = conn
+        .prepare("SELECT COUNT(*) FROM pragma_table_info('jobs') WHERE name = 'plan_path'")?
+        .query_row([], |row| row.get::<_, i64>(0))
+        .map(|count| count > 0)?;
+
+    if !has_plan_path {
+        conn.execute_batch("ALTER TABLE jobs ADD COLUMN plan_path TEXT NOT NULL DEFAULT '';")?;
+    }
 
     Ok(())
 }

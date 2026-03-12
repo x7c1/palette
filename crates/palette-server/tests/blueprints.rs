@@ -7,11 +7,13 @@ const BLUEPRINT_YAML: &str = r#"
 task:
   id: 2026/feature-x
   title: Add feature X
+  plan_path: 2026/feature-x
 
 jobs:
   - id: C-A
     type: craft
     title: Implement API
+    plan_path: 2026/feature-x/api-impl
     priority: high
     repository:
       name: x7c1/palette
@@ -20,6 +22,7 @@ jobs:
   - id: R-A
     type: review
     title: Review API
+    plan_path: 2026/feature-x/api-review
     depends_on: [C-A]
 "#;
 

@@ -12,6 +12,7 @@ pub struct JobResponse {
     #[serde(rename = "type")]
     pub job_type: JobType,
     pub title: String,
+    pub plan_path: String,
     pub description: Option<String>,
     pub assignee: Option<String>,
     pub status: JobStatus,
@@ -30,6 +31,7 @@ impl From<domain::job::Job> for JobResponse {
             id: t.id.to_string(),
             job_type: t.job_type.into(),
             title: t.title,
+            plan_path: t.plan_path,
             description: t.description,
             assignee: t.assignee.map(|a| a.to_string()),
             status: t.status.into(),

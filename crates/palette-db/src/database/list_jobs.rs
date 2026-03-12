@@ -3,7 +3,7 @@ use super::*;
 impl Database {
     pub fn list_jobs(&self, filter: &JobFilter) -> crate::Result<Vec<Job>> {
         let conn = lock!(self.conn);
-        let mut sql = "SELECT id, type, title, description, assignee, status, priority, repository, pr_url, created_at, updated_at, notes, assigned_at FROM jobs WHERE 1=1".to_string();
+        let mut sql = "SELECT id, type, title, plan_path, description, assignee, status, priority, repository, pr_url, created_at, updated_at, notes, assigned_at FROM jobs WHERE 1=1".to_string();
         let mut param_values: Vec<Box<dyn rusqlite::types::ToSql>> = Vec::new();
 
         if let Some(ref t) = filter.job_type {
@@ -46,6 +46,7 @@ mod tests {
             id: Some(jid("C-001")),
             job_type: JobType::Craft,
             title: "Craft 1".to_string(),
+            plan_path: "test/C-001".to_string(),
             description: None,
             assignee: None,
             priority: None,
@@ -58,6 +59,7 @@ mod tests {
             id: Some(jid("R-001")),
             job_type: JobType::Review,
             title: "Review 1".to_string(),
+            plan_path: "test/R-001".to_string(),
             description: None,
             assignee: None,
             priority: None,
