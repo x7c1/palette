@@ -2,12 +2,12 @@
 
 ## Definition
 
-A Job is a unit of work assigned to a single [Member](../worker/member/). Each Job belongs to a [Task](../task/) and represents one concrete step toward completing that Task.
+A Job is a unit of work assigned to a single [Member](../worker/member/). Each Job belongs to a [Task](../task/) and represents one concrete step toward completing that Task. A Job has a [Plan](../plan/) that describes what should be accomplished and how.
 
 There are two kinds of Jobs:
 
-- **Craft Job**: Assigned to a [Crafter](../worker/member/crafter/). Produces a deliverable such as code changes or a plan.
-- **Review Job**: Assigned to a [Reviewer](../worker/member/reviewer/). Inspects the deliverable of a Craft Job and reports findings to the [Review Integrator](../worker/supervisor/review-integrator/).
+- **Craft Job**: Assigned to a [Crafter](../worker/member/crafter/). Produces a deliverable such as code changes or a [Blueprint](../blueprint/) (during the planning phase).
+- **Review Job**: Assigned to a [Reviewer](../worker/member/reviewer/). Inspects the deliverable of a Craft Job and reports findings to the [Review Integrator](../worker/supervisor/review-integrator/). During the planning phase, the Reviewer evaluates the Blueprint as a whole — whether the Job breakdown is appropriate and whether the Plans are adequate.
 
 A Task may involve multiple rounds of Craft Jobs and Review Jobs. When a Review Job results in a "changes requested" verdict, the Crafter revises the work and a new round of review begins.
 
@@ -35,3 +35,4 @@ A Task may involve multiple rounds of Craft Jobs and Review Jobs. When a Review 
 - [Crafter](../worker/member/crafter/) — executes Craft Jobs
 - [Reviewer](../worker/member/reviewer/) — executes Review Jobs
 - [Review Integrator](../worker/supervisor/review-integrator/) — consolidates findings from multiple Review Jobs
+- [Plan](../plan/) — describes what the Job should accomplish

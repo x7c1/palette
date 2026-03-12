@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub(crate) struct RepositoryRow {
     pub name: String,
-    pub branch: Option<String>,
+    pub branch: String,
 }
 
 impl From<&Repository> for RepositoryRow {
@@ -26,12 +26,12 @@ impl From<RepositoryRow> for Repository {
     }
 }
 
-pub(crate) fn repositories_to_json(repos: &[Repository]) -> String {
-    let rows: Vec<RepositoryRow> = repos.iter().map(RepositoryRow::from).collect();
-    serde_json::to_string(&rows).unwrap()
+pub(crate) fn repository_to_json(repo: &Repository) -> String {
+    let row = RepositoryRow::from(repo);
+    serde_json::to_string(&row).unwrap()
 }
 
-pub(crate) fn repositories_from_json(json: &str) -> Option<Vec<Repository>> {
-    let rows: Vec<RepositoryRow> = serde_json::from_str(json).ok()?;
-    Some(rows.into_iter().map(Repository::from).collect())
+pub(crate) fn repository_from_json(json: &str) -> Option<Repository> {
+    let row: RepositoryRow = serde_json::from_str(json).ok()?;
+    Some(Repository::from(row))
 }

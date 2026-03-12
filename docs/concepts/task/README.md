@@ -4,7 +4,7 @@
 
 A Task is a goal that the [Operator](../operator/) wants to achieve. It describes *what* should be accomplished, not *how* to accomplish it.
 
-A Task can be broken down into child Tasks or into [Jobs](../job/). A planning Task produces child Tasks as its outcome; an implementation Task is broken down into Jobs that are executed by [Crafters](../worker/member/crafter/) and [Reviewers](../worker/member/reviewer/).
+A Task has a [Plan](../plan/) that describes its overall scope and approach. A Task can be broken down into child Tasks or into [Jobs](../job/). A planning Task produces child Tasks as its outcome; an implementation Task is broken down into Jobs that are executed by [Crafters](../worker/member/crafter/) and [Reviewers](../worker/member/reviewer/).
 
 ## Examples
 
@@ -27,3 +27,5 @@ A Task can be broken down into child Tasks or into [Jobs](../job/). A planning T
 
 - [Operator](../operator/) — defines the Task
 - [Job](../job/) — a unit of work that a Member executes to fulfill a Task
+- [Plan](../plan/) — describes the scope and approach for the Task
+- [Blueprint](../blueprint/) — defines the Task and its Jobs

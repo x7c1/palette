@@ -133,21 +133,23 @@ impl Orchestrator {
     }
 }
 
+/// Container-side mount point for the shared plan directory.
+const PLAN_DIR_MOUNT: &str = "/home/agent/plans";
+
 /// Format a job into an instruction message for a member.
 fn format_job_instruction(job: &Job) -> String {
-    let mut msg = format!("## Task: {}\n\nID: {}\n", job.title, job.id);
+    let mut msg = format!(
+        "## Task: {}\n\nID: {}\nPlan: {}/{}\n",
+        job.title, job.id, PLAN_DIR_MOUNT, job.plan_path
+    );
     if let Some(ref desc) = job.description {
         msg.push_str(&format!("\n{desc}\n"));
     }
-    if let Some(ref repos) = job.repositories {
-        msg.push('\n');
-        for repo in repos {
-            if let Some(ref branch) = repo.branch {
-                msg.push_str(&format!("- {} (branch: {branch})\n", repo.name));
-            } else {
-                msg.push_str(&format!("- {}\n", repo.name));
-            }
-        }
+    if let Some(ref repo) = job.repository {
+        msg.push_str(&format!(
+            "\nRepository: {} (branch: {})\n",
+            repo.name, repo.branch
+        ));
     }
     msg.push_str("\nPlease begin working on this task.");
     msg
@@ -175,10 +177,11 @@ mod tests {
             id: Some(jid("W-001")),
             job_type: JobType::Craft,
             title: "Work".to_string(),
+            plan_path: "test/W-001".to_string(),
             description: None,
             assignee: Some(AgentId::new("member-a")),
             priority: None,
-            repositories: None,
+            repository: None,
             depends_on: vec![],
         })
         .unwrap();
@@ -187,10 +190,11 @@ mod tests {
             id: Some(jid("R-001")),
             job_type: JobType::Review,
             title: "Review".to_string(),
+            plan_path: "test/R-001".to_string(),
             description: None,
             assignee: None,
             priority: None,
-            repositories: None,
+            repository: None,
             depends_on: vec![jid("W-001")],
         })
         .unwrap();

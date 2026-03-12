@@ -1,7 +1,7 @@
 use super::job_id_input::JobIdInput;
 use super::job_type_input::JobTypeInput;
 use super::priority_input::PriorityInput;
-use super::repository_entry::RepositoryEntry;
+use crate::api_types::Repository;
 use serde::Deserialize;
 
 /// A single job entry in the YAML file.
@@ -11,10 +11,10 @@ pub(super) struct JobEntry {
     #[serde(rename = "type")]
     pub job_type: JobTypeInput,
     pub title: String,
+    pub plan_path: String,
     pub description: Option<String>,
     pub priority: Option<PriorityInput>,
-    /// Per-job repositories override. If omitted, inherits from top-level.
-    pub repositories: Option<Vec<RepositoryEntry>>,
+    pub repository: Option<Repository>,
     #[serde(default)]
     pub depends_on: Vec<JobIdInput>,
 }

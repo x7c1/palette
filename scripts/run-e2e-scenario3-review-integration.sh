@@ -74,10 +74,17 @@ echo "--- containers ---"
 docker ps --filter label=palette.managed=true --format '{{.Names}} {{.Status}}' 2>&1
 
 echo ""
-echo "=== Loading jobs from YAML ==="
-LOAD_RESP=$(curl -s -X POST ${BASE_URL}/jobs/load \
+echo "=== Submitting blueprint ==="
+SUBMIT_RESP=$(curl -s -X POST ${BASE_URL}/blueprints/submit \
   -H "Content-Type: text/plain" \
   --data-binary @tests/fixtures/scenario3-review-integration.yaml)
+TASK_ID=$(echo "$SUBMIT_RESP" | jq -r '.task_id')
+TASK_ID_ENCODED=$(printf '%s' "$TASK_ID" | jq -sRr @uri)
+echo "Blueprint submitted: $TASK_ID"
+
+echo ""
+echo "=== Loading blueprint ==="
+LOAD_RESP=$(curl -s -X POST ${BASE_URL}/blueprints/${TASK_ID_ENCODED}/load)
 echo "$LOAD_RESP" | jq -r '.[] | "\(.id) \(.status)"'
 
 echo ""

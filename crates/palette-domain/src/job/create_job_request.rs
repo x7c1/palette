@@ -6,9 +6,10 @@ pub struct CreateJobRequest {
     pub id: Option<JobId>,
     pub job_type: JobType,
     pub title: String,
+    pub plan_path: String,
     pub description: Option<String>,
     pub assignee: Option<AgentId>,
     pub priority: Option<Priority>,
-    pub repositories: Option<Vec<Repository>>,
+    pub repository: Option<Repository>,
     pub depends_on: Vec<JobId>,
 }
