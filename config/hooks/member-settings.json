@@ -11,7 +11,8 @@
       "Bash(echo)",
       "Bash(echo *)",
       "Bash(cat *)",
-      "Bash(pwd)"
+      "Bash(pwd)",
+      "Bash(git checkout *)"
     ]
   },
   "hooks": {
