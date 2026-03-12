@@ -140,12 +140,10 @@ fn format_job_instruction(job: &Job) -> String {
         msg.push_str(&format!("\n{desc}\n"));
     }
     if let Some(ref repo) = job.repository {
-        msg.push('\n');
-        if let Some(ref branch) = repo.branch {
-            msg.push_str(&format!("Repository: {} (branch: {branch})\n", repo.name));
-        } else {
-            msg.push_str(&format!("Repository: {}\n", repo.name));
-        }
+        msg.push_str(&format!(
+            "\nRepository: {} (branch: {})\n",
+            repo.name, repo.branch
+        ));
     }
     msg.push_str("\nPlease begin working on this task.");
     msg

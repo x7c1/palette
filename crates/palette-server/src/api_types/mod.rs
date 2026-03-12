@@ -45,7 +45,7 @@ pub use repository::Repository;
 
 mod blueprint;
 pub use blueprint::Blueprint;
-pub use blueprint::TaskInfo;
+pub use blueprint::Task;
 
 mod blueprint_response;
 pub use blueprint_response::BlueprintResponse;

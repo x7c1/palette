@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub(crate) struct RepositoryRow {
     pub name: String,
-    pub branch: Option<String>,
+    pub branch: String,
 }
 
 impl From<&Repository> for RepositoryRow {

@@ -3,19 +3,19 @@ mod job_id_input;
 mod job_type_input;
 mod priority_input;
 mod repository_entry;
-mod task_info;
+mod task;
 
 use job_entry::JobEntry;
 use palette_domain::job::{CreateJobRequest, JobId, Priority, Repository};
 use serde::Deserialize;
 
-pub use task_info::TaskInfo;
+pub use task::Task;
 
 /// A Blueprint defines a Task and its Jobs.
 /// Stored and loaded via the Blueprint API.
 #[derive(Debug, Deserialize)]
 pub struct Blueprint {
-    pub task: TaskInfo,
+    pub task: Task,
     jobs: Vec<JobEntry>,
 }
 
@@ -89,7 +89,7 @@ jobs:
 
         let repo = requests[0].repository.as_ref().unwrap();
         assert_eq!(repo.name, "x7c1/palette");
-        assert_eq!(repo.branch.as_deref(), Some("feature/test"));
+        assert_eq!(repo.branch, "feature/test");
 
         // Review job has no repository
         assert_eq!(requests[1].depends_on, vec![JobId::new("C-A")]);
@@ -116,7 +116,7 @@ jobs:
 
         let repo = requests[0].repository.as_ref().unwrap();
         assert_eq!(repo.name, "x7c1/special-repo");
-        assert_eq!(repo.branch.as_deref(), Some("feature/special"));
+        assert_eq!(repo.branch, "feature/special");
     }
 
     #[test]

@@ -74,7 +74,7 @@ mod tests {
                 priority: Some(Priority::High),
                 repository: Some(Repository {
                     name: "x7c1/palette".to_string(),
-                    branch: Some("feature/test".to_string()),
+                    branch: "feature/test".to_string(),
                 }),
                 depends_on: vec![],
             })
