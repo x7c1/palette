@@ -1,9 +1,10 @@
 use super::*;
-use crate::models::StoredBlueprint;
+use crate::models::stored_blueprint::StoredBlueprint;
+use palette_domain::blueprint::Blueprint;
 
 impl Database {
     /// Get a blueprint by task_id.
-    pub fn get_blueprint(&self, task_id: &str) -> crate::Result<Option<StoredBlueprint>> {
+    pub fn get_blueprint(&self, task_id: &str) -> crate::Result<Option<Blueprint>> {
         let conn = lock!(self.conn);
         let mut stmt = conn.prepare(
             "SELECT task_id, title, yaml, created_at FROM blueprints WHERE task_id = ?1",
@@ -18,7 +19,7 @@ impl Database {
         })?;
 
         match rows.next() {
-            Some(Ok(bp)) => Ok(Some(bp)),
+            Some(Ok(bp)) => Ok(Some(bp.into())),
             Some(Err(e)) => Err(e.into()),
             None => Ok(None),
         }

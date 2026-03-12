@@ -42,7 +42,15 @@ async fn blueprint_submit_stores_and_returns() {
         .unwrap();
     assert_eq!(resp.status(), 201);
 
-    let body: serde_json::Value = resp.json().await.unwrap();
+    // Verify via GET
+    let body: serde_json::Value = client
+        .get(format!("{base_url}/blueprints/{}", "2026%2Ffeature-x"))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
     assert_eq!(body["task_id"], "2026/feature-x");
     assert_eq!(body["title"], "Add feature X");
     assert!(body["yaml"].as_str().unwrap().contains("feature-x"));

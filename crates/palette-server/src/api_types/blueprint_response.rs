@@ -1,5 +1,5 @@
 use chrono::{DateTime, Utc};
-use palette_db::models::StoredBlueprint;
+use palette_domain::blueprint::Blueprint;
 use serde::Serialize;
 
 #[derive(Debug, Serialize)]
@@ -10,8 +10,8 @@ pub struct BlueprintResponse {
     pub created_at: DateTime<Utc>,
 }
 
-impl From<StoredBlueprint> for BlueprintResponse {
-    fn from(bp: StoredBlueprint) -> Self {
+impl From<Blueprint> for BlueprintResponse {
+    fn from(bp: Blueprint) -> Self {
         Self {
             task_id: bp.task_id,
             title: bp.title,
