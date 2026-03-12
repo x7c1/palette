@@ -5,7 +5,7 @@ impl Database {
     pub fn find_crafts_for_review(&self, review_id: &JobId) -> crate::Result<Vec<Job>> {
         let conn = lock!(self.conn);
         let mut stmt = conn.prepare(
-            "SELECT t.id, t.type, t.title, t.description, t.assignee, t.status, t.priority, t.repositories, t.pr_url, t.created_at, t.updated_at, t.notes, t.assigned_at
+            "SELECT t.id, t.type, t.title, t.description, t.assignee, t.status, t.priority, t.repository, t.pr_url, t.created_at, t.updated_at, t.notes, t.assigned_at
              FROM jobs t
              JOIN dependencies d ON d.depends_on = t.id
              WHERE d.job_id = ?1 AND t.type = 'craft'",

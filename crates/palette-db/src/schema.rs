@@ -9,7 +9,7 @@ CREATE TABLE IF NOT EXISTS jobs (
     assignee TEXT,
     status TEXT NOT NULL,
     priority TEXT CHECK(priority IN ('high', 'medium', 'low') OR priority IS NULL),
-    repositories TEXT,
+    repository TEXT,
     pr_url TEXT,
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL,
@@ -82,6 +82,7 @@ fn migrate(conn: &Connection) -> rusqlite::Result<()> {
             created_at TEXT NOT NULL
         );",
     )?;
+
     Ok(())
 }
 

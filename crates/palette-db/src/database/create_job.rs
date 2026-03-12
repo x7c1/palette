@@ -24,7 +24,7 @@ impl Database {
         let tx = conn.transaction()?;
 
         tx.execute(
-            "INSERT INTO jobs (id, type, title, description, assignee, status, priority, repositories, pr_url, created_at, updated_at, notes, assigned_at)
+            "INSERT INTO jobs (id, type, title, description, assignee, status, priority, repository, pr_url, created_at, updated_at, notes, assigned_at)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, NULL, ?9, ?10, NULL, NULL)",
             params![
                 id.as_ref(),

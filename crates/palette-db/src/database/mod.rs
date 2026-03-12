@@ -79,7 +79,7 @@ fn parse_datetime(s: &str) -> DateTime<Utc> {
 /// Query a single job by ID from a connection or transaction.
 fn query_job(conn: &Connection, id: &JobId) -> crate::Result<Option<Job>> {
     let mut stmt = conn.prepare(
-        "SELECT id, type, title, description, assignee, status, priority, repositories, pr_url, created_at, updated_at, notes, assigned_at
+        "SELECT id, type, title, description, assignee, status, priority, repository, pr_url, created_at, updated_at, notes, assigned_at
          FROM jobs WHERE id = ?1",
     )?;
     let mut rows = stmt.query_map(params![id.as_ref()], |row| Ok(row_to_job(row)))?;
