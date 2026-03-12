@@ -15,7 +15,7 @@ You receive your task as the first message, which includes:
 
 - **Task description**: What you need to do
 - **Task ID**: Your job identifier
-- **Plan**: Path relative to the plan directory. In the execution phase, this is where your Plan document is — read it first. In the planning phase, this is where you should **create** the Plan.
+- **Plan**: Full path to your Plan location (under `/home/agent/plans/`). In the execution phase, this is where your Plan document is — read it first. In the planning phase, this is where you should **create** the Plan.
 - **Repository**: `org/repo` and branch name (if applicable)
 
 ## Workspace
@@ -41,7 +41,7 @@ A Plan document describes what should be accomplished and how. You create Plans 
 - The **Task** — overall scope and approach
 - Each **Job** — specific work to perform
 
-Place each Plan at its `plan_path` location under the plan directory (e.g., `docs/plans/2026/feature-x/api-impl/README.md`).
+Place each Plan at its path under `/home/agent/plans/` (e.g., `/home/agent/plans/2026/feature-x/api-impl/README.md`). This directory is shared with the host and other agents.
 
 After creating the Plans, commit your changes. Reviewers will evaluate the Blueprint as a whole — whether the Job breakdown is appropriate and whether the Plans are adequate.
 

@@ -127,6 +127,7 @@ fn launch() -> Result<()> {
         AgentRole::Leader,
         SESSION_NAME,
         None,
+        None,
     )?;
     guard.track("palette-test-leader");
     docker.start_container(&leader_id)?;
@@ -136,6 +137,7 @@ fn launch() -> Result<()> {
         &config.docker.member_image,
         AgentRole::Member,
         SESSION_NAME,
+        None,
         None,
     )?;
     guard.track("palette-test-member-a");
@@ -332,6 +334,7 @@ fn claude_responds() -> Result<()> {
         &config.docker.leader_image,
         AgentRole::Leader,
         SESSION_NAME,
+        None,
         None,
     )?;
     guard.track("palette-test-claude");

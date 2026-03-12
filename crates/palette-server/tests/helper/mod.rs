@@ -110,6 +110,7 @@ pub async fn spawn_server(
         db: Arc::clone(&db),
         docker,
         docker_config: test_docker_config(),
+        plan_dir: String::new(),
         tmux: Arc::clone(&tmux),
         infra: Arc::clone(&infra),
         state_path: String::new(),

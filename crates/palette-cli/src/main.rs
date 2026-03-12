@@ -68,10 +68,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     });
 
     // Start orchestrator event loop
+    // Ensure plan_dir exists on the host
+    std::fs::create_dir_all(&config.plan_dir)?;
+
     let orchestrator = Arc::new(Orchestrator {
         db: Arc::clone(&db),
         docker,
         docker_config: config.docker,
+        plan_dir: config.plan_dir.clone(),
         tmux: Arc::clone(&tmux),
         infra: Arc::clone(&infra),
         state_path: config.state_path.clone(),
@@ -113,7 +117,7 @@ fn spawn_agent(
     settings_template: &Path,
 ) -> Result<AgentState, Box<dyn std::error::Error>> {
     let container_id =
-        docker.create_container(spec.name, spec.image, spec.role, session_name, None)?;
+        docker.create_container(spec.name, spec.image, spec.role, session_name, None, None)?;
     docker.start_container(&container_id)?;
     docker.write_settings(&container_id, settings_template, spec.id.as_ref())?;
     DockerManager::copy_file_to_container(

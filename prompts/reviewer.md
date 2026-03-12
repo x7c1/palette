@@ -15,7 +15,7 @@ You receive your task as the first message, which includes:
 
 - **Task description**: What you need to review
 - **Review Job ID**: Your job identifier (used when submitting the review)
-- **Plan**: Path to your Plan document (relative to the plan directory)
+- **Plan**: Full path to your Plan document (under `/home/agent/plans/`)
 
 Read your Plan document first. It describes what you should evaluate and how.
 

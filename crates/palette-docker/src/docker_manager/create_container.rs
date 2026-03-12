@@ -10,6 +10,14 @@ pub struct WorkspaceVolume {
     pub read_only: bool,
 }
 
+/// Plan directory bind mount configuration.
+pub struct PlanDirMount {
+    /// Absolute path on the host (e.g., "/path/to/data/plans").
+    pub host_path: String,
+    /// If true, mount as read-only.
+    pub read_only: bool,
+}
+
 impl DockerManager {
     /// Create and start a container for an agent.
     /// Returns the container ID.
@@ -20,6 +28,7 @@ impl DockerManager {
         role: AgentRole,
         session_name: &str,
         workspace: Option<WorkspaceVolume>,
+        plan_dir: Option<PlanDirMount>,
     ) -> crate::Result<ContainerId> {
         let role_str = role.as_str();
         let labels = [
@@ -91,6 +100,13 @@ impl DockerManager {
             let suffix = if ws.read_only { ":ro" } else { "" };
             args.push("-v".to_string());
             args.push(format!("{}:/home/agent/workspace{suffix}", ws.name));
+        }
+
+        // Plan directory: bind mount from host for shared plan documents
+        if let Some(pd) = plan_dir {
+            let suffix = if pd.read_only { ":ro" } else { "" };
+            args.push("-v".to_string());
+            args.push(format!("{}:/home/agent/plans{suffix}", pd.host_path));
         }
 
         args.push(image.to_string());

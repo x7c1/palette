@@ -15,6 +15,8 @@ pub struct Config {
     pub db_path: String,
     #[serde(default = "default_state_path")]
     pub state_path: String,
+    #[serde(default = "default_plan_dir")]
+    pub plan_dir: String,
     pub tmux: TmuxConfig,
     #[serde(default)]
     pub rules: RulesConfig,
@@ -27,6 +29,10 @@ fn default_db_path() -> String {
 
 fn default_state_path() -> String {
     "data/state.json".to_string()
+}
+
+fn default_plan_dir() -> String {
+    "data/plans".to_string()
 }
 
 impl Config {

@@ -133,11 +133,14 @@ impl Orchestrator {
     }
 }
 
+/// Container-side mount point for the shared plan directory.
+const PLAN_DIR_MOUNT: &str = "/home/agent/plans";
+
 /// Format a job into an instruction message for a member.
 fn format_job_instruction(job: &Job) -> String {
     let mut msg = format!(
-        "## Task: {}\n\nID: {}\nPlan: {}\n",
-        job.title, job.id, job.plan_path
+        "## Task: {}\n\nID: {}\nPlan: {}/{}\n",
+        job.title, job.id, PLAN_DIR_MOUNT, job.plan_path
     );
     if let Some(ref desc) = job.description {
         msg.push_str(&format!("\n{desc}\n"));

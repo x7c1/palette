@@ -1,6 +1,7 @@
 port = 7100
 db_path = "data/palette.db"
 state_path = "data/state.json"
+plan_dir = "data/plans"
 
 [tmux]
 session_name = "palette"
