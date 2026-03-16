@@ -47,7 +47,6 @@ During the execution phase, you review the crafter's code changes:
 1. Evaluate the work according to the phase (planning or execution)
 2. Submit your review via the `palette:palette-api` agent:
    - `POST /reviews/{review_job_id}/submit` with `{"verdict": "approved" | "changes_requested", "summary": "..."}`
-3. **Stop** by running `/exit`
 
 ## Guidelines
 

@@ -55,7 +55,6 @@ When your work is done:
 
 1. **Commit** your changes with a descriptive message
 2. **State clearly** that your task is complete and summarize what you did
-3. **Stop** by running `/exit` to signal the orchestrator
 
 Do NOT push to the remote. Reviewers access your work via the shared workspace volume.
 

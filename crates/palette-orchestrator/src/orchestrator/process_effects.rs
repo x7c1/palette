@@ -43,7 +43,32 @@ impl Orchestrator {
         infra: &mut PersistentState,
         deliveries: &mut Vec<PendingDelivery>,
     ) -> crate::Result<()> {
-        // Only assign if the job is truly assignable (ready + all deps done)
+        let job = match self.db.get_job(job_id)? {
+            Some(j) => j,
+            None => return Ok(()),
+        };
+
+        // Re-review: job already has an assignee (e.g. reviewer from previous round).
+        // Deliver a new instruction to the existing member instead of spawning a new one.
+        if let Some(ref existing_assignee) = job.assignee {
+            if let Some(member) = infra.find_member(existing_assignee) {
+                let instruction = format_job_instruction(&job);
+                self.db.enqueue_message(existing_assignee, &instruction)?;
+                self.db.update_job_status(job_id, JobStatus::InProgress)?;
+                deliveries.push(PendingDelivery {
+                    target_id: existing_assignee.clone(),
+                    terminal_target: member.terminal_target.clone(),
+                });
+                tracing::info!(
+                    job_id = %job_id,
+                    member_id = %existing_assignee,
+                    "re-assigned job to existing member"
+                );
+                return Ok(());
+            }
+        }
+
+        // New assignment: verify the job is assignable (ready + all deps done, no assignee)
         let assignable_jobs = self.db.find_assignable_jobs()?;
         let job = match assignable_jobs.iter().find(|j| j.id == *job_id) {
             Some(j) => j.clone(),
@@ -297,7 +322,7 @@ mod tests {
     }
 
     #[test]
-    fn changes_requested_reverts_craft() {
+    fn changes_requested_reverts_craft_and_blocks_review() {
         let db = setup_db();
         create_craft_review_pair(&db);
 
@@ -307,7 +332,7 @@ mod tests {
             .unwrap();
         db.update_job_status(&jid("W-001"), JobStatus::InReview)
             .unwrap();
-        db.update_job_status(&jid("R-001"), JobStatus::InProgress)
+        db.assign_job(&jid("R-001"), &AgentId::new("member-b"))
             .unwrap();
 
         let sub = db
@@ -324,6 +349,7 @@ mod tests {
         let engine = RuleEngine::new(&db, 5);
         let effects = engine.on_review_submitted(&jid("R-001"), &sub).unwrap();
 
+        // Only craft status change; reviewer is kept alive (no DestroyMember)
         assert_eq!(effects.len(), 1);
         assert_eq!(
             effects[0],
@@ -335,10 +361,15 @@ mod tests {
 
         let craft = db.get_job(&jid("W-001")).unwrap().unwrap();
         assert_eq!(craft.status, JobStatus::InProgress);
+
+        // Review job is blocked, assignee preserved for re-review
+        let review = db.get_job(&jid("R-001")).unwrap().unwrap();
+        assert_eq!(review.status, JobStatus::Blocked);
+        assert_eq!(review.assignee, Some(AgentId::new("member-b")));
     }
 
     #[test]
-    fn approved_completes_craft() {
+    fn approved_completes_craft_and_review() {
         let db = setup_db();
         create_craft_review_pair(&db);
 
@@ -348,7 +379,7 @@ mod tests {
             .unwrap();
         db.update_job_status(&jid("W-001"), JobStatus::InReview)
             .unwrap();
-        db.update_job_status(&jid("R-001"), JobStatus::InProgress)
+        db.assign_job(&jid("R-001"), &AgentId::new("member-b"))
             .unwrap();
 
         let sub = db
@@ -365,14 +396,23 @@ mod tests {
         let engine = RuleEngine::new(&db, 5);
         let effects = engine.on_review_submitted(&jid("R-001"), &sub).unwrap();
 
-        assert_eq!(effects.len(), 1);
+        assert_eq!(effects.len(), 2);
         assert_eq!(
             effects[0],
+            RuleEffect::DestroyMember {
+                member_id: AgentId::new("member-b"),
+            }
+        );
+        assert_eq!(
+            effects[1],
             RuleEffect::StatusChanged {
                 job_id: jid("W-001"),
                 new_status: JobStatus::Done,
             }
         );
+
+        let review = db.get_job(&jid("R-001")).unwrap().unwrap();
+        assert_eq!(review.status, JobStatus::Done);
     }
 
     #[test]
@@ -386,10 +426,10 @@ mod tests {
             .unwrap();
         db.update_job_status(&jid("W-001"), JobStatus::InReview)
             .unwrap();
-        db.update_job_status(&jid("R-001"), JobStatus::InProgress)
+        db.assign_job(&jid("R-001"), &AgentId::new("member-b"))
             .unwrap();
 
-        // Round 1
+        // Round 1: changes_requested → review goes Blocked, craft goes InProgress
         let sub1 = db
             .submit_review(
                 &jid("R-001"),
@@ -403,8 +443,12 @@ mod tests {
         let engine = RuleEngine::new(&db, 2);
         engine.on_review_submitted(&jid("R-001"), &sub1).unwrap();
 
-        // Reset craft to in_review for round 2
+        // Reset for round 2: craft back to in_review, review back to in_progress
         db.update_job_status(&jid("W-001"), JobStatus::InReview)
+            .unwrap();
+        db.update_job_status(&jid("R-001"), JobStatus::Todo)
+            .unwrap();
+        db.assign_job(&jid("R-001"), &AgentId::new("member-c"))
             .unwrap();
 
         // Round 2 - should escalate

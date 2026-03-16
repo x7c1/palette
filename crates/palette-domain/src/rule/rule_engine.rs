@@ -84,6 +84,12 @@ impl<S: JobStore> RuleEngine<S> {
         submission: &ReviewSubmission,
     ) -> Result<Vec<RuleEffect>, S::Error> {
         let mut effects = Vec::new();
+        let review_job = self
+            .store
+            .get_job(review_job_id)?
+            .ok_or_else(|| JobError::NotFound {
+                job_id: review_job_id.clone(),
+            })?;
         let craft_jobs = self.store.find_crafts_for_review(review_job_id)?;
 
         match submission.verdict {
@@ -101,6 +107,11 @@ impl<S: JobStore> RuleEngine<S> {
                     return Ok(effects);
                 }
 
+                // Review job → Blocked (waits for craft to re-enter InReview).
+                // Keep assignee so the same reviewer can re-review with context.
+                self.store
+                    .update_job_status(review_job_id, JobStatus::Blocked)?;
+
                 // Revert craft jobs to in_progress
                 for craft in &craft_jobs {
                     self.store
@@ -112,6 +123,15 @@ impl<S: JobStore> RuleEngine<S> {
                 }
             }
             Verdict::Approved => {
+                // Review job → Done
+                self.store
+                    .update_job_status(review_job_id, JobStatus::Done)?;
+                if let Some(ref assignee) = review_job.assignee {
+                    effects.push(RuleEffect::DestroyMember {
+                        member_id: assignee.clone(),
+                    });
+                }
+
                 // Check if ALL reviews for each craft job are approved
                 for craft in &craft_jobs {
                     let all_reviews = self.store.find_reviews_for_craft(&craft.id)?;
@@ -158,6 +178,7 @@ pub fn validate_transition(
         (JobType::Review, JobStatus::Todo, JobStatus::InProgress) => true,
         (JobType::Review, JobStatus::Blocked, JobStatus::Todo) => true,
         (JobType::Review, JobStatus::InProgress, JobStatus::Done) => true,
+        (JobType::Review, JobStatus::InProgress, JobStatus::Blocked) => true, // changes_requested
 
         _ => false,
     };
