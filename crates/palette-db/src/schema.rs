@@ -5,11 +5,12 @@ CREATE TABLE IF NOT EXISTS jobs (
     id TEXT PRIMARY KEY,
     type TEXT NOT NULL CHECK(type IN ('craft', 'review')),
     title TEXT NOT NULL,
+    plan_path TEXT NOT NULL,
     description TEXT,
     assignee TEXT,
     status TEXT NOT NULL,
     priority TEXT CHECK(priority IN ('high', 'medium', 'low') OR priority IS NULL),
-    repositories TEXT,
+    repository TEXT,
     pr_url TEXT,
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL,
@@ -55,6 +56,13 @@ CREATE INDEX IF NOT EXISTS idx_jobs_type_status ON jobs(type, status);
 CREATE INDEX IF NOT EXISTS idx_review_submissions_job ON review_submissions(review_job_id);
 CREATE INDEX IF NOT EXISTS idx_review_comments_submission ON review_comments(submission_id);
 CREATE INDEX IF NOT EXISTS idx_message_queue_target ON message_queue(target_id, id);
+
+CREATE TABLE IF NOT EXISTS blueprints (
+    task_id TEXT PRIMARY KEY,
+    title TEXT NOT NULL,
+    yaml TEXT NOT NULL,
+    created_at TEXT NOT NULL
+);
 "#;
 
 pub(crate) fn initialize(conn: &Connection) -> rusqlite::Result<()> {
@@ -65,7 +73,27 @@ pub(crate) fn initialize(conn: &Connection) -> rusqlite::Result<()> {
 }
 
 /// Apply migrations for existing databases that lack new columns/tables.
-fn migrate(_conn: &Connection) -> rusqlite::Result<()> {
+fn migrate(conn: &Connection) -> rusqlite::Result<()> {
+    // Add blueprints table if it doesn't exist (for databases created before this migration).
+    conn.execute_batch(
+        "CREATE TABLE IF NOT EXISTS blueprints (
+            task_id TEXT PRIMARY KEY,
+            title TEXT NOT NULL,
+            yaml TEXT NOT NULL,
+            created_at TEXT NOT NULL
+        );",
+    )?;
+
+    // Add plan_path column to jobs table if it doesn't exist.
+    let has_plan_path: bool = conn
+        .prepare("SELECT COUNT(*) FROM pragma_table_info('jobs') WHERE name = 'plan_path'")?
+        .query_row([], |row| row.get::<_, i64>(0))
+        .map(|count| count > 0)?;
+
+    if !has_plan_path {
+        conn.execute_batch("ALTER TABLE jobs ADD COLUMN plan_path TEXT NOT NULL DEFAULT '';")?;
+    }
+
     Ok(())
 }
 

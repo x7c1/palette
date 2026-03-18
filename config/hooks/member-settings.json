@@ -1,4 +1,20 @@
 {
+  "attribution": {
+    "commit": "",
+    "pr": ""
+  },
+  "permissions": {
+    "allow": [
+      "Bash(ls)",
+      "Bash(ls *)",
+      "Bash(cd *)",
+      "Bash(echo)",
+      "Bash(echo *)",
+      "Bash(cat *)",
+      "Bash(pwd)",
+      "Bash(git checkout *)"
+    ]
+  },
   "hooks": {
     "Stop": [
       {

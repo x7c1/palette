@@ -1,19 +1,38 @@
 use crate::AppState;
-use crate::api_types::{JobFile, JobResponse};
-use axum::{Json, extract::State, http::StatusCode};
+use crate::api_types::{Blueprint, JobResponse};
+use axum::{
+    Json,
+    extract::{Path, State},
+    http::StatusCode,
+};
 use palette_domain::job::{JobId, JobStatus, JobType};
 use palette_domain::rule::validate_transition;
 use palette_domain::server::ServerEvent;
 use std::sync::Arc;
 
-pub async fn handle_load_jobs(
+pub async fn handle_load_blueprint(
     State(state): State<Arc<AppState>>,
-    body: String,
+    Path(task_id): Path<String>,
 ) -> Result<(StatusCode, Json<Vec<JobResponse>>), (StatusCode, String)> {
-    let job_file = JobFile::parse(&body)
-        .map_err(|e| (StatusCode::BAD_REQUEST, format!("invalid YAML: {e}")))?;
+    let stored = state
+        .db
+        .get_blueprint(&task_id)
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+        .ok_or_else(|| {
+            (
+                StatusCode::NOT_FOUND,
+                format!("blueprint not found: {task_id}"),
+            )
+        })?;
 
-    let requests = job_file.into_requests();
+    let blueprint = Blueprint::parse(&stored.yaml).map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("stored YAML is invalid: {e}"),
+        )
+    })?;
+
+    let requests = blueprint.into_requests();
     let mut created_jobs = Vec::new();
 
     // Create all jobs as draft
@@ -22,7 +41,7 @@ pub async fn handle_load_jobs(
             .db
             .create_job(req)
             .map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))?;
-        tracing::info!(job_id = %job.id, "created job from YAML");
+        tracing::info!(job_id = %job.id, task_id = %task_id, "created job from blueprint");
         created_jobs.push(job);
     }
 
@@ -48,7 +67,7 @@ pub async fn handle_load_jobs(
             .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
         for effect in &effects {
-            tracing::info!(?effect, "rule engine effect (job load)");
+            tracing::info!(?effect, "rule engine effect (blueprint load)");
         }
 
         if !effects.is_empty() {

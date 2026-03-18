@@ -1,5 +1,5 @@
 use super::Orchestrator;
-use palette_docker::{DockerManager, WorkspaceVolume};
+use palette_docker::{DockerManager, PlanDirMount, WorkspaceVolume};
 use palette_domain::agent::{AgentId, AgentRole, AgentState, AgentStatus};
 use palette_domain::job::JobType;
 use palette_domain::server::PersistentState;
@@ -27,12 +27,20 @@ impl Orchestrator {
         let terminal_target = self.tmux.create_pane(&supervisor_state.terminal_target)?;
 
         let member_id_str = member_id.as_ref();
+        let plan_dir_abs = std::fs::canonicalize(&self.plan_dir)
+            .map_err(|e| crate::Error::Internal(format!("failed to resolve plan_dir: {e}")))?;
+        let plan_dir_mount = PlanDirMount {
+            host_path: plan_dir_abs.to_string_lossy().to_string(),
+            read_only: job_type == JobType::Review,
+        };
+
         let container_id = self.docker.create_container(
             member_id_str,
             &self.docker_config.member_image,
             AgentRole::Member,
             session_name,
             workspace,
+            Some(plan_dir_mount),
         )?;
         self.docker.start_container(&container_id)?;
         self.docker.write_settings(
@@ -40,9 +48,13 @@ impl Orchestrator {
             std::path::Path::new(&self.docker_config.settings_template),
             member_id_str,
         )?;
+        let prompt_path = match job_type {
+            JobType::Craft => &self.docker_config.crafter_prompt,
+            JobType::Review => &self.docker_config.reviewer_prompt,
+        };
         DockerManager::copy_file_to_container(
             &container_id,
-            std::path::Path::new(&self.docker_config.member_prompt),
+            std::path::Path::new(prompt_path),
             "/home/agent/prompt.md",
         )?;
         DockerManager::copy_dir_to_container(

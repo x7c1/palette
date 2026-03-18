@@ -10,10 +10,11 @@ pub struct CreateJobRequest {
     #[serde(rename = "type")]
     pub job_type: JobType,
     pub title: String,
+    pub plan_path: String,
     pub description: Option<String>,
     pub assignee: Option<String>,
     pub priority: Option<Priority>,
-    pub repositories: Option<Vec<Repository>>,
+    pub repository: Option<Repository>,
     #[serde(default)]
     pub depends_on: Vec<String>,
 }
@@ -25,12 +26,11 @@ impl From<CreateJobRequest> for domain::job::CreateJobRequest {
             id: api.id.map(domain::job::JobId::new),
             job_type: api.job_type.into(),
             title: api.title,
+            plan_path: api.plan_path,
             description: api.description,
             assignee: api.assignee.map(domain::agent::AgentId::new),
             priority: api.priority.map(domain::job::Priority::from),
-            repositories: api
-                .repositories
-                .map(|repos| repos.into_iter().map(Into::into).collect()),
+            repository: api.repository.map(Into::into),
             depends_on: api
                 .depends_on
                 .into_iter()

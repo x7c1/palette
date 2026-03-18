@@ -71,10 +71,11 @@ mod tests {
             id: Some(jid("C-001")),
             job_type: JobType::Craft,
             title: "Craft".to_string(),
+            plan_path: "test/C-001".to_string(),
             description: None,
             assignee: None,
             priority: None,
-            repositories: None,
+            repository: None,
             depends_on: vec![],
         })
         .unwrap();
@@ -83,10 +84,11 @@ mod tests {
             id: Some(jid("R-001")),
             job_type: JobType::Review,
             title: "Review".to_string(),
+            plan_path: "test/R-001".to_string(),
             description: None,
             assignee: None,
             priority: None,
-            repositories: None,
+            repository: None,
             depends_on: vec![jid("C-001")],
         })
         .unwrap();

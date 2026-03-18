@@ -9,7 +9,7 @@ The [Review Integrator](../../supervisor/review-integrator/) consolidates findin
 ## Examples
 
 - A Reviewer examines a code change for correctness, security issues, and test coverage, then reports its findings to the Review Integrator.
-- A Reviewer inspects a plan document for consistency and feasibility.
+- A Reviewer evaluates a Blueprint during the planning phase — checking whether the Job breakdown is appropriate and whether the Plans are consistent and feasible.
 
 ## Collocations
 

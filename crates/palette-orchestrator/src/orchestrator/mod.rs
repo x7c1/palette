@@ -19,6 +19,7 @@ pub struct Orchestrator {
     pub db: Arc<Database>,
     pub docker: DockerManager,
     pub docker_config: DockerConfig,
+    pub plan_dir: String,
     pub tmux: Arc<palette_tmux::TmuxManager>,
     pub infra: Arc<tokio::sync::Mutex<PersistentState>>,
     pub state_path: String,

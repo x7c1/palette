@@ -8,7 +8,7 @@ Autonomous Workers are capable of producing high-quality work when given proper 
 
 ## The Approach
 
-An [Operator](operator/) gives Palette a [Task](task/) — a goal to achieve, such as "add feature X." Palette breaks the Task down into [Jobs](job/) and orchestrates a team of Workers to complete them.
+An [Operator](operator/) gives Palette a [Blueprint](blueprint/) — a document that defines a [Task](task/) and the [Jobs](job/) needed to achieve it. Palette creates the Jobs from the Blueprint and orchestrates a team of Workers to complete them.
 
 Palette replaces the human-in-the-loop with a Supervisor-in-the-loop in two ways:
 

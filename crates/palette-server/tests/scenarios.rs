@@ -59,10 +59,11 @@ async fn scenario3_message_queuing_to_leader() {
             id: Some(jid("R-A")),
             job_type: JobType::Review,
             title: "Review A".to_string(),
+            plan_path: "test/R-A".to_string(),
             description: None,
             assignee: None,
             priority: None,
-            repositories: None,
+            repository: None,
             depends_on: vec![],
         })
         .unwrap();
@@ -72,10 +73,11 @@ async fn scenario3_message_queuing_to_leader() {
             id: Some(jid("R-B")),
             job_type: JobType::Review,
             title: "Review B".to_string(),
+            plan_path: "test/R-B".to_string(),
             description: None,
             assignee: None,
             priority: None,
-            repositories: None,
+            repository: None,
             depends_on: vec![],
         })
         .unwrap();

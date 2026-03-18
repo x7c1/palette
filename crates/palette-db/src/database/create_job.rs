@@ -11,9 +11,9 @@ impl Database {
             .unwrap_or_else(|| JobId::generate(req.job_type));
 
         let repos_json = req
-            .repositories
+            .repository
             .as_ref()
-            .map(|r| repository_row::repositories_to_json(r));
+            .map(repository_row::repository_to_json);
 
         // Craft jobs start as Draft; review jobs start as Todo
         let initial_status = match req.job_type {
@@ -24,12 +24,13 @@ impl Database {
         let tx = conn.transaction()?;
 
         tx.execute(
-            "INSERT INTO jobs (id, type, title, description, assignee, status, priority, repositories, pr_url, created_at, updated_at, notes, assigned_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, NULL, ?9, ?10, NULL, NULL)",
+            "INSERT INTO jobs (id, type, title, plan_path, description, assignee, status, priority, repository, pr_url, created_at, updated_at, notes, assigned_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, NULL, ?10, ?11, NULL, NULL)",
             params![
                 id.as_ref(),
                 req.job_type.as_str(),
                 req.title,
+                req.plan_path,
                 req.description,
                 req.assignee.as_ref().map(|a| a.as_ref()),
                 initial_status.as_str(),
@@ -69,13 +70,14 @@ mod tests {
                 id: Some(jid("C-001")),
                 job_type: JobType::Craft,
                 title: "Implement feature".to_string(),
+                plan_path: "2026/feature-x/api-impl".to_string(),
                 description: Some("Details".to_string()),
                 assignee: Some(aid("member-a")),
                 priority: Some(Priority::High),
-                repositories: Some(vec![Repository {
+                repository: Some(Repository {
                     name: "x7c1/palette".to_string(),
-                    branch: Some("feature/test".to_string()),
-                }]),
+                    branch: "feature/test".to_string(),
+                }),
                 depends_on: vec![],
             })
             .unwrap();
@@ -96,10 +98,11 @@ mod tests {
             id: Some(jid("C-001")),
             job_type: JobType::Craft,
             title: "Craft job".to_string(),
+            plan_path: "test/C-001".to_string(),
             description: None,
             assignee: None,
             priority: None,
-            repositories: None,
+            repository: None,
             depends_on: vec![],
         })
         .unwrap();
@@ -108,10 +111,11 @@ mod tests {
             id: Some(jid("R-001")),
             job_type: JobType::Review,
             title: "Review job".to_string(),
+            plan_path: "test/R-001".to_string(),
             description: None,
             assignee: None,
             priority: None,
-            repositories: None,
+            repository: None,
             depends_on: vec![jid("C-001")],
         })
         .unwrap();

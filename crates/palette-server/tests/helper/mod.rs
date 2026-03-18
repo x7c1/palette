@@ -33,7 +33,8 @@ pub fn test_docker_config() -> DockerConfig {
         leader_prompt: "prompts/leader.md".to_string(),
         review_integrator_image: "palette-leader:latest".to_string(),
         review_integrator_prompt: "prompts/review-integrator.md".to_string(),
-        member_prompt: "prompts/member.md".to_string(),
+        crafter_prompt: "prompts/crafter.md".to_string(),
+        reviewer_prompt: "prompts/reviewer.md".to_string(),
         max_members: 3,
     }
 }
@@ -51,10 +52,11 @@ pub fn create_craft(id: &str, title: &str) -> CreateJobRequest {
         id: Some(id.to_string()),
         job_type: JobType::Craft,
         title: title.to_string(),
+        plan_path: format!("test/{id}"),
         description: None,
         assignee: None,
         priority: None,
-        repositories: None,
+        repository: None,
         depends_on: vec![],
     }
 }
@@ -64,10 +66,11 @@ pub fn create_review(id: &str, title: &str, depends_on: Vec<&str>) -> CreateJobR
         id: Some(id.to_string()),
         job_type: JobType::Review,
         title: title.to_string(),
+        plan_path: format!("test/{id}"),
         description: None,
         assignee: None,
         priority: None,
-        repositories: None,
+        repository: None,
         depends_on: depends_on.into_iter().map(String::from).collect(),
     }
 }
@@ -107,6 +110,7 @@ pub async fn spawn_server(
         db: Arc::clone(&db),
         docker,
         docker_config: test_docker_config(),
+        plan_dir: String::new(),
         tmux: Arc::clone(&tmux),
         infra: Arc::clone(&infra),
         state_path: String::new(),

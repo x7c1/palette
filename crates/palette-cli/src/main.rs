@@ -41,9 +41,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let state_path = PathBuf::from(&config.state_path);
     let infra = match palette_file_state::load(&state_path)? {
-        Some(state) => {
-            tracing::info!("restored previous state");
+        Some(state) if supervisors_alive(&state, &tmux) => {
+            tracing::info!("restored previous state (containers running)");
             state
+        }
+        Some(stale) => {
+            tracing::warn!(
+                "previous state found but supervisors are not fully alive, re-bootstrapping"
+            );
+            cleanup_stale_containers(&stale, &docker);
+            bootstrap_supervisors(&config, &tmux, &docker, &state_path)?
         }
         None => bootstrap_supervisors(&config, &tmux, &docker, &state_path)?,
     };
@@ -61,10 +68,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     });
 
     // Start orchestrator event loop
+    // Ensure plan_dir exists on the host
+    std::fs::create_dir_all(&config.plan_dir)?;
+
     let orchestrator = Arc::new(Orchestrator {
         db: Arc::clone(&db),
         docker,
         docker_config: config.docker,
+        plan_dir: config.plan_dir.clone(),
         tmux: Arc::clone(&tmux),
         infra: Arc::clone(&infra),
         state_path: config.state_path.clone(),
@@ -106,7 +117,7 @@ fn spawn_agent(
     settings_template: &Path,
 ) -> Result<AgentState, Box<dyn std::error::Error>> {
     let container_id =
-        docker.create_container(spec.name, spec.image, spec.role, session_name, None)?;
+        docker.create_container(spec.name, spec.image, spec.role, session_name, None, None)?;
     docker.start_container(&container_id)?;
     docker.write_settings(&container_id, settings_template, spec.id.as_ref())?;
     DockerManager::copy_file_to_container(
@@ -133,6 +144,35 @@ fn spawn_agent(
         status: AgentStatus::Booting,
         session_id: None,
     })
+}
+
+/// Check if all supervisor containers and tmux panes from a restored state are still alive.
+fn supervisors_alive(state: &PersistentState, tmux: &TmuxManager) -> bool {
+    state.supervisors.iter().all(|s| {
+        let container_running = palette_docker::is_container_running(s.container_id.as_ref());
+        if !container_running {
+            tracing::warn!(id = %s.id, container = %s.container_id, "supervisor container not running");
+            return false;
+        }
+        let pane_alive = tmux
+            .is_terminal_alive(&s.terminal_target)
+            .unwrap_or(false);
+        if !pane_alive {
+            tracing::warn!(id = %s.id, target = %s.terminal_target, "supervisor tmux pane not found");
+        }
+        pane_alive
+    })
+}
+
+/// Stop and remove containers from a stale state before re-bootstrapping.
+fn cleanup_stale_containers(state: &PersistentState, docker: &DockerManager) {
+    for s in state.supervisors.iter().chain(state.members.iter()) {
+        if palette_docker::is_container_running(s.container_id.as_ref()) {
+            tracing::info!(id = %s.id, container = %s.container_id, "stopping stale container");
+            let _ = docker.stop_container(&s.container_id);
+        }
+        let _ = docker.remove_container(&s.container_id);
+    }
 }
 
 /// Bootstrap supervisors (main leader + optional review integrator).

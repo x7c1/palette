@@ -1,6 +1,6 @@
-repositories:
-  - name: x7c1/palette
-    branch: e2e-scenario1
+task:
+  id: e2e/scenario1-parallel
+  title: "E2E Scenario 1: Parallel jobs"
 
 jobs:
   - id: W-A
@@ -8,6 +8,9 @@ jobs:
     title: Create file A
     description: Create /home/agent/file-a.txt with content "Hello from Job A"
     priority: high
+    repository:
+      name: x7c1/palette
+      branch: e2e-scenario1
 
   - id: R-A
     type: review
@@ -19,6 +22,9 @@ jobs:
     title: Create file B
     description: Create /home/agent/file-b.txt with content "Hello from Job B"
     priority: medium
+    repository:
+      name: x7c1/palette
+      branch: e2e-scenario1
 
   - id: R-B
     type: review
