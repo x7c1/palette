@@ -50,22 +50,22 @@ impl Orchestrator {
 
         // Re-review: job already has an assignee (e.g. reviewer from previous round).
         // Deliver a new instruction to the existing member instead of spawning a new one.
-        if let Some(ref existing_assignee) = job.assignee {
-            if let Some(member) = infra.find_member(existing_assignee) {
-                let instruction = format_job_instruction(&job);
-                self.db.enqueue_message(existing_assignee, &instruction)?;
-                self.db.update_job_status(job_id, JobStatus::InProgress)?;
-                deliveries.push(PendingDelivery {
-                    target_id: existing_assignee.clone(),
-                    terminal_target: member.terminal_target.clone(),
-                });
-                tracing::info!(
-                    job_id = %job_id,
-                    member_id = %existing_assignee,
-                    "re-assigned job to existing member"
-                );
-                return Ok(());
-            }
+        if let Some(ref existing_assignee) = job.assignee
+            && let Some(member) = infra.find_member(existing_assignee)
+        {
+            let instruction = format_job_instruction(&job);
+            self.db.enqueue_message(existing_assignee, &instruction)?;
+            self.db.update_job_status(job_id, JobStatus::InProgress)?;
+            deliveries.push(PendingDelivery {
+                target_id: existing_assignee.clone(),
+                terminal_target: member.terminal_target.clone(),
+            });
+            tracing::info!(
+                job_id = %job_id,
+                member_id = %existing_assignee,
+                "re-assigned job to existing member"
+            );
+            return Ok(());
         }
 
         // New assignment: verify the job is assignable (ready + all deps done, no assignee)
