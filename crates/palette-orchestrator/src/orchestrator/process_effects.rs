@@ -162,10 +162,9 @@ impl Orchestrator {
         Ok(chained)
     }
 
-    /// When a Job completes, mark its Task as Done and cascade through the task tree.
+    /// When a Job completes, mark its Task as Done and cascade effects through the tree.
     fn propagate_task_completion(&self, job_id: &JobId) -> crate::Result<()> {
-        use palette_domain::rule::{TaskEffect, TaskRuleEngine};
-        use palette_domain::task::{TaskId, TaskStatus, TaskStore};
+        use palette_domain::task::{TaskStatus, TaskStore};
 
         let Some(job) = self.db.get_job(job_id)? else {
             return Ok(());
@@ -174,63 +173,85 @@ impl Orchestrator {
             return Ok(()); // Legacy job without task association
         };
 
-        // Mark the task as Done
         self.db.update_task_status(task_id, TaskStatus::Done)?;
         tracing::info!(task_id = %task_id, "task completed via job");
 
         self.check_workflow_completion(task_id)?;
+        self.cascade_task_effects(task_id)
+    }
 
-        // Cascade: resolve siblings and propagate parent completion
+    /// Process cascading effects after a task completes:
+    /// unblock sibling tasks, propagate parent completion, create jobs for newly ready tasks.
+    fn cascade_task_effects(
+        &self,
+        completed_task_id: &palette_domain::task::TaskId,
+    ) -> crate::Result<()> {
+        use palette_domain::rule::{TaskEffect, TaskRuleEngine};
+        use palette_domain::task::{TaskStatus, TaskStore};
+
         let task_engine = TaskRuleEngine::new(&*self.db);
-        let mut pending = task_engine.on_task_completed(task_id)?;
+        let mut pending = task_engine.on_task_completed(completed_task_id)?;
 
         while !pending.is_empty() {
             let mut next = Vec::new();
             for effect in &pending {
                 let TaskEffect::TaskStatusChanged {
-                    task_id: affected_id,
+                    task_id,
                     new_status,
                 } = effect
                 else {
                     continue;
                 };
 
-                self.db.update_task_status(affected_id, *new_status)?;
-                tracing::info!(task_id = %affected_id, status = ?new_status, "task status cascaded");
+                self.db.update_task_status(task_id, *new_status)?;
+                tracing::info!(task_id = %task_id, status = ?new_status, "task status cascaded");
 
-                if *new_status == TaskStatus::Ready {
-                    let children = self.db.get_child_tasks(affected_id)?;
-                    if children.is_empty() {
-                        // Leaf task: create a Job if it has a job_type
-                        if let Some(task) = self.db.get_task(affected_id)? {
-                            if let Some(job_type) = task.job_type {
-                                self.create_job_for_ready_task(
-                                    affected_id,
-                                    job_type,
-                                    task.plan_path.as_deref(),
-                                )?;
-                            }
-                        }
-                    } else {
-                        self.db
-                            .update_task_status(affected_id, TaskStatus::InProgress)?;
-                        let child_ids: Vec<TaskId> =
-                            children.iter().map(|c| c.id.clone()).collect();
-                        let child_effects = task_engine.resolve_ready_tasks(&child_ids)?;
-                        next.extend(child_effects);
+                match new_status {
+                    TaskStatus::Ready => {
+                        let cascaded = self.activate_ready_task(task_id, &task_engine)?;
+                        next.extend(cascaded);
                     }
-                }
-
-                if *new_status == TaskStatus::Done {
-                    self.check_workflow_completion(affected_id)?;
-                    let further = task_engine.on_task_completed(affected_id)?;
-                    next.extend(further);
+                    TaskStatus::Done => {
+                        self.check_workflow_completion(task_id)?;
+                        let further = task_engine.on_task_completed(task_id)?;
+                        next.extend(further);
+                    }
+                    _ => {}
                 }
             }
             pending = next;
         }
 
         Ok(())
+    }
+
+    /// Handle a task that just became Ready:
+    /// - Leaf task: create a Job if it has a job_type
+    /// - Composite task: transition to InProgress and resolve children
+    fn activate_ready_task(
+        &self,
+        task_id: &palette_domain::task::TaskId,
+        task_engine: &palette_domain::rule::TaskRuleEngine<&palette_db::Database>,
+    ) -> crate::Result<Vec<palette_domain::rule::TaskEffect>> {
+        use palette_domain::task::{TaskStatus, TaskStore};
+
+        let children = self.db.get_child_tasks(task_id)?;
+        if children.is_empty() {
+            if let Some(task) = self.db.get_task(task_id)?
+                && let Some(job_type) = task.job_type
+            {
+                self.create_job_for_ready_task(task_id, job_type, task.plan_path.as_deref())?;
+            }
+            Ok(vec![])
+        } else {
+            self.db
+                .update_task_status(task_id, TaskStatus::InProgress)?;
+            let child_ids: Vec<palette_domain::task::TaskId> =
+                children.iter().map(|c| c.id.clone()).collect();
+            task_engine
+                .resolve_ready_tasks(&child_ids)
+                .map_err(Into::into)
+        }
     }
 
     /// Create a Job for a leaf task that just became Ready.
