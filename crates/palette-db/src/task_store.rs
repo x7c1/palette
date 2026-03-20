@@ -6,9 +6,8 @@ impl TaskStore for Database {
     type Error = Error;
 
     fn get_task(&self, id: &TaskId) -> Result<Option<Task>, Error> {
-        let row = match self.get_task_row(id)? {
-            Some(r) => r,
-            None => return Ok(None),
+        let Some(row) = self.get_task_row(id)? else {
+            return Ok(None);
         };
         Ok(Some(self.build_task_tree(row)?))
     }

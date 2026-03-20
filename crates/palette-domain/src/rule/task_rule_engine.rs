@@ -17,9 +17,8 @@ impl<S: TaskStore> TaskRuleEngine<S> {
         let mut effects = Vec::new();
 
         for task_id in task_ids {
-            let task = match self.store.get_task(task_id)? {
-                Some(t) => t,
-                None => continue,
+            let Some(task) = self.store.get_task(task_id)? else {
+                continue;
             };
 
             if task.status != TaskStatus::Pending {
@@ -61,13 +60,12 @@ impl<S: TaskStore> TaskRuleEngine<S> {
     pub fn on_task_completed(&self, task_id: &TaskId) -> Result<Vec<TaskEffect>, S::Error> {
         let mut effects = Vec::new();
 
-        let row = match self.store.get_task(task_id)? {
-            Some(r) => r,
-            None => return Ok(effects),
+        let Some(task) = self.store.get_task(task_id)? else {
+            return Ok(effects);
         };
 
         // Check if any sibling tasks can now become Ready
-        if let Some(ref parent_id) = row.parent_id {
+        if let Some(ref parent_id) = task.parent_id {
             let siblings = self.store.get_child_tasks(parent_id)?;
 
             for sibling in &siblings {

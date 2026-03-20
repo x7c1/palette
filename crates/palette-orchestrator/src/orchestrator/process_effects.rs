@@ -43,9 +43,8 @@ impl Orchestrator {
         infra: &mut PersistentState,
         deliveries: &mut Vec<PendingDelivery>,
     ) -> crate::Result<()> {
-        let job = match self.db.get_job(job_id)? {
-            Some(j) => j,
-            None => return Ok(()),
+        let Some(job) = self.db.get_job(job_id)? else {
+            return Ok(());
         };
 
         // Re-review: job already has an assignee (e.g. reviewer from previous round).
