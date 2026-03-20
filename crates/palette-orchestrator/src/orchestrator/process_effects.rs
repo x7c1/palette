@@ -187,7 +187,6 @@ impl Orchestrator {
         completed_task_id: &palette_domain::task::TaskId,
     ) -> crate::Result<()> {
         use palette_domain::rule::{TaskEffect, TaskRuleEngine};
-        use palette_domain::task::{TaskStatus, TaskStore};
 
         let task_engine = TaskRuleEngine::new(&*self.db);
         let mut pending = task_engine.on_task_completed(completed_task_id)?;
@@ -202,27 +201,35 @@ impl Orchestrator {
                 else {
                     continue;
                 };
-
-                self.db.update_task_status(task_id, *new_status)?;
-                tracing::info!(task_id = %task_id, status = ?new_status, "task status cascaded");
-
-                match new_status {
-                    TaskStatus::Ready => {
-                        let cascaded = self.activate_ready_task(task_id, &task_engine)?;
-                        next.extend(cascaded);
-                    }
-                    TaskStatus::Done => {
-                        self.check_workflow_completion(task_id)?;
-                        let further = task_engine.on_task_completed(task_id)?;
-                        next.extend(further);
-                    }
-                    _ => {}
-                }
+                let follow_up = self.apply_task_effect(task_id, *new_status, &task_engine)?;
+                next.extend(follow_up);
             }
             pending = next;
         }
 
         Ok(())
+    }
+
+    /// Apply a single task status change and return any follow-up effects.
+    fn apply_task_effect(
+        &self,
+        task_id: &palette_domain::task::TaskId,
+        new_status: palette_domain::task::TaskStatus,
+        task_engine: &palette_domain::rule::TaskRuleEngine<&palette_db::Database>,
+    ) -> crate::Result<Vec<palette_domain::rule::TaskEffect>> {
+        use palette_domain::task::TaskStatus;
+
+        self.db.update_task_status(task_id, new_status)?;
+        tracing::info!(task_id = %task_id, status = ?new_status, "task status cascaded");
+
+        match new_status {
+            TaskStatus::Ready => self.activate_ready_task(task_id, task_engine),
+            TaskStatus::Done => {
+                self.check_workflow_completion(task_id)?;
+                task_engine.on_task_completed(task_id).map_err(Into::into)
+            }
+            _ => Ok(vec![]),
+        }
     }
 
     /// Handle a task that just became Ready:
