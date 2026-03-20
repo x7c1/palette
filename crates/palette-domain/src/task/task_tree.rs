@@ -1,5 +1,5 @@
 use super::TaskId;
-use crate::job::JobType;
+use crate::job::{JobType, Priority, Repository};
 use std::collections::HashMap;
 
 /// Static structure of a task hierarchy, extracted from a Blueprint.
@@ -18,6 +18,9 @@ pub struct TaskTreeNode {
     pub title: String,
     pub plan_path: Option<String>,
     pub job_type: Option<JobType>,
+    pub description: Option<String>,
+    pub priority: Option<Priority>,
+    pub repository: Option<Repository>,
     pub children: Vec<TaskId>,
     pub depends_on: Vec<TaskId>,
 }

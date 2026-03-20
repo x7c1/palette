@@ -1,55 +1,46 @@
 mod helper;
 
-use helper::{
-    create_craft, create_review, spawn_server, test_session_name_with_guard, update_status,
-};
-use palette_server::api_types::{JobStatus, ReviewCommentInput, SubmitReviewRequest, Verdict};
+use helper::{spawn_server, test_session_name_with_guard};
+use palette_server::api_types::{ReviewCommentInput, SubmitReviewRequest, Verdict};
 use palette_tmux::TmuxManager;
 
 #[tokio::test]
-async fn review_api_submit_and_get() {
+async fn review_submit_and_get_submissions() {
     let (session, _guard) = test_session_name_with_guard("review");
     let tmux = TmuxManager::new(session.clone());
     tmux.create_session(&session).unwrap();
 
-    let (base_url, _state) = spawn_server(tmux, &session).await;
+    let (base_url, state) = spawn_server(tmux, &session).await;
+
+    // Create a standalone review job (no Job-level depends_on needed in task tree model)
+    use palette_domain::agent::AgentId;
+    use palette_domain::job::{CreateJobRequest, JobId, JobStatus, JobType};
+
+    let review_job = state
+        .db
+        .create_job(&CreateJobRequest {
+            task_id: None,
+            id: Some(JobId::new("R-001")),
+            job_type: JobType::Review,
+            title: "Review".to_string(),
+            plan_path: "test/R-001".to_string(),
+            description: None,
+            assignee: None,
+            priority: None,
+            repository: None,
+            depends_on: vec![],
+        })
+        .unwrap();
+    state
+        .db
+        .update_job_status(&review_job.id, JobStatus::Todo)
+        .unwrap();
+    state
+        .db
+        .assign_job(&review_job.id, &AgentId::new("member-b"))
+        .unwrap();
 
     let client = reqwest::Client::new();
-
-    // Setup: create craft + review jobs
-    client
-        .post(format!("{base_url}/jobs/create"))
-        .json(&create_craft("W-001", "Craft"))
-        .send()
-        .await
-        .unwrap();
-
-    client
-        .post(format!("{base_url}/jobs/create"))
-        .json(&create_review("R-001", "Review", vec!["W-001"]))
-        .send()
-        .await
-        .unwrap();
-
-    // Transition craft to in_review
-    client
-        .post(format!("{base_url}/jobs/update"))
-        .json(&update_status("W-001", JobStatus::Ready))
-        .send()
-        .await
-        .unwrap();
-    client
-        .post(format!("{base_url}/jobs/update"))
-        .json(&update_status("W-001", JobStatus::InProgress))
-        .send()
-        .await
-        .unwrap();
-    client
-        .post(format!("{base_url}/jobs/update"))
-        .json(&update_status("W-001", JobStatus::InReview))
-        .send()
-        .await
-        .unwrap();
 
     // Submit review with changes_requested
     let resp = client
@@ -72,16 +63,9 @@ async fn review_api_submit_and_get() {
     assert_eq!(sub["round"], 1);
     assert_eq!(sub["verdict"], "changes_requested");
 
-    // W-001 should be reverted to in_progress by rule engine
-    let jobs: Vec<serde_json::Value> = client
-        .get(format!("{base_url}/jobs?type=craft"))
-        .send()
-        .await
-        .unwrap()
-        .json()
-        .await
-        .unwrap();
-    assert_eq!(jobs[0]["status"], "in_progress");
+    // Review job should be blocked
+    let review = state.db.get_job(&JobId::new("R-001")).unwrap().unwrap();
+    assert_eq!(review.status, JobStatus::Blocked);
 
     // Get submissions
     let submissions: Vec<serde_json::Value> = client
@@ -96,48 +80,41 @@ async fn review_api_submit_and_get() {
 }
 
 #[tokio::test]
-async fn full_cycle_craft_review_approved() {
+async fn review_approved_completes_review_job() {
     let (session, _guard) = test_session_name_with_guard("cycle");
     let tmux = TmuxManager::new(session.clone());
     tmux.create_session(&session).unwrap();
 
-    let (base_url, _state) = spawn_server(tmux, &session).await;
+    let (base_url, state) = spawn_server(tmux, &session).await;
+
+    use palette_domain::agent::AgentId;
+    use palette_domain::job::{CreateJobRequest, JobId, JobStatus, JobType};
+
+    let review_job = state
+        .db
+        .create_job(&CreateJobRequest {
+            task_id: None,
+            id: Some(JobId::new("R-001")),
+            job_type: JobType::Review,
+            title: "Review".to_string(),
+            plan_path: "test/R-001".to_string(),
+            description: None,
+            assignee: None,
+            priority: None,
+            repository: None,
+            depends_on: vec![],
+        })
+        .unwrap();
+    state
+        .db
+        .update_job_status(&review_job.id, JobStatus::Todo)
+        .unwrap();
+    state
+        .db
+        .assign_job(&review_job.id, &AgentId::new("member-b"))
+        .unwrap();
 
     let client = reqwest::Client::new();
-
-    // Create craft + review
-    client
-        .post(format!("{base_url}/jobs/create"))
-        .json(&create_craft("W-001", "Craft"))
-        .send()
-        .await
-        .unwrap();
-    client
-        .post(format!("{base_url}/jobs/create"))
-        .json(&create_review("R-001", "Review", vec!["W-001"]))
-        .send()
-        .await
-        .unwrap();
-
-    // Craft: draft -> ready -> in_progress -> in_review
-    client
-        .post(format!("{base_url}/jobs/update"))
-        .json(&update_status("W-001", JobStatus::Ready))
-        .send()
-        .await
-        .unwrap();
-    client
-        .post(format!("{base_url}/jobs/update"))
-        .json(&update_status("W-001", JobStatus::InProgress))
-        .send()
-        .await
-        .unwrap();
-    client
-        .post(format!("{base_url}/jobs/update"))
-        .json(&update_status("W-001", JobStatus::InReview))
-        .send()
-        .await
-        .unwrap();
 
     // Review: approve
     let resp = client
@@ -152,14 +129,7 @@ async fn full_cycle_craft_review_approved() {
         .unwrap();
     assert_eq!(resp.status(), 201);
 
-    // W-001 should be done
-    let jobs: Vec<serde_json::Value> = client
-        .get(format!("{base_url}/jobs?type=craft"))
-        .send()
-        .await
-        .unwrap()
-        .json()
-        .await
-        .unwrap();
-    assert_eq!(jobs[0]["status"], "done");
+    // Review job should be done
+    let review = state.db.get_job(&JobId::new("R-001")).unwrap().unwrap();
+    assert_eq!(review.status, JobStatus::Done);
 }

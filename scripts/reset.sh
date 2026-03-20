@@ -26,8 +26,8 @@ if tmux has-session -t "$SESSION_NAME" 2>/dev/null; then
   tmux kill-session -t "$SESSION_NAME"
 fi
 
-# Remove data files
-for f in "$STATE_FILE" "$DB_FILE"; do
+# Remove data files (including SQLite WAL/SHM)
+for f in "$STATE_FILE" "$DB_FILE" "${DB_FILE}-wal" "${DB_FILE}-shm"; do
   if [[ -f "$f" ]]; then
     echo "removing $(basename "$f")..."
     rm "$f"

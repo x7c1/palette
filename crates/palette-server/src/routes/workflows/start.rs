@@ -185,10 +185,10 @@ fn create_jobs_for_ready_tasks(
         let Some(task) = task_store.get_task(task_id).map_err(internal_err)? else {
             continue;
         };
-        let Some(job_type) = task.job_type else {
+        if task.job_type.is_none() {
             continue;
-        };
-        create_job_for_task(state, task_id, job_type, task.plan_path.as_deref())?;
+        }
+        create_job_for_task(state, &task)?;
     }
     Ok(())
 }
@@ -196,50 +196,52 @@ fn create_jobs_for_ready_tasks(
 /// Create a Job for a task and trigger auto-assign for craft jobs.
 pub(crate) fn create_job_for_task(
     state: &AppState,
-    task_id: &TaskId,
-    job_type: JobType,
-    plan_path: Option<&str>,
+    task: &palette_domain::task::Task,
 ) -> HandlerResult<()> {
+    let job_type = task.job_type.ok_or_else(|| internal_err("task has no job_type"))?;
     let job = state
         .db
         .create_job(&CreateJobRequest {
             id: Some(JobId::generate(job_type)),
-            task_id: Some(task_id.clone()),
+            task_id: Some(task.id.clone()),
             job_type,
-            title: task_id
+            title: task
+                .id
                 .as_ref()
                 .rsplit('/')
                 .next()
                 .unwrap_or("task")
                 .to_string(),
-            plan_path: plan_path.unwrap_or_default().to_string(),
-            description: None,
+            plan_path: task.plan_path.clone().unwrap_or_default(),
+            description: task.description.clone(),
             assignee: None,
-            priority: None,
-            repository: None,
+            priority: task.priority,
+            repository: task.repository.clone(),
             depends_on: vec![],
         })
         .map_err(internal_err)?;
 
-    if job_type == JobType::Craft {
-        state
-            .db
-            .update_job_status(&job.id, JobStatus::Ready)
-            .map_err(internal_err)?;
+    let initial_status = match job_type {
+        JobType::Craft => JobStatus::Ready,
+        JobType::Review => JobStatus::Todo,
+    };
+    state
+        .db
+        .update_job_status(&job.id, initial_status)
+        .map_err(internal_err)?;
 
-        let effects = state
-            .rules
-            .on_status_change(&job.id, JobStatus::Ready)
-            .map_err(internal_err)?;
+    let effects = state
+        .rules
+        .on_status_change(&job.id, initial_status)
+        .map_err(internal_err)?;
 
-        if !effects.is_empty() {
-            let _ = state.event_tx.send(ServerEvent::ProcessEffects { effects });
-        }
+    if !effects.is_empty() {
+        let _ = state.event_tx.send(ServerEvent::ProcessEffects { effects });
     }
 
     tracing::info!(
         job_id = %job.id,
-        task_id = %task_id,
+        task_id = %task.id,
         job_type = ?job_type,
         "created job for task"
     );

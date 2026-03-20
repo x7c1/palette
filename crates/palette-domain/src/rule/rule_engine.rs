@@ -4,6 +4,7 @@ use crate::review::{ReviewSubmission, Verdict};
 
 pub struct RuleEngine<S> {
     store: S,
+    #[allow(dead_code)] // TODO: re-enable when changes_requested is implemented for task tree model
     max_review_rounds: u32,
 }
 
@@ -43,19 +44,8 @@ impl<S: JobStore> RuleEngine<S> {
                     job_id: job_id.clone(),
                 });
             }
-            // craft -> in_review: enable related reviews
-            (JobType::Craft, JobStatus::InReview) => {
-                let reviews = self.store.find_reviews_for_craft(job_id)?;
-                for review in reviews {
-                    if review.status == JobStatus::Todo || review.status == JobStatus::Blocked {
-                        self.store.update_job_status(&review.id, JobStatus::Todo)?;
-                        effects.push(RuleEffect::StatusChanged {
-                            job_id: review.id,
-                            new_status: JobStatus::Todo,
-                        });
-                    }
-                }
-            }
+            // craft -> in_review: task cascade handles review task activation
+            (JobType::Craft, JobStatus::InReview) => {}
             // craft -> done: destroy member container, trigger auto-assign for waiting jobs
             (JobType::Craft, JobStatus::Done) => {
                 if let Some(ref assignee) = job.assignee {
@@ -78,6 +68,13 @@ impl<S: JobStore> RuleEngine<S> {
     }
 
     /// Apply rules after a review submission. Returns side effects.
+    ///
+    /// In the task tree model, craft and review are sibling tasks. The craft task
+    /// is already Done (marked when its job reached InReview). This method only
+    /// needs to handle the review job's own status transitions:
+    /// - Approved: review job → Done → task cascade handles the rest
+    /// - ChangesRequested: review job → Done (with verdict recorded) → task cascade
+    ///   Note: changes_requested handling in the task tree model is a future design task
     pub fn on_review_submitted(
         &self,
         review_job_id: &JobId,
@@ -90,65 +87,27 @@ impl<S: JobStore> RuleEngine<S> {
             .ok_or_else(|| JobError::NotFound {
                 job_id: review_job_id.clone(),
             })?;
-        let craft_jobs = self.store.find_crafts_for_review(review_job_id)?;
 
         match submission.verdict {
             Verdict::ChangesRequested => {
-                // Check escalation threshold
-                if submission.round as u32 >= self.max_review_rounds {
-                    for craft in &craft_jobs {
-                        self.store
-                            .update_job_status(&craft.id, JobStatus::Escalated)?;
-                        effects.push(RuleEffect::Escalated {
-                            job_id: craft.id.clone(),
-                            round: submission.round,
-                        });
-                    }
-                    return Ok(effects);
-                }
-
-                // Review job → Blocked (waits for craft to re-enter InReview).
-                // Keep assignee so the same reviewer can re-review with context.
+                // Review job → Blocked. The reviewer keeps their assignee for re-review.
+                // TODO: In the task tree model, changes_requested should trigger
+                // a new craft cycle. For now, the review stays blocked.
                 self.store
                     .update_job_status(review_job_id, JobStatus::Blocked)?;
-
-                // Revert craft jobs to in_progress
-                for craft in &craft_jobs {
-                    self.store
-                        .update_job_status(&craft.id, JobStatus::InProgress)?;
-                    effects.push(RuleEffect::StatusChanged {
-                        job_id: craft.id.clone(),
-                        new_status: JobStatus::InProgress,
-                    });
-                }
             }
             Verdict::Approved => {
-                // Review job → Done
+                // Review job → Done. Task cascade will propagate completion.
                 self.store
                     .update_job_status(review_job_id, JobStatus::Done)?;
+                effects.push(RuleEffect::StatusChanged {
+                    job_id: review_job_id.clone(),
+                    new_status: JobStatus::Done,
+                });
                 if let Some(ref assignee) = review_job.assignee {
                     effects.push(RuleEffect::DestroyMember {
                         member_id: assignee.clone(),
                     });
-                }
-
-                // Check if ALL reviews for each craft job are approved
-                for craft in &craft_jobs {
-                    let all_reviews = self.store.find_reviews_for_craft(&craft.id)?;
-                    let all_approved = all_reviews.iter().all(|r| {
-                        if r.id == *review_job_id {
-                            return true; // This one is being approved now
-                        }
-                        let subs = self.store.get_review_submissions(&r.id).unwrap_or_default();
-                        subs.last().is_some_and(|s| s.verdict == Verdict::Approved)
-                    });
-                    if all_approved {
-                        self.store.update_job_status(&craft.id, JobStatus::Done)?;
-                        effects.push(RuleEffect::StatusChanged {
-                            job_id: craft.id.clone(),
-                            new_status: JobStatus::Done,
-                        });
-                    }
                 }
             }
         }
@@ -175,6 +134,7 @@ pub fn validate_transition(
         (JobType::Craft, _, JobStatus::Escalated) => true,
 
         // Review transitions
+        (JobType::Review, JobStatus::Draft, JobStatus::Todo) => true,
         (JobType::Review, JobStatus::Todo, JobStatus::InProgress) => true,
         (JobType::Review, JobStatus::Blocked, JobStatus::Todo) => true,
         (JobType::Review, JobStatus::InProgress, JobStatus::Done) => true,

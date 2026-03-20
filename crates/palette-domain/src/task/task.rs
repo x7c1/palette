@@ -1,5 +1,5 @@
 use super::{TaskId, TaskStatus};
-use crate::job::JobType;
+use crate::job::{JobType, Priority, Repository};
 use crate::workflow::WorkflowId;
 
 /// A Task is a goal to achieve. Tasks form a tree structure where a Composite
@@ -15,6 +15,9 @@ pub struct Task {
     pub title: String,
     pub plan_path: Option<String>,
     pub job_type: Option<JobType>,
+    pub description: Option<String>,
+    pub priority: Option<Priority>,
+    pub repository: Option<Repository>,
     pub status: TaskStatus,
     pub children: Vec<Task>,
     pub depends_on: Vec<TaskId>,

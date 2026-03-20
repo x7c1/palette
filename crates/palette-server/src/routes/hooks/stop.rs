@@ -68,13 +68,11 @@ pub async fn handle_stop(
             match job.job_type {
                 palette_domain::job::JobType::Craft => {
                     // Craft jobs: in_progress -> in_review.
-                    // The rule engine triggers AutoAssign for the review job,
-                    // so we only need the status transition here.
                     if let Err(e) = state.db.update_job_status(&job.id, JobStatus::InReview) {
                         tracing::error!(job_id = %job.id, error = %e, "failed to transition job to in_review");
                         continue;
                     }
-                    let effects = state
+                    let mut effects = state
                         .rules
                         .on_status_change(&job.id, JobStatus::InReview)
                         .unwrap_or_default();
@@ -82,9 +80,13 @@ pub async fn handle_stop(
                         tracing::info!(?effect, "rule engine effect (member stop)");
                     }
 
-                    if !effects.is_empty() {
-                        let _ = state.event_tx.send(ServerEvent::ProcessEffects { effects });
-                    }
+                    // Always notify orchestrator of the status change so it can
+                    // propagate task completion through the task tree.
+                    effects.push(palette_domain::rule::RuleEffect::StatusChanged {
+                        job_id: job.id.clone(),
+                        new_status: JobStatus::InReview,
+                    });
+                    let _ = state.event_tx.send(ServerEvent::ProcessEffects { effects });
                 }
                 palette_domain::job::JobType::Review => {
                     // Review jobs: notify the member's supervisor (review integrator)

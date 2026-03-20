@@ -87,7 +87,7 @@ impl Orchestrator {
         }
 
         // Determine workspace volume based on job type
-        let workspace = self.resolve_workspace(job_id, job.job_type)?;
+        let workspace = self.resolve_workspace(&job)?;
 
         // Spawn a new member with supervisor_id based on job type
         let member_id = infra.next_member_id();
@@ -125,22 +125,44 @@ impl Orchestrator {
         }
     }
 
+    /// Determine the workspace volume for a job.
+    /// Craft jobs get a new volume; review jobs share the sibling craft job's volume (read-only).
     fn resolve_workspace(
         &self,
-        job_id: &JobId,
-        job_type: JobType,
+        job: &Job,
     ) -> crate::Result<Option<WorkspaceVolume>> {
-        match job_type {
+        match job.job_type {
             JobType::Craft => Ok(Some(WorkspaceVolume {
-                name: format!("palette-workspace-{job_id}"),
+                name: format!("palette-workspace-{}", job.id),
                 read_only: false,
             })),
             JobType::Review => {
-                let crafts = self.db.find_crafts_for_review(job_id)?;
-                Ok(crafts.first().map(|w| WorkspaceVolume {
-                    name: format!("palette-workspace-{}", w.id),
-                    read_only: true,
-                }))
+                // In the task tree model, find the sibling craft task's job.
+                // Review task_id e.g. "root/step-a/review" → parent "root/step-a"
+                // → look for sibling craft job under the same parent.
+                if let Some(ref task_id) = job.task_id {
+                    let parent_prefix = task_id
+                        .as_ref()
+                        .rsplit_once('/')
+                        .map(|(parent, _)| parent)
+                        .unwrap_or(task_id.as_ref());
+
+                    // Find all jobs and look for a craft job under the same parent task
+                    let all_jobs = self.db.list_jobs(&palette_domain::job::JobFilter::default())?;
+                    let sibling_craft = all_jobs.iter().find(|j| {
+                        j.job_type == JobType::Craft
+                            && j.task_id
+                                .as_ref()
+                                .is_some_and(|t| t.as_ref().starts_with(parent_prefix) && t != task_id)
+                    });
+                    Ok(sibling_craft.map(|c| WorkspaceVolume {
+                        name: format!("palette-workspace-{}", c.id),
+                        read_only: true,
+                    }))
+                } else {
+                    // Fallback for legacy jobs without task_id
+                    Ok(None)
+                }
             }
         }
     }
@@ -156,11 +178,61 @@ impl Orchestrator {
             tracing::info!(?e, "chained rule engine effect");
         }
 
-        // When a job completes, propagate to its task and collect any new job effects
+        // When a job completes, propagate to its task and collect any new job effects.
+        // For craft jobs, `in_review` means the craft work is done — the review will be
+        // handled by a separate review task in the task tree.
         let mut all_effects = chained;
-        if new_status == JobStatus::Done {
+        if new_status == JobStatus::Done || new_status == JobStatus::InReview {
             let task_job_effects = self.propagate_task_completion(job_id)?;
             all_effects.extend(task_job_effects);
+        }
+
+        // When a review job is Done (approved), check if all sibling review jobs are Done.
+        // If so, mark sibling craft jobs as Done too (they were left in InReview).
+        if new_status == JobStatus::Done {
+            if let Some(job) = self.db.get_job(job_id)? {
+                if job.job_type == JobType::Review {
+                    if let Some(ref review_task_id) = job.task_id {
+                        let parent_prefix = review_task_id
+                            .as_ref()
+                            .rsplit_once('/')
+                            .map(|(p, _)| p)
+                            .unwrap_or(review_task_id.as_ref());
+                        let all_jobs =
+                            self.db.list_jobs(&palette_domain::job::JobFilter::default())?;
+                        let sibling_jobs: Vec<_> = all_jobs
+                            .iter()
+                            .filter(|j| {
+                                j.task_id.as_ref().is_some_and(|t| {
+                                    t.as_ref().starts_with(parent_prefix)
+                                        && t != review_task_id
+                                })
+                            })
+                            .collect();
+
+                        // Only complete craft jobs if ALL sibling review jobs are Done
+                        let all_reviews_done = sibling_jobs
+                            .iter()
+                            .filter(|j| j.job_type == JobType::Review)
+                            .all(|j| j.id == *job_id || j.status == JobStatus::Done);
+
+                        if all_reviews_done {
+                            for craft_job in sibling_jobs.iter().filter(|j| {
+                                j.job_type == JobType::Craft
+                                    && j.status == JobStatus::InReview
+                            }) {
+                                self.db
+                                    .update_job_status(&craft_job.id, JobStatus::Done)?;
+                                tracing::info!(
+                                    craft_job_id = %craft_job.id,
+                                    review_job_id = %job_id,
+                                    "craft job completed via approved review"
+                                );
+                            }
+                        }
+                    }
+                }
+            }
         }
 
         Ok(all_effects)
@@ -264,10 +336,25 @@ impl Orchestrator {
         let children = task_store.get_child_tasks(task_id)?;
         if children.is_empty() {
             // Leaf task: create a job if it has a job_type
-            let job_effects = if let Some(task) = task_store.get_task(task_id)?
-                && let Some(job_type) = task.job_type
+            let job_effects = if let Some(mut task) = task_store.get_task(task_id)?
+                && task.job_type.is_some()
             {
-                self.create_job_for_ready_task(task_id, job_type, task.plan_path.as_deref())?
+                // For review tasks, inherit plan_path and description from sibling craft task
+                // so the reviewer sees the same context as the crafter
+                if task.job_type == Some(JobType::Review) {
+                    if let Some(ref parent_id) = task.parent_id {
+                        let siblings = task_store.get_child_tasks(parent_id)?;
+                        if let Some(craft) = siblings.iter().find(|s| s.job_type == Some(JobType::Craft)) {
+                            if task.plan_path.is_none() {
+                                task.plan_path = craft.plan_path.clone();
+                            }
+                            if task.description.is_none() {
+                                task.description = craft.description.clone();
+                            }
+                        }
+                    }
+                }
+                self.create_job_for_ready_task(&task)?
             } else {
                 vec![]
             };
@@ -285,38 +372,39 @@ impl Orchestrator {
     /// Returns RuleEffects (e.g. AutoAssign) that should be processed by the caller.
     fn create_job_for_ready_task(
         &self,
-        task_id: &TaskId,
-        job_type: JobType,
-        plan_path: Option<&str>,
+        task: &palette_domain::task::Task,
     ) -> crate::Result<Vec<RuleEffect>> {
+        let job_type = task.job_type.expect("leaf task must have job_type");
         let job = self.db.create_job(&palette_domain::job::CreateJobRequest {
             id: Some(JobId::generate(job_type)),
-            task_id: Some(task_id.clone()),
+            task_id: Some(task.id.clone()),
             job_type,
-            title: task_id
+            title: task
+                .id
                 .as_ref()
                 .rsplit('/')
                 .next()
                 .unwrap_or("task")
                 .to_string(),
-            plan_path: plan_path.unwrap_or_default().to_string(),
-            description: None,
+            plan_path: task.plan_path.clone().unwrap_or_default(),
+            description: task.description.clone(),
             assignee: None,
-            priority: None,
-            repository: None,
+            priority: task.priority,
+            repository: task.repository.clone(),
             depends_on: vec![],
         })?;
 
-        let mut effects = Vec::new();
-        if job_type == JobType::Craft {
-            self.db.update_job_status(&job.id, JobStatus::Ready)?;
-            let rules = RuleEngine::new(&*self.db, 0);
-            effects = rules.on_status_change(&job.id, JobStatus::Ready)?;
-        }
+        let initial_status = match job_type {
+            JobType::Craft => JobStatus::Ready,
+            JobType::Review => JobStatus::Todo,
+        };
+        self.db.update_job_status(&job.id, initial_status)?;
+        let rules = RuleEngine::new(&*self.db, 0);
+        let effects = rules.on_status_change(&job.id, initial_status)?;
 
         tracing::info!(
             job_id = %job.id,
-            task_id = %task_id,
+            task_id = %task.id,
             job_type = ?job_type,
             "created job for ready task (cascade)"
         );
@@ -364,21 +452,9 @@ mod tests {
         JobId::new(s)
     }
 
-    fn create_craft_review_pair(db: &Database) {
-        db.create_job(&CreateJobRequest {
-            task_id: None,
-            id: Some(jid("W-001")),
-            job_type: JobType::Craft,
-            title: "Work".to_string(),
-            plan_path: "test/W-001".to_string(),
-            description: None,
-            assignee: Some(AgentId::new("member-a")),
-            priority: None,
-            repository: None,
-            depends_on: vec![],
-        })
-        .unwrap();
-
+    #[test]
+    fn review_todo_triggers_auto_assign() {
+        let db = setup_db();
         db.create_job(&CreateJobRequest {
             task_id: None,
             id: Some(jid("R-001")),
@@ -389,49 +465,10 @@ mod tests {
             assignee: None,
             priority: None,
             repository: None,
-            depends_on: vec![jid("W-001")],
+            depends_on: vec![],
         })
         .unwrap();
-    }
 
-    #[test]
-    fn craft_in_review_enables_reviews() {
-        let db = setup_db();
-        create_craft_review_pair(&db);
-
-        db.update_job_status(&jid("W-001"), JobStatus::Ready)
-            .unwrap();
-        db.update_job_status(&jid("W-001"), JobStatus::InProgress)
-            .unwrap();
-        db.update_job_status(&jid("W-001"), JobStatus::InReview)
-            .unwrap();
-
-        let engine = RuleEngine::new(&db, 5);
-        let effects = engine
-            .on_status_change(&jid("W-001"), JobStatus::InReview)
-            .unwrap();
-
-        assert_eq!(effects.len(), 1);
-        assert_eq!(
-            effects[0],
-            RuleEffect::StatusChanged {
-                job_id: jid("R-001"),
-                new_status: JobStatus::Todo,
-            }
-        );
-    }
-
-    #[test]
-    fn review_todo_triggers_auto_assign() {
-        let db = setup_db();
-        create_craft_review_pair(&db);
-
-        db.update_job_status(&jid("W-001"), JobStatus::Ready)
-            .unwrap();
-        db.update_job_status(&jid("W-001"), JobStatus::InProgress)
-            .unwrap();
-        db.update_job_status(&jid("W-001"), JobStatus::InReview)
-            .unwrap();
         db.update_job_status(&jid("R-001"), JobStatus::Todo)
             .unwrap();
 
@@ -450,103 +487,23 @@ mod tests {
     }
 
     #[test]
-    fn review_auto_assign_chains_from_craft_in_review() {
-        // Verify the full chain: craft -> in_review -> review -> todo -> auto_assign
+    fn approved_review_produces_done_and_destroy() {
         let db = setup_db();
-        create_craft_review_pair(&db);
+        db.create_job(&CreateJobRequest {
+            task_id: None,
+            id: Some(jid("R-001")),
+            job_type: JobType::Review,
+            title: "Review".to_string(),
+            plan_path: "test/R-001".to_string(),
+            description: None,
+            assignee: None,
+            priority: None,
+            repository: None,
+            depends_on: vec![],
+        })
+        .unwrap();
 
-        db.update_job_status(&jid("W-001"), JobStatus::Ready)
-            .unwrap();
-        db.update_job_status(&jid("W-001"), JobStatus::InProgress)
-            .unwrap();
-        db.update_job_status(&jid("W-001"), JobStatus::InReview)
-            .unwrap();
-
-        let engine = RuleEngine::new(&db, 5);
-
-        // Step 1: craft -> in_review produces StatusChanged for review
-        let effects = engine
-            .on_status_change(&jid("W-001"), JobStatus::InReview)
-            .unwrap();
-        assert_eq!(effects.len(), 1);
-        assert_eq!(
-            effects[0],
-            RuleEffect::StatusChanged {
-                job_id: jid("R-001"),
-                new_status: JobStatus::Todo,
-            }
-        );
-
-        // Step 2: chained StatusChanged(R-001, Todo) produces AutoAssign
-        let chained = engine
-            .on_status_change(&jid("R-001"), JobStatus::Todo)
-            .unwrap();
-        assert_eq!(chained.len(), 1);
-        assert_eq!(
-            chained[0],
-            RuleEffect::AutoAssign {
-                job_id: jid("R-001"),
-            }
-        );
-    }
-
-    #[test]
-    fn changes_requested_reverts_craft_and_blocks_review() {
-        let db = setup_db();
-        create_craft_review_pair(&db);
-
-        db.update_job_status(&jid("W-001"), JobStatus::Ready)
-            .unwrap();
-        db.update_job_status(&jid("W-001"), JobStatus::InProgress)
-            .unwrap();
-        db.update_job_status(&jid("W-001"), JobStatus::InReview)
-            .unwrap();
-        db.assign_job(&jid("R-001"), &AgentId::new("member-b"))
-            .unwrap();
-
-        let sub = db
-            .submit_review(
-                &jid("R-001"),
-                &SubmitReviewRequest {
-                    verdict: Verdict::ChangesRequested,
-                    summary: None,
-                    comments: vec![],
-                },
-            )
-            .unwrap();
-
-        let engine = RuleEngine::new(&db, 5);
-        let effects = engine.on_review_submitted(&jid("R-001"), &sub).unwrap();
-
-        // Only craft status change; reviewer is kept alive (no DestroyMember)
-        assert_eq!(effects.len(), 1);
-        assert_eq!(
-            effects[0],
-            RuleEffect::StatusChanged {
-                job_id: jid("W-001"),
-                new_status: JobStatus::InProgress,
-            }
-        );
-
-        let craft = db.get_job(&jid("W-001")).unwrap().unwrap();
-        assert_eq!(craft.status, JobStatus::InProgress);
-
-        // Review job is blocked, assignee preserved for re-review
-        let review = db.get_job(&jid("R-001")).unwrap().unwrap();
-        assert_eq!(review.status, JobStatus::Blocked);
-        assert_eq!(review.assignee, Some(AgentId::new("member-b")));
-    }
-
-    #[test]
-    fn approved_completes_craft_and_review() {
-        let db = setup_db();
-        create_craft_review_pair(&db);
-
-        db.update_job_status(&jid("W-001"), JobStatus::Ready)
-            .unwrap();
-        db.update_job_status(&jid("W-001"), JobStatus::InProgress)
-            .unwrap();
-        db.update_job_status(&jid("W-001"), JobStatus::InReview)
+        db.update_job_status(&jid("R-001"), JobStatus::Todo)
             .unwrap();
         db.assign_job(&jid("R-001"), &AgentId::new("member-b"))
             .unwrap();
@@ -568,15 +525,15 @@ mod tests {
         assert_eq!(effects.len(), 2);
         assert_eq!(
             effects[0],
-            RuleEffect::DestroyMember {
-                member_id: AgentId::new("member-b"),
+            RuleEffect::StatusChanged {
+                job_id: jid("R-001"),
+                new_status: JobStatus::Done,
             }
         );
         assert_eq!(
             effects[1],
-            RuleEffect::StatusChanged {
-                job_id: jid("W-001"),
-                new_status: JobStatus::Done,
+            RuleEffect::DestroyMember {
+                member_id: AgentId::new("member-b"),
             }
         );
 
@@ -585,21 +542,28 @@ mod tests {
     }
 
     #[test]
-    fn escalation_on_max_rounds() {
+    fn changes_requested_blocks_review() {
         let db = setup_db();
-        create_craft_review_pair(&db);
+        db.create_job(&CreateJobRequest {
+            task_id: None,
+            id: Some(jid("R-001")),
+            job_type: JobType::Review,
+            title: "Review".to_string(),
+            plan_path: "test/R-001".to_string(),
+            description: None,
+            assignee: None,
+            priority: None,
+            repository: None,
+            depends_on: vec![],
+        })
+        .unwrap();
 
-        db.update_job_status(&jid("W-001"), JobStatus::Ready)
-            .unwrap();
-        db.update_job_status(&jid("W-001"), JobStatus::InProgress)
-            .unwrap();
-        db.update_job_status(&jid("W-001"), JobStatus::InReview)
+        db.update_job_status(&jid("R-001"), JobStatus::Todo)
             .unwrap();
         db.assign_job(&jid("R-001"), &AgentId::new("member-b"))
             .unwrap();
 
-        // Round 1: changes_requested → review goes Blocked, craft goes InProgress
-        let sub1 = db
+        let sub = db
             .submit_review(
                 &jid("R-001"),
                 &SubmitReviewRequest {
@@ -609,32 +573,14 @@ mod tests {
                 },
             )
             .unwrap();
-        let engine = RuleEngine::new(&db, 2);
-        engine.on_review_submitted(&jid("R-001"), &sub1).unwrap();
 
-        // Reset for round 2: craft back to in_review, review back to in_progress
-        db.update_job_status(&jid("W-001"), JobStatus::InReview)
-            .unwrap();
-        db.update_job_status(&jid("R-001"), JobStatus::Todo)
-            .unwrap();
-        db.assign_job(&jid("R-001"), &AgentId::new("member-c"))
-            .unwrap();
+        let engine = RuleEngine::new(&db, 5);
+        let effects = engine.on_review_submitted(&jid("R-001"), &sub).unwrap();
 
-        // Round 2 - should escalate
-        let sub2 = db
-            .submit_review(
-                &jid("R-001"),
-                &SubmitReviewRequest {
-                    verdict: Verdict::ChangesRequested,
-                    summary: None,
-                    comments: vec![],
-                },
-            )
-            .unwrap();
-        let engine = RuleEngine::new(&db, 2);
-        let effects = engine.on_review_submitted(&jid("R-001"), &sub2).unwrap();
+        assert!(effects.is_empty());
 
-        assert_eq!(effects.len(), 1);
-        assert!(matches!(effects[0], RuleEffect::Escalated { .. }));
+        let review = db.get_job(&jid("R-001")).unwrap().unwrap();
+        assert_eq!(review.status, JobStatus::Blocked);
+        assert_eq!(review.assignee, Some(AgentId::new("member-b")));
     }
 }
