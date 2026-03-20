@@ -203,8 +203,26 @@ impl Orchestrator {
         let task_store = TaskStoreImpl::from_db(&self.db, &task_state.workflow_id)
             .map_err(|e| crate::Error::Internal(e.to_string()))?;
 
-        // Use task tree to find sibling craft task, then look up its job
-        let Some(craft_node) = task_store.tree().sibling_craft(review_task_id) else {
+        let tree = task_store.tree();
+
+        // Check that ALL sibling review tasks have their jobs Done
+        let siblings = tree.siblings(review_task_id);
+        let all_reviews_done = siblings
+            .iter()
+            .filter(|s| s.job_type == Some(JobType::Review))
+            .all(|s| {
+                self.db
+                    .get_job_by_task_id(&s.id)
+                    .ok()
+                    .flatten()
+                    .is_some_and(|j| j.status == JobStatus::Done)
+            });
+        if !all_reviews_done {
+            return Ok(());
+        }
+
+        // All reviews passed — mark sibling craft jobs as Done
+        let Some(craft_node) = tree.sibling_craft(review_task_id) else {
             return Ok(());
         };
         let Some(craft_job) = self.db.get_job_by_task_id(&craft_node.id)? else {

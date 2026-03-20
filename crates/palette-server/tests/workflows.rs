@@ -754,3 +754,164 @@ children:
     let wf = state.db.get_workflow(&workflow_id).unwrap().unwrap();
     assert_eq!(wf.status, WorkflowStatus::Completed);
 }
+
+/// Craft job must NOT be marked Done until ALL sibling review jobs are Done.
+#[tokio::test]
+async fn craft_waits_for_all_reviews_before_done() {
+    let (session, _guard) = test_session_name_with_guard("wf-multi-review");
+    let tmux = TmuxManager::new(session.clone());
+    tmux.create_session(&session).unwrap();
+
+    let (base_url, state) = spawn_server(tmux, &session).await;
+    let client = reqwest::Client::new();
+
+    // Blueprint: craft with two review siblings
+    let yaml = r#"
+task:
+  id: e2e/multi-review
+  title: Multi review test
+
+children:
+  - id: step
+    children:
+      - id: craft
+        type: craft
+        plan_path: test/craft
+      - id: review-1
+        type: review
+        depends_on: [craft]
+      - id: review-2
+        type: review
+        depends_on: [craft]
+"#;
+    let blueprint_file = write_blueprint_file(yaml);
+
+    let resp = client
+        .post(format!("{base_url}/workflows/start"))
+        .json(&serde_json::json!({
+            "blueprint_path": blueprint_file.path().to_str().unwrap()
+        }))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), 201);
+
+    use palette_domain::job::{JobFilter, JobStatus as JStatus};
+    use palette_domain::rule::RuleEffect;
+    use palette_domain::server::ServerEvent;
+    use palette_domain::task::{TaskId, TaskStatus};
+
+    let wait = || tokio::time::sleep(tokio::time::Duration::from_millis(200));
+
+    // Craft → InReview
+    let jobs = state.db.list_jobs(&JobFilter::default()).unwrap();
+    let craft_id = jobs[0].id.clone();
+    state
+        .db
+        .update_job_status(&craft_id, JStatus::InProgress)
+        .unwrap();
+    state
+        .db
+        .update_job_status(&craft_id, JStatus::InReview)
+        .unwrap();
+
+    let _ = state.event_tx.send(ServerEvent::ProcessEffects {
+        effects: vec![RuleEffect::StatusChanged {
+            job_id: craft_id.clone(),
+            new_status: JStatus::InReview,
+        }],
+    });
+    wait().await;
+
+    // Both review jobs should be created (review-1 and review-2 under step)
+    let all_jobs = state.db.list_jobs(&JobFilter::default()).unwrap();
+    let mut review_jobs: Vec<_> = all_jobs
+        .iter()
+        .filter(|j| {
+            j.task_id
+                .as_ref()
+                .is_some_and(|t| t.as_ref().starts_with("e2e/multi-review/step/review"))
+        })
+        .collect();
+    review_jobs.sort_by_key(|j| j.task_id.as_ref().map(|t| t.to_string()));
+    assert_eq!(review_jobs.len(), 2, "both review jobs should be created");
+
+    let review_1_id = review_jobs[0].id.clone();
+    let review_2_id = review_jobs[1].id.clone();
+
+    // Approve only review-1
+    state
+        .db
+        .update_job_status(&review_1_id, JStatus::Todo)
+        .unwrap();
+    state
+        .db
+        .assign_job(
+            &review_1_id,
+            &palette_domain::agent::AgentId::new("reviewer-1"),
+        )
+        .unwrap();
+
+    use palette_domain::review::{SubmitReviewRequest, Verdict};
+    let sub = state
+        .db
+        .submit_review(
+            &review_1_id,
+            &SubmitReviewRequest {
+                verdict: Verdict::Approved,
+                summary: Some("LGTM".to_string()),
+                comments: vec![],
+            },
+        )
+        .unwrap();
+
+    let engine = palette_domain::rule::RuleEngine::new(&*state.db, 5);
+    let effects = engine.on_review_submitted(&review_1_id, &sub).unwrap();
+    let _ = state.event_tx.send(ServerEvent::ProcessEffects { effects });
+    wait().await;
+
+    // Craft job should still be InReview (not Done) because review-2 is not yet approved
+    let craft_job = state.db.get_job(&craft_id).unwrap().unwrap();
+    assert_eq!(
+        craft_job.status,
+        JStatus::InReview,
+        "craft job must stay InReview until all reviews are Done"
+    );
+
+    // Now approve review-2
+    state
+        .db
+        .update_job_status(&review_2_id, JStatus::Todo)
+        .unwrap();
+    state
+        .db
+        .assign_job(
+            &review_2_id,
+            &palette_domain::agent::AgentId::new("reviewer-2"),
+        )
+        .unwrap();
+
+    let sub = state
+        .db
+        .submit_review(
+            &review_2_id,
+            &SubmitReviewRequest {
+                verdict: Verdict::Approved,
+                summary: Some("LGTM".to_string()),
+                comments: vec![],
+            },
+        )
+        .unwrap();
+
+    let effects = engine.on_review_submitted(&review_2_id, &sub).unwrap();
+    let _ = state.event_tx.send(ServerEvent::ProcessEffects { effects });
+    wait().await;
+
+    // NOW craft job should be Done
+    let craft_job = state.db.get_job(&craft_id).unwrap().unwrap();
+    assert_eq!(
+        craft_job.status,
+        JStatus::Done,
+        "craft job should be Done after all reviews approved"
+    );
+}
