@@ -920,6 +920,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "palette-fs"
+version = "0.1.0"
+dependencies = [
+ "palette-domain",
+ "serde",
+ "serde_yaml",
+ "tempfile",
+]
+
+[[package]]
 name = "palette-orchestrator"
 version = "0.1.0"
 dependencies = [
@@ -942,12 +952,14 @@ dependencies = [
  "palette-db",
  "palette-docker",
  "palette-domain",
+ "palette-fs",
  "palette-orchestrator",
  "palette-tmux",
  "reqwest",
  "serde",
  "serde_json",
  "serde_yaml",
+ "tempfile",
  "tokio",
  "tracing",
 ]
