@@ -1,7 +1,7 @@
 mod job_entry;
 mod job_id_input;
-pub(crate) mod job_type_input;
-pub(crate) mod priority_input;
+pub mod job_type_input;
+pub mod priority_input;
 mod task;
 pub mod task_node;
 

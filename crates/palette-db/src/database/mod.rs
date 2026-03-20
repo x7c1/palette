@@ -21,6 +21,8 @@ macro_rules! lock {
 }
 
 mod create_task;
+pub use create_task::CreateTaskRequest;
+
 mod create_workflow;
 mod get_task;
 mod update_task_status;

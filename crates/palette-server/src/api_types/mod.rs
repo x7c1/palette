@@ -43,7 +43,7 @@ pub use verdict::Verdict;
 mod repository;
 pub use repository::Repository;
 
-mod blueprint;
+pub mod blueprint;
 pub use blueprint::Blueprint;
 pub use blueprint::Task;
 

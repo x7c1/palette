@@ -4,7 +4,7 @@ use serde::Deserialize;
 /// Priority as represented in YAML input.
 #[derive(Debug, Clone, Copy, Deserialize)]
 #[serde(rename_all = "snake_case")]
-pub(crate) enum PriorityInput {
+pub enum PriorityInput {
     High,
     Medium,
     Low,
