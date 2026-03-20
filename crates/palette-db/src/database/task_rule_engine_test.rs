@@ -28,6 +28,7 @@ mod tests {
             parent_id: parent_id.map(TaskId::new),
             title: id.to_string(),
             plan_path: None,
+            job_type: None,
             depends_on: deps.into_iter().map(TaskId::new).collect(),
         })
         .unwrap();
