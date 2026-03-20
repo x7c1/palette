@@ -76,108 +76,16 @@ CREATE TABLE IF NOT EXISTS workflows (
 CREATE TABLE IF NOT EXISTS tasks (
     id TEXT PRIMARY KEY,
     workflow_id TEXT NOT NULL,
-    parent_id TEXT,
-    title TEXT NOT NULL,
-    plan_path TEXT,
-    job_type TEXT CHECK(job_type IN ('craft', 'review') OR job_type IS NULL),
     status TEXT NOT NULL CHECK(status IN ('pending', 'ready', 'in_progress', 'suspended', 'done')),
-    FOREIGN KEY (workflow_id) REFERENCES workflows(id),
-    FOREIGN KEY (parent_id) REFERENCES tasks(id)
-);
-
-CREATE TABLE IF NOT EXISTS task_dependencies (
-    task_id TEXT NOT NULL,
-    depends_on TEXT NOT NULL,
-    PRIMARY KEY (task_id, depends_on),
-    FOREIGN KEY (task_id) REFERENCES tasks(id),
-    FOREIGN KEY (depends_on) REFERENCES tasks(id)
+    FOREIGN KEY (workflow_id) REFERENCES workflows(id)
 );
 
 CREATE INDEX IF NOT EXISTS idx_tasks_workflow ON tasks(workflow_id);
-CREATE INDEX IF NOT EXISTS idx_tasks_parent ON tasks(parent_id);
 "#;
 
 pub(crate) fn initialize(conn: &Connection) -> rusqlite::Result<()> {
     conn.execute_batch("PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON;")?;
     conn.execute_batch(SCHEMA)?;
-    migrate(conn)?;
-    Ok(())
-}
-
-/// Apply migrations for existing databases that lack new columns/tables.
-fn migrate(conn: &Connection) -> rusqlite::Result<()> {
-    // Add blueprints table if it doesn't exist (for databases created before this migration).
-    conn.execute_batch(
-        "CREATE TABLE IF NOT EXISTS blueprints (
-            task_id TEXT PRIMARY KEY,
-            title TEXT NOT NULL,
-            yaml TEXT NOT NULL,
-            created_at TEXT NOT NULL
-        );",
-    )?;
-
-    // Add plan_path column to jobs table if it doesn't exist.
-    let has_plan_path: bool = conn
-        .prepare("SELECT COUNT(*) FROM pragma_table_info('jobs') WHERE name = 'plan_path'")?
-        .query_row([], |row| row.get::<_, i64>(0))
-        .map(|count| count > 0)?;
-
-    if !has_plan_path {
-        conn.execute_batch("ALTER TABLE jobs ADD COLUMN plan_path TEXT NOT NULL DEFAULT '';")?;
-    }
-
-    // Add workflows, tasks, and task_dependencies tables if they don't exist.
-    conn.execute_batch(
-        "CREATE TABLE IF NOT EXISTS workflows (
-            id TEXT PRIMARY KEY,
-            blueprint_path TEXT NOT NULL,
-            status TEXT NOT NULL CHECK(status IN ('active', 'suspended', 'completed')),
-            started_at TEXT NOT NULL
-        );
-
-        CREATE TABLE IF NOT EXISTS tasks (
-            id TEXT PRIMARY KEY,
-            workflow_id TEXT NOT NULL,
-            parent_id TEXT,
-            title TEXT NOT NULL,
-            plan_path TEXT,
-            status TEXT NOT NULL CHECK(status IN ('pending', 'ready', 'in_progress', 'suspended', 'done')),
-            FOREIGN KEY (workflow_id) REFERENCES workflows(id),
-            FOREIGN KEY (parent_id) REFERENCES tasks(id)
-        );
-
-        CREATE TABLE IF NOT EXISTS task_dependencies (
-            task_id TEXT NOT NULL,
-            depends_on TEXT NOT NULL,
-            PRIMARY KEY (task_id, depends_on),
-            FOREIGN KEY (task_id) REFERENCES tasks(id),
-            FOREIGN KEY (depends_on) REFERENCES tasks(id)
-        );
-
-        CREATE INDEX IF NOT EXISTS idx_tasks_workflow ON tasks(workflow_id);
-        CREATE INDEX IF NOT EXISTS idx_tasks_parent ON tasks(parent_id);",
-    )?;
-
-    // Add task_id column to jobs table if it doesn't exist.
-    let has_task_id: bool = conn
-        .prepare("SELECT COUNT(*) FROM pragma_table_info('jobs') WHERE name = 'task_id'")?
-        .query_row([], |row| row.get::<_, i64>(0))
-        .map(|count| count > 0)?;
-
-    if !has_task_id {
-        conn.execute_batch("ALTER TABLE jobs ADD COLUMN task_id TEXT;")?;
-    }
-
-    // Add job_type column to tasks table if it doesn't exist.
-    let has_job_type: bool = conn
-        .prepare("SELECT COUNT(*) FROM pragma_table_info('tasks') WHERE name = 'job_type'")?
-        .query_row([], |row| row.get::<_, i64>(0))
-        .map(|count| count > 0)?;
-
-    if !has_job_type {
-        conn.execute_batch("ALTER TABLE tasks ADD COLUMN job_type TEXT CHECK(job_type IN ('craft', 'review') OR job_type IS NULL);")?;
-    }
-
     Ok(())
 }
 
@@ -205,7 +113,6 @@ mod tests {
         assert!(tables.contains(&"message_queue".to_string()));
         assert!(tables.contains(&"workflows".to_string()));
         assert!(tables.contains(&"tasks".to_string()));
-        assert!(tables.contains(&"task_dependencies".to_string()));
     }
 
     #[test]

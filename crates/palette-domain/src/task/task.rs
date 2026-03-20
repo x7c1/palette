@@ -4,6 +4,9 @@ use crate::workflow::WorkflowId;
 
 /// A Task is a goal to achieve. Tasks form a tree structure where a Composite
 /// Task has child Tasks. A Task can also have a Job assigned to it.
+///
+/// Constructed by combining structural information (from Blueprint / TaskTree)
+/// with execution state (from DB / TaskState).
 #[derive(Debug, Clone)]
 pub struct Task {
     pub id: TaskId,
@@ -14,6 +17,7 @@ pub struct Task {
     pub job_type: Option<JobType>,
     pub status: TaskStatus,
     pub children: Vec<Task>,
+    pub depends_on: Vec<TaskId>,
 }
 
 impl Task {

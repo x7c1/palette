@@ -9,6 +9,7 @@ members = [
     "crates/palette-fs",
     "crates/palette-orchestrator",
     "crates/palette-server",
+    "crates/palette-service",
     "crates/palette-tmux",
 ]
 
