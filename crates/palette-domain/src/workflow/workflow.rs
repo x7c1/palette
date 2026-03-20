@@ -7,7 +7,7 @@ use super::{WorkflowId, WorkflowStatus};
 #[derive(Debug, Clone)]
 pub struct Workflow {
     pub id: WorkflowId,
-    pub blueprint_path: String,
+    pub blueprint_yaml: String,
     pub status: WorkflowStatus,
     pub started_at: DateTime<Utc>,
 }

@@ -68,7 +68,7 @@ CREATE TABLE IF NOT EXISTS blueprints (
 
 CREATE TABLE IF NOT EXISTS workflows (
     id TEXT PRIMARY KEY,
-    blueprint_path TEXT NOT NULL,
+    blueprint_yaml TEXT NOT NULL,
     status TEXT NOT NULL CHECK(status IN ('active', 'suspended', 'completed')),
     started_at TEXT NOT NULL
 );
@@ -130,7 +130,7 @@ fn migrate(conn: &Connection) -> rusqlite::Result<()> {
     conn.execute_batch(
         "CREATE TABLE IF NOT EXISTS workflows (
             id TEXT PRIMARY KEY,
-            blueprint_path TEXT NOT NULL,
+            blueprint_yaml TEXT NOT NULL,
             status TEXT NOT NULL CHECK(status IN ('active', 'suspended', 'completed')),
             started_at TEXT NOT NULL
         );

@@ -10,7 +10,8 @@ mod tests {
     fn setup() -> (Database, WorkflowId) {
         let db = Database::open_in_memory().unwrap();
         let wf_id = WorkflowId::new("wf-test");
-        db.create_workflow(&wf_id, "test").unwrap();
+        db.create_workflow(&wf_id, "task: {id: test, title: test}")
+            .unwrap();
         (db, wf_id)
     }
 
