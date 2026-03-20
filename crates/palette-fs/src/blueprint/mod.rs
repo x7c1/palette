@@ -193,5 +193,4 @@ children:
         assert_eq!(bp.task.id, "test");
         assert_eq!(bp.children.len(), 1);
     }
-
 }

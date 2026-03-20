@@ -6,7 +6,6 @@ use axum::{
     http::StatusCode,
 };
 use palette_domain::job::{JobId, JobType};
-use palette_domain::review::Verdict;
 use palette_domain::server::ServerEvent;
 use std::sync::Arc;
 
@@ -52,48 +51,15 @@ pub async fn handle_submit_review(
         tracing::info!(?effect, "review rule engine effect");
     }
 
-    // If changes_requested, enqueue feedback to the assignee member
-    if submission.verdict == Verdict::ChangesRequested {
-        let craft_jobs = state
-            .db
-            .find_crafts_for_review(&review_job_id)
-            .unwrap_or_default();
-        for craft in &craft_jobs {
-            if let Some(ref assignee) = craft.assignee {
-                let feedback = format!(
-                    "[review-feedback] job={} verdict=changes_requested summary: {}",
-                    craft.id,
-                    submission.summary.as_deref().unwrap_or("(no summary)")
-                );
-                let _ = state.db.enqueue_message(assignee, &feedback);
-                tracing::info!(
-                    job_id = %craft.id,
-                    assignee = %assignee,
-                    "enqueued review feedback to member"
-                );
-            }
-        }
-    }
-
     // Notify leader about review results
     {
         let infra = state.infra.lock().await;
         if let Some(leader) = infra.find_leader() {
             let verdict_str = match submission.verdict {
-                Verdict::Approved => "approved",
-                Verdict::ChangesRequested => "changes_requested",
+                palette_domain::review::Verdict::Approved => "approved",
+                palette_domain::review::Verdict::ChangesRequested => "changes_requested",
             };
-            let craft_ids: Vec<String> = state
-                .db
-                .find_crafts_for_review(&review_job_id)
-                .unwrap_or_default()
-                .iter()
-                .map(|w| w.id.to_string())
-                .collect();
-            let notification = format!(
-                "[event] review={review_job_id} crafts={} type={verdict_str}",
-                craft_ids.join(","),
-            );
+            let notification = format!("[event] review={review_job_id} type={verdict_str}",);
             let _ = state.db.enqueue_message(&leader.id, &notification);
             tracing::info!(
                 review_job_id = %review_job_id,

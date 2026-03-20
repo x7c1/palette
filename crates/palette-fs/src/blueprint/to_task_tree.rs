@@ -1,5 +1,5 @@
 use super::{TaskNode, TaskTreeBlueprint};
-use palette_domain::job::JobType;
+use palette_domain::job::{JobType, Priority, Repository};
 use palette_domain::task::{TaskId, TaskTree, TaskTreeNode};
 use std::collections::HashMap;
 
@@ -23,6 +23,9 @@ impl TaskTreeBlueprint {
                 title: self.task.title.clone(),
                 plan_path: self.task.plan_path.clone(),
                 job_type: None,
+                description: None,
+                priority: None,
+                repository: None,
                 children: child_ids,
                 depends_on: vec![],
             },
@@ -64,6 +67,9 @@ fn collect_nodes(
                 title: child.title.clone().unwrap_or_else(|| child.id.clone()),
                 plan_path: child.plan_path.clone(),
                 job_type: child.job_type.map(JobType::from),
+                description: child.description.clone(),
+                priority: child.priority.map(Priority::from),
+                repository: child.repository.clone().map(Repository::from),
                 children: grandchild_ids,
                 depends_on,
             },
@@ -77,8 +83,8 @@ fn collect_nodes(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use super::TaskTreeBlueprint;
+    use super::*;
 
     #[test]
     fn builds_flat_index_from_nested_blueprint() {

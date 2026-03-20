@@ -1,5 +1,5 @@
 use super::TaskId;
-use crate::job::JobType;
+use crate::job::{JobType, Priority, Repository};
 use std::collections::HashMap;
 
 /// Static structure of a task hierarchy, extracted from a Blueprint.
@@ -18,6 +18,9 @@ pub struct TaskTreeNode {
     pub title: String,
     pub plan_path: Option<String>,
     pub job_type: Option<JobType>,
+    pub description: Option<String>,
+    pub priority: Option<Priority>,
+    pub repository: Option<Repository>,
     pub children: Vec<TaskId>,
     pub depends_on: Vec<TaskId>,
 }
@@ -38,5 +41,33 @@ impl TaskTree {
     /// Return all task IDs in this tree.
     pub fn task_ids(&self) -> impl Iterator<Item = &TaskId> {
         self.nodes.keys()
+    }
+
+    /// Find sibling nodes that share the same parent as the given task.
+    /// Returns an empty vec if the task has no parent (root) or is not found.
+    pub fn siblings(&self, id: &TaskId) -> Vec<&TaskTreeNode> {
+        let Some(node) = self.nodes.get(id) else {
+            return vec![];
+        };
+        let Some(ref parent_id) = node.parent_id else {
+            return vec![];
+        };
+        let Some(parent) = self.nodes.get(parent_id) else {
+            return vec![];
+        };
+        parent
+            .children
+            .iter()
+            .filter(|child_id| *child_id != id)
+            .filter_map(|child_id| self.nodes.get(child_id))
+            .collect()
+    }
+
+    /// Find the sibling craft task for a given task (typically a review task).
+    /// Returns None if no sibling with job_type Craft exists.
+    pub fn sibling_craft(&self, id: &TaskId) -> Option<&TaskTreeNode> {
+        self.siblings(id)
+            .into_iter()
+            .find(|s| s.job_type == Some(JobType::Craft))
     }
 }

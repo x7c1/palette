@@ -13,6 +13,9 @@ members = [
     "crates/palette-tmux",
 ]
 
+[profile.dev]
+debug = 1
+
 [workspace.package]
 edition = "2024"
 license = "MIT"

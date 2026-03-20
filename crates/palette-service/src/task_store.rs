@@ -47,6 +47,10 @@ impl<'a> TaskStoreImpl<'a> {
         Ok(Self::new(db, tree, workflow_id.clone(), statuses))
     }
 
+    pub fn tree(&self) -> &TaskTree {
+        &self.tree
+    }
+
     pub fn root_id(&self) -> &TaskId {
         self.tree.root_id()
     }
@@ -72,6 +76,9 @@ impl<'a> TaskStoreImpl<'a> {
             title: node.title.clone(),
             plan_path: node.plan_path.clone(),
             job_type: node.job_type,
+            description: node.description.clone(),
+            priority: node.priority,
+            repository: node.repository.clone(),
             status,
             children,
             depends_on: node.depends_on.clone(),
