@@ -43,6 +43,7 @@ mod get_blueprint;
 mod get_dependencies;
 mod get_dependents;
 mod get_job;
+mod get_job_by_task;
 mod get_review_comments;
 mod get_review_submissions;
 mod has_pending_messages;

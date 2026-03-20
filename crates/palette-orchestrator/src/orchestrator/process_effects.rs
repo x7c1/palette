@@ -153,7 +153,77 @@ impl Orchestrator {
         for e in &chained {
             tracing::info!(?e, "chained rule engine effect");
         }
+
+        // When a job completes, propagate to its task
+        if new_status == JobStatus::Done {
+            self.propagate_task_completion(job_id)?;
+        }
+
         Ok(chained)
+    }
+
+    /// When a Job completes, mark its Task as Done and cascade through the task tree.
+    fn propagate_task_completion(&self, job_id: &JobId) -> crate::Result<()> {
+        use palette_domain::rule::{TaskEffect, TaskRuleEngine};
+        use palette_domain::task::{TaskId, TaskStatus, TaskStore};
+
+        let Some(job) = self.db.get_job(job_id)? else {
+            return Ok(());
+        };
+        let Some(ref task_id) = job.task_id else {
+            return Ok(()); // Legacy job without task association
+        };
+
+        // Mark the task as Done
+        self.db.update_task_status(task_id, TaskStatus::Done)?;
+        tracing::info!(task_id = %task_id, "task completed via job");
+
+        // Cascade: resolve siblings and propagate parent completion
+        let task_engine = TaskRuleEngine::new(&*self.db);
+        let mut pending = task_engine.on_task_completed(task_id)?;
+
+        while !pending.is_empty() {
+            let mut next = Vec::new();
+            for effect in &pending {
+                let TaskEffect::TaskStatusChanged {
+                    task_id: affected_id,
+                    new_status,
+                } = effect
+                else {
+                    continue;
+                };
+
+                self.db.update_task_status(affected_id, *new_status)?;
+                tracing::info!(task_id = %affected_id, status = ?new_status, "task status cascaded");
+
+                if *new_status == TaskStatus::Ready {
+                    let children = self.db.get_child_tasks(affected_id)?;
+                    if children.is_empty() {
+                        // Leaf task became Ready: create a Job for it
+                        // (Job creation for dynamically-readied tasks will be handled here
+                        //  once the full bridge is implemented)
+                        tracing::info!(task_id = %affected_id, "leaf task ready (job creation pending)");
+                    } else {
+                        // Composite task: transition to InProgress and resolve children
+                        self.db
+                            .update_task_status(affected_id, TaskStatus::InProgress)?;
+                        let child_ids: Vec<TaskId> =
+                            children.iter().map(|c| c.id.clone()).collect();
+                        let child_effects = task_engine.resolve_ready_tasks(&child_ids)?;
+                        next.extend(child_effects);
+                    }
+                }
+
+                if *new_status == TaskStatus::Done {
+                    // Parent completed, check if its parent can also complete
+                    let further = task_engine.on_task_completed(affected_id)?;
+                    next.extend(further);
+                }
+            }
+            pending = next;
+        }
+
+        Ok(())
     }
 }
 
