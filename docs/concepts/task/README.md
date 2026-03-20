@@ -4,28 +4,45 @@
 
 A Task is a goal that the [Operator](../operator/) wants to achieve. It describes *what* should be accomplished, not *how* to accomplish it.
 
-A Task has a [Plan](../plan/) that describes its overall scope and approach. A Task can be broken down into child Tasks or into [Jobs](../job/). A planning Task produces child Tasks as its outcome; an implementation Task is broken down into Jobs that are executed by [Crafters](../worker/member/crafter/) and [Reviewers](../worker/member/reviewer/).
+A Task can be broken down into child Tasks, forming a tree. A Task can also have a [Job](../job/) assigned to it — a Job defines who works on the Task and how. A Task that has been broken down into child Tasks is called a Composite Task.
+
+Dependencies between Tasks are defined among siblings — Tasks that share the same parent. A dependent Task cannot begin until the Tasks it depends on are complete.
+
+## Composite Task
+
+A Composite Task is a Task that has child Tasks. A [Leader](../worker/supervisor/leader/) can be assigned to a Composite Task to supervise its child Tasks, handle decisions that arise during execution, and raise [Escalations](../escalation/) when a decision exceeds its confidence.
+
+A Task may become a Composite Task at any point — for example, when a Task that already has a Job assigned needs to be partially broken down further.
+
+## Completion
+
+A Task is complete when all of its child Tasks are complete and its Job (if any) is done.
 
 ## Examples
 
-- "Plan the next release of product A" — a planning Task. When completed, it produces child Tasks such as "add feature X", "add feature Y", and "fix bug Z."
-- "Add dark mode support" — an implementation Task. It is broken down into Jobs: a Craft Job for a Crafter and Review Jobs for Reviewers.
+- "Add feature X" — a Composite Task broken down into child Tasks: "plan feature X" and "implement feature X," where the latter depends on the former.
+- "Implement the API endpoint" — a Task with a Craft Job assigned to a [Crafter](../worker/member/crafter/) and a Review Job assigned to a [Reviewer](../worker/member/reviewer/) (as separate child Tasks).
+- "Plan feature X" depends on nothing; "implement feature X" depends on "plan feature X." Both are children of "add feature X."
 
 ## Collocations
 
-- define (a Task for the system)
-- break down (a Task into child Tasks or Jobs)
-- complete (a Task when all its child Tasks or Jobs are done)
+- define (a Task)
+- break down (a Task into child Tasks)
+- complete (a Task)
+- depend on (a sibling Task)
 
 ## Domain Rules
 
-- A Task is complete when all of its child Tasks or Jobs are complete.
-- A planning Task produces child Tasks as its deliverable.
-- An implementation Task is broken down into Jobs.
+- A Task is complete when all of its child Tasks are complete and its Job (if any) is done.
+- A Task has at most one Job.
+- Dependencies are defined among sibling Tasks only.
+- A dependent Task cannot begin until the Tasks it depends on are complete.
+- A Task can have both child Tasks and a Job at the same time.
 
 ## Related Concepts
 
 - [Operator](../operator/) — defines the Task
-- [Job](../job/) — a unit of work that a Member executes to fulfill a Task
+- [Job](../job/) — a work assignment on a Task
 - [Plan](../plan/) — describes the scope and approach for the Task
-- [Blueprint](../blueprint/) — defines the Task and its Jobs
+- [Leader](../worker/supervisor/leader/) — supervises a Composite Task
+- [Blueprint](../blueprint/) — defines a Task tree

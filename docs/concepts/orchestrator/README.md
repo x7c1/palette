@@ -2,7 +2,7 @@
 
 ## Definition
 
-The Orchestrator is the infrastructure layer of Palette. It manages the lifecycle of [Workers](../worker/), routes messages between them, and enforces [Job](../job/) state transitions according to predefined rules. The Orchestrator makes no judgments — it applies rules mechanically.
+The Orchestrator is the infrastructure layer of Palette. It manages [Workflow](../workflow/) execution, the lifecycle of [Workers](../worker/), routes messages between them, and enforces [Task](../task/) and [Job](../job/) state transitions according to predefined rules. The Orchestrator makes no judgments — it applies rules mechanically.
 
 All communication between Workers passes through the Orchestrator. No Worker communicates directly with another.
 
@@ -27,5 +27,7 @@ All communication between Workers passes through the Orchestrator. No Worker com
 
 ## Related Concepts
 
+- [Workflow](../workflow/) — the Orchestrator manages Workflow execution
 - [Worker](../worker/) — the Orchestrator manages Worker lifecycle
+- [Task](../task/) — the Orchestrator tracks Task state
 - [Job](../job/) — the Orchestrator tracks Job state and enforces transitions
