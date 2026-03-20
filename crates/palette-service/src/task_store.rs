@@ -41,7 +41,7 @@ impl<'a> TaskStoreImpl<'a> {
 
         let blueprint = palette_fs::read_blueprint(std::path::Path::new(&workflow.blueprint_path))
             .map_err(Error::Blueprint)?;
-        let tree = palette_fs::to_task_tree(&blueprint);
+        let tree = blueprint.to_task_tree();
         let statuses = db.get_task_statuses(workflow_id).map_err(Error::Db)?;
 
         Ok(Self::new(db, tree, workflow_id.clone(), statuses))
@@ -150,7 +150,7 @@ children:
     depends_on: [a]
 "#;
         let blueprint: palette_fs::TaskTreeBlueprint = serde_yaml::from_str(yaml).unwrap();
-        let tree = palette_fs::to_task_tree(&blueprint);
+        let tree = blueprint.to_task_tree();
 
         // Register tasks in DB
         for task_id in tree.task_ids() {

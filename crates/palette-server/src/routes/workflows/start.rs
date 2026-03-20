@@ -11,7 +11,7 @@ use palette_domain::rule::TaskEffect;
 use palette_domain::server::ServerEvent;
 use palette_domain::task::{TaskId, TaskStatus, TaskStore, TaskTree};
 use palette_domain::workflow::WorkflowId;
-use palette_fs::{read_blueprint, to_task_tree};
+use palette_fs::read_blueprint;
 use palette_service::TaskStoreImpl;
 use serde::{Deserialize, Serialize};
 use std::path::Path;
@@ -36,7 +36,7 @@ pub async fn handle_start_workflow(
         .map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))?;
 
     let workflow_id = WorkflowId::generate();
-    let tree = to_task_tree(&blueprint);
+    let tree = blueprint.to_task_tree();
 
     let task_count = register_tasks(&state, &workflow_id, &tree, &req.blueprint_path)?;
 

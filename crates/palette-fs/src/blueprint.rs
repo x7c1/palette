@@ -132,41 +132,38 @@ impl From<RepositoryYaml> for Repository {
     }
 }
 
-/// Convert a parsed Blueprint into a domain TaskTree.
-pub fn to_task_tree(blueprint: &TaskTreeBlueprint) -> palette_domain::task::TaskTree {
-    use palette_domain::task::{TaskId, TaskTree, TaskTreeNode};
-    use std::collections::HashMap;
+impl TaskTreeBlueprint {
+    /// Convert this Blueprint into a domain TaskTree.
+    pub fn to_task_tree(&self) -> palette_domain::task::TaskTree {
+        use palette_domain::task::{TaskId, TaskTree, TaskTreeNode};
+        use std::collections::HashMap;
 
-    let root_id = TaskId::new(&blueprint.task.id);
-    let mut nodes = HashMap::new();
+        let root_id = TaskId::new(&self.task.id);
+        let mut nodes = HashMap::new();
 
-    let child_ids: Vec<TaskId> = blueprint
-        .children
-        .iter()
-        .map(|c| TaskId::new(format!("{}/{}", blueprint.task.id, c.id)))
-        .collect();
+        let child_ids: Vec<TaskId> = self
+            .children
+            .iter()
+            .map(|c| TaskId::new(format!("{}/{}", self.task.id, c.id)))
+            .collect();
 
-    nodes.insert(
-        root_id.clone(),
-        TaskTreeNode {
-            id: root_id.clone(),
-            parent_id: None,
-            title: blueprint.task.title.clone(),
-            plan_path: blueprint.task.plan_path.clone(),
-            job_type: None,
-            children: child_ids,
-            depends_on: vec![],
-        },
-    );
+        nodes.insert(
+            root_id.clone(),
+            TaskTreeNode {
+                id: root_id.clone(),
+                parent_id: None,
+                title: self.task.title.clone(),
+                plan_path: self.task.plan_path.clone(),
+                job_type: None,
+                children: child_ids,
+                depends_on: vec![],
+            },
+        );
 
-    collect_nodes(
-        &blueprint.task.id,
-        &root_id,
-        &blueprint.children,
-        &mut nodes,
-    );
+        collect_nodes(&self.task.id, &root_id, &self.children, &mut nodes);
 
-    TaskTree::new(root_id, nodes)
+        TaskTree::new(root_id, nodes)
+    }
 }
 
 fn collect_nodes(
@@ -303,7 +300,7 @@ children:
         plan_path: 2026/feature-x/execution/api-impl
 "#;
         let blueprint: TaskTreeBlueprint = serde_yaml::from_str(yaml).unwrap();
-        let tree = to_task_tree(&blueprint);
+        let tree = blueprint.to_task_tree();
 
         // Root
         assert_eq!(tree.root_id(), &TaskId::new("2026/feature-x"));
