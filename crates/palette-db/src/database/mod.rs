@@ -90,7 +90,7 @@ fn query_job(conn: &Connection, id: &JobId) -> crate::Result<Option<Job>> {
         "SELECT id, task_id, type, title, plan_path, description, assignee, status, priority, repository, pr_url, created_at, updated_at, notes, assigned_at
          FROM jobs WHERE id = ?1",
     )?;
-    let mut rows = stmt.query_map(params![id.as_ref()], |row| Ok(row_to_job(row)))?;
+    let mut rows = stmt.query_map(params![id.as_ref()], row_to_job)?;
     match rows.next() {
         Some(Ok(job)) => Ok(Some(job)),
         Some(Err(e)) => Err(e.into()),
@@ -98,36 +98,52 @@ fn query_job(conn: &Connection, id: &JobId) -> crate::Result<Option<Job>> {
     }
 }
 
-fn row_to_job(row: &rusqlite::Row) -> Job {
+fn row_to_job(row: &rusqlite::Row) -> rusqlite::Result<Job> {
     use palette_domain::task::TaskId;
 
-    let repos_str: Option<String> = row.get(9).unwrap();
+    let repos_str: Option<String> = row.get(9)?;
     let repository: Option<Repository> =
         repos_str.and_then(|s| repository_row::repository_from_json(&s));
 
-    Job {
-        id: JobId::new(row.get::<_, String>(0).unwrap()),
-        task_id: row.get::<_, Option<String>>(1).unwrap().map(TaskId::new),
-        job_type: row.get::<_, String>(2).unwrap().parse().unwrap(),
-        title: row.get(3).unwrap(),
-        plan_path: row.get(4).unwrap(),
-        description: row.get(5).unwrap(),
-        assignee: row.get::<_, Option<String>>(6).unwrap().map(AgentId::new),
-        status: row.get::<_, String>(7).unwrap().parse().unwrap(),
+    let job_type_str: String = row.get(2)?;
+    let job_type: JobType = job_type_str.parse().map_err(|e: String| {
+        rusqlite::Error::FromSqlConversionFailure(
+            2,
+            rusqlite::types::Type::Text,
+            Box::new(std::io::Error::new(std::io::ErrorKind::InvalidData, e)),
+        )
+    })?;
+
+    let status_str: String = row.get(7)?;
+    let status: JobStatus = status_str.parse().map_err(|e: String| {
+        rusqlite::Error::FromSqlConversionFailure(
+            7,
+            rusqlite::types::Type::Text,
+            Box::new(std::io::Error::new(std::io::ErrorKind::InvalidData, e)),
+        )
+    })?;
+
+    Ok(Job {
+        id: JobId::new(row.get::<_, String>(0)?),
+        task_id: row.get::<_, Option<String>>(1)?.map(TaskId::new),
+        job_type,
+        title: row.get(3)?,
+        plan_path: row.get(4)?,
+        description: row.get(5)?,
+        assignee: row.get::<_, Option<String>>(6)?.map(AgentId::new),
+        status,
         priority: row
-            .get::<_, Option<String>>(8)
-            .unwrap()
+            .get::<_, Option<String>>(8)?
             .and_then(|s| s.parse().ok()),
         repository,
-        pr_url: row.get(10).unwrap(),
-        created_at: parse_datetime(&row.get::<_, String>(11).unwrap()),
-        updated_at: parse_datetime(&row.get::<_, String>(12).unwrap()),
-        notes: row.get(13).unwrap(),
+        pr_url: row.get(10)?,
+        created_at: parse_datetime(&row.get::<_, String>(11)?),
+        updated_at: parse_datetime(&row.get::<_, String>(12)?),
+        notes: row.get(13)?,
         assigned_at: row
-            .get::<_, Option<String>>(14)
-            .unwrap()
+            .get::<_, Option<String>>(14)?
             .map(|s| parse_datetime(&s)),
-    }
+    })
 }
 
 #[cfg(test)]

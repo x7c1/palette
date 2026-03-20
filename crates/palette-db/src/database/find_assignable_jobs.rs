@@ -31,7 +31,7 @@ impl Database {
                  ELSE 3
                END",
         )?;
-        let rows = stmt.query_map([], |row| Ok(row_to_job(row)))?;
+        let rows = stmt.query_map([], row_to_job)?;
         let mut jobs = Vec::new();
         for row in rows {
             jobs.push(row?);

@@ -7,7 +7,7 @@ impl Database {
             "SELECT id, task_id, type, title, plan_path, description, assignee, status, priority, repository, pr_url, created_at, updated_at, notes, assigned_at
              FROM jobs WHERE id = ?1",
         )?;
-        let mut rows = stmt.query_map(params![id.as_ref()], |row| Ok(row_to_job(row)))?;
+        let mut rows = stmt.query_map(params![id.as_ref()], row_to_job)?;
         match rows.next() {
             Some(Ok(job)) => Ok(Some(job)),
             Some(Err(e)) => Err(e.into()),

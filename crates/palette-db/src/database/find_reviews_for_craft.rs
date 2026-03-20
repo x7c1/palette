@@ -10,7 +10,7 @@ impl Database {
              JOIN dependencies d ON d.job_id = t.id
              WHERE d.depends_on = ?1 AND t.type = 'review'",
         )?;
-        let rows = stmt.query_map(params![craft_id.as_ref()], |row| Ok(row_to_job(row)))?;
+        let rows = stmt.query_map(params![craft_id.as_ref()], row_to_job)?;
         let mut jobs = Vec::new();
         for row in rows {
             jobs.push(row?);
