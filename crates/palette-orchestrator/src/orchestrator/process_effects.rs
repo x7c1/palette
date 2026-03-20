@@ -201,7 +201,16 @@ impl Orchestrator {
                 if *new_status == TaskStatus::Ready {
                     let children = self.db.get_child_tasks(affected_id)?;
                     if children.is_empty() {
-                        tracing::info!(task_id = %affected_id, "leaf task ready (job creation pending)");
+                        // Leaf task: create a Job if it has a job_type
+                        if let Some(task) = self.db.get_task(affected_id)? {
+                            if let Some(job_type) = task.job_type {
+                                self.create_job_for_ready_task(
+                                    affected_id,
+                                    job_type,
+                                    task.plan_path.as_deref(),
+                                )?;
+                            }
+                        }
                     } else {
                         self.db
                             .update_task_status(affected_id, TaskStatus::InProgress)?;
@@ -221,6 +230,50 @@ impl Orchestrator {
             pending = next;
         }
 
+        Ok(())
+    }
+
+    /// Create a Job for a leaf task that just became Ready.
+    fn create_job_for_ready_task(
+        &self,
+        task_id: &palette_domain::task::TaskId,
+        job_type: JobType,
+        plan_path: Option<&str>,
+    ) -> crate::Result<()> {
+        let job = self.db.create_job(&palette_domain::job::CreateJobRequest {
+            id: Some(JobId::generate(job_type)),
+            task_id: Some(task_id.clone()),
+            job_type,
+            title: task_id
+                .as_ref()
+                .rsplit('/')
+                .next()
+                .unwrap_or("task")
+                .to_string(),
+            plan_path: plan_path.unwrap_or_default().to_string(),
+            description: None,
+            assignee: None,
+            priority: None,
+            repository: None,
+            depends_on: vec![],
+        })?;
+
+        if job_type == JobType::Craft {
+            self.db.update_job_status(&job.id, JobStatus::Ready)?;
+            let rules = RuleEngine::new(&*self.db, 0);
+            let effects = rules.on_status_change(&job.id, JobStatus::Ready)?;
+            for e in &effects {
+                tracing::info!(?e, "rule engine effect (dynamic job)");
+            }
+            // Note: AutoAssign effects will be processed by the caller's effect loop
+        }
+
+        tracing::info!(
+            job_id = %job.id,
+            task_id = %task_id,
+            job_type = ?job_type,
+            "created job for ready task (cascade)"
+        );
         Ok(())
     }
 

@@ -1,3 +1,4 @@
+use palette_domain::job::JobType;
 use palette_domain::task::{TaskId, TaskStatus};
 use palette_domain::workflow::WorkflowId;
 
@@ -9,5 +10,6 @@ pub struct TaskRow {
     pub parent_id: Option<TaskId>,
     pub title: String,
     pub plan_path: Option<String>,
+    pub job_type: Option<JobType>,
     pub status: TaskStatus,
 }

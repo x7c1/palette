@@ -79,6 +79,7 @@ CREATE TABLE IF NOT EXISTS tasks (
     parent_id TEXT,
     title TEXT NOT NULL,
     plan_path TEXT,
+    job_type TEXT CHECK(job_type IN ('craft', 'review') OR job_type IS NULL),
     status TEXT NOT NULL CHECK(status IN ('pending', 'ready', 'in_progress', 'suspended', 'done')),
     FOREIGN KEY (workflow_id) REFERENCES workflows(id),
     FOREIGN KEY (parent_id) REFERENCES tasks(id)
@@ -165,6 +166,16 @@ fn migrate(conn: &Connection) -> rusqlite::Result<()> {
 
     if !has_task_id {
         conn.execute_batch("ALTER TABLE jobs ADD COLUMN task_id TEXT;")?;
+    }
+
+    // Add job_type column to tasks table if it doesn't exist.
+    let has_job_type: bool = conn
+        .prepare("SELECT COUNT(*) FROM pragma_table_info('tasks') WHERE name = 'job_type'")?
+        .query_row([], |row| row.get::<_, i64>(0))
+        .map(|count| count > 0)?;
+
+    if !has_job_type {
+        conn.execute_batch("ALTER TABLE tasks ADD COLUMN job_type TEXT CHECK(job_type IN ('craft', 'review') OR job_type IS NULL);")?;
     }
 
     Ok(())

@@ -1,5 +1,6 @@
 use super::Database;
 use crate::error::Error;
+use palette_domain::job::JobType;
 use palette_domain::task::{TaskId, TaskStatus};
 use palette_domain::workflow::WorkflowId;
 use rusqlite::params;
@@ -10,6 +11,7 @@ pub struct CreateTaskRequest {
     pub parent_id: Option<TaskId>,
     pub title: String,
     pub plan_path: Option<String>,
+    pub job_type: Option<JobType>,
     pub depends_on: Vec<TaskId>,
 }
 
@@ -19,13 +21,14 @@ impl Database {
         let tx = conn.unchecked_transaction()?;
 
         tx.execute(
-            "INSERT INTO tasks (id, workflow_id, parent_id, title, plan_path, status) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            "INSERT INTO tasks (id, workflow_id, parent_id, title, plan_path, job_type, status) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
             params![
                 req.id.as_ref(),
                 req.workflow_id.as_ref(),
                 req.parent_id.as_ref().map(|id| id.as_ref()),
                 req.title,
                 req.plan_path,
+                req.job_type.map(|jt| jt.as_str()),
                 TaskStatus::Pending.as_str(),
             ],
         )?;

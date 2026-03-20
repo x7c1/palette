@@ -17,6 +17,7 @@ impl Database {
             parent_id: row.parent_id,
             title: row.title,
             plan_path: row.plan_path,
+            job_type: row.job_type,
             status: row.status,
             children,
         })
