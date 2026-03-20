@@ -189,48 +189,46 @@ impl Orchestrator {
 
         // When a review job is Done (approved), check if all sibling review jobs are Done.
         // If so, mark sibling craft jobs as Done too (they were left in InReview).
-        if new_status == JobStatus::Done {
-            if let Some(job) = self.db.get_job(job_id)? {
-                if job.job_type == JobType::Review {
-                    if let Some(ref review_task_id) = job.task_id {
-                        let parent_prefix = review_task_id
-                            .as_ref()
-                            .rsplit_once('/')
-                            .map(|(p, _)| p)
-                            .unwrap_or(review_task_id.as_ref());
-                        let all_jobs =
-                            self.db.list_jobs(&palette_domain::job::JobFilter::default())?;
-                        let sibling_jobs: Vec<_> = all_jobs
-                            .iter()
-                            .filter(|j| {
-                                j.task_id.as_ref().is_some_and(|t| {
-                                    t.as_ref().starts_with(parent_prefix)
-                                        && t != review_task_id
-                                })
-                            })
-                            .collect();
+        if new_status == JobStatus::Done
+            && let Some(job) = self.db.get_job(job_id)?
+            && job.job_type == JobType::Review
+            && let Some(ref review_task_id) = job.task_id
+        {
+            let parent_prefix = review_task_id
+                .as_ref()
+                .rsplit_once('/')
+                .map(|(p, _)| p)
+                .unwrap_or(review_task_id.as_ref());
+            let all_jobs =
+                self.db.list_jobs(&palette_domain::job::JobFilter::default())?;
+            let sibling_jobs: Vec<_> = all_jobs
+                .iter()
+                .filter(|j| {
+                    j.task_id.as_ref().is_some_and(|t| {
+                        t.as_ref().starts_with(parent_prefix)
+                            && t != review_task_id
+                    })
+                })
+                .collect();
 
-                        // Only complete craft jobs if ALL sibling review jobs are Done
-                        let all_reviews_done = sibling_jobs
-                            .iter()
-                            .filter(|j| j.job_type == JobType::Review)
-                            .all(|j| j.id == *job_id || j.status == JobStatus::Done);
+            // Only complete craft jobs if ALL sibling review jobs are Done
+            let all_reviews_done = sibling_jobs
+                .iter()
+                .filter(|j| j.job_type == JobType::Review)
+                .all(|j| j.id == *job_id || j.status == JobStatus::Done);
 
-                        if all_reviews_done {
-                            for craft_job in sibling_jobs.iter().filter(|j| {
-                                j.job_type == JobType::Craft
-                                    && j.status == JobStatus::InReview
-                            }) {
-                                self.db
-                                    .update_job_status(&craft_job.id, JobStatus::Done)?;
-                                tracing::info!(
-                                    craft_job_id = %craft_job.id,
-                                    review_job_id = %job_id,
-                                    "craft job completed via approved review"
-                                );
-                            }
-                        }
-                    }
+            if all_reviews_done {
+                for craft_job in sibling_jobs.iter().filter(|j| {
+                    j.job_type == JobType::Craft
+                        && j.status == JobStatus::InReview
+                }) {
+                    self.db
+                        .update_job_status(&craft_job.id, JobStatus::Done)?;
+                    tracing::info!(
+                        craft_job_id = %craft_job.id,
+                        review_job_id = %job_id,
+                        "craft job completed via approved review"
+                    );
                 }
             }
         }
@@ -341,16 +339,16 @@ impl Orchestrator {
             {
                 // For review tasks, inherit plan_path and description from sibling craft task
                 // so the reviewer sees the same context as the crafter
-                if task.job_type == Some(JobType::Review) {
-                    if let Some(ref parent_id) = task.parent_id {
-                        let siblings = task_store.get_child_tasks(parent_id)?;
-                        if let Some(craft) = siblings.iter().find(|s| s.job_type == Some(JobType::Craft)) {
-                            if task.plan_path.is_none() {
-                                task.plan_path = craft.plan_path.clone();
-                            }
-                            if task.description.is_none() {
-                                task.description = craft.description.clone();
-                            }
+                if task.job_type == Some(JobType::Review)
+                    && let Some(ref parent_id) = task.parent_id
+                {
+                    let siblings = task_store.get_child_tasks(parent_id)?;
+                    if let Some(craft) = siblings.iter().find(|s| s.job_type == Some(JobType::Craft)) {
+                        if task.plan_path.is_none() {
+                            task.plan_path = craft.plan_path.clone();
+                        }
+                        if task.description.is_none() {
+                            task.description = craft.description.clone();
                         }
                     }
                 }
