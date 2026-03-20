@@ -4,7 +4,7 @@ use serde::Deserialize;
 /// Job type as represented in YAML input.
 #[derive(Debug, Clone, Copy, Deserialize)]
 #[serde(rename_all = "snake_case")]
-pub(super) enum JobTypeInput {
+pub(crate) enum JobTypeInput {
     Craft,
     Review,
 }

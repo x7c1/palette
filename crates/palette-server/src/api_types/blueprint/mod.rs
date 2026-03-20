@@ -1,8 +1,9 @@
 mod job_entry;
 mod job_id_input;
-mod job_type_input;
-mod priority_input;
+pub(crate) mod job_type_input;
+pub(crate) mod priority_input;
 mod task;
+pub mod task_node;
 
 use job_entry::JobEntry;
 use palette_domain::job::{CreateJobRequest, JobId, Priority};
