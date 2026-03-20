@@ -8,7 +8,7 @@ Autonomous Workers are capable of producing high-quality work when given proper 
 
 ## The Approach
 
-An [Operator](operator/) gives Palette a [Task](task/) — a goal to achieve. Palette plans the work by having a [Crafter](worker/member/crafter/) produce a [Blueprint](blueprint/) that breaks the goal into child Tasks and [Jobs](job/), then orchestrates a team of Workers to complete them.
+An [Operator](operator/) gives Palette a [Task](task/) — a goal to achieve. Palette plans the work by having a [Crafter](worker/member/crafter/) produce a [Blueprint](blueprint/) that breaks the goal into child Tasks and [Jobs](job/). The Operator then starts a [Workflow](workflow/) from the Blueprint, and Palette orchestrates a team of Workers to complete it.
 
 Palette replaces the human-in-the-loop with a Supervisor-in-the-loop in two ways:
 

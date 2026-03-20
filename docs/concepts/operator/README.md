@@ -2,7 +2,7 @@
 
 ## Definition
 
-The Operator is the human who uses Palette. The Operator defines what should be achieved, starts the system, and receives the results. During execution, the Operator is absent — the system runs autonomously. The Operator only returns when a [Supervisor](../worker/supervisor/) raises an [Escalation](../escalation/).
+The Operator is the human who uses Palette. The Operator defines what should be achieved, starts a [Workflow](../workflow/) from a [Blueprint](../blueprint/), and receives the results. During execution, the Operator is absent — the system runs autonomously. The Operator only returns when a [Supervisor](../worker/supervisor/) raises an [Escalation](../escalation/).
 
 ## Examples
 
@@ -12,12 +12,14 @@ The Operator is the human who uses Palette. The Operator defines what should be 
 
 ## Collocations
 
-- start (the system with a Task)
+- start (a Workflow from a Blueprint)
 - respond (to an Escalation)
 - review (the final deliverables)
 
 ## Related Concepts
 
 - [Task](../task/) — what the Operator wants to achieve
+- [Workflow](../workflow/) — the execution that the Operator starts
+- [Blueprint](../blueprint/) — the plan that defines the Workflow
 - [Escalation](../escalation/) — how the system reaches the Operator during execution
 - [Supervisor](../worker/supervisor/) — the agent that acts on behalf of the Operator
