@@ -86,78 +86,6 @@ CREATE INDEX IF NOT EXISTS idx_tasks_workflow ON tasks(workflow_id);
 pub(crate) fn initialize(conn: &Connection) -> rusqlite::Result<()> {
     conn.execute_batch("PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON;")?;
     conn.execute_batch(SCHEMA)?;
-    migrate(conn)?;
-    Ok(())
-}
-
-/// Apply migrations for existing databases that lack new columns/tables.
-fn migrate(conn: &Connection) -> rusqlite::Result<()> {
-    // Add blueprints table if it doesn't exist (for databases created before this migration).
-    conn.execute_batch(
-        "CREATE TABLE IF NOT EXISTS blueprints (
-            task_id TEXT PRIMARY KEY,
-            title TEXT NOT NULL,
-            yaml TEXT NOT NULL,
-            created_at TEXT NOT NULL
-        );",
-    )?;
-
-    // Add plan_path column to jobs table if it doesn't exist.
-    let has_plan_path: bool = conn
-        .prepare("SELECT COUNT(*) FROM pragma_table_info('jobs') WHERE name = 'plan_path'")?
-        .query_row([], |row| row.get::<_, i64>(0))
-        .map(|count| count > 0)?;
-
-    if !has_plan_path {
-        conn.execute_batch("ALTER TABLE jobs ADD COLUMN plan_path TEXT NOT NULL DEFAULT '';")?;
-    }
-
-    // Add workflows table if it doesn't exist.
-    conn.execute_batch(
-        "CREATE TABLE IF NOT EXISTS workflows (
-            id TEXT PRIMARY KEY,
-            blueprint_path TEXT NOT NULL,
-            status TEXT NOT NULL CHECK(status IN ('active', 'suspended', 'completed')),
-            started_at TEXT NOT NULL
-        );",
-    )?;
-
-    // Add task_id column to jobs table if it doesn't exist.
-    let has_task_id: bool = conn
-        .prepare("SELECT COUNT(*) FROM pragma_table_info('jobs') WHERE name = 'task_id'")?
-        .query_row([], |row| row.get::<_, i64>(0))
-        .map(|count| count > 0)?;
-
-    if !has_task_id {
-        conn.execute_batch("ALTER TABLE jobs ADD COLUMN task_id TEXT;")?;
-    }
-
-    // Migrate tasks table: drop legacy columns if present (parent_id, title, plan_path, job_type).
-    // SQLite does not support DROP COLUMN before 3.35.0, so we recreate the table.
-    let has_parent_id: bool = conn
-        .prepare("SELECT COUNT(*) FROM pragma_table_info('tasks') WHERE name = 'parent_id'")?
-        .query_row([], |row| row.get::<_, i64>(0))
-        .map(|count| count > 0)?;
-
-    if has_parent_id {
-        conn.execute_batch(
-            "CREATE TABLE IF NOT EXISTS tasks_new (
-                id TEXT PRIMARY KEY,
-                workflow_id TEXT NOT NULL,
-                status TEXT NOT NULL CHECK(status IN ('pending', 'ready', 'in_progress', 'suspended', 'done')),
-                FOREIGN KEY (workflow_id) REFERENCES workflows(id)
-            );
-            INSERT OR IGNORE INTO tasks_new (id, workflow_id, status)
-                SELECT id, workflow_id, status FROM tasks;
-            DROP TABLE tasks;
-            ALTER TABLE tasks_new RENAME TO tasks;
-            CREATE INDEX IF NOT EXISTS idx_tasks_workflow ON tasks(workflow_id);",
-        )?;
-    }
-
-    // Drop task_dependencies table if it exists (legacy).
-    conn.execute_batch("DROP TABLE IF EXISTS task_dependencies;")?;
-
     Ok(())
 }
 
@@ -185,8 +113,6 @@ mod tests {
         assert!(tables.contains(&"message_queue".to_string()));
         assert!(tables.contains(&"workflows".to_string()));
         assert!(tables.contains(&"tasks".to_string()));
-        // task_dependencies is no longer created
-        assert!(!tables.contains(&"task_dependencies".to_string()));
     }
 
     #[test]
