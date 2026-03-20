@@ -10,7 +10,7 @@ use palette_db::database::CreateTaskRequest;
 use palette_domain::job::{CreateJobRequest, JobId, JobStatus, JobType, Priority};
 use palette_domain::rule::{TaskEffect, TaskRuleEngine};
 use palette_domain::server::ServerEvent;
-use palette_domain::task::{TaskId, TaskStatus};
+use palette_domain::task::{TaskId, TaskStatus, TaskStore};
 use palette_domain::workflow::WorkflowId;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
@@ -121,7 +121,7 @@ pub async fn handle_start_workflow(
                 if *new_status == TaskStatus::Ready {
                     let children = state
                         .db
-                        .get_child_task_rows(task_id)
+                        .get_child_tasks(task_id)
                         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
                     if !children.is_empty() {
                         // Composite task: transition to InProgress and resolve children

@@ -42,6 +42,7 @@ impl Database {
         Ok(Task {
             id: req.id.clone(),
             workflow_id: req.workflow_id.clone(),
+            parent_id: req.parent_id.clone(),
             title: req.title.clone(),
             plan_path: req.plan_path.clone(),
             status: TaskStatus::Pending,
