@@ -1,6 +1,6 @@
 use super::Database;
 use crate::error::Error;
-use palette_domain::task::{Task, TaskId, TaskStatus};
+use palette_domain::task::{TaskId, TaskStatus};
 use palette_domain::workflow::WorkflowId;
 use rusqlite::params;
 
@@ -14,7 +14,7 @@ pub struct CreateTaskRequest {
 }
 
 impl Database {
-    pub fn create_task(&self, req: &CreateTaskRequest) -> crate::Result<Task> {
+    pub fn create_task(&self, req: &CreateTaskRequest) -> crate::Result<()> {
         let conn = lock!(self.conn);
         let tx = conn.unchecked_transaction()?;
 
@@ -38,15 +38,6 @@ impl Database {
         }
 
         tx.commit()?;
-
-        Ok(Task {
-            id: req.id.clone(),
-            workflow_id: req.workflow_id.clone(),
-            parent_id: req.parent_id.clone(),
-            title: req.title.clone(),
-            plan_path: req.plan_path.clone(),
-            status: TaskStatus::Pending,
-            children: vec![],
-        })
+        Ok(())
     }
 }

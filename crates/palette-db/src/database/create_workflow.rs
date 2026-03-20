@@ -1,14 +1,10 @@
 use super::Database;
 use crate::error::Error;
-use palette_domain::workflow::{Workflow, WorkflowId, WorkflowStatus};
+use palette_domain::workflow::{WorkflowId, WorkflowStatus};
 use rusqlite::params;
 
 impl Database {
-    pub fn create_workflow(
-        &self,
-        id: &WorkflowId,
-        blueprint_path: &str,
-    ) -> crate::Result<Workflow> {
+    pub fn create_workflow(&self, id: &WorkflowId, blueprint_path: &str) -> crate::Result<()> {
         let conn = lock!(self.conn);
         let now = chrono::Utc::now();
         conn.execute(
@@ -20,11 +16,6 @@ impl Database {
                 now.to_rfc3339(),
             ],
         )?;
-        Ok(Workflow {
-            id: id.clone(),
-            blueprint_path: blueprint_path.to_string(),
-            status: WorkflowStatus::Active,
-            started_at: now,
-        })
+        Ok(())
     }
 }
