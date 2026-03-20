@@ -95,50 +95,46 @@ fn query_job(conn: &Connection, id: &JobId) -> crate::Result<Option<Job>> {
     rows.next().transpose().map_err(Into::into)
 }
 
+pub(super) fn parse_column<T: std::str::FromStr<Err = String>>(
+    row: &rusqlite::Row,
+    column: &str,
+) -> rusqlite::Result<T> {
+    let s: String = row.get(column)?;
+    s.parse().map_err(|e: String| {
+        rusqlite::Error::FromSqlConversionFailure(
+            0,
+            rusqlite::types::Type::Text,
+            Box::new(std::io::Error::new(std::io::ErrorKind::InvalidData, e)),
+        )
+    })
+}
+
 fn row_to_job(row: &rusqlite::Row) -> rusqlite::Result<Job> {
     use palette_domain::task::TaskId;
 
-    let repos_str: Option<String> = row.get(9)?;
+    let repos_str: Option<String> = row.get("repository")?;
     let repository: Option<Repository> =
         repos_str.and_then(|s| repository_row::repository_from_json(&s));
 
-    let job_type_str: String = row.get(2)?;
-    let job_type: JobType = job_type_str.parse().map_err(|e: String| {
-        rusqlite::Error::FromSqlConversionFailure(
-            2,
-            rusqlite::types::Type::Text,
-            Box::new(std::io::Error::new(std::io::ErrorKind::InvalidData, e)),
-        )
-    })?;
-
-    let status_str: String = row.get(7)?;
-    let status: JobStatus = status_str.parse().map_err(|e: String| {
-        rusqlite::Error::FromSqlConversionFailure(
-            7,
-            rusqlite::types::Type::Text,
-            Box::new(std::io::Error::new(std::io::ErrorKind::InvalidData, e)),
-        )
-    })?;
-
     Ok(Job {
-        id: JobId::new(row.get::<_, String>(0)?),
-        task_id: row.get::<_, Option<String>>(1)?.map(TaskId::new),
-        job_type,
-        title: row.get(3)?,
-        plan_path: row.get(4)?,
-        description: row.get(5)?,
-        assignee: row.get::<_, Option<String>>(6)?.map(AgentId::new),
-        status,
+        id: JobId::new(row.get::<_, String>("id")?),
+        task_id: row.get::<_, Option<String>>("task_id")?.map(TaskId::new),
+        job_type: parse_column(row, "type")?,
+        title: row.get("title")?,
+        plan_path: row.get("plan_path")?,
+        description: row.get("description")?,
+        assignee: row.get::<_, Option<String>>("assignee")?.map(AgentId::new),
+        status: parse_column(row, "status")?,
         priority: row
-            .get::<_, Option<String>>(8)?
+            .get::<_, Option<String>>("priority")?
             .and_then(|s| s.parse().ok()),
         repository,
-        pr_url: row.get(10)?,
-        created_at: parse_datetime(&row.get::<_, String>(11)?),
-        updated_at: parse_datetime(&row.get::<_, String>(12)?),
-        notes: row.get(13)?,
+        pr_url: row.get("pr_url")?,
+        created_at: parse_datetime(&row.get::<_, String>("created_at")?),
+        updated_at: parse_datetime(&row.get::<_, String>("updated_at")?),
+        notes: row.get("notes")?,
         assigned_at: row
-            .get::<_, Option<String>>(14)?
+            .get::<_, Option<String>>("assigned_at")?
             .map(|s| parse_datetime(&s)),
     })
 }

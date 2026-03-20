@@ -1,26 +1,17 @@
-use super::Database;
+use super::{Database, parse_column};
 use crate::error::Error;
-use palette_domain::task::{TaskId, TaskRow, TaskStatus};
+use palette_domain::task::{TaskId, TaskRow};
 use palette_domain::workflow::WorkflowId;
 use rusqlite::params;
 
 fn row_to_task_row(row: &rusqlite::Row) -> rusqlite::Result<TaskRow> {
-    let status_str: String = row.get(5)?;
-    let status: TaskStatus = status_str.parse().map_err(|e: String| {
-        rusqlite::Error::FromSqlConversionFailure(
-            5,
-            rusqlite::types::Type::Text,
-            Box::new(std::io::Error::new(std::io::ErrorKind::InvalidData, e)),
-        )
-    })?;
-
     Ok(TaskRow {
-        id: TaskId::new(row.get::<_, String>(0)?),
-        workflow_id: WorkflowId::new(row.get::<_, String>(1)?),
-        parent_id: row.get::<_, Option<String>>(2)?.map(TaskId::new),
-        title: row.get(3)?,
-        plan_path: row.get(4)?,
-        status,
+        id: TaskId::new(row.get::<_, String>("id")?),
+        workflow_id: WorkflowId::new(row.get::<_, String>("workflow_id")?),
+        parent_id: row.get::<_, Option<String>>("parent_id")?.map(TaskId::new),
+        title: row.get("title")?,
+        plan_path: row.get("plan_path")?,
+        status: parse_column(row, "status")?,
     })
 }
 
