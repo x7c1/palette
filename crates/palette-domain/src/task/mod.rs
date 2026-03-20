@@ -7,3 +7,6 @@ pub use task_status::TaskStatus;
 #[allow(clippy::module_inception)]
 mod task;
 pub use task::Task;
+
+mod task_store;
+pub use task_store::TaskStore;

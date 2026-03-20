@@ -25,6 +25,7 @@ pub use create_task::CreateTaskRequest;
 
 mod create_workflow;
 mod get_task;
+mod get_task_dependencies;
 mod update_task_status;
 
 mod assign_job;

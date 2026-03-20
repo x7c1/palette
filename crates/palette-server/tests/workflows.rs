@@ -78,10 +78,7 @@ async fn workflow_start_creates_task_tree() {
     );
 
     // Check grandchildren
-    let planning_children = state
-        .db
-        .get_child_tasks(&planning.id)
-        .unwrap();
+    let planning_children = state.db.get_child_tasks(&planning.id).unwrap();
     assert_eq!(planning_children.len(), 2);
 }
 
