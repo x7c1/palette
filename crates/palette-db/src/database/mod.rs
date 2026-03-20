@@ -20,6 +20,7 @@ macro_rules! lock {
     };
 }
 
+mod build_task_tree;
 mod create_task;
 pub use create_task::CreateTaskRequest;
 
