@@ -178,6 +178,8 @@ impl Orchestrator {
         self.db.update_task_status(task_id, TaskStatus::Done)?;
         tracing::info!(task_id = %task_id, "task completed via job");
 
+        self.check_workflow_completion(task_id)?;
+
         // Cascade: resolve siblings and propagate parent completion
         let task_engine = TaskRuleEngine::new(&*self.db);
         let mut pending = task_engine.on_task_completed(task_id)?;
@@ -199,12 +201,8 @@ impl Orchestrator {
                 if *new_status == TaskStatus::Ready {
                     let children = self.db.get_child_tasks(affected_id)?;
                     if children.is_empty() {
-                        // Leaf task became Ready: create a Job for it
-                        // (Job creation for dynamically-readied tasks will be handled here
-                        //  once the full bridge is implemented)
                         tracing::info!(task_id = %affected_id, "leaf task ready (job creation pending)");
                     } else {
-                        // Composite task: transition to InProgress and resolve children
                         self.db
                             .update_task_status(affected_id, TaskStatus::InProgress)?;
                         let child_ids: Vec<TaskId> =
@@ -215,7 +213,7 @@ impl Orchestrator {
                 }
 
                 if *new_status == TaskStatus::Done {
-                    // Parent completed, check if its parent can also complete
+                    self.check_workflow_completion(affected_id)?;
                     let further = task_engine.on_task_completed(affected_id)?;
                     next.extend(further);
                 }
@@ -223,6 +221,30 @@ impl Orchestrator {
             pending = next;
         }
 
+        Ok(())
+    }
+
+    /// If the task is a root task (no parent), mark its workflow as completed.
+    fn check_workflow_completion(
+        &self,
+        task_id: &palette_domain::task::TaskId,
+    ) -> crate::Result<()> {
+        use palette_domain::task::TaskStore;
+        use palette_domain::workflow::WorkflowStatus;
+
+        let Some(task) = self.db.get_task(task_id)? else {
+            return Ok(());
+        };
+        if task.parent_id.is_some() {
+            return Ok(());
+        }
+        // Root task completed → workflow is done
+        self.db
+            .update_workflow_status(&task.workflow_id, WorkflowStatus::Completed)?;
+        tracing::info!(
+            workflow_id = %task.workflow_id,
+            "workflow completed"
+        );
         Ok(())
     }
 }

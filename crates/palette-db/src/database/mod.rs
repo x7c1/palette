@@ -52,6 +52,7 @@ mod list_jobs;
 mod save_blueprint;
 mod submit_review;
 mod update_job_status;
+mod update_workflow_status;
 
 impl Database {
     pub fn open(path: &Path) -> crate::Result<Self> {

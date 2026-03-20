@@ -266,4 +266,64 @@ children:
         .unwrap()
         .unwrap();
     assert_eq!(step_b.status, TaskStatus::Ready);
+
+    // Now complete step-b's job to trigger full workflow completion
+    // step-b doesn't have a job yet (job creation for dynamically-readied tasks is pending)
+    // So we create one manually and complete it
+    let step_b_job = state
+        .db
+        .create_job(&palette_domain::job::CreateJobRequest {
+            id: Some(palette_domain::job::JobId::new("C-step-b")),
+            task_id: Some(TaskId::new("2026/cascade-test/step-b")),
+            job_type: JobType::Craft,
+            title: "step-b".to_string(),
+            plan_path: "test/step-b".to_string(),
+            description: None,
+            assignee: None,
+            priority: None,
+            repository: None,
+            depends_on: vec![],
+        })
+        .unwrap();
+    state
+        .db
+        .update_job_status(&step_b_job.id, JStatus::Ready)
+        .unwrap();
+    state
+        .db
+        .update_job_status(&step_b_job.id, JStatus::InProgress)
+        .unwrap();
+    state
+        .db
+        .update_job_status(&step_b_job.id, JStatus::InReview)
+        .unwrap();
+    state
+        .db
+        .update_job_status(&step_b_job.id, JStatus::Done)
+        .unwrap();
+
+    let _ = state.event_tx.send(ServerEvent::ProcessEffects {
+        effects: vec![RuleEffect::StatusChanged {
+            job_id: step_b_job.id.clone(),
+            new_status: JStatus::Done,
+        }],
+    });
+
+    tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
+
+    // step-b task should be Done
+    let step_b = state
+        .db
+        .get_task(&TaskId::new("2026/cascade-test/step-b"))
+        .unwrap()
+        .unwrap();
+    assert_eq!(step_b.status, TaskStatus::Done);
+
+    // Root task should be Done (all children complete)
+    let root = state
+        .db
+        .get_task(&TaskId::new("2026/cascade-test"))
+        .unwrap()
+        .unwrap();
+    assert_eq!(root.status, TaskStatus::Done);
 }
