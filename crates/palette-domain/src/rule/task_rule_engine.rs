@@ -17,18 +17,18 @@ impl<S: TaskStore> TaskRuleEngine<S> {
         let mut effects = Vec::new();
 
         for task_id in task_ids {
-            let task = match self.store.get_task(task_id)? {
-                Some(t) => t,
+            let row = match self.store.get_task_row(task_id)? {
+                Some(r) => r,
                 None => continue,
             };
 
-            if task.status != TaskStatus::Pending {
+            if row.status != TaskStatus::Pending {
                 continue;
             }
 
             // Parent must be active (Ready or InProgress) for child to become Ready
-            if let Some(ref parent_id) = task.parent_id {
-                let parent_active = self.store.get_task(parent_id)?.is_some_and(|p| {
+            if let Some(ref parent_id) = row.parent_id {
+                let parent_active = self.store.get_task_row(parent_id)?.is_some_and(|p| {
                     p.status == TaskStatus::Ready || p.status == TaskStatus::InProgress
                 });
                 if !parent_active {
@@ -39,7 +39,7 @@ impl<S: TaskStore> TaskRuleEngine<S> {
             let deps = self.store.get_task_dependencies(task_id)?;
             let all_deps_done = deps.iter().all(|dep_id| {
                 self.store
-                    .get_task(dep_id)
+                    .get_task_row(dep_id)
                     .ok()
                     .flatten()
                     .is_some_and(|dep| dep.status == TaskStatus::Done)
@@ -61,14 +61,14 @@ impl<S: TaskStore> TaskRuleEngine<S> {
     pub fn on_task_completed(&self, task_id: &TaskId) -> Result<Vec<TaskEffect>, S::Error> {
         let mut effects = Vec::new();
 
-        let task = match self.store.get_task(task_id)? {
-            Some(t) => t,
+        let row = match self.store.get_task_row(task_id)? {
+            Some(r) => r,
             None => return Ok(effects),
         };
 
         // Check if any sibling tasks can now become Ready
-        if let Some(ref parent_id) = task.parent_id {
-            let siblings = self.store.get_child_tasks(parent_id)?;
+        if let Some(ref parent_id) = row.parent_id {
+            let siblings = self.store.get_child_task_rows(parent_id)?;
 
             for sibling in &siblings {
                 if sibling.status != TaskStatus::Pending {
@@ -77,7 +77,7 @@ impl<S: TaskStore> TaskRuleEngine<S> {
                 let deps = self.store.get_task_dependencies(&sibling.id)?;
                 let all_deps_done = deps.iter().all(|dep_id| {
                     self.store
-                        .get_task(dep_id)
+                        .get_task_row(dep_id)
                         .ok()
                         .flatten()
                         .is_some_and(|dep| dep.status == TaskStatus::Done)
@@ -95,7 +95,7 @@ impl<S: TaskStore> TaskRuleEngine<S> {
                 s.status == TaskStatus::Done || s.id == *task_id // the task that just completed
             });
             if all_children_done {
-                let parent = self.store.get_task(parent_id)?;
+                let parent = self.store.get_task_row(parent_id)?;
                 if let Some(p) = parent
                     && p.status != TaskStatus::Done
                 {
@@ -114,13 +114,13 @@ impl<S: TaskStore> TaskRuleEngine<S> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::task::Task;
+    use crate::task::TaskRow;
     use crate::workflow::WorkflowId;
     use std::cell::RefCell;
     use std::collections::HashMap;
 
     struct MockTaskStore {
-        tasks: RefCell<HashMap<String, Task>>,
+        tasks: RefCell<HashMap<String, TaskRow>>,
         children: HashMap<String, Vec<String>>,
         deps: HashMap<String, Vec<String>>,
     }
@@ -135,15 +135,15 @@ mod tests {
         }
 
         fn add_task(&mut self, id: &str, parent_id: Option<&str>, status: TaskStatus) {
-            let task = Task {
+            let row = TaskRow {
                 id: TaskId::new(id),
                 workflow_id: WorkflowId::new("wf-test"),
-                parent_id: parent_id.map(|p| TaskId::new(p)),
+                parent_id: parent_id.map(TaskId::new),
                 title: id.to_string(),
                 plan_path: None,
                 status,
             };
-            self.tasks.borrow_mut().insert(id.to_string(), task);
+            self.tasks.borrow_mut().insert(id.to_string(), row);
             if let Some(p) = parent_id {
                 self.children
                     .entry(p.to_string())
@@ -158,22 +158,16 @@ mod tests {
                 .or_default()
                 .push(depends_on.to_string());
         }
-
-        fn set_status(&self, id: &str, status: TaskStatus) {
-            if let Some(task) = self.tasks.borrow_mut().get_mut(id) {
-                task.status = status;
-            }
-        }
     }
 
     impl TaskStore for &MockTaskStore {
         type Error = String;
 
-        fn get_task(&self, id: &TaskId) -> Result<Option<Task>, String> {
+        fn get_task_row(&self, id: &TaskId) -> Result<Option<TaskRow>, String> {
             Ok(self.tasks.borrow().get(id.as_ref()).cloned())
         }
 
-        fn get_child_tasks(&self, parent_id: &TaskId) -> Result<Vec<Task>, String> {
+        fn get_child_task_rows(&self, parent_id: &TaskId) -> Result<Vec<TaskRow>, String> {
             let tasks = self.tasks.borrow();
             let ids = self.children.get(parent_id.as_ref());
             Ok(ids
@@ -190,7 +184,9 @@ mod tests {
         }
 
         fn update_task_status(&self, id: &TaskId, status: TaskStatus) -> Result<(), String> {
-            self.set_status(id.as_ref(), status);
+            if let Some(row) = self.tasks.borrow_mut().get_mut(id.as_ref()) {
+                row.status = status;
+            }
             Ok(())
         }
     }

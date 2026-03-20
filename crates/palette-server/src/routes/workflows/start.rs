@@ -121,7 +121,7 @@ pub async fn handle_start_workflow(
                 if *new_status == TaskStatus::Ready {
                     let children = state
                         .db
-                        .get_child_tasks(task_id)
+                        .get_child_task_rows(task_id)
                         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
                     if !children.is_empty() {
                         // Composite task: transition to InProgress and resolve children

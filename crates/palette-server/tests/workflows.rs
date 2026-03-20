@@ -1,6 +1,7 @@
 mod helper;
 
 use helper::{spawn_server, test_session_name_with_guard};
+use palette_domain::task::TaskStore;
 use palette_tmux::TmuxManager;
 
 const TASK_TREE_YAML: &str = r#"
@@ -54,32 +55,21 @@ async fn workflow_start_creates_task_tree() {
     // Root + planning + api-plan + api-plan-review + execution + api-impl + api-impl-review = 7
     assert_eq!(body["task_count"].as_u64().unwrap(), 7);
 
-    // Verify tasks were created in the DB
+    // Verify tasks were created in the DB as a tree
     let root = state
         .db
         .get_task(&palette_domain::task::TaskId::new("2026/feature-x"))
+        .unwrap()
         .unwrap();
-    assert!(root.is_some());
-    let root = root.unwrap();
     assert_eq!(root.title, "Add feature X");
-    assert!(root.parent_id.is_none());
+    assert_eq!(root.children.len(), 2);
 
-    // Check child tasks
-    let children = state
-        .db
-        .get_child_tasks(&palette_domain::task::TaskId::new("2026/feature-x"))
+    let planning = root
+        .children
+        .iter()
+        .find(|t| t.title == "planning")
         .unwrap();
-    assert_eq!(children.len(), 2);
-
-    let planning = children.iter().find(|t| t.title == "planning").unwrap();
-    assert_eq!(
-        planning.parent_id.as_ref().unwrap().to_string(),
-        "2026/feature-x"
-    );
-
-    // Check grandchildren
-    let planning_children = state.db.get_child_tasks(&planning.id).unwrap();
-    assert_eq!(planning_children.len(), 2);
+    assert_eq!(planning.children.len(), 2);
 
     // Verify initial task status resolution:
     // - root: InProgress (has children)

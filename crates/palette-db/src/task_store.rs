@@ -5,12 +5,12 @@ use palette_domain::task::*;
 impl TaskStore for Database {
     type Error = Error;
 
-    fn get_task(&self, id: &TaskId) -> Result<Option<Task>, Error> {
-        self.get_task(id)
+    fn get_task_row(&self, id: &TaskId) -> Result<Option<TaskRow>, Error> {
+        self.get_task_row(id)
     }
 
-    fn get_child_tasks(&self, parent_id: &TaskId) -> Result<Vec<Task>, Error> {
-        self.get_child_tasks(parent_id)
+    fn get_child_task_rows(&self, parent_id: &TaskId) -> Result<Vec<TaskRow>, Error> {
+        self.get_child_task_rows(parent_id)
     }
 
     fn get_task_dependencies(&self, task_id: &TaskId) -> Result<Vec<TaskId>, Error> {

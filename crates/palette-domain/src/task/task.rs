@@ -7,8 +7,15 @@ use crate::workflow::WorkflowId;
 pub struct Task {
     pub id: TaskId,
     pub workflow_id: WorkflowId,
-    pub parent_id: Option<TaskId>,
     pub title: String,
     pub plan_path: Option<String>,
     pub status: TaskStatus,
+    pub children: Vec<Task>,
+}
+
+impl Task {
+    /// A Composite Task is a Task that has child Tasks.
+    pub fn is_composite(&self) -> bool {
+        !self.children.is_empty()
+    }
 }
