@@ -40,13 +40,7 @@ pub async fn handle_start_workflow(
     let workflow_id = WorkflowId::generate();
     let root_task_id = TaskId::new(&blueprint.task.id);
 
-    let task_count = register_task_tree(
-        &state,
-        &workflow_id,
-        &root_task_id,
-        &blueprint,
-        &req.blueprint_yaml,
-    )?;
+    let task_count = register_task_tree(&state, &workflow_id, &root_task_id, &blueprint)?;
 
     let ready_leaf_ids = resolve_ready_cascade(&state, &root_task_id)?;
 
@@ -81,11 +75,10 @@ fn register_task_tree(
     workflow_id: &WorkflowId,
     root_task_id: &TaskId,
     blueprint: &TaskTreeBlueprint,
-    blueprint_yaml: &str,
 ) -> HandlerResult<usize> {
     state
         .db
-        .create_workflow(workflow_id, blueprint_yaml)
+        .create_workflow(workflow_id, &format!("inline:{}", blueprint.task.id))
         .map_err(internal_err)?;
 
     state
