@@ -6,7 +6,7 @@ The Operator is the human who uses Palette. The Operator defines what should be 
 
 ## Examples
 
-- The Operator gives Palette a [Task](../task/) such as "plan the next release of product A" or "add dark mode support to product A."
+- The Operator defines a [Task](../task/) such as "plan the next release of product A" or "add dark mode support to product A."
 - The Operator reviews the final deliverables (branches, pull requests) after all [Jobs](../job/) are complete.
 - The Operator responds to an Escalation when a Supervisor cannot make a judgment call on its own.
 
