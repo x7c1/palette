@@ -2,7 +2,7 @@
 mod tests {
     use crate::Database;
     use palette_domain::rule::{TaskEffect, TaskRuleEngine};
-    use palette_domain::task::{TaskId, TaskStatus, TaskStore};
+    use palette_domain::task::{TaskId, TaskStatus};
     use palette_domain::workflow::WorkflowId;
 
     use crate::database::CreateTaskRequest;
