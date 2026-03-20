@@ -59,9 +59,7 @@ pub async fn handle_submit_review(
                 palette_domain::review::Verdict::Approved => "approved",
                 palette_domain::review::Verdict::ChangesRequested => "changes_requested",
             };
-            let notification = format!(
-                "[event] review={review_job_id} type={verdict_str}",
-            );
+            let notification = format!("[event] review={review_job_id} type={verdict_str}",);
             let _ = state.db.enqueue_message(&leader.id, &notification);
             tracing::info!(
                 review_job_id = %review_job_id,

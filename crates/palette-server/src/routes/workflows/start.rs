@@ -151,9 +151,7 @@ fn resolve_ready_cascade(task_store: &TaskStoreImpl<'_>) -> HandlerResult<Vec<Ta
             tracing::info!(task_id = %task_id, status = ?new_status, "task status changed");
 
             if *new_status == TaskStatus::Ready {
-                let children = task_store
-                    .get_child_tasks(task_id)
-                    .map_err(internal_err)?;
+                let children = task_store.get_child_tasks(task_id).map_err(internal_err)?;
                 if children.is_empty() {
                     ready_leaf_ids.push(task_id.clone());
                 } else {
@@ -198,7 +196,9 @@ pub(crate) fn create_job_for_task(
     state: &AppState,
     task: &palette_domain::task::Task,
 ) -> HandlerResult<()> {
-    let job_type = task.job_type.ok_or_else(|| internal_err("task has no job_type"))?;
+    let job_type = task
+        .job_type
+        .ok_or_else(|| internal_err("task has no job_type"))?;
     let job = state
         .db
         .create_job(&CreateJobRequest {

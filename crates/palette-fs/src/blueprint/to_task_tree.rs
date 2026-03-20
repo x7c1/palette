@@ -83,8 +83,8 @@ fn collect_nodes(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use super::TaskTreeBlueprint;
+    use super::*;
 
     #[test]
     fn builds_flat_index_from_nested_blueprint() {

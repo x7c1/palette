@@ -379,10 +379,7 @@ children:
     use palette_domain::task::{TaskId, TaskStatus};
 
     // step-a/craft should have a Job in Ready state
-    let jobs = state
-        .db
-        .list_jobs(&JobFilter::default())
-        .unwrap();
+    let jobs = state.db.list_jobs(&JobFilter::default()).unwrap();
     assert_eq!(jobs.len(), 1, "only step-a/craft job should exist");
     let craft_job_id = &jobs[0].id;
 
@@ -433,16 +430,20 @@ children:
     assert_eq!(review_task.status, TaskStatus::Ready);
 
     // Verify: a review Job was created for step-a/review
-    let all_jobs = state
-        .db
-        .list_jobs(&JobFilter::default())
-        .unwrap();
+    let all_jobs = state.db.list_jobs(&JobFilter::default()).unwrap();
     let review_jobs: Vec<_> = all_jobs
         .iter()
-        .filter(|j| j.task_id.as_ref().map(|t| t.to_string()) == Some("e2e/ir-test/step-a/review".to_string()))
+        .filter(|j| {
+            j.task_id.as_ref().map(|t| t.to_string())
+                == Some("e2e/ir-test/step-a/review".to_string())
+        })
         .collect();
     assert_eq!(review_jobs.len(), 1, "review job should be created");
-    assert_eq!(review_jobs[0].status, JStatus::Todo, "review job should be in Todo status for AutoAssign");
+    assert_eq!(
+        review_jobs[0].status,
+        JStatus::Todo,
+        "review job should be in Todo status for AutoAssign"
+    );
 
     // step-b should still be Pending (step-a composite is not Done yet)
     let step_b = state
@@ -500,9 +501,8 @@ children:
         .unwrap();
     assert_eq!(resp.status(), 201);
     let resp_body: serde_json::Value = resp.json().await.unwrap();
-    let workflow_id = palette_domain::workflow::WorkflowId::new(
-        resp_body["workflow_id"].as_str().unwrap(),
-    );
+    let workflow_id =
+        palette_domain::workflow::WorkflowId::new(resp_body["workflow_id"].as_str().unwrap());
 
     use palette_domain::job::{JobFilter, JobStatus as JStatus};
     use palette_domain::rule::RuleEffect;
@@ -517,8 +517,14 @@ children:
     assert_eq!(jobs.len(), 1);
     let craft_a_id = jobs[0].id.clone();
 
-    state.db.update_job_status(&craft_a_id, JStatus::InProgress).unwrap();
-    state.db.update_job_status(&craft_a_id, JStatus::InReview).unwrap();
+    state
+        .db
+        .update_job_status(&craft_a_id, JStatus::InProgress)
+        .unwrap();
+    state
+        .db
+        .update_job_status(&craft_a_id, JStatus::InReview)
+        .unwrap();
 
     let _ = state.event_tx.send(ServerEvent::ProcessEffects {
         effects: vec![RuleEffect::StatusChanged {
@@ -530,39 +536,72 @@ children:
 
     // step-a/craft task Done, step-a/review task Ready, review Job created
     assert_eq!(
-        state.db.get_task_state(&TaskId::new("e2e/full/step-a/craft")).unwrap().unwrap().status,
+        state
+            .db
+            .get_task_state(&TaskId::new("e2e/full/step-a/craft"))
+            .unwrap()
+            .unwrap()
+            .status,
         TaskStatus::Done
     );
     assert_eq!(
-        state.db.get_task_state(&TaskId::new("e2e/full/step-a/review")).unwrap().unwrap().status,
+        state
+            .db
+            .get_task_state(&TaskId::new("e2e/full/step-a/review"))
+            .unwrap()
+            .unwrap()
+            .status,
         TaskStatus::Ready
     );
 
     let all_jobs = state.db.list_jobs(&JobFilter::default()).unwrap();
-    let review_a_job = all_jobs.iter().find(|j| {
-        j.task_id.as_ref().map(|t| t.to_string()) == Some("e2e/full/step-a/review".to_string())
-    }).expect("review job should exist");
+    let review_a_job = all_jobs
+        .iter()
+        .find(|j| {
+            j.task_id.as_ref().map(|t| t.to_string()) == Some("e2e/full/step-a/review".to_string())
+        })
+        .expect("review job should exist");
     let review_a_id = review_a_job.id.clone();
 
     // step-b still Pending
     assert_eq!(
-        state.db.get_task_state(&TaskId::new("e2e/full/step-b")).unwrap().unwrap().status,
+        state
+            .db
+            .get_task_state(&TaskId::new("e2e/full/step-b"))
+            .unwrap()
+            .unwrap()
+            .status,
         TaskStatus::Pending
     );
 
     // --- Phase 2: step-a review Done (approved) ---
     // Review jobs start as Draft; transition to InProgress via assignment
-    state.db.update_job_status(&review_a_id, JStatus::Todo).unwrap();
-    state.db.assign_job(&review_a_id, &palette_domain::agent::AgentId::new("reviewer-a")).unwrap();
+    state
+        .db
+        .update_job_status(&review_a_id, JStatus::Todo)
+        .unwrap();
+    state
+        .db
+        .assign_job(
+            &review_a_id,
+            &palette_domain::agent::AgentId::new("reviewer-a"),
+        )
+        .unwrap();
     // assign_job sets InProgress
 
     // Submit approved verdict
     use palette_domain::review::{SubmitReviewRequest, Verdict};
-    let sub = state.db.submit_review(&review_a_id, &SubmitReviewRequest {
-        verdict: Verdict::Approved,
-        summary: Some("LGTM".to_string()),
-        comments: vec![],
-    }).unwrap();
+    let sub = state
+        .db
+        .submit_review(
+            &review_a_id,
+            &SubmitReviewRequest {
+                verdict: Verdict::Approved,
+                summary: Some("LGTM".to_string()),
+                comments: vec![],
+            },
+        )
+        .unwrap();
 
     let engine = palette_domain::rule::RuleEngine::new(&*state.db, 5);
     let effects = engine.on_review_submitted(&review_a_id, &sub).unwrap();
@@ -573,35 +612,64 @@ children:
 
     // step-a/review task should be Done
     assert_eq!(
-        state.db.get_task_state(&TaskId::new("e2e/full/step-a/review")).unwrap().unwrap().status,
+        state
+            .db
+            .get_task_state(&TaskId::new("e2e/full/step-a/review"))
+            .unwrap()
+            .unwrap()
+            .status,
         TaskStatus::Done
     );
 
     // step-a composite should be Done (both children Done)
     assert_eq!(
-        state.db.get_task_state(&TaskId::new("e2e/full/step-a")).unwrap().unwrap().status,
+        state
+            .db
+            .get_task_state(&TaskId::new("e2e/full/step-a"))
+            .unwrap()
+            .unwrap()
+            .status,
         TaskStatus::Done
     );
 
     // step-b should now be Ready → InProgress (composite auto-transitions)
-    let step_b_status = state.db.get_task_state(&TaskId::new("e2e/full/step-b")).unwrap().unwrap().status;
+    let step_b_status = state
+        .db
+        .get_task_state(&TaskId::new("e2e/full/step-b"))
+        .unwrap()
+        .unwrap()
+        .status;
     assert_eq!(step_b_status, TaskStatus::InProgress);
 
     // step-b/craft should be Ready with a Job created
     assert_eq!(
-        state.db.get_task_state(&TaskId::new("e2e/full/step-b/craft")).unwrap().unwrap().status,
+        state
+            .db
+            .get_task_state(&TaskId::new("e2e/full/step-b/craft"))
+            .unwrap()
+            .unwrap()
+            .status,
         TaskStatus::Ready
     );
 
     let all_jobs = state.db.list_jobs(&JobFilter::default()).unwrap();
-    let craft_b_job = all_jobs.iter().find(|j| {
-        j.task_id.as_ref().map(|t| t.to_string()) == Some("e2e/full/step-b/craft".to_string())
-    }).expect("step-b craft job should exist");
+    let craft_b_job = all_jobs
+        .iter()
+        .find(|j| {
+            j.task_id.as_ref().map(|t| t.to_string()) == Some("e2e/full/step-b/craft".to_string())
+        })
+        .expect("step-b craft job should exist");
     let craft_b_id = craft_b_job.id.clone();
 
     // --- Phase 3: step-b craft InReview → review → Done → workflow complete ---
-    state.db.update_job_status(&craft_b_id, JStatus::InProgress).unwrap();
-    state.db.update_job_status(&craft_b_id, JStatus::InReview).unwrap();
+    state
+        .db
+        .update_job_status(&craft_b_id, JStatus::InProgress)
+        .unwrap();
+    state
+        .db
+        .update_job_status(&craft_b_id, JStatus::InReview)
+        .unwrap();
 
     let _ = state.event_tx.send(ServerEvent::ProcessEffects {
         effects: vec![RuleEffect::StatusChanged {
@@ -613,25 +681,48 @@ children:
 
     // step-b/review should be Ready with a Job
     assert_eq!(
-        state.db.get_task_state(&TaskId::new("e2e/full/step-b/review")).unwrap().unwrap().status,
+        state
+            .db
+            .get_task_state(&TaskId::new("e2e/full/step-b/review"))
+            .unwrap()
+            .unwrap()
+            .status,
         TaskStatus::Ready
     );
 
     let all_jobs = state.db.list_jobs(&JobFilter::default()).unwrap();
-    let review_b_job = all_jobs.iter().find(|j| {
-        j.task_id.as_ref().map(|t| t.to_string()) == Some("e2e/full/step-b/review".to_string())
-    }).expect("step-b review job should exist");
+    let review_b_job = all_jobs
+        .iter()
+        .find(|j| {
+            j.task_id.as_ref().map(|t| t.to_string()) == Some("e2e/full/step-b/review".to_string())
+        })
+        .expect("step-b review job should exist");
     let review_b_id = review_b_job.id.clone();
 
     // Approve step-b review
-    state.db.update_job_status(&review_b_id, JStatus::Todo).unwrap();
-    state.db.assign_job(&review_b_id, &palette_domain::agent::AgentId::new("reviewer-b")).unwrap();
+    state
+        .db
+        .update_job_status(&review_b_id, JStatus::Todo)
+        .unwrap();
+    state
+        .db
+        .assign_job(
+            &review_b_id,
+            &palette_domain::agent::AgentId::new("reviewer-b"),
+        )
+        .unwrap();
 
-    let sub = state.db.submit_review(&review_b_id, &SubmitReviewRequest {
-        verdict: Verdict::Approved,
-        summary: Some("LGTM".to_string()),
-        comments: vec![],
-    }).unwrap();
+    let sub = state
+        .db
+        .submit_review(
+            &review_b_id,
+            &SubmitReviewRequest {
+                verdict: Verdict::Approved,
+                summary: Some("LGTM".to_string()),
+                comments: vec![],
+            },
+        )
+        .unwrap();
 
     let effects = engine.on_review_submitted(&review_b_id, &sub).unwrap();
     let _ = state.event_tx.send(ServerEvent::ProcessEffects { effects });
@@ -639,13 +730,23 @@ children:
 
     // step-b composite Done
     assert_eq!(
-        state.db.get_task_state(&TaskId::new("e2e/full/step-b")).unwrap().unwrap().status,
+        state
+            .db
+            .get_task_state(&TaskId::new("e2e/full/step-b"))
+            .unwrap()
+            .unwrap()
+            .status,
         TaskStatus::Done
     );
 
     // Root task Done
     assert_eq!(
-        state.db.get_task_state(&TaskId::new("e2e/full")).unwrap().unwrap().status,
+        state
+            .db
+            .get_task_state(&TaskId::new("e2e/full"))
+            .unwrap()
+            .unwrap()
+            .status,
         TaskStatus::Done
     );
 

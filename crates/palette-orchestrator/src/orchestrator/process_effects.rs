@@ -127,10 +127,7 @@ impl Orchestrator {
 
     /// Determine the workspace volume for a job.
     /// Craft jobs get a new volume; review jobs share the sibling craft job's volume (read-only).
-    fn resolve_workspace(
-        &self,
-        job: &Job,
-    ) -> crate::Result<Option<WorkspaceVolume>> {
+    fn resolve_workspace(&self, job: &Job) -> crate::Result<Option<WorkspaceVolume>> {
         match job.job_type {
             JobType::Craft => Ok(Some(WorkspaceVolume {
                 name: format!("palette-workspace-{}", job.id),
@@ -148,12 +145,14 @@ impl Orchestrator {
                         .unwrap_or(task_id.as_ref());
 
                     // Find all jobs and look for a craft job under the same parent task
-                    let all_jobs = self.db.list_jobs(&palette_domain::job::JobFilter::default())?;
+                    let all_jobs = self
+                        .db
+                        .list_jobs(&palette_domain::job::JobFilter::default())?;
                     let sibling_craft = all_jobs.iter().find(|j| {
                         j.job_type == JobType::Craft
-                            && j.task_id
-                                .as_ref()
-                                .is_some_and(|t| t.as_ref().starts_with(parent_prefix) && t != task_id)
+                            && j.task_id.as_ref().is_some_and(|t| {
+                                t.as_ref().starts_with(parent_prefix) && t != task_id
+                            })
                     });
                     Ok(sibling_craft.map(|c| WorkspaceVolume {
                         name: format!("palette-workspace-{}", c.id),
@@ -199,14 +198,14 @@ impl Orchestrator {
                 .rsplit_once('/')
                 .map(|(p, _)| p)
                 .unwrap_or(review_task_id.as_ref());
-            let all_jobs =
-                self.db.list_jobs(&palette_domain::job::JobFilter::default())?;
+            let all_jobs = self
+                .db
+                .list_jobs(&palette_domain::job::JobFilter::default())?;
             let sibling_jobs: Vec<_> = all_jobs
                 .iter()
                 .filter(|j| {
                     j.task_id.as_ref().is_some_and(|t| {
-                        t.as_ref().starts_with(parent_prefix)
-                            && t != review_task_id
+                        t.as_ref().starts_with(parent_prefix) && t != review_task_id
                     })
                 })
                 .collect();
@@ -218,12 +217,11 @@ impl Orchestrator {
                 .all(|j| j.id == *job_id || j.status == JobStatus::Done);
 
             if all_reviews_done {
-                for craft_job in sibling_jobs.iter().filter(|j| {
-                    j.job_type == JobType::Craft
-                        && j.status == JobStatus::InReview
-                }) {
-                    self.db
-                        .update_job_status(&craft_job.id, JobStatus::Done)?;
+                for craft_job in sibling_jobs
+                    .iter()
+                    .filter(|j| j.job_type == JobType::Craft && j.status == JobStatus::InReview)
+                {
+                    self.db.update_job_status(&craft_job.id, JobStatus::Done)?;
                     tracing::info!(
                         craft_job_id = %craft_job.id,
                         review_job_id = %job_id,
@@ -343,7 +341,9 @@ impl Orchestrator {
                     && let Some(ref parent_id) = task.parent_id
                 {
                     let siblings = task_store.get_child_tasks(parent_id)?;
-                    if let Some(craft) = siblings.iter().find(|s| s.job_type == Some(JobType::Craft)) {
+                    if let Some(craft) =
+                        siblings.iter().find(|s| s.job_type == Some(JobType::Craft))
+                    {
                         if task.plan_path.is_none() {
                             task.plan_path = craft.plan_path.clone();
                         }
@@ -408,7 +408,6 @@ impl Orchestrator {
         );
         Ok(effects)
     }
-
 }
 
 /// Container-side mount point for the shared plan directory.

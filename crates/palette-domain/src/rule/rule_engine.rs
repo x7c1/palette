@@ -4,7 +4,8 @@ use crate::review::{ReviewSubmission, Verdict};
 
 pub struct RuleEngine<S> {
     store: S,
-    #[allow(dead_code)] // TODO: re-enable when changes_requested is implemented for task tree model
+    #[allow(dead_code)]
+    // TODO: re-enable when changes_requested is implemented for task tree model
     max_review_rounds: u32,
 }
 
