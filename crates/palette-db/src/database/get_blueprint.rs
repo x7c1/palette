@@ -18,10 +18,9 @@ impl Database {
             })
         })?;
 
-        match rows.next() {
-            Some(Ok(bp)) => Ok(Some(bp.into())),
-            Some(Err(e)) => Err(e.into()),
-            None => Ok(None),
-        }
+        rows.next()
+            .transpose()
+            .map(|opt| opt.map(Into::into))
+            .map_err(Into::into)
     }
 }

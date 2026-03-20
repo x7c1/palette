@@ -92,11 +92,7 @@ fn query_job(conn: &Connection, id: &JobId) -> crate::Result<Option<Job>> {
          FROM jobs WHERE id = ?1",
     )?;
     let mut rows = stmt.query_map(params![id.as_ref()], row_to_job)?;
-    match rows.next() {
-        Some(Ok(job)) => Ok(Some(job)),
-        Some(Err(e)) => Err(e.into()),
-        None => Ok(None),
-    }
+    rows.next().transpose().map_err(Into::into)
 }
 
 fn row_to_job(row: &rusqlite::Row) -> rusqlite::Result<Job> {
