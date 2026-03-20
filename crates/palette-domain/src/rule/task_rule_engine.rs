@@ -26,6 +26,16 @@ impl<S: TaskStore> TaskRuleEngine<S> {
                 continue;
             }
 
+            // Parent must be active (Ready or InProgress) for child to become Ready
+            if let Some(ref parent_id) = task.parent_id {
+                let parent_active = self.store.get_task(parent_id)?.is_some_and(|p| {
+                    p.status == TaskStatus::Ready || p.status == TaskStatus::InProgress
+                });
+                if !parent_active {
+                    continue;
+                }
+            }
+
             let deps = self.store.get_task_dependencies(task_id)?;
             let all_deps_done = deps.iter().all(|dep_id| {
                 self.store
@@ -188,7 +198,7 @@ mod tests {
     #[test]
     fn tasks_without_deps_become_ready() {
         let mut store = MockTaskStore::new();
-        store.add_task("root", None, TaskStatus::Pending);
+        store.add_task("root", None, TaskStatus::InProgress);
         store.add_task("a", Some("root"), TaskStatus::Pending);
         store.add_task("b", Some("root"), TaskStatus::Pending);
         store.add_dep("b", "a");

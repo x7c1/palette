@@ -96,6 +96,7 @@ async fn workflow_start_creates_task_tree() {
         .unwrap();
     assert_eq!(root.status, TaskStatus::InProgress);
 
+    // Planning is a composite task: Ready → InProgress (has children)
     let planning = state
         .db
         .get_task(&palette_domain::task::TaskId::new(
@@ -103,7 +104,7 @@ async fn workflow_start_creates_task_tree() {
         ))
         .unwrap()
         .unwrap();
-    assert_eq!(planning.status, TaskStatus::Ready);
+    assert_eq!(planning.status, TaskStatus::InProgress);
 
     let execution = state
         .db
@@ -131,6 +132,27 @@ async fn workflow_start_creates_task_tree() {
         .unwrap()
         .unwrap();
     assert_eq!(api_plan_review.status, TaskStatus::Pending);
+
+    // Verify that a Job was created for the Ready craft task (api-plan)
+    use palette_domain::job::JobFilter;
+    let jobs = state
+        .db
+        .list_jobs(&JobFilter {
+            job_type: None,
+            status: None,
+            assignee: None,
+        })
+        .unwrap();
+
+    // Only api-plan should have a job (it's the only Ready leaf task with type: craft)
+    assert_eq!(jobs.len(), 1);
+    assert_eq!(
+        jobs[0].task_id.as_ref().unwrap().to_string(),
+        "2026/feature-x/planning/api-plan"
+    );
+    assert_eq!(jobs[0].job_type, palette_domain::job::JobType::Craft);
+    // Craft jobs start as Draft then transition to Ready
+    assert_eq!(jobs[0].status, palette_domain::job::JobStatus::Ready);
 }
 
 #[tokio::test]
