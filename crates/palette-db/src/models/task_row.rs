@@ -1,8 +1,7 @@
-use super::{TaskId, TaskStatus};
-use crate::workflow::WorkflowId;
+use palette_domain::task::{TaskId, TaskStatus};
+use palette_domain::workflow::WorkflowId;
 
 /// Flat representation of a Task as stored in the database.
-/// Use `TaskStore::get_task()` to get a `Task` with children populated.
 #[derive(Debug, Clone)]
 pub struct TaskRow {
     pub id: TaskId,

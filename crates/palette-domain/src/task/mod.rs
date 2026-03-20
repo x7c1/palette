@@ -8,8 +8,5 @@ pub use task_status::TaskStatus;
 mod task;
 pub use task::Task;
 
-mod task_row;
-pub use task_row::TaskRow;
-
 mod task_store;
 pub use task_store::TaskStore;

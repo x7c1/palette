@@ -1,5 +1,6 @@
 use super::Database;
-use palette_domain::task::{Task, TaskRow};
+use crate::models::TaskRow;
+use palette_domain::task::Task;
 
 impl Database {
     /// Recursively build a Task tree from a TaskRow.

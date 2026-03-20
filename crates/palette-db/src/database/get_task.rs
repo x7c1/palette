@@ -1,6 +1,7 @@
 use super::{Database, parse_column};
 use crate::error::Error;
-use palette_domain::task::{TaskId, TaskRow};
+use crate::models::TaskRow;
+use palette_domain::task::TaskId;
 use palette_domain::workflow::WorkflowId;
 use rusqlite::params;
 

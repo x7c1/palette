@@ -112,13 +112,22 @@ impl<S: TaskStore> TaskRuleEngine<S> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::task::{Task, TaskRow};
+    use crate::task::Task;
     use crate::workflow::WorkflowId;
     use std::cell::RefCell;
     use std::collections::HashMap;
 
+    /// Minimal task data for mock storage (no children — tree is built dynamically).
+    #[derive(Clone)]
+    struct MockTask {
+        id: TaskId,
+        workflow_id: WorkflowId,
+        parent_id: Option<TaskId>,
+        status: TaskStatus,
+    }
+
     struct MockTaskStore {
-        tasks: RefCell<HashMap<String, TaskRow>>,
+        tasks: RefCell<HashMap<String, MockTask>>,
         children: HashMap<String, Vec<String>>,
         deps: HashMap<String, Vec<String>>,
     }
@@ -133,15 +142,13 @@ mod tests {
         }
 
         fn add_task(&mut self, id: &str, parent_id: Option<&str>, status: TaskStatus) {
-            let row = TaskRow {
+            let mock = MockTask {
                 id: TaskId::new(id),
                 workflow_id: WorkflowId::new("wf-test"),
                 parent_id: parent_id.map(TaskId::new),
-                title: id.to_string(),
-                plan_path: None,
                 status,
             };
-            self.tasks.borrow_mut().insert(id.to_string(), row);
+            self.tasks.borrow_mut().insert(id.to_string(), mock);
             if let Some(p) = parent_id {
                 self.children
                     .entry(p.to_string())
@@ -157,24 +164,24 @@ mod tests {
                 .push(depends_on.to_string());
         }
 
-        fn row_to_task(&self, row: &TaskRow) -> Task {
-            let child_ids = self.children.get(row.id.as_ref());
+        fn to_task(&self, mock: &MockTask) -> Task {
+            let child_ids = self.children.get(mock.id.as_ref());
             let tasks = self.tasks.borrow();
             let children = child_ids
                 .map(|ids| {
                     ids.iter()
-                        .filter_map(|id| tasks.get(id).map(|r| self.row_to_task(r)))
+                        .filter_map(|id| tasks.get(id).map(|m| self.to_task(m)))
                         .collect()
                 })
                 .unwrap_or_default();
 
             Task {
-                id: row.id.clone(),
-                workflow_id: row.workflow_id.clone(),
-                parent_id: row.parent_id.clone(),
-                title: row.title.clone(),
-                plan_path: row.plan_path.clone(),
-                status: row.status,
+                id: mock.id.clone(),
+                workflow_id: mock.workflow_id.clone(),
+                parent_id: mock.parent_id.clone(),
+                title: mock.id.to_string(),
+                plan_path: None,
+                status: mock.status,
                 children,
             }
         }
@@ -185,7 +192,7 @@ mod tests {
 
         fn get_task(&self, id: &TaskId) -> Result<Option<Task>, String> {
             let tasks = self.tasks.borrow();
-            Ok(tasks.get(id.as_ref()).map(|row| self.row_to_task(row)))
+            Ok(tasks.get(id.as_ref()).map(|m| self.to_task(m)))
         }
 
         fn get_child_tasks(&self, parent_id: &TaskId) -> Result<Vec<Task>, String> {
@@ -194,7 +201,7 @@ mod tests {
             Ok(ids
                 .map(|ids| {
                     ids.iter()
-                        .filter_map(|id| tasks.get(id).map(|r| self.row_to_task(r)))
+                        .filter_map(|id| tasks.get(id).map(|m| self.to_task(m)))
                         .collect()
                 })
                 .unwrap_or_default())
@@ -209,8 +216,8 @@ mod tests {
         }
 
         fn update_task_status(&self, id: &TaskId, status: TaskStatus) -> Result<(), String> {
-            if let Some(row) = self.tasks.borrow_mut().get_mut(id.as_ref()) {
-                row.status = status;
+            if let Some(mock) = self.tasks.borrow_mut().get_mut(id.as_ref()) {
+                mock.status = status;
             }
             Ok(())
         }
