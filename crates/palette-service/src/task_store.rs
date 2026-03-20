@@ -1,0 +1,287 @@
+use palette_domain::task::{Task, TaskId, TaskStatus, TaskStore, TaskTree, TaskTreeNode};
+use palette_domain::workflow::WorkflowId;
+use std::cell::RefCell;
+use std::collections::HashMap;
+
+/// TaskStore implementation that combines a TaskTree (structure from Blueprint)
+/// with task statuses (execution state from DB) to produce full Task objects.
+pub struct TaskStoreImpl {
+    tree: TaskTree,
+    workflow_id: WorkflowId,
+    statuses: RefCell<HashMap<TaskId, TaskStatus>>,
+}
+
+impl TaskStoreImpl {
+    /// Build a TaskStoreImpl from a TaskTree and a map of task statuses.
+    pub fn new(
+        tree: TaskTree,
+        workflow_id: WorkflowId,
+        statuses: HashMap<TaskId, TaskStatus>,
+    ) -> Self {
+        Self {
+            tree,
+            workflow_id,
+            statuses: RefCell::new(statuses),
+        }
+    }
+
+    /// Build a TaskStoreImpl by reading the Blueprint file and task statuses from DB.
+    pub fn from_db(db: &palette_db::Database, workflow_id: &WorkflowId) -> Result<Self, Error> {
+        let workflow = db
+            .get_workflow(workflow_id)
+            .map_err(Error::Db)?
+            .ok_or_else(|| Error::WorkflowNotFound(workflow_id.clone()))?;
+
+        let blueprint = palette_fs::read_blueprint(std::path::Path::new(&workflow.blueprint_path))
+            .map_err(Error::Blueprint)?;
+        let tree = palette_fs::to_task_tree(&blueprint);
+        let statuses = db.get_task_statuses(workflow_id).map_err(Error::Db)?;
+
+        Ok(Self::new(tree, workflow_id.clone(), statuses))
+    }
+
+    pub fn root_id(&self) -> &TaskId {
+        self.tree.root_id()
+    }
+
+    fn build_task(&self, node: &TaskTreeNode) -> Task {
+        let statuses = self.statuses.borrow();
+        let status = statuses
+            .get(&node.id)
+            .copied()
+            .unwrap_or(TaskStatus::Pending);
+
+        let children: Vec<Task> = node
+            .children
+            .iter()
+            .filter_map(|child_id| self.tree.get(child_id))
+            .map(|child_node| self.build_task(child_node))
+            .collect();
+
+        Task {
+            id: node.id.clone(),
+            workflow_id: self.workflow_id.clone(),
+            parent_id: node.parent_id.clone(),
+            title: node.title.clone(),
+            plan_path: node.plan_path.clone(),
+            job_type: node.job_type,
+            status,
+            children,
+            depends_on: node.depends_on.clone(),
+        }
+    }
+
+    /// Return a snapshot of all statuses that have been updated.
+    pub fn statuses(&self) -> HashMap<TaskId, TaskStatus> {
+        self.statuses.borrow().clone()
+    }
+}
+
+impl TaskStore for TaskStoreImpl {
+    type Error = std::convert::Infallible;
+
+    fn get_task(&self, id: &TaskId) -> Result<Option<Task>, Self::Error> {
+        Ok(self.tree.get(id).map(|node| self.build_task(node)))
+    }
+
+    fn get_child_tasks(&self, parent_id: &TaskId) -> Result<Vec<Task>, Self::Error> {
+        let Some(parent_node) = self.tree.get(parent_id) else {
+            return Ok(vec![]);
+        };
+        Ok(parent_node
+            .children
+            .iter()
+            .filter_map(|child_id| self.tree.get(child_id))
+            .map(|child_node| self.build_task(child_node))
+            .collect())
+    }
+
+    fn update_task_status(&self, id: &TaskId, status: TaskStatus) -> Result<(), Self::Error> {
+        self.statuses.borrow_mut().insert(id.clone(), status);
+        Ok(())
+    }
+}
+
+#[derive(Debug)]
+pub enum Error {
+    Db(palette_db::Error),
+    Blueprint(palette_fs::BlueprintReadError),
+    WorkflowNotFound(WorkflowId),
+}
+
+impl std::fmt::Display for Error {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Error::Db(e) => write!(f, "database error: {e}"),
+            Error::Blueprint(e) => write!(f, "blueprint error: {e}"),
+            Error::WorkflowNotFound(id) => write!(f, "workflow not found: {id}"),
+        }
+    }
+}
+
+impl std::error::Error for Error {}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use palette_domain::job::JobType;
+    use palette_domain::task::TaskTree;
+
+    fn build_test_tree() -> (TaskTree, WorkflowId) {
+        let yaml = r#"
+task:
+  id: 2026/test
+  title: Test
+
+children:
+  - id: a
+    type: craft
+    plan_path: test/a
+  - id: b
+    type: craft
+    plan_path: test/b
+    depends_on: [a]
+"#;
+        let blueprint: palette_fs::TaskTreeBlueprint = serde_yaml::from_str(yaml).unwrap();
+        let tree = palette_fs::to_task_tree(&blueprint);
+        (tree, WorkflowId::new("wf-test"))
+    }
+
+    #[test]
+    fn get_task_returns_full_task() {
+        let (tree, wf_id) = build_test_tree();
+        let mut statuses = HashMap::new();
+        statuses.insert(TaskId::new("2026/test"), TaskStatus::InProgress);
+        statuses.insert(TaskId::new("2026/test/a"), TaskStatus::Ready);
+        statuses.insert(TaskId::new("2026/test/b"), TaskStatus::Pending);
+
+        let store = TaskStoreImpl::new(tree, wf_id.clone(), statuses);
+
+        let root = store.get_task(&TaskId::new("2026/test")).unwrap().unwrap();
+        assert_eq!(root.title, "Test");
+        assert_eq!(root.status, TaskStatus::InProgress);
+        assert_eq!(root.workflow_id, wf_id);
+        assert_eq!(root.children.len(), 2);
+
+        let a = store
+            .get_task(&TaskId::new("2026/test/a"))
+            .unwrap()
+            .unwrap();
+        assert_eq!(a.job_type, Some(JobType::Craft));
+        assert_eq!(a.status, TaskStatus::Ready);
+        assert!(a.depends_on.is_empty());
+
+        let b = store
+            .get_task(&TaskId::new("2026/test/b"))
+            .unwrap()
+            .unwrap();
+        assert_eq!(b.status, TaskStatus::Pending);
+        assert_eq!(b.depends_on, vec![TaskId::new("2026/test/a")]);
+    }
+
+    #[test]
+    fn get_child_tasks_returns_children() {
+        let (tree, wf_id) = build_test_tree();
+        let statuses = HashMap::new();
+        let store = TaskStoreImpl::new(tree, wf_id, statuses);
+
+        let children = store.get_child_tasks(&TaskId::new("2026/test")).unwrap();
+        assert_eq!(children.len(), 2);
+    }
+
+    #[test]
+    fn update_task_status_updates_in_memory() {
+        let (tree, wf_id) = build_test_tree();
+        let statuses = HashMap::new();
+        let store = TaskStoreImpl::new(tree, wf_id, statuses);
+
+        store
+            .update_task_status(&TaskId::new("2026/test/a"), TaskStatus::Done)
+            .unwrap();
+
+        let a = store
+            .get_task(&TaskId::new("2026/test/a"))
+            .unwrap()
+            .unwrap();
+        assert_eq!(a.status, TaskStatus::Done);
+    }
+
+    #[test]
+    fn task_rule_engine_resolves_ready_tasks() {
+        use palette_domain::rule::{TaskEffect, TaskRuleEngine};
+
+        let (tree, wf_id) = build_test_tree();
+        let mut statuses = HashMap::new();
+        statuses.insert(TaskId::new("2026/test"), TaskStatus::InProgress);
+        statuses.insert(TaskId::new("2026/test/a"), TaskStatus::Pending);
+        statuses.insert(TaskId::new("2026/test/b"), TaskStatus::Pending);
+
+        let store = TaskStoreImpl::new(tree, wf_id, statuses);
+        let engine = TaskRuleEngine::new(&store);
+
+        let task_ids = vec![TaskId::new("2026/test/a"), TaskId::new("2026/test/b")];
+        let effects = engine.resolve_ready_tasks(&task_ids).unwrap();
+
+        // Only 'a' should become Ready (b depends on a)
+        assert_eq!(effects.len(), 1);
+        assert_eq!(
+            effects[0],
+            TaskEffect::TaskStatusChanged {
+                task_id: TaskId::new("2026/test/a"),
+                new_status: TaskStatus::Ready,
+            }
+        );
+    }
+
+    #[test]
+    fn task_rule_engine_cascades_completion() {
+        use palette_domain::rule::{TaskEffect, TaskRuleEngine};
+
+        let (tree, wf_id) = build_test_tree();
+        let mut statuses = HashMap::new();
+        statuses.insert(TaskId::new("2026/test"), TaskStatus::InProgress);
+        statuses.insert(TaskId::new("2026/test/a"), TaskStatus::Done);
+        statuses.insert(TaskId::new("2026/test/b"), TaskStatus::Pending);
+
+        let store = TaskStoreImpl::new(tree, wf_id, statuses);
+        let engine = TaskRuleEngine::new(&store);
+
+        let effects = engine
+            .on_task_completed(&TaskId::new("2026/test/a"))
+            .unwrap();
+
+        // b should become Ready (dependency on a is satisfied)
+        assert_eq!(effects.len(), 1);
+        assert_eq!(
+            effects[0],
+            TaskEffect::TaskStatusChanged {
+                task_id: TaskId::new("2026/test/b"),
+                new_status: TaskStatus::Ready,
+            }
+        );
+    }
+
+    #[test]
+    fn all_children_done_completes_parent() {
+        use palette_domain::rule::{TaskEffect, TaskRuleEngine};
+
+        let (tree, wf_id) = build_test_tree();
+        let mut statuses = HashMap::new();
+        statuses.insert(TaskId::new("2026/test"), TaskStatus::InProgress);
+        statuses.insert(TaskId::new("2026/test/a"), TaskStatus::Done);
+        statuses.insert(TaskId::new("2026/test/b"), TaskStatus::Done);
+
+        let store = TaskStoreImpl::new(tree, wf_id, statuses);
+        let engine = TaskRuleEngine::new(&store);
+
+        let effects = engine
+            .on_task_completed(&TaskId::new("2026/test/b"))
+            .unwrap();
+
+        assert!(effects.iter().any(|e| *e
+            == TaskEffect::TaskStatusChanged {
+                task_id: TaskId::new("2026/test"),
+                new_status: TaskStatus::Done,
+            }));
+    }
+}

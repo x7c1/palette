@@ -63,7 +63,7 @@ impl<S: TaskStore> TaskRuleEngine<S> {
         if !self.parent_is_active(&task)? {
             return Ok(None);
         }
-        if !self.all_deps_done(task_id)? {
+        if !self.all_deps_done(&task)? {
             return Ok(None);
         }
         Ok(Some(TaskEffect::TaskStatusChanged {
@@ -82,9 +82,8 @@ impl<S: TaskStore> TaskRuleEngine<S> {
             .is_some_and(|p| p.status == TaskStatus::Ready || p.status == TaskStatus::InProgress))
     }
 
-    fn all_deps_done(&self, task_id: &TaskId) -> Result<bool, S::Error> {
-        let deps = self.store.get_task_dependencies(task_id)?;
-        for dep_id in &deps {
+    fn all_deps_done(&self, task: &Task) -> Result<bool, S::Error> {
+        for dep_id in &task.depends_on {
             let done = self
                 .store
                 .get_task(dep_id)?

@@ -1,6 +1,5 @@
 use super::Database;
 use crate::error::Error;
-use palette_domain::job::JobType;
 use palette_domain::task::{TaskId, TaskStatus};
 use palette_domain::workflow::WorkflowId;
 use rusqlite::params;
@@ -8,39 +7,19 @@ use rusqlite::params;
 pub struct CreateTaskRequest {
     pub id: TaskId,
     pub workflow_id: WorkflowId,
-    pub parent_id: Option<TaskId>,
-    pub title: String,
-    pub plan_path: Option<String>,
-    pub job_type: Option<JobType>,
-    pub depends_on: Vec<TaskId>,
 }
 
 impl Database {
     pub fn create_task(&self, req: &CreateTaskRequest) -> crate::Result<()> {
         let conn = lock!(self.conn);
-        let tx = conn.unchecked_transaction()?;
-
-        tx.execute(
-            "INSERT INTO tasks (id, workflow_id, parent_id, title, plan_path, job_type, status) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+        conn.execute(
+            "INSERT INTO tasks (id, workflow_id, status) VALUES (?1, ?2, ?3)",
             params![
                 req.id.as_ref(),
                 req.workflow_id.as_ref(),
-                req.parent_id.as_ref().map(|id| id.as_ref()),
-                req.title,
-                req.plan_path,
-                req.job_type.map(|jt| jt.as_str()),
                 TaskStatus::Pending.as_str(),
             ],
         )?;
-
-        for dep in &req.depends_on {
-            tx.execute(
-                "INSERT INTO task_dependencies (task_id, depends_on) VALUES (?1, ?2)",
-                params![req.id.as_ref(), dep.as_ref()],
-            )?;
-        }
-
-        tx.commit()?;
         Ok(())
     }
 }

@@ -1,15 +1,11 @@
-use palette_domain::job::JobType;
 use palette_domain::task::{TaskId, TaskStatus};
 use palette_domain::workflow::WorkflowId;
 
 /// Flat representation of a Task as stored in the database.
+/// Contains only execution state — structural information comes from the Blueprint.
 #[derive(Debug, Clone)]
 pub struct TaskRow {
     pub id: TaskId,
     pub workflow_id: WorkflowId,
-    pub parent_id: Option<TaskId>,
-    pub title: String,
-    pub plan_path: Option<String>,
-    pub job_type: Option<JobType>,
     pub status: TaskStatus,
 }
