@@ -134,34 +134,24 @@ impl Orchestrator {
                 read_only: false,
             })),
             JobType::Review => {
-                // In the task tree model, find the sibling craft task's job.
-                // Review task_id e.g. "root/step-a/review" → parent "root/step-a"
-                // → look for sibling craft job under the same parent.
-                if let Some(ref task_id) = job.task_id {
-                    let parent_prefix = task_id
-                        .as_ref()
-                        .rsplit_once('/')
-                        .map(|(parent, _)| parent)
-                        .unwrap_or(task_id.as_ref());
-
-                    // Find all jobs and look for a craft job under the same parent task
-                    let all_jobs = self
-                        .db
-                        .list_jobs(&palette_domain::job::JobFilter::default())?;
-                    let sibling_craft = all_jobs.iter().find(|j| {
-                        j.job_type == JobType::Craft
-                            && j.task_id.as_ref().is_some_and(|t| {
-                                t.as_ref().starts_with(parent_prefix) && t != task_id
-                            })
-                    });
-                    Ok(sibling_craft.map(|c| WorkspaceVolume {
-                        name: format!("palette-workspace-{}", c.id),
-                        read_only: true,
-                    }))
-                } else {
-                    // Fallback for legacy jobs without task_id
-                    Ok(None)
-                }
+                let Some(ref task_id) = job.task_id else {
+                    return Ok(None);
+                };
+                let Some(task_state) = self.db.get_task_state(task_id)? else {
+                    return Ok(None);
+                };
+                let task_store = TaskStoreImpl::from_db(&self.db, &task_state.workflow_id)
+                    .map_err(|e| crate::Error::Internal(e.to_string()))?;
+                let Some(craft_node) = task_store.tree().sibling_craft(task_id) else {
+                    return Ok(None);
+                };
+                let Some(craft_job) = self.db.get_job_by_task_id(&craft_node.id)? else {
+                    return Ok(None);
+                };
+                Ok(Some(WorkspaceVolume {
+                    name: format!("palette-workspace-{}", craft_job.id),
+                    read_only: true,
+                }))
             }
         }
     }
@@ -186,52 +176,49 @@ impl Orchestrator {
             all_effects.extend(task_job_effects);
         }
 
-        // When a review job is Done (approved), check if all sibling review jobs are Done.
-        // If so, mark sibling craft jobs as Done too (they were left in InReview).
-        if new_status == JobStatus::Done
-            && let Some(job) = self.db.get_job(job_id)?
-            && job.job_type == JobType::Review
-            && let Some(ref review_task_id) = job.task_id
-        {
-            let parent_prefix = review_task_id
-                .as_ref()
-                .rsplit_once('/')
-                .map(|(p, _)| p)
-                .unwrap_or(review_task_id.as_ref());
-            let all_jobs = self
-                .db
-                .list_jobs(&palette_domain::job::JobFilter::default())?;
-            let sibling_jobs: Vec<_> = all_jobs
-                .iter()
-                .filter(|j| {
-                    j.task_id.as_ref().is_some_and(|t| {
-                        t.as_ref().starts_with(parent_prefix) && t != review_task_id
-                    })
-                })
-                .collect();
-
-            // Only complete craft jobs if ALL sibling review jobs are Done
-            let all_reviews_done = sibling_jobs
-                .iter()
-                .filter(|j| j.job_type == JobType::Review)
-                .all(|j| j.id == *job_id || j.status == JobStatus::Done);
-
-            if all_reviews_done {
-                for craft_job in sibling_jobs
-                    .iter()
-                    .filter(|j| j.job_type == JobType::Craft && j.status == JobStatus::InReview)
-                {
-                    self.db.update_job_status(&craft_job.id, JobStatus::Done)?;
-                    tracing::info!(
-                        craft_job_id = %craft_job.id,
-                        review_job_id = %job_id,
-                        "craft job completed via approved review"
-                    );
-                }
-            }
+        // When a review job is Done (approved), mark the sibling craft job as Done too
+        // (it was left in InReview while awaiting review).
+        if new_status == JobStatus::Done {
+            self.complete_sibling_craft_job(job_id)?;
         }
 
         Ok(all_effects)
+    }
+
+    /// When a review job is Done, find and complete the sibling craft job
+    /// (which was left in InReview while awaiting review approval).
+    fn complete_sibling_craft_job(&self, review_job_id: &JobId) -> crate::Result<()> {
+        let Some(job) = self.db.get_job(review_job_id)? else {
+            return Ok(());
+        };
+        if job.job_type != JobType::Review {
+            return Ok(());
+        }
+        let Some(ref review_task_id) = job.task_id else {
+            return Ok(());
+        };
+        let Some(task_state) = self.db.get_task_state(review_task_id)? else {
+            return Ok(());
+        };
+        let task_store = TaskStoreImpl::from_db(&self.db, &task_state.workflow_id)
+            .map_err(|e| crate::Error::Internal(e.to_string()))?;
+
+        // Use task tree to find sibling craft task, then look up its job
+        let Some(craft_node) = task_store.tree().sibling_craft(review_task_id) else {
+            return Ok(());
+        };
+        let Some(craft_job) = self.db.get_job_by_task_id(&craft_node.id)? else {
+            return Ok(());
+        };
+        if craft_job.status == JobStatus::InReview {
+            self.db.update_job_status(&craft_job.id, JobStatus::Done)?;
+            tracing::info!(
+                craft_job_id = %craft_job.id,
+                review_job_id = %review_job_id,
+                "craft job completed via approved review"
+            );
+        }
+        Ok(())
     }
 
     /// When a Job completes, mark its Task as Done and cascade effects through the tree.

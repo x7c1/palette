@@ -42,4 +42,32 @@ impl TaskTree {
     pub fn task_ids(&self) -> impl Iterator<Item = &TaskId> {
         self.nodes.keys()
     }
+
+    /// Find sibling nodes that share the same parent as the given task.
+    /// Returns an empty vec if the task has no parent (root) or is not found.
+    pub fn siblings(&self, id: &TaskId) -> Vec<&TaskTreeNode> {
+        let Some(node) = self.nodes.get(id) else {
+            return vec![];
+        };
+        let Some(ref parent_id) = node.parent_id else {
+            return vec![];
+        };
+        let Some(parent) = self.nodes.get(parent_id) else {
+            return vec![];
+        };
+        parent
+            .children
+            .iter()
+            .filter(|child_id| *child_id != id)
+            .filter_map(|child_id| self.nodes.get(child_id))
+            .collect()
+    }
+
+    /// Find the sibling craft task for a given task (typically a review task).
+    /// Returns None if no sibling with job_type Craft exists.
+    pub fn sibling_craft(&self, id: &TaskId) -> Option<&TaskTreeNode> {
+        self.siblings(id)
+            .into_iter()
+            .find(|s| s.job_type == Some(JobType::Craft))
+    }
 }
