@@ -31,11 +31,7 @@ impl Database {
             "SELECT id, workflow_id, parent_id, title, plan_path, status FROM tasks WHERE id = ?1",
         )?;
         let mut rows = stmt.query_map(params![id.as_ref()], row_to_task_row)?;
-        match rows.next() {
-            Some(Ok(task)) => Ok(Some(task)),
-            Some(Err(e)) => Err(e.into()),
-            None => Ok(None),
-        }
+        rows.next().transpose().map_err(Into::into)
     }
 
     pub fn get_child_task_rows(&self, parent_id: &TaskId) -> crate::Result<Vec<TaskRow>> {
