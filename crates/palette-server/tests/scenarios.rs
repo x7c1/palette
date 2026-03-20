@@ -56,6 +56,7 @@ async fn scenario3_message_queuing_to_leader() {
     state
         .db
         .create_job(&CreateJobRequest {
+            task_id: None,
             id: Some(jid("R-A")),
             job_type: JobType::Review,
             title: "Review A".to_string(),
@@ -70,6 +71,7 @@ async fn scenario3_message_queuing_to_leader() {
     state
         .db
         .create_job(&CreateJobRequest {
+            task_id: None,
             id: Some(jid("R-B")),
             job_type: JobType::Review,
             title: "Review B".to_string(),

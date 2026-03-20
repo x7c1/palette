@@ -68,6 +68,7 @@ mod tests {
     fn submit_and_get_review() {
         let db = test_db();
         db.create_job(&CreateJobRequest {
+            task_id: None,
             id: Some(jid("C-001")),
             job_type: JobType::Craft,
             title: "Craft".to_string(),
@@ -81,6 +82,7 @@ mod tests {
         .unwrap();
 
         db.create_job(&CreateJobRequest {
+            task_id: None,
             id: Some(jid("R-001")),
             job_type: JobType::Review,
             title: "Review".to_string(),

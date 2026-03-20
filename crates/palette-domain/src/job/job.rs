@@ -2,10 +2,12 @@ use chrono::{DateTime, Utc};
 
 use super::{JobId, JobStatus, JobType, Priority, Repository};
 use crate::agent::AgentId;
+use crate::task::TaskId;
 
 #[derive(Debug, Clone)]
 pub struct Job {
     pub id: JobId,
+    pub task_id: Option<TaskId>,
     pub job_type: JobType,
     pub title: String,
     pub plan_path: String,

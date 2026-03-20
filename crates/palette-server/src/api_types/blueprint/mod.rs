@@ -29,6 +29,7 @@ impl Blueprint {
         self.jobs
             .into_iter()
             .map(|entry| CreateJobRequest {
+                task_id: None,
                 id: Some(entry.id.into()),
                 job_type: entry.job_type.into(),
                 title: entry.title,

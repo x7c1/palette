@@ -3,6 +3,7 @@ use rusqlite::Connection;
 pub(crate) const SCHEMA: &str = r#"
 CREATE TABLE IF NOT EXISTS jobs (
     id TEXT PRIMARY KEY,
+    task_id TEXT,
     type TEXT NOT NULL CHECK(type IN ('craft', 'review')),
     title TEXT NOT NULL,
     plan_path TEXT NOT NULL,
@@ -15,7 +16,8 @@ CREATE TABLE IF NOT EXISTS jobs (
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL,
     notes TEXT,
-    assigned_at TEXT
+    assigned_at TEXT,
+    FOREIGN KEY (task_id) REFERENCES tasks(id)
 );
 
 CREATE TABLE IF NOT EXISTS dependencies (
@@ -154,6 +156,16 @@ fn migrate(conn: &Connection) -> rusqlite::Result<()> {
         CREATE INDEX IF NOT EXISTS idx_tasks_workflow ON tasks(workflow_id);
         CREATE INDEX IF NOT EXISTS idx_tasks_parent ON tasks(parent_id);",
     )?;
+
+    // Add task_id column to jobs table if it doesn't exist.
+    let has_task_id: bool = conn
+        .prepare("SELECT COUNT(*) FROM pragma_table_info('jobs') WHERE name = 'task_id'")?
+        .query_row([], |row| row.get::<_, i64>(0))
+        .map(|count| count > 0)?;
+
+    if !has_task_id {
+        conn.execute_batch("ALTER TABLE jobs ADD COLUMN task_id TEXT;")?;
+    }
 
     Ok(())
 }

@@ -199,6 +199,7 @@ mod tests {
 
     fn create_craft_review_pair(db: &Database) {
         db.create_job(&CreateJobRequest {
+            task_id: None,
             id: Some(jid("W-001")),
             job_type: JobType::Craft,
             title: "Work".to_string(),
@@ -212,6 +213,7 @@ mod tests {
         .unwrap();
 
         db.create_job(&CreateJobRequest {
+            task_id: None,
             id: Some(jid("R-001")),
             job_type: JobType::Review,
             title: "Review".to_string(),
