@@ -96,13 +96,13 @@ impl<S: TaskStore> TaskRuleEngine<S> {
             });
             if all_children_done {
                 let parent = self.store.get_task(parent_id)?;
-                if let Some(p) = parent {
-                    if p.status != TaskStatus::Done {
-                        effects.push(TaskEffect::TaskStatusChanged {
-                            task_id: parent_id.clone(),
-                            new_status: TaskStatus::Done,
-                        });
-                    }
+                if let Some(p) = parent
+                    && p.status != TaskStatus::Done
+                {
+                    effects.push(TaskEffect::TaskStatusChanged {
+                        task_id: parent_id.clone(),
+                        new_status: TaskStatus::Done,
+                    });
                 }
             }
         }
