@@ -6,7 +6,7 @@ use axum::{
     http::StatusCode,
     response::{IntoResponse, Response},
 };
-use palette_db::database::CreateTaskRequest;
+use palette_db::CreateTaskRequest;
 use palette_domain::job::{CreateJobRequest, JobId, JobStatus, JobType, Priority};
 use palette_domain::rule::{TaskEffect, TaskRuleEngine};
 use palette_domain::server::ServerEvent;
