@@ -1,4 +1,4 @@
-use crate::blueprint::{TaskNode, TaskTreeBlueprint};
+use super::{TaskNode, TaskTreeBlueprint};
 use palette_domain::job::JobType;
 use palette_domain::task::{TaskId, TaskTree, TaskTreeNode};
 use std::collections::HashMap;
@@ -78,7 +78,7 @@ fn collect_nodes(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::blueprint::TaskTreeBlueprint;
+    use super::TaskTreeBlueprint;
 
     #[test]
     fn builds_flat_index_from_nested_blueprint() {

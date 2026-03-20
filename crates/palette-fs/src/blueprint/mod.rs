@@ -1,3 +1,5 @@
+mod to_task_tree;
+
 use palette_domain::job::{JobType, Priority, Repository};
 use serde::Deserialize;
 use std::path::Path;
