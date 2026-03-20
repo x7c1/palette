@@ -7,7 +7,8 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use palette_db::database::CreateTaskRequest;
-use palette_domain::task::TaskId;
+use palette_domain::rule::{TaskEffect, TaskRuleEngine};
+use palette_domain::task::{TaskId, TaskStatus};
 use palette_domain::workflow::WorkflowId;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
@@ -56,22 +57,52 @@ pub async fn handle_start_workflow(
         })
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
-    // Recursively create child tasks
-    let mut task_count = 1;
+    // Recursively create child tasks, collecting all created task IDs
+    let mut all_task_ids = vec![root_task_id.clone()];
     create_child_tasks(
         &state,
         &workflow_id,
         &root_task_id,
         &blueprint.task.id,
         &blueprint.children,
-        &mut task_count,
+        &mut all_task_ids,
     )
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    let task_count = all_task_ids.len();
+
+    // Transition root task to InProgress
+    state
+        .db
+        .update_task_status(&root_task_id, TaskStatus::InProgress)
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    // Resolve initial ready tasks (tasks with no dependencies)
+    let task_engine = TaskRuleEngine::new(&*state.db);
+    let effects = task_engine
+        .resolve_ready_tasks(&all_task_ids)
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    // Apply effects: transition tasks to Ready
+    for effect in &effects {
+        if let TaskEffect::TaskStatusChanged {
+            task_id,
+            new_status,
+        } = effect
+        {
+            state
+                .db
+                .update_task_status(task_id, *new_status)
+                .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+            tracing::info!(task_id = %task_id, status = ?new_status, "task status changed");
+        }
+    }
 
     tracing::info!(
         workflow_id = %workflow_id,
         root_task = %blueprint.task.id,
         task_count = task_count,
+        ready_tasks = effects.len(),
         "started workflow"
     );
 
@@ -89,7 +120,7 @@ fn create_child_tasks(
     parent_task_id: &TaskId,
     parent_id_str: &str,
     children: &[TaskNode],
-    task_count: &mut usize,
+    all_task_ids: &mut Vec<TaskId>,
 ) -> Result<(), String> {
     for child in children {
         let child_id_str = format!("{parent_id_str}/{}", child.id);
@@ -115,7 +146,7 @@ fn create_child_tasks(
             })
             .map_err(|e| e.to_string())?;
 
-        *task_count += 1;
+        all_task_ids.push(child_task_id.clone());
 
         // Recurse into grandchildren
         if !child.children.is_empty() {
@@ -125,7 +156,7 @@ fn create_child_tasks(
                 &child_task_id,
                 &child_id_str,
                 &child.children,
-                task_count,
+                all_task_ids,
             )?;
         }
     }

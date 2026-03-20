@@ -80,6 +80,57 @@ async fn workflow_start_creates_task_tree() {
     // Check grandchildren
     let planning_children = state.db.get_child_tasks(&planning.id).unwrap();
     assert_eq!(planning_children.len(), 2);
+
+    // Verify initial task status resolution:
+    // - root: InProgress (has children)
+    // - planning: Ready (no dependencies)
+    // - execution: Pending (depends on planning)
+    // - api-plan: Ready (no dependencies within planning)
+    // - api-plan-review: Pending (depends on api-plan)
+    use palette_domain::task::TaskStatus;
+
+    let root = state
+        .db
+        .get_task(&palette_domain::task::TaskId::new("2026/feature-x"))
+        .unwrap()
+        .unwrap();
+    assert_eq!(root.status, TaskStatus::InProgress);
+
+    let planning = state
+        .db
+        .get_task(&palette_domain::task::TaskId::new(
+            "2026/feature-x/planning",
+        ))
+        .unwrap()
+        .unwrap();
+    assert_eq!(planning.status, TaskStatus::Ready);
+
+    let execution = state
+        .db
+        .get_task(&palette_domain::task::TaskId::new(
+            "2026/feature-x/execution",
+        ))
+        .unwrap()
+        .unwrap();
+    assert_eq!(execution.status, TaskStatus::Pending);
+
+    let api_plan = state
+        .db
+        .get_task(&palette_domain::task::TaskId::new(
+            "2026/feature-x/planning/api-plan",
+        ))
+        .unwrap()
+        .unwrap();
+    assert_eq!(api_plan.status, TaskStatus::Ready);
+
+    let api_plan_review = state
+        .db
+        .get_task(&palette_domain::task::TaskId::new(
+            "2026/feature-x/planning/api-plan-review",
+        ))
+        .unwrap()
+        .unwrap();
+    assert_eq!(api_plan_review.status, TaskStatus::Pending);
 }
 
 #[tokio::test]
