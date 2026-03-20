@@ -1,10 +1,12 @@
 mod error;
 pub use error::{Error, Result};
 
-pub mod models;
+pub(crate) mod models;
 
 mod database;
+pub use database::CreateTaskRequest;
 pub use database::Database;
 
 mod job_store;
 mod schema;
+mod task_store;

@@ -24,10 +24,11 @@ impl Database {
         let tx = conn.transaction()?;
 
         tx.execute(
-            "INSERT INTO jobs (id, type, title, plan_path, description, assignee, status, priority, repository, pr_url, created_at, updated_at, notes, assigned_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, NULL, ?10, ?11, NULL, NULL)",
+            "INSERT INTO jobs (id, task_id, type, title, plan_path, description, assignee, status, priority, repository, pr_url, created_at, updated_at, notes, assigned_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, NULL, ?11, ?12, NULL, NULL)",
             params![
                 id.as_ref(),
+                req.task_id.as_ref().map(|t| t.as_ref()),
                 req.job_type.as_str(),
                 req.title,
                 req.plan_path,
@@ -67,6 +68,7 @@ mod tests {
         let db = test_db();
         let job = db
             .create_job(&CreateJobRequest {
+                task_id: None,
                 id: Some(jid("C-001")),
                 job_type: JobType::Craft,
                 title: "Implement feature".to_string(),
@@ -95,6 +97,7 @@ mod tests {
     fn create_job_with_dependencies() {
         let db = test_db();
         db.create_job(&CreateJobRequest {
+            task_id: None,
             id: Some(jid("C-001")),
             job_type: JobType::Craft,
             title: "Craft job".to_string(),
@@ -108,6 +111,7 @@ mod tests {
         .unwrap();
 
         db.create_job(&CreateJobRequest {
+            task_id: None,
             id: Some(jid("R-001")),
             job_type: JobType::Review,
             title: "Review job".to_string(),

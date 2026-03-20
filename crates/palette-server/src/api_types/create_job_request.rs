@@ -24,6 +24,7 @@ impl From<CreateJobRequest> for domain::job::CreateJobRequest {
     fn from(api: CreateJobRequest) -> Self {
         Self {
             id: api.id.map(domain::job::JobId::new),
+            task_id: None,
             job_type: api.job_type.into(),
             title: api.title,
             plan_path: api.plan_path,

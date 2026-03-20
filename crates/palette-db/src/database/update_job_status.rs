@@ -27,6 +27,7 @@ mod tests {
     fn update_job_status() {
         let db = test_db();
         db.create_job(&CreateJobRequest {
+            task_id: None,
             id: Some(jid("C-001")),
             job_type: JobType::Craft,
             title: "Craft".to_string(),

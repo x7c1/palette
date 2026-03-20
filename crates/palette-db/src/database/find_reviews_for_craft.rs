@@ -5,12 +5,12 @@ impl Database {
     pub fn find_reviews_for_craft(&self, craft_id: &JobId) -> crate::Result<Vec<Job>> {
         let conn = lock!(self.conn);
         let mut stmt = conn.prepare(
-            "SELECT t.id, t.type, t.title, t.plan_path, t.description, t.assignee, t.status, t.priority, t.repository, t.pr_url, t.created_at, t.updated_at, t.notes, t.assigned_at
+            "SELECT t.id, t.task_id, t.type, t.title, t.plan_path, t.description, t.assignee, t.status, t.priority, t.repository, t.pr_url, t.created_at, t.updated_at, t.notes, t.assigned_at
              FROM jobs t
              JOIN dependencies d ON d.job_id = t.id
              WHERE d.depends_on = ?1 AND t.type = 'review'",
         )?;
-        let rows = stmt.query_map(params![craft_id.as_ref()], |row| Ok(row_to_job(row)))?;
+        let rows = stmt.query_map(params![craft_id.as_ref()], row_to_job)?;
         let mut jobs = Vec::new();
         for row in rows {
             jobs.push(row?);
@@ -29,6 +29,7 @@ mod tests {
     fn find_reviews_for_craft() {
         let db = test_db();
         db.create_job(&CreateJobRequest {
+            task_id: None,
             id: Some(jid("C-001")),
             job_type: JobType::Craft,
             title: "Craft".to_string(),
@@ -42,6 +43,7 @@ mod tests {
         .unwrap();
 
         db.create_job(&CreateJobRequest {
+            task_id: None,
             id: Some(jid("R-001")),
             job_type: JobType::Review,
             title: "Review".to_string(),

@@ -1,8 +1,9 @@
 mod job_entry;
 mod job_id_input;
-mod job_type_input;
-mod priority_input;
+pub mod job_type_input;
+pub mod priority_input;
 mod task;
+pub mod task_node;
 
 use job_entry::JobEntry;
 use palette_domain::job::{CreateJobRequest, JobId, Priority};
@@ -28,6 +29,7 @@ impl Blueprint {
         self.jobs
             .into_iter()
             .map(|entry| CreateJobRequest {
+                task_id: None,
                 id: Some(entry.id.into()),
                 job_type: entry.job_type.into(),
                 title: entry.title,

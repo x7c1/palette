@@ -3,6 +3,7 @@ use rusqlite::Connection;
 pub(crate) const SCHEMA: &str = r#"
 CREATE TABLE IF NOT EXISTS jobs (
     id TEXT PRIMARY KEY,
+    task_id TEXT,
     type TEXT NOT NULL CHECK(type IN ('craft', 'review')),
     title TEXT NOT NULL,
     plan_path TEXT NOT NULL,
@@ -15,7 +16,8 @@ CREATE TABLE IF NOT EXISTS jobs (
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL,
     notes TEXT,
-    assigned_at TEXT
+    assigned_at TEXT,
+    FOREIGN KEY (task_id) REFERENCES tasks(id)
 );
 
 CREATE TABLE IF NOT EXISTS dependencies (
@@ -63,6 +65,35 @@ CREATE TABLE IF NOT EXISTS blueprints (
     yaml TEXT NOT NULL,
     created_at TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS workflows (
+    id TEXT PRIMARY KEY,
+    blueprint_path TEXT NOT NULL,
+    status TEXT NOT NULL CHECK(status IN ('active', 'suspended', 'completed')),
+    started_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS tasks (
+    id TEXT PRIMARY KEY,
+    workflow_id TEXT NOT NULL,
+    parent_id TEXT,
+    title TEXT NOT NULL,
+    plan_path TEXT,
+    status TEXT NOT NULL CHECK(status IN ('pending', 'ready', 'in_progress', 'suspended', 'done')),
+    FOREIGN KEY (workflow_id) REFERENCES workflows(id),
+    FOREIGN KEY (parent_id) REFERENCES tasks(id)
+);
+
+CREATE TABLE IF NOT EXISTS task_dependencies (
+    task_id TEXT NOT NULL,
+    depends_on TEXT NOT NULL,
+    PRIMARY KEY (task_id, depends_on),
+    FOREIGN KEY (task_id) REFERENCES tasks(id),
+    FOREIGN KEY (depends_on) REFERENCES tasks(id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_tasks_workflow ON tasks(workflow_id);
+CREATE INDEX IF NOT EXISTS idx_tasks_parent ON tasks(parent_id);
 "#;
 
 pub(crate) fn initialize(conn: &Connection) -> rusqlite::Result<()> {
@@ -94,6 +125,48 @@ fn migrate(conn: &Connection) -> rusqlite::Result<()> {
         conn.execute_batch("ALTER TABLE jobs ADD COLUMN plan_path TEXT NOT NULL DEFAULT '';")?;
     }
 
+    // Add workflows, tasks, and task_dependencies tables if they don't exist.
+    conn.execute_batch(
+        "CREATE TABLE IF NOT EXISTS workflows (
+            id TEXT PRIMARY KEY,
+            blueprint_path TEXT NOT NULL,
+            status TEXT NOT NULL CHECK(status IN ('active', 'suspended', 'completed')),
+            started_at TEXT NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS tasks (
+            id TEXT PRIMARY KEY,
+            workflow_id TEXT NOT NULL,
+            parent_id TEXT,
+            title TEXT NOT NULL,
+            plan_path TEXT,
+            status TEXT NOT NULL CHECK(status IN ('pending', 'ready', 'in_progress', 'suspended', 'done')),
+            FOREIGN KEY (workflow_id) REFERENCES workflows(id),
+            FOREIGN KEY (parent_id) REFERENCES tasks(id)
+        );
+
+        CREATE TABLE IF NOT EXISTS task_dependencies (
+            task_id TEXT NOT NULL,
+            depends_on TEXT NOT NULL,
+            PRIMARY KEY (task_id, depends_on),
+            FOREIGN KEY (task_id) REFERENCES tasks(id),
+            FOREIGN KEY (depends_on) REFERENCES tasks(id)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_tasks_workflow ON tasks(workflow_id);
+        CREATE INDEX IF NOT EXISTS idx_tasks_parent ON tasks(parent_id);",
+    )?;
+
+    // Add task_id column to jobs table if it doesn't exist.
+    let has_task_id: bool = conn
+        .prepare("SELECT COUNT(*) FROM pragma_table_info('jobs') WHERE name = 'task_id'")?
+        .query_row([], |row| row.get::<_, i64>(0))
+        .map(|count| count > 0)?;
+
+    if !has_task_id {
+        conn.execute_batch("ALTER TABLE jobs ADD COLUMN task_id TEXT;")?;
+    }
+
     Ok(())
 }
 
@@ -119,6 +192,9 @@ mod tests {
         assert!(tables.contains(&"review_submissions".to_string()));
         assert!(tables.contains(&"review_comments".to_string()));
         assert!(tables.contains(&"message_queue".to_string()));
+        assert!(tables.contains(&"workflows".to_string()));
+        assert!(tables.contains(&"tasks".to_string()));
+        assert!(tables.contains(&"task_dependencies".to_string()));
     }
 
     #[test]

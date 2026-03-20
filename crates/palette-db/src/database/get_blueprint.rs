@@ -11,17 +11,16 @@ impl Database {
         )?;
         let mut rows = stmt.query_map(params![task_id], |row| {
             Ok(StoredBlueprint {
-                task_id: row.get(0)?,
-                title: row.get(1)?,
-                yaml: row.get(2)?,
-                created_at: parse_datetime(&row.get::<_, String>(3)?),
+                task_id: row.get("task_id")?,
+                title: row.get("title")?,
+                yaml: row.get("yaml")?,
+                created_at: parse_datetime(&row.get::<_, String>("created_at")?),
             })
         })?;
 
-        match rows.next() {
-            Some(Ok(bp)) => Ok(Some(bp.into())),
-            Some(Err(e)) => Err(e.into()),
-            None => Ok(None),
-        }
+        rows.next()
+            .transpose()
+            .map(|opt| opt.map(Into::into))
+            .map_err(Into::into)
     }
 }

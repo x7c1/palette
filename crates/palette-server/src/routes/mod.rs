@@ -3,6 +3,7 @@ mod hooks;
 mod jobs;
 mod reviews;
 mod send;
+mod workflows;
 
 use crate::{AppState, EventRecord};
 use axum::{
@@ -35,6 +36,8 @@ pub fn create_router(state: Arc<AppState>) -> Router {
             "/blueprints/{task_id}",
             get(blueprints::handle_get_blueprint),
         )
+        // Workflow API
+        .route("/workflows/start", post(workflows::handle_start_workflow))
         // Job API
         .route("/jobs/create", post(jobs::handle_create_job))
         .route("/jobs/update", post(jobs::handle_update_job))
