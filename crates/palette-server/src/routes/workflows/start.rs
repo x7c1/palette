@@ -17,7 +17,7 @@ use std::sync::Arc;
 
 #[derive(Debug, Deserialize)]
 pub struct StartWorkflowRequest {
-    pub blueprint_yaml: String,
+    pub blueprint_path: String,
 }
 
 #[derive(Debug, Serialize)]
@@ -30,7 +30,17 @@ pub async fn handle_start_workflow(
     State(state): State<Arc<AppState>>,
     Json(req): Json<StartWorkflowRequest>,
 ) -> Result<Response, (StatusCode, String)> {
-    let blueprint = TaskTreeBlueprint::parse(&req.blueprint_yaml).map_err(|e| {
+    let yaml = std::fs::read_to_string(&req.blueprint_path).map_err(|e| {
+        (
+            StatusCode::BAD_REQUEST,
+            format!(
+                "failed to read blueprint file '{}': {e}",
+                req.blueprint_path
+            ),
+        )
+    })?;
+
+    let blueprint = TaskTreeBlueprint::parse(&yaml).map_err(|e| {
         (
             StatusCode::BAD_REQUEST,
             format!("invalid blueprint YAML: {e}"),
@@ -40,7 +50,13 @@ pub async fn handle_start_workflow(
     let workflow_id = WorkflowId::generate();
     let root_task_id = TaskId::new(&blueprint.task.id);
 
-    let task_count = register_task_tree(&state, &workflow_id, &root_task_id, &blueprint)?;
+    let task_count = register_task_tree(
+        &state,
+        &workflow_id,
+        &root_task_id,
+        &blueprint,
+        &req.blueprint_path,
+    )?;
 
     let ready_leaf_ids = resolve_ready_cascade(&state, &root_task_id)?;
 
@@ -75,10 +91,11 @@ fn register_task_tree(
     workflow_id: &WorkflowId,
     root_task_id: &TaskId,
     blueprint: &TaskTreeBlueprint,
+    blueprint_path: &str,
 ) -> HandlerResult<usize> {
     state
         .db
-        .create_workflow(workflow_id, &format!("inline:{}", blueprint.task.id))
+        .create_workflow(workflow_id, blueprint_path)
         .map_err(internal_err)?;
 
     state
