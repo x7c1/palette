@@ -3,6 +3,14 @@ mod helper;
 use helper::{spawn_server, test_session_name_with_guard};
 use palette_domain::task::TaskStore;
 use palette_tmux::TmuxManager;
+use std::io::Write;
+
+/// Write YAML to a temp file and return the path.
+fn write_blueprint_file(yaml: &str) -> tempfile::NamedTempFile {
+    let mut f = tempfile::NamedTempFile::new().unwrap();
+    f.write_all(yaml.as_bytes()).unwrap();
+    f
+}
 
 const TASK_TREE_YAML: &str = r#"
 task:
@@ -38,12 +46,13 @@ async fn workflow_start_creates_task_tree() {
 
     let (base_url, state) = spawn_server(tmux, &session).await;
     let client = reqwest::Client::new();
+    let blueprint_file = write_blueprint_file(TASK_TREE_YAML);
 
     // POST /workflows/start
     let resp = client
         .post(format!("{base_url}/workflows/start"))
         .json(&serde_json::json!({
-            "blueprint_yaml": TASK_TREE_YAML
+            "blueprint_path": blueprint_file.path().to_str().unwrap()
         }))
         .send()
         .await
@@ -153,11 +162,32 @@ async fn workflow_start_rejects_invalid_yaml() {
 
     let (base_url, _state) = spawn_server(tmux, &session).await;
     let client = reqwest::Client::new();
+    let blueprint_file = write_blueprint_file("not valid yaml: [[");
 
     let resp = client
         .post(format!("{base_url}/workflows/start"))
         .json(&serde_json::json!({
-            "blueprint_yaml": "not valid yaml: [["
+            "blueprint_path": blueprint_file.path().to_str().unwrap()
+        }))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), 400);
+}
+
+#[tokio::test]
+async fn workflow_start_rejects_missing_file() {
+    let (session, _guard) = test_session_name_with_guard("wf-missing");
+    let tmux = TmuxManager::new(session.clone());
+    tmux.create_session(&session).unwrap();
+
+    let (base_url, _state) = spawn_server(tmux, &session).await;
+    let client = reqwest::Client::new();
+
+    let resp = client
+        .post(format!("{base_url}/workflows/start"))
+        .json(&serde_json::json!({
+            "blueprint_path": "/nonexistent/path.yaml"
         }))
         .send()
         .await
@@ -175,7 +205,6 @@ async fn job_completion_cascades_through_task_tree() {
     let (base_url, state) = spawn_server(tmux, &session).await;
     let client = reqwest::Client::new();
 
-    // Start a workflow with: planning(api-plan → api-plan-review) → execution
     let yaml = r#"
 task:
   id: 2026/cascade-test
@@ -190,10 +219,13 @@ children:
     plan_path: test/step-b
     depends_on: [step-a]
 "#;
+    let blueprint_file = write_blueprint_file(yaml);
 
     let resp = client
         .post(format!("{base_url}/workflows/start"))
-        .json(&serde_json::json!({ "blueprint_yaml": yaml }))
+        .json(&serde_json::json!({
+            "blueprint_path": blueprint_file.path().to_str().unwrap()
+        }))
         .send()
         .await
         .unwrap();

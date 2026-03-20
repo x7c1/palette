@@ -46,6 +46,7 @@ mod get_job;
 mod get_job_by_task;
 mod get_review_comments;
 mod get_review_submissions;
+mod get_workflow;
 mod has_pending_messages;
 mod list_blueprints;
 mod list_jobs;

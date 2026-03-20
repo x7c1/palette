@@ -1,5 +1,4 @@
 use crate::AppState;
-use crate::api_types::blueprint::task_node::{TaskNode, TaskTreeBlueprint};
 use axum::{
     Json,
     extract::State,
@@ -12,12 +11,14 @@ use palette_domain::rule::{TaskEffect, TaskRuleEngine};
 use palette_domain::server::ServerEvent;
 use palette_domain::task::{TaskId, TaskStatus, TaskStore};
 use palette_domain::workflow::WorkflowId;
+use palette_fs::{TaskNode, TaskTreeBlueprint, read_blueprint};
 use serde::{Deserialize, Serialize};
+use std::path::Path;
 use std::sync::Arc;
 
 #[derive(Debug, Deserialize)]
 pub struct StartWorkflowRequest {
-    pub blueprint_yaml: String,
+    pub blueprint_path: String,
 }
 
 #[derive(Debug, Serialize)]
@@ -30,17 +31,19 @@ pub async fn handle_start_workflow(
     State(state): State<Arc<AppState>>,
     Json(req): Json<StartWorkflowRequest>,
 ) -> Result<Response, (StatusCode, String)> {
-    let blueprint = TaskTreeBlueprint::parse(&req.blueprint_yaml).map_err(|e| {
-        (
-            StatusCode::BAD_REQUEST,
-            format!("invalid blueprint YAML: {e}"),
-        )
-    })?;
+    let blueprint = read_blueprint(Path::new(&req.blueprint_path))
+        .map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))?;
 
     let workflow_id = WorkflowId::generate();
     let root_task_id = TaskId::new(&blueprint.task.id);
 
-    let task_count = register_task_tree(&state, &workflow_id, &root_task_id, &blueprint)?;
+    let task_count = register_task_tree(
+        &state,
+        &workflow_id,
+        &root_task_id,
+        &blueprint,
+        &req.blueprint_path,
+    )?;
 
     let ready_leaf_ids = resolve_ready_cascade(&state, &root_task_id)?;
 
@@ -75,10 +78,11 @@ fn register_task_tree(
     workflow_id: &WorkflowId,
     root_task_id: &TaskId,
     blueprint: &TaskTreeBlueprint,
+    blueprint_path: &str,
 ) -> HandlerResult<usize> {
     state
         .db
-        .create_workflow(workflow_id, &format!("inline:{}", blueprint.task.id))
+        .create_workflow(workflow_id, blueprint_path)
         .map_err(internal_err)?;
 
     state
