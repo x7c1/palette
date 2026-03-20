@@ -2,16 +2,16 @@
 
 ## Definition
 
-A Blueprint is a document that defines a [Task](../task/) and the [Jobs](../job/) needed to accomplish it. It is the input that an [Operator](../operator/) provides to Palette to start work.
+A Blueprint is a document that defines a [Task](../task/) tree. It describes Tasks, their child Tasks, dependencies between sibling Tasks, and [Jobs](../job/) assigned to Tasks. Tasks can be nested to any depth.
 
-A Blueprint contains a Task identity (id, title, and [Plan](../plan/) location) and a list of Job entries. Each Job entry specifies the Job type (craft or review), its dependencies on other Jobs, its Plan location, and typically a repository and branch to work on.
+A Blueprint is produced by a [Crafter](../worker/member/crafter/) as the deliverable of a planning Task. For example, the [Operator](../operator/) gives Palette a goal such as "add feature X." Palette assigns a Crafter to plan that goal, and the Crafter produces a Blueprint that breaks it down into concrete child Tasks.
 
 ## Lifecycle
 
-1. **Submit**: The Operator submits a Blueprint as a YAML document. Palette stores it for later use.
-2. **Load**: The Operator loads a stored Blueprint. Palette creates the Jobs defined in the Blueprint and transitions them according to the lifecycle rules.
+1. **Submit**: A Blueprint is submitted as a YAML document. Palette stores it for later use.
+2. **Load**: A stored Blueprint is loaded. Palette creates the Tasks and Jobs defined in the Blueprint and begins execution.
 
-Submitting a Blueprint does not create Jobs — it only stores the document. Loading is the step that instantiates the Jobs and begins execution.
+Submitting a Blueprint does not create Tasks or Jobs — it only stores the document. Loading is the step that instantiates them and begins execution.
 
 ## Examples
 
@@ -19,42 +19,47 @@ Submitting a Blueprint does not create Jobs — it only stores the document. Loa
 task:
   id: 2026/feature-x
   title: Add feature X
-  plan_path: 2026/feature-x
 
-jobs:
-  - id: C-A
-    type: craft
-    title: Implement API
-    plan_path: 2026/feature-x/api-impl
-    priority: high
-    repository:
-      name: x7c1/palette
-      branch: feature/test
+children:
+  - id: planning
+    children:
+      - id: api-plan
+        type: craft
+        plan_path: 2026/feature-x/planning/api-plan
+      - id: api-plan-review
+        type: review
+        depends_on: [api-plan]
 
-  - id: R-A
-    type: review
-    title: Review API
-    plan_path: 2026/feature-x/api-review
-    depends_on: [C-A]
+  - id: execution
+    depends_on: [planning]
+    children:
+      - id: api-impl
+        type: craft
+        plan_path: 2026/feature-x/execution/api-impl
+        repository:
+          name: x7c1/palette
+          branch: feature/x-api-impl
+      - id: api-impl-review
+        type: review
+        depends_on: [api-impl]
 ```
 
 ## Collocations
 
+- produce (a Blueprint as the deliverable of a planning Task)
 - submit (a Blueprint to store it)
-- load (a Blueprint to create Jobs from it)
+- load (a Blueprint to create Tasks and Jobs from it)
 - parse (a Blueprint from YAML)
 
 ## Domain Rules
 
-- A Blueprint must contain exactly one Task identity.
-- A Blueprint must contain at least one Job entry.
-- Each Job entry with a repository must specify a branch.
-- Loading a Blueprint creates all Jobs as draft, then transitions eligible Craft Jobs to ready.
+- A Blueprint must contain exactly one root Task.
+- Loading a Blueprint creates the Task tree and Jobs defined in it.
 
 ## Related Concepts
 
-- [Task](../task/) — the goal that the Blueprint defines
-- [Job](../job/) — the units of work that the Blueprint specifies
-- [Operator](../operator/) — submits and loads Blueprints
-- [Plan](../plan/) — the documents that Task and Jobs reference via `plan_path`
-- [Orchestrator](../orchestrator/) — processes the Jobs created from a Blueprint
+- [Task](../task/) — the goals that the Blueprint defines
+- [Job](../job/) — the work assignments that the Blueprint specifies
+- [Crafter](../worker/member/crafter/) — produces a Blueprint as a planning deliverable
+- [Plan](../plan/) — the documents that Tasks and Jobs reference via `plan_path`
+- [Orchestrator](../orchestrator/) — processes the Tasks and Jobs created from a Blueprint
