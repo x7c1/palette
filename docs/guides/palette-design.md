@@ -61,5 +61,5 @@ Note: palette-server depends on palette-orchestrator only as a dev-dependency (f
 ## Design Principles
 
 - **palette-domain has no external format dependencies.** Each layer defines its own serialization types and converts to/from domain types. Do not add serde to palette-domain.
-- **Types are not shared across layers.** A YAML type in palette-fs, a DB row type in palette-db, and an API type in palette-server may represent the same concept but are distinct types with distinct responsibilities. These are not "intermediate types" — they are the appropriate representation for each layer.
+- **Each layer owns its own types.** A YAML type in palette-fs, a DB row type in palette-db, and an API type in palette-server may have similar structure, but they represent different things — a file format, a storage format, and an API contract respectively. They are not interchangeable even when they look alike.
 - **Dependencies flow inward.** All crates depend on palette-domain. Infrastructure crates (db, fs, docker, tmux) do not depend on each other. palette-server does not depend on palette-orchestrator in production.
