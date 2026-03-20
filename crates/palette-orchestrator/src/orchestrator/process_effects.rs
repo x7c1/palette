@@ -184,34 +184,25 @@ impl Orchestrator {
         let task_store = TaskStoreImpl::from_db(&self.db, &task_state.workflow_id)
             .map_err(|e| crate::Error::Internal(e.to_string()))?;
 
-        // Mark the completed task as Done in memory
-        task_store
-            .update_task_status(task_id, TaskStatus::Done)
-            .unwrap();
+        // Mark the completed task as Done
+        task_store.update_task_status(task_id, TaskStatus::Done)?;
 
         tracing::info!(task_id = %task_id, "task completed via job");
 
-        // Run the cascade in memory, then flush to DB
-        let job_effects = self.cascade_task_effects(task_id, &task_store)?;
-
-        // Flush all status changes to DB
-        self.flush_statuses(&task_store)?;
-
-        Ok(job_effects)
+        self.cascade_task_effects(task_id, &task_store)
     }
 
     /// Process cascading effects after a task completes.
-    /// All status changes happen in the in-memory TaskStoreImpl;
-    /// the caller is responsible for flushing to DB afterward.
+    /// Status changes are written to DB immediately via TaskStoreImpl.
     fn cascade_task_effects(
         &self,
         completed_task_id: &TaskId,
-        task_store: &TaskStoreImpl,
+        task_store: &TaskStoreImpl<'_>,
     ) -> crate::Result<Vec<RuleEffect>> {
         use palette_domain::rule::{TaskEffect, TaskRuleEngine};
 
         let task_engine = TaskRuleEngine::new(task_store);
-        let mut pending = task_engine.on_task_completed(completed_task_id).unwrap();
+        let mut pending = task_engine.on_task_completed(completed_task_id)?;
         let mut job_effects = Vec::new();
 
         while !pending.is_empty() {
@@ -225,8 +216,7 @@ impl Orchestrator {
                     continue;
                 };
 
-                // Update in-memory status
-                task_store.update_task_status(task_id, *new_status).unwrap();
+                task_store.update_task_status(task_id, *new_status)?;
                 tracing::info!(task_id = %task_id, status = ?new_status, "task status cascaded");
 
                 match new_status {
@@ -238,7 +228,7 @@ impl Orchestrator {
                     }
                     TaskStatus::Done => {
                         // Check workflow completion
-                        if let Some(task) = task_store.get_task(task_id).unwrap()
+                        if let Some(task) = task_store.get_task(task_id)?
                             && task.parent_id.is_none()
                         {
                             use palette_domain::workflow::WorkflowStatus;
@@ -251,7 +241,7 @@ impl Orchestrator {
                                 "workflow completed"
                             );
                         }
-                        let effects = task_engine.on_task_completed(task_id).unwrap();
+                        let effects = task_engine.on_task_completed(task_id)?;
                         next.extend(effects);
                     }
                     _ => {}
@@ -268,13 +258,13 @@ impl Orchestrator {
     fn activate_ready_task(
         &self,
         task_id: &TaskId,
-        task_store: &TaskStoreImpl,
-        task_engine: &palette_domain::rule::TaskRuleEngine<&TaskStoreImpl>,
+        task_store: &TaskStoreImpl<'_>,
+        task_engine: &palette_domain::rule::TaskRuleEngine<&TaskStoreImpl<'_>>,
     ) -> crate::Result<(Vec<palette_domain::rule::TaskEffect>, Vec<RuleEffect>)> {
-        let children = task_store.get_child_tasks(task_id).unwrap();
+        let children = task_store.get_child_tasks(task_id)?;
         if children.is_empty() {
             // Leaf task: create a job if it has a job_type
-            let job_effects = if let Some(task) = task_store.get_task(task_id).unwrap()
+            let job_effects = if let Some(task) = task_store.get_task(task_id)?
                 && let Some(job_type) = task.job_type
             {
                 self.create_job_for_ready_task(task_id, job_type, task.plan_path.as_deref())?
@@ -284,11 +274,9 @@ impl Orchestrator {
             Ok((vec![], job_effects))
         } else {
             // Composite task: transition to InProgress and resolve children
-            task_store
-                .update_task_status(task_id, TaskStatus::InProgress)
-                .unwrap();
+            task_store.update_task_status(task_id, TaskStatus::InProgress)?;
             let child_ids: Vec<TaskId> = children.iter().map(|c| c.id.clone()).collect();
-            let task_effects = task_engine.resolve_ready_tasks(&child_ids).unwrap();
+            let task_effects = task_engine.resolve_ready_tasks(&child_ids)?;
             Ok((task_effects, vec![]))
         }
     }
@@ -335,13 +323,6 @@ impl Orchestrator {
         Ok(effects)
     }
 
-    /// Flush all in-memory status changes from TaskStoreImpl to the database.
-    fn flush_statuses(&self, task_store: &TaskStoreImpl) -> crate::Result<()> {
-        for (task_id, status) in task_store.statuses() {
-            self.db.update_task_status(&task_id, status)?;
-        }
-        Ok(())
-    }
 }
 
 /// Container-side mount point for the shared plan directory.

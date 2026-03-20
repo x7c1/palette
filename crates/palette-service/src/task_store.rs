@@ -1,3 +1,4 @@
+use palette_db::Database;
 use palette_domain::task::{Task, TaskId, TaskStatus, TaskStore, TaskTree, TaskTreeNode};
 use palette_domain::workflow::WorkflowId;
 use std::cell::RefCell;
@@ -5,20 +6,26 @@ use std::collections::HashMap;
 
 /// TaskStore implementation that combines a TaskTree (structure from Blueprint)
 /// with task statuses (execution state from DB) to produce full Task objects.
-pub struct TaskStoreImpl {
+///
+/// Reads are served from in-memory data (TaskTree + cached statuses).
+/// Writes go to both the in-memory cache and the database.
+pub struct TaskStoreImpl<'a> {
+    db: &'a Database,
     tree: TaskTree,
     workflow_id: WorkflowId,
     statuses: RefCell<HashMap<TaskId, TaskStatus>>,
 }
 
-impl TaskStoreImpl {
+impl<'a> TaskStoreImpl<'a> {
     /// Build a TaskStoreImpl from a TaskTree and a map of task statuses.
     pub fn new(
+        db: &'a Database,
         tree: TaskTree,
         workflow_id: WorkflowId,
         statuses: HashMap<TaskId, TaskStatus>,
     ) -> Self {
         Self {
+            db,
             tree,
             workflow_id,
             statuses: RefCell::new(statuses),
@@ -26,7 +33,7 @@ impl TaskStoreImpl {
     }
 
     /// Build a TaskStoreImpl by reading the Blueprint file and task statuses from DB.
-    pub fn from_db(db: &palette_db::Database, workflow_id: &WorkflowId) -> Result<Self, Error> {
+    pub fn from_db(db: &'a Database, workflow_id: &WorkflowId) -> Result<Self, Error> {
         let workflow = db
             .get_workflow(workflow_id)
             .map_err(Error::Db)?
@@ -37,7 +44,7 @@ impl TaskStoreImpl {
         let tree = palette_fs::to_task_tree(&blueprint);
         let statuses = db.get_task_statuses(workflow_id).map_err(Error::Db)?;
 
-        Ok(Self::new(tree, workflow_id.clone(), statuses))
+        Ok(Self::new(db, tree, workflow_id.clone(), statuses))
     }
 
     pub fn root_id(&self) -> &TaskId {
@@ -70,15 +77,10 @@ impl TaskStoreImpl {
             depends_on: node.depends_on.clone(),
         }
     }
-
-    /// Return a snapshot of all statuses that have been updated.
-    pub fn statuses(&self) -> HashMap<TaskId, TaskStatus> {
-        self.statuses.borrow().clone()
-    }
 }
 
-impl TaskStore for TaskStoreImpl {
-    type Error = std::convert::Infallible;
+impl TaskStore for TaskStoreImpl<'_> {
+    type Error = palette_db::Error;
 
     fn get_task(&self, id: &TaskId) -> Result<Option<Task>, Self::Error> {
         Ok(self.tree.get(id).map(|node| self.build_task(node)))
@@ -97,6 +99,7 @@ impl TaskStore for TaskStoreImpl {
     }
 
     fn update_task_status(&self, id: &TaskId, status: TaskStatus) -> Result<(), Self::Error> {
+        self.db.update_task_status(id, status)?;
         self.statuses.borrow_mut().insert(id.clone(), status);
         Ok(())
     }
@@ -127,7 +130,11 @@ mod tests {
     use palette_domain::job::JobType;
     use palette_domain::task::TaskTree;
 
-    fn build_test_tree() -> (TaskTree, WorkflowId) {
+    fn setup() -> (Database, TaskTree, WorkflowId) {
+        let db = Database::open_in_memory().unwrap();
+        let wf_id = WorkflowId::new("wf-test");
+        db.create_workflow(&wf_id, "/dev/null").unwrap();
+
         let yaml = r#"
 task:
   id: 2026/test
@@ -144,18 +151,29 @@ children:
 "#;
         let blueprint: palette_fs::TaskTreeBlueprint = serde_yaml::from_str(yaml).unwrap();
         let tree = palette_fs::to_task_tree(&blueprint);
-        (tree, WorkflowId::new("wf-test"))
+
+        // Register tasks in DB
+        for task_id in tree.task_ids() {
+            db.create_task(&palette_db::CreateTaskRequest {
+                id: task_id.clone(),
+                workflow_id: wf_id.clone(),
+            })
+            .unwrap();
+        }
+
+        (db, tree, wf_id)
     }
 
     #[test]
     fn get_task_returns_full_task() {
-        let (tree, wf_id) = build_test_tree();
-        let mut statuses = HashMap::new();
-        statuses.insert(TaskId::new("2026/test"), TaskStatus::InProgress);
-        statuses.insert(TaskId::new("2026/test/a"), TaskStatus::Ready);
-        statuses.insert(TaskId::new("2026/test/b"), TaskStatus::Pending);
+        let (db, tree, wf_id) = setup();
+        db.update_task_status(&TaskId::new("2026/test"), TaskStatus::InProgress)
+            .unwrap();
+        db.update_task_status(&TaskId::new("2026/test/a"), TaskStatus::Ready)
+            .unwrap();
 
-        let store = TaskStoreImpl::new(tree, wf_id.clone(), statuses);
+        let statuses = db.get_task_statuses(&wf_id).unwrap();
+        let store = TaskStoreImpl::new(&db, tree, wf_id.clone(), statuses);
 
         let root = store.get_task(&TaskId::new("2026/test")).unwrap().unwrap();
         assert_eq!(root.title, "Test");
@@ -181,42 +199,49 @@ children:
 
     #[test]
     fn get_child_tasks_returns_children() {
-        let (tree, wf_id) = build_test_tree();
-        let statuses = HashMap::new();
-        let store = TaskStoreImpl::new(tree, wf_id, statuses);
+        let (db, tree, wf_id) = setup();
+        let statuses = db.get_task_statuses(&wf_id).unwrap();
+        let store = TaskStoreImpl::new(&db, tree, wf_id, statuses);
 
         let children = store.get_child_tasks(&TaskId::new("2026/test")).unwrap();
         assert_eq!(children.len(), 2);
     }
 
     #[test]
-    fn update_task_status_updates_in_memory() {
-        let (tree, wf_id) = build_test_tree();
-        let statuses = HashMap::new();
-        let store = TaskStoreImpl::new(tree, wf_id, statuses);
+    fn update_task_status_writes_to_db() {
+        let (db, tree, wf_id) = setup();
+        let statuses = db.get_task_statuses(&wf_id).unwrap();
+        let store = TaskStoreImpl::new(&db, tree, wf_id.clone(), statuses);
 
         store
             .update_task_status(&TaskId::new("2026/test/a"), TaskStatus::Done)
             .unwrap();
 
+        // Verify in-memory cache is updated
         let a = store
             .get_task(&TaskId::new("2026/test/a"))
             .unwrap()
             .unwrap();
         assert_eq!(a.status, TaskStatus::Done);
+
+        // Verify DB is updated
+        let state = db
+            .get_task_state(&TaskId::new("2026/test/a"))
+            .unwrap()
+            .unwrap();
+        assert_eq!(state.status, TaskStatus::Done);
     }
 
     #[test]
     fn task_rule_engine_resolves_ready_tasks() {
         use palette_domain::rule::{TaskEffect, TaskRuleEngine};
 
-        let (tree, wf_id) = build_test_tree();
-        let mut statuses = HashMap::new();
-        statuses.insert(TaskId::new("2026/test"), TaskStatus::InProgress);
-        statuses.insert(TaskId::new("2026/test/a"), TaskStatus::Pending);
-        statuses.insert(TaskId::new("2026/test/b"), TaskStatus::Pending);
+        let (db, tree, wf_id) = setup();
+        db.update_task_status(&TaskId::new("2026/test"), TaskStatus::InProgress)
+            .unwrap();
 
-        let store = TaskStoreImpl::new(tree, wf_id, statuses);
+        let statuses = db.get_task_statuses(&wf_id).unwrap();
+        let store = TaskStoreImpl::new(&db, tree, wf_id, statuses);
         let engine = TaskRuleEngine::new(&store);
 
         let task_ids = vec![TaskId::new("2026/test/a"), TaskId::new("2026/test/b")];
@@ -237,13 +262,14 @@ children:
     fn task_rule_engine_cascades_completion() {
         use palette_domain::rule::{TaskEffect, TaskRuleEngine};
 
-        let (tree, wf_id) = build_test_tree();
-        let mut statuses = HashMap::new();
-        statuses.insert(TaskId::new("2026/test"), TaskStatus::InProgress);
-        statuses.insert(TaskId::new("2026/test/a"), TaskStatus::Done);
-        statuses.insert(TaskId::new("2026/test/b"), TaskStatus::Pending);
+        let (db, tree, wf_id) = setup();
+        db.update_task_status(&TaskId::new("2026/test"), TaskStatus::InProgress)
+            .unwrap();
+        db.update_task_status(&TaskId::new("2026/test/a"), TaskStatus::Done)
+            .unwrap();
 
-        let store = TaskStoreImpl::new(tree, wf_id, statuses);
+        let statuses = db.get_task_statuses(&wf_id).unwrap();
+        let store = TaskStoreImpl::new(&db, tree, wf_id, statuses);
         let engine = TaskRuleEngine::new(&store);
 
         let effects = engine
@@ -265,13 +291,16 @@ children:
     fn all_children_done_completes_parent() {
         use palette_domain::rule::{TaskEffect, TaskRuleEngine};
 
-        let (tree, wf_id) = build_test_tree();
-        let mut statuses = HashMap::new();
-        statuses.insert(TaskId::new("2026/test"), TaskStatus::InProgress);
-        statuses.insert(TaskId::new("2026/test/a"), TaskStatus::Done);
-        statuses.insert(TaskId::new("2026/test/b"), TaskStatus::Done);
+        let (db, tree, wf_id) = setup();
+        db.update_task_status(&TaskId::new("2026/test"), TaskStatus::InProgress)
+            .unwrap();
+        db.update_task_status(&TaskId::new("2026/test/a"), TaskStatus::Done)
+            .unwrap();
+        db.update_task_status(&TaskId::new("2026/test/b"), TaskStatus::Done)
+            .unwrap();
 
-        let store = TaskStoreImpl::new(tree, wf_id, statuses);
+        let statuses = db.get_task_statuses(&wf_id).unwrap();
+        let store = TaskStoreImpl::new(&db, tree, wf_id, statuses);
         let engine = TaskRuleEngine::new(&store);
 
         let effects = engine

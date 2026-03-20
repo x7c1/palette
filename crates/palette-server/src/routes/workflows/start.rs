@@ -14,7 +14,6 @@ use palette_domain::workflow::WorkflowId;
 use palette_fs::{read_blueprint, to_task_tree};
 use palette_service::TaskStoreImpl;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 use std::path::Path;
 use std::sync::Arc;
 
@@ -41,14 +40,11 @@ pub async fn handle_start_workflow(
 
     let task_count = register_tasks(&state, &workflow_id, &tree, &req.blueprint_path)?;
 
-    let task_store = build_task_store(&tree, &workflow_id);
+    let task_store = build_task_store(&state, &tree, &workflow_id);
 
     let ready_leaf_ids = resolve_ready_cascade(&task_store)?;
 
     create_jobs_for_ready_tasks(&state, &ready_leaf_ids, &task_store)?;
-
-    // Flush all status changes to DB
-    flush_statuses(&state, &task_store)?;
 
     tracing::info!(
         workflow_id = %workflow_id,
@@ -100,33 +96,39 @@ fn register_tasks(
     Ok(count)
 }
 
-/// Build an in-memory TaskStoreImpl with all tasks in Pending status.
-fn build_task_store(tree: &TaskTree, workflow_id: &WorkflowId) -> TaskStoreImpl {
-    let statuses: HashMap<TaskId, TaskStatus> = tree
+/// Build a TaskStoreImpl backed by the database.
+fn build_task_store<'a>(
+    state: &'a AppState,
+    tree: &TaskTree,
+    workflow_id: &WorkflowId,
+) -> TaskStoreImpl<'a> {
+    let statuses = tree
         .task_ids()
         .map(|id| (id.clone(), TaskStatus::Pending))
         .collect();
-    TaskStoreImpl::new(tree.clone(), workflow_id.clone(), statuses)
+    TaskStoreImpl::new(&state.db, tree.clone(), workflow_id.clone(), statuses)
 }
 
 /// Resolve which tasks are Ready, cascading through composite tasks.
 /// Returns the IDs of leaf tasks that became Ready.
-fn resolve_ready_cascade(task_store: &TaskStoreImpl) -> HandlerResult<Vec<TaskId>> {
+fn resolve_ready_cascade(task_store: &TaskStoreImpl<'_>) -> HandlerResult<Vec<TaskId>> {
     use palette_domain::rule::TaskRuleEngine;
 
     // Root task → InProgress
     let root = task_store
         .get_task(task_store.root_id())
-        .unwrap()
+        .map_err(internal_err)?
         .ok_or_else(|| internal_err("root task not found"))?;
     task_store
         .update_task_status(&root.id, TaskStatus::InProgress)
-        .unwrap();
+        .map_err(internal_err)?;
 
     let task_engine = TaskRuleEngine::new(task_store);
 
     let child_ids: Vec<TaskId> = root.children.iter().map(|c| c.id.clone()).collect();
-    let initial_effects = task_engine.resolve_ready_tasks(&child_ids).unwrap();
+    let initial_effects = task_engine
+        .resolve_ready_tasks(&child_ids)
+        .map_err(internal_err)?;
 
     let mut ready_leaf_ids = Vec::new();
     let mut pending = initial_effects;
@@ -143,19 +145,25 @@ fn resolve_ready_cascade(task_store: &TaskStoreImpl) -> HandlerResult<Vec<TaskId
                 continue;
             };
 
-            task_store.update_task_status(task_id, *new_status).unwrap();
+            task_store
+                .update_task_status(task_id, *new_status)
+                .map_err(internal_err)?;
             tracing::info!(task_id = %task_id, status = ?new_status, "task status changed");
 
             if *new_status == TaskStatus::Ready {
-                let children = task_store.get_child_tasks(task_id).unwrap();
+                let children = task_store
+                    .get_child_tasks(task_id)
+                    .map_err(internal_err)?;
                 if children.is_empty() {
                     ready_leaf_ids.push(task_id.clone());
                 } else {
                     task_store
                         .update_task_status(task_id, TaskStatus::InProgress)
-                        .unwrap();
+                        .map_err(internal_err)?;
                     let ids: Vec<TaskId> = children.iter().map(|c| c.id.clone()).collect();
-                    let effects = task_engine.resolve_ready_tasks(&ids).unwrap();
+                    let effects = task_engine
+                        .resolve_ready_tasks(&ids)
+                        .map_err(internal_err)?;
                     next.extend(effects);
                 }
             }
@@ -171,27 +179,16 @@ fn resolve_ready_cascade(task_store: &TaskStoreImpl) -> HandlerResult<Vec<TaskId
 fn create_jobs_for_ready_tasks(
     state: &AppState,
     ready_leaf_ids: &[TaskId],
-    task_store: &TaskStoreImpl,
+    task_store: &TaskStoreImpl<'_>,
 ) -> HandlerResult<()> {
     for task_id in ready_leaf_ids {
-        let Some(task) = task_store.get_task(task_id).unwrap() else {
+        let Some(task) = task_store.get_task(task_id).map_err(internal_err)? else {
             continue;
         };
         let Some(job_type) = task.job_type else {
             continue;
         };
         create_job_for_task(state, task_id, job_type, task.plan_path.as_deref())?;
-    }
-    Ok(())
-}
-
-/// Flush all in-memory status changes to the database.
-fn flush_statuses(state: &AppState, task_store: &TaskStoreImpl) -> HandlerResult<()> {
-    for (task_id, status) in task_store.statuses() {
-        state
-            .db
-            .update_task_status(&task_id, status)
-            .map_err(internal_err)?;
     }
     Ok(())
 }
