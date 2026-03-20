@@ -164,3 +164,166 @@ async fn workflow_start_rejects_invalid_yaml() {
         .unwrap();
     assert_eq!(resp.status(), 400);
 }
+
+/// Test the full loop: Job Done → Task Done → sibling Task Ready → new Job
+#[tokio::test]
+async fn job_completion_cascades_through_task_tree() {
+    let (session, _guard) = test_session_name_with_guard("wf-cascade");
+    let tmux = TmuxManager::new(session.clone());
+    tmux.create_session(&session).unwrap();
+
+    let (base_url, state) = spawn_server(tmux, &session).await;
+    let client = reqwest::Client::new();
+
+    // Start a workflow with: planning(api-plan → api-plan-review) → execution
+    let yaml = r#"
+task:
+  id: 2026/cascade-test
+  title: Cascade test
+
+children:
+  - id: step-a
+    type: craft
+    plan_path: test/step-a
+  - id: step-b
+    type: craft
+    plan_path: test/step-b
+    depends_on: [step-a]
+"#;
+
+    let resp = client
+        .post(format!("{base_url}/workflows/start"))
+        .json(&serde_json::json!({ "blueprint_yaml": yaml }))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), 201);
+
+    use palette_domain::job::{JobFilter, JobStatus as JStatus, JobType};
+    use palette_domain::task::{TaskId, TaskStatus};
+
+    // step-a should have a Job in Ready state
+    let jobs = state
+        .db
+        .list_jobs(&JobFilter {
+            job_type: None,
+            status: None,
+            assignee: None,
+        })
+        .unwrap();
+    assert_eq!(jobs.len(), 1);
+    assert_eq!(
+        jobs[0].task_id.as_ref().unwrap().to_string(),
+        "2026/cascade-test/step-a"
+    );
+
+    // step-b should be Pending (depends on step-a)
+    let step_b = state
+        .db
+        .get_task(&TaskId::new("2026/cascade-test/step-b"))
+        .unwrap()
+        .unwrap();
+    assert_eq!(step_b.status, TaskStatus::Pending);
+
+    // Simulate Job completion by sending a StatusChanged(Done) effect to the orchestrator.
+    // This triggers propagate_task_completion inside process_effects.
+    let job_id = &jobs[0].id;
+    state
+        .db
+        .update_job_status(job_id, JStatus::InProgress)
+        .unwrap();
+    state
+        .db
+        .update_job_status(job_id, JStatus::InReview)
+        .unwrap();
+    state.db.update_job_status(job_id, JStatus::Done).unwrap();
+
+    // Send StatusChanged effect to trigger orchestrator processing
+    use palette_domain::rule::RuleEffect;
+    use palette_domain::server::ServerEvent;
+    let _ = state.event_tx.send(ServerEvent::ProcessEffects {
+        effects: vec![RuleEffect::StatusChanged {
+            job_id: job_id.clone(),
+            new_status: JStatus::Done,
+        }],
+    });
+
+    // Give the orchestrator event loop time to process
+    tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
+
+    // Verify: step-a task should be Done
+    let step_a = state
+        .db
+        .get_task(&TaskId::new("2026/cascade-test/step-a"))
+        .unwrap()
+        .unwrap();
+    assert_eq!(step_a.status, TaskStatus::Done);
+
+    // Verify: step-b should now be Ready (dependency satisfied)
+    let step_b = state
+        .db
+        .get_task(&TaskId::new("2026/cascade-test/step-b"))
+        .unwrap()
+        .unwrap();
+    assert_eq!(step_b.status, TaskStatus::Ready);
+
+    // Now complete step-b's job to trigger full workflow completion
+    // step-b doesn't have a job yet (job creation for dynamically-readied tasks is pending)
+    // So we create one manually and complete it
+    let step_b_job = state
+        .db
+        .create_job(&palette_domain::job::CreateJobRequest {
+            id: Some(palette_domain::job::JobId::new("C-step-b")),
+            task_id: Some(TaskId::new("2026/cascade-test/step-b")),
+            job_type: JobType::Craft,
+            title: "step-b".to_string(),
+            plan_path: "test/step-b".to_string(),
+            description: None,
+            assignee: None,
+            priority: None,
+            repository: None,
+            depends_on: vec![],
+        })
+        .unwrap();
+    state
+        .db
+        .update_job_status(&step_b_job.id, JStatus::Ready)
+        .unwrap();
+    state
+        .db
+        .update_job_status(&step_b_job.id, JStatus::InProgress)
+        .unwrap();
+    state
+        .db
+        .update_job_status(&step_b_job.id, JStatus::InReview)
+        .unwrap();
+    state
+        .db
+        .update_job_status(&step_b_job.id, JStatus::Done)
+        .unwrap();
+
+    let _ = state.event_tx.send(ServerEvent::ProcessEffects {
+        effects: vec![RuleEffect::StatusChanged {
+            job_id: step_b_job.id.clone(),
+            new_status: JStatus::Done,
+        }],
+    });
+
+    tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
+
+    // step-b task should be Done
+    let step_b = state
+        .db
+        .get_task(&TaskId::new("2026/cascade-test/step-b"))
+        .unwrap()
+        .unwrap();
+    assert_eq!(step_b.status, TaskStatus::Done);
+
+    // Root task should be Done (all children complete)
+    let root = state
+        .db
+        .get_task(&TaskId::new("2026/cascade-test"))
+        .unwrap()
+        .unwrap();
+    assert_eq!(root.status, TaskStatus::Done);
+}
