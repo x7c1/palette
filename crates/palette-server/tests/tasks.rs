@@ -3,6 +3,9 @@ mod helper;
 use helper::{
     create_craft, create_review, spawn_server, test_session_name_with_guard, update_status,
 };
+use palette_db::CreateTaskRequest;
+use palette_domain::task::TaskId;
+use palette_domain::workflow::WorkflowId;
 use palette_server::api_types::{CreateJobRequest, JobStatus, JobType};
 use palette_tmux::TmuxManager;
 
@@ -12,7 +15,28 @@ async fn job_api_create_and_list() {
     let tmux = TmuxManager::new(session.clone());
     tmux.create_session(&session).unwrap();
 
-    let (base_url, _state) = spawn_server(tmux, &session).await;
+    let (base_url, state) = spawn_server(tmux, &session).await;
+
+    // Set up workflow and tasks for the jobs
+    let wf_id = WorkflowId::new("wf-jobapi");
+    state
+        .db
+        .create_workflow(&wf_id, "test/blueprint.yaml")
+        .unwrap();
+    state
+        .db
+        .create_task(&CreateTaskRequest {
+            id: TaskId::new("task-W-001"),
+            workflow_id: wf_id.clone(),
+        })
+        .unwrap();
+    state
+        .db
+        .create_task(&CreateTaskRequest {
+            id: TaskId::new("task-R-001"),
+            workflow_id: wf_id,
+        })
+        .unwrap();
 
     let client = reqwest::Client::new();
 
@@ -21,6 +45,7 @@ async fn job_api_create_and_list() {
         .post(format!("{base_url}/jobs/create"))
         .json(&CreateJobRequest {
             id: Some("W-001".to_string()),
+            task_id: "task-W-001".to_string(),
             job_type: JobType::Craft,
             title: "Implement feature".to_string(),
             plan_path: "test/W-001".to_string(),
@@ -28,7 +53,6 @@ async fn job_api_create_and_list() {
             assignee: Some("member-a".to_string()),
             priority: Some(palette_server::api_types::Priority::High),
             repository: None,
-            depends_on: vec![],
         })
         .send()
         .await
@@ -39,11 +63,12 @@ async fn job_api_create_and_list() {
     assert_eq!(job["id"], "W-001");
     assert_eq!(job["status"], "draft");
 
-    // Create a review job depending on W-001
+    // Create a review job
     let resp = client
         .post(format!("{base_url}/jobs/create"))
         .json(&CreateJobRequest {
             id: Some("R-001".to_string()),
+            task_id: "task-R-001".to_string(),
             job_type: JobType::Review,
             title: "Review feature".to_string(),
             plan_path: "test/R-001".to_string(),
@@ -51,7 +76,6 @@ async fn job_api_create_and_list() {
             assignee: None,
             priority: None,
             repository: None,
-            depends_on: vec!["W-001".to_string()],
         })
         .send()
         .await
@@ -90,21 +114,42 @@ async fn job_api_update_with_rules() {
     let tmux = TmuxManager::new(session.clone());
     tmux.create_session(&session).unwrap();
 
-    let (base_url, _state) = spawn_server(tmux, &session).await;
+    let (base_url, state) = spawn_server(tmux, &session).await;
+
+    // Set up workflow and tasks
+    let wf_id = WorkflowId::new("wf-jobrules");
+    state
+        .db
+        .create_workflow(&wf_id, "test/blueprint.yaml")
+        .unwrap();
+    state
+        .db
+        .create_task(&CreateTaskRequest {
+            id: TaskId::new("task-W-001"),
+            workflow_id: wf_id.clone(),
+        })
+        .unwrap();
+    state
+        .db
+        .create_task(&CreateTaskRequest {
+            id: TaskId::new("task-R-001"),
+            workflow_id: wf_id,
+        })
+        .unwrap();
 
     let client = reqwest::Client::new();
 
     // Create craft + review
     client
         .post(format!("{base_url}/jobs/create"))
-        .json(&create_craft("W-001", "Craft"))
+        .json(&create_craft("W-001", "Craft", "task-W-001"))
         .send()
         .await
         .unwrap();
 
     client
         .post(format!("{base_url}/jobs/create"))
-        .json(&create_review("R-001", "Review", vec!["W-001"]))
+        .json(&create_review("R-001", "Review", "task-R-001"))
         .send()
         .await
         .unwrap();

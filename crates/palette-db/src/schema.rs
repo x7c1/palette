@@ -3,7 +3,7 @@ use rusqlite::Connection;
 pub(crate) const SCHEMA: &str = r#"
 CREATE TABLE IF NOT EXISTS jobs (
     id TEXT PRIMARY KEY,
-    task_id TEXT,
+    task_id TEXT NOT NULL,
     type TEXT NOT NULL CHECK(type IN ('craft', 'review')),
     title TEXT NOT NULL,
     plan_path TEXT NOT NULL,
@@ -18,14 +18,6 @@ CREATE TABLE IF NOT EXISTS jobs (
     notes TEXT,
     assigned_at TEXT,
     FOREIGN KEY (task_id) REFERENCES tasks(id)
-);
-
-CREATE TABLE IF NOT EXISTS dependencies (
-    job_id TEXT NOT NULL,
-    depends_on TEXT NOT NULL,
-    PRIMARY KEY (job_id, depends_on),
-    FOREIGN KEY (job_id) REFERENCES jobs(id),
-    FOREIGN KEY (depends_on) REFERENCES jobs(id)
 );
 
 CREATE TABLE IF NOT EXISTS review_submissions (
@@ -58,13 +50,6 @@ CREATE INDEX IF NOT EXISTS idx_jobs_type_status ON jobs(type, status);
 CREATE INDEX IF NOT EXISTS idx_review_submissions_job ON review_submissions(review_job_id);
 CREATE INDEX IF NOT EXISTS idx_review_comments_submission ON review_comments(submission_id);
 CREATE INDEX IF NOT EXISTS idx_message_queue_target ON message_queue(target_id, id);
-
-CREATE TABLE IF NOT EXISTS blueprints (
-    task_id TEXT PRIMARY KEY,
-    title TEXT NOT NULL,
-    yaml TEXT NOT NULL,
-    created_at TEXT NOT NULL
-);
 
 CREATE TABLE IF NOT EXISTS workflows (
     id TEXT PRIMARY KEY,
@@ -107,7 +92,6 @@ mod tests {
             .unwrap();
 
         assert!(tables.contains(&"jobs".to_string()));
-        assert!(tables.contains(&"dependencies".to_string()));
         assert!(tables.contains(&"review_submissions".to_string()));
         assert!(tables.contains(&"review_comments".to_string()));
         assert!(tables.contains(&"message_queue".to_string()));

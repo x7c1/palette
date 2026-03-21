@@ -33,20 +33,13 @@ mod create_job;
 mod dequeue_message;
 mod enqueue_message;
 mod find_assignable_jobs;
-mod find_crafts_for_review;
-mod find_reviews_for_craft;
-mod get_blueprint;
-mod get_dependencies;
-mod get_dependents;
 mod get_job;
 mod get_job_by_task;
 mod get_review_comments;
 mod get_review_submissions;
 mod get_workflow;
 mod has_pending_messages;
-mod list_blueprints;
 mod list_jobs;
-mod save_blueprint;
 mod submit_review;
 mod update_job_status;
 mod update_workflow_status;
@@ -119,7 +112,7 @@ fn row_to_job(row: &rusqlite::Row) -> rusqlite::Result<Job> {
 
     Ok(Job {
         id: JobId::new(row.get::<_, String>("id")?),
-        task_id: row.get::<_, Option<String>>("task_id")?.map(TaskId::new),
+        task_id: TaskId::new(row.get::<_, String>("task_id")?),
         job_type: parse_column(row, "type")?,
         title: row.get("title")?,
         plan_path: row.get("plan_path")?,
@@ -143,6 +136,8 @@ fn row_to_job(row: &rusqlite::Row) -> rusqlite::Result<Job> {
 #[cfg(test)]
 pub(crate) mod test_helpers {
     use super::*;
+    use palette_domain::task::TaskId;
+    use palette_domain::workflow::WorkflowId;
 
     pub fn test_db() -> Database {
         Database::open_in_memory().unwrap()
@@ -152,13 +147,31 @@ pub(crate) mod test_helpers {
         JobId::new(s)
     }
 
+    pub fn tid(s: &str) -> TaskId {
+        TaskId::new(s)
+    }
+
     pub fn aid(s: &str) -> AgentId {
         AgentId::new(s)
     }
 
-    pub fn create_craft(db: &Database, id: &str, priority: Option<Priority>, deps: Vec<JobId>) {
+    /// Create a workflow and a task for testing. Returns the TaskId.
+    pub fn setup_task(db: &Database, task_id: &str) -> TaskId {
+        let wf_id = WorkflowId::new(format!("wf-{task_id}"));
+        let t_id = tid(task_id);
+        // Ignore errors if workflow already exists
+        let _ = db.create_workflow(&wf_id, "test/blueprint.yaml");
+        let _ = db.create_task(&CreateTaskRequest {
+            id: t_id.clone(),
+            workflow_id: wf_id,
+        });
+        t_id
+    }
+
+    pub fn create_craft(db: &Database, id: &str, priority: Option<Priority>) {
+        let task_id = setup_task(db, &format!("task-{id}"));
         db.create_job(&CreateJobRequest {
-            task_id: None,
+            task_id,
             id: Some(jid(id)),
             job_type: JobType::Craft,
             title: format!("Job {id}"),
@@ -167,14 +180,14 @@ pub(crate) mod test_helpers {
             assignee: None,
             priority,
             repository: None,
-            depends_on: deps,
         })
         .unwrap();
     }
 
-    pub fn create_review(db: &Database, id: &str, deps: Vec<JobId>) {
+    pub fn create_review(db: &Database, id: &str) {
+        let task_id = setup_task(db, &format!("task-{id}"));
         db.create_job(&CreateJobRequest {
-            task_id: None,
+            task_id,
             id: Some(jid(id)),
             job_type: JobType::Review,
             title: format!("Review {id}"),
@@ -183,7 +196,6 @@ pub(crate) mod test_helpers {
             assignee: None,
             priority: None,
             repository: None,
-            depends_on: deps,
         })
         .unwrap();
     }

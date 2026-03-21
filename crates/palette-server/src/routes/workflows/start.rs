@@ -203,7 +203,7 @@ pub(crate) fn create_job_for_task(
         .db
         .create_job(&CreateJobRequest {
             id: Some(JobId::generate(job_type)),
-            task_id: Some(task.id.clone()),
+            task_id: task.id.clone(),
             job_type,
             title: task
                 .id
@@ -217,7 +217,6 @@ pub(crate) fn create_job_for_task(
             assignee: None,
             priority: task.priority,
             repository: task.repository.clone(),
-            depends_on: vec![],
         })
         .map_err(internal_err)?;
 

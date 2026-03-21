@@ -67,8 +67,9 @@ mod tests {
     #[test]
     fn submit_and_get_review() {
         let db = test_db();
+        let craft_task = setup_task(&db, "task-C-001");
         db.create_job(&CreateJobRequest {
-            task_id: None,
+            task_id: craft_task,
             id: Some(jid("C-001")),
             job_type: JobType::Craft,
             title: "Craft".to_string(),
@@ -77,12 +78,12 @@ mod tests {
             assignee: None,
             priority: None,
             repository: None,
-            depends_on: vec![],
         })
         .unwrap();
 
+        let review_task = setup_task(&db, "task-R-001");
         db.create_job(&CreateJobRequest {
-            task_id: None,
+            task_id: review_task,
             id: Some(jid("R-001")),
             job_type: JobType::Review,
             title: "Review".to_string(),
@@ -91,7 +92,6 @@ mod tests {
             assignee: None,
             priority: None,
             repository: None,
-            depends_on: vec![jid("C-001")],
         })
         .unwrap();
 

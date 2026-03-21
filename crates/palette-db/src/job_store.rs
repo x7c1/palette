@@ -10,14 +10,6 @@ impl JobStore for Database {
         self.get_job(id)
     }
 
-    fn find_reviews_for_craft(&self, craft_id: &JobId) -> Result<Vec<Job>, Error> {
-        self.find_reviews_for_craft(craft_id)
-    }
-
-    fn find_crafts_for_review(&self, review_id: &JobId) -> Result<Vec<Job>, Error> {
-        self.find_crafts_for_review(review_id)
-    }
-
     fn update_job_status(&self, id: &JobId, status: JobStatus) -> Result<Job, Error> {
         self.update_job_status(id, status)
     }

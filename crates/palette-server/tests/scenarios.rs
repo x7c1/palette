@@ -1,8 +1,11 @@
 mod helper;
 
 use helper::{aid, capture_pane, jid, spawn_server, test_session_name_with_guard};
+use palette_db::CreateTaskRequest;
 use palette_domain::agent::{AgentRole, AgentState, AgentStatus, ContainerId};
 use palette_domain::job::{CreateJobRequest, JobStatus, JobType};
+use palette_domain::task::TaskId;
+use palette_domain::workflow::WorkflowId;
 use palette_tmux::TmuxManager;
 use serde_json::json;
 
@@ -52,11 +55,34 @@ async fn scenario3_message_queuing_to_leader() {
 
     let client = reqwest::Client::new();
 
+    // Set up workflow and tasks for review jobs
+    let wf_id = WorkflowId::new("wf-scenario3");
+    state
+        .db
+        .create_workflow(&wf_id, "test/blueprint.yaml")
+        .unwrap();
+    let task_a = TaskId::new("task-R-A");
+    let task_b = TaskId::new("task-R-B");
+    state
+        .db
+        .create_task(&CreateTaskRequest {
+            id: task_a.clone(),
+            workflow_id: wf_id.clone(),
+        })
+        .unwrap();
+    state
+        .db
+        .create_task(&CreateTaskRequest {
+            id: task_b.clone(),
+            workflow_id: wf_id,
+        })
+        .unwrap();
+
     // Create review jobs and assign them
     state
         .db
         .create_job(&CreateJobRequest {
-            task_id: None,
+            task_id: task_a,
             id: Some(jid("R-A")),
             job_type: JobType::Review,
             title: "Review A".to_string(),
@@ -65,13 +91,12 @@ async fn scenario3_message_queuing_to_leader() {
             assignee: None,
             priority: None,
             repository: None,
-            depends_on: vec![],
         })
         .unwrap();
     state
         .db
         .create_job(&CreateJobRequest {
-            task_id: None,
+            task_id: task_b,
             id: Some(jid("R-B")),
             job_type: JobType::Review,
             title: "Review B".to_string(),
@@ -80,7 +105,6 @@ async fn scenario3_message_queuing_to_leader() {
             assignee: None,
             priority: None,
             repository: None,
-            depends_on: vec![],
         })
         .unwrap();
 

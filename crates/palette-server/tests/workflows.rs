@@ -120,7 +120,7 @@ async fn workflow_start_creates_task_tree() {
     // Only api-plan should have a job (it's the only Ready leaf task with type: craft)
     assert_eq!(jobs.len(), 1);
     assert_eq!(
-        jobs[0].task_id.as_ref().unwrap().to_string(),
+        jobs[0].task_id.to_string(),
         "2026/feature-x/planning/api-plan"
     );
     assert_eq!(jobs[0].job_type, palette_domain::job::JobType::Craft);
@@ -217,10 +217,7 @@ children:
         })
         .unwrap();
     assert_eq!(jobs.len(), 1);
-    assert_eq!(
-        jobs[0].task_id.as_ref().unwrap().to_string(),
-        "2026/cascade-test/step-a"
-    );
+    assert_eq!(jobs[0].task_id.to_string(), "2026/cascade-test/step-a");
 
     // step-b should be Pending (depends on step-a)
     let step_b = state
@@ -276,7 +273,7 @@ children:
         .db
         .create_job(&palette_domain::job::CreateJobRequest {
             id: Some(palette_domain::job::JobId::new("C-step-b")),
-            task_id: Some(TaskId::new("2026/cascade-test/step-b")),
+            task_id: TaskId::new("2026/cascade-test/step-b"),
             job_type: JobType::Craft,
             title: "step-b".to_string(),
             plan_path: "test/step-b".to_string(),
@@ -284,7 +281,6 @@ children:
             assignee: None,
             priority: None,
             repository: None,
-            depends_on: vec![],
         })
         .unwrap();
     state
@@ -433,10 +429,7 @@ children:
     let all_jobs = state.db.list_jobs(&JobFilter::default()).unwrap();
     let review_jobs: Vec<_> = all_jobs
         .iter()
-        .filter(|j| {
-            j.task_id.as_ref().map(|t| t.to_string())
-                == Some("e2e/ir-test/step-a/review".to_string())
-        })
+        .filter(|j| j.task_id.to_string() == "e2e/ir-test/step-a/review")
         .collect();
     assert_eq!(review_jobs.len(), 1, "review job should be created");
     assert_eq!(
@@ -557,9 +550,7 @@ children:
     let all_jobs = state.db.list_jobs(&JobFilter::default()).unwrap();
     let review_a_job = all_jobs
         .iter()
-        .find(|j| {
-            j.task_id.as_ref().map(|t| t.to_string()) == Some("e2e/full/step-a/review".to_string())
-        })
+        .find(|j| j.task_id.as_ref() == "e2e/full/step-a/review")
         .expect("review job should exist");
     let review_a_id = review_a_job.id.clone();
 
@@ -655,9 +646,7 @@ children:
     let all_jobs = state.db.list_jobs(&JobFilter::default()).unwrap();
     let craft_b_job = all_jobs
         .iter()
-        .find(|j| {
-            j.task_id.as_ref().map(|t| t.to_string()) == Some("e2e/full/step-b/craft".to_string())
-        })
+        .find(|j| j.task_id.as_ref() == "e2e/full/step-b/craft")
         .expect("step-b craft job should exist");
     let craft_b_id = craft_b_job.id.clone();
 
@@ -693,9 +682,7 @@ children:
     let all_jobs = state.db.list_jobs(&JobFilter::default()).unwrap();
     let review_b_job = all_jobs
         .iter()
-        .find(|j| {
-            j.task_id.as_ref().map(|t| t.to_string()) == Some("e2e/full/step-b/review".to_string())
-        })
+        .find(|j| j.task_id.as_ref() == "e2e/full/step-b/review")
         .expect("step-b review job should exist");
     let review_b_id = review_b_job.id.clone();
 
@@ -799,8 +786,6 @@ children:
     use palette_domain::job::{JobFilter, JobStatus as JStatus};
     use palette_domain::rule::RuleEffect;
     use palette_domain::server::ServerEvent;
-    use palette_domain::task::{TaskId, TaskStatus};
-
     let wait = || tokio::time::sleep(tokio::time::Duration::from_millis(200));
 
     // Craft → InReview
@@ -830,10 +815,10 @@ children:
         .filter(|j| {
             j.task_id
                 .as_ref()
-                .is_some_and(|t| t.as_ref().starts_with("e2e/multi-review/step/review"))
+                .starts_with("e2e/multi-review/step/review")
         })
         .collect();
-    review_jobs.sort_by_key(|j| j.task_id.as_ref().map(|t| t.to_string()));
+    review_jobs.sort_by_key(|j| j.task_id.to_string());
     assert_eq!(review_jobs.len(), 2, "both review jobs should be created");
 
     let review_1_id = review_jobs[0].id.clone();

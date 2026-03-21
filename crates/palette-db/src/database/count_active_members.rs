@@ -22,8 +22,8 @@ mod tests {
     #[test]
     fn count_active_members() {
         let db = test_db();
-        create_craft(&db, "C-001", None, vec![]);
-        create_craft(&db, "C-002", None, vec![]);
+        create_craft(&db, "C-001", None);
+        create_craft(&db, "C-002", None);
 
         assert_eq!(db.count_active_members().unwrap(), 0);
 

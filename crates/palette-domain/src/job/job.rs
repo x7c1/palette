@@ -7,7 +7,7 @@ use crate::task::TaskId;
 #[derive(Debug, Clone)]
 pub struct Job {
     pub id: JobId,
-    pub task_id: Option<TaskId>,
+    pub task_id: TaskId,
     pub job_type: JobType,
     pub title: String,
     pub plan_path: String,

@@ -34,7 +34,7 @@ mod tests {
     #[test]
     fn assign_job_sets_assignee_and_status() {
         let db = test_db();
-        create_craft(&db, "C-001", None, vec![]);
+        create_craft(&db, "C-001", None);
         db.update_job_status(&jid("C-001"), JobStatus::Ready)
             .unwrap();
 
