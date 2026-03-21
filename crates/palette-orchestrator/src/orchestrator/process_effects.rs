@@ -334,21 +334,17 @@ impl Orchestrator {
             let job_effects = if let Some(mut task) = task_store.get_task(task_id)?
                 && task.job_type.is_some()
             {
-                // For review tasks, inherit plan_path and description from sibling craft task
-                // so the reviewer sees the same context as the crafter
+                // For review tasks, inherit plan_path from sibling craft task
+                // so the reviewer reads the same plan document as the crafter
                 if task.job_type == Some(JobType::Review)
+                    && task.plan_path.is_none()
                     && let Some(ref parent_id) = task.parent_id
                 {
                     let siblings = task_store.get_child_tasks(parent_id)?;
                     if let Some(craft) =
                         siblings.iter().find(|s| s.job_type == Some(JobType::Craft))
                     {
-                        if task.plan_path.is_none() {
-                            task.plan_path = craft.plan_path.clone();
-                        }
-                        if task.description.is_none() {
-                            task.description = craft.description.clone();
-                        }
+                        task.plan_path = craft.plan_path.clone();
                     }
                 }
                 self.create_job_for_ready_task(&task)?
