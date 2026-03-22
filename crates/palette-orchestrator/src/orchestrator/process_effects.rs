@@ -341,6 +341,20 @@ impl Orchestrator {
             "craft job reverted to InProgress due to changes_requested"
         );
 
+        // Enqueue review feedback to the crafter so they know what to fix
+        if let Some(ref assignee) = craft_job.assignee {
+            let submissions = self.db.get_review_submissions(review_job_id)?;
+            let feedback = submissions
+                .last()
+                .and_then(|s| s.summary.clone())
+                .unwrap_or_else(|| "Changes requested (no summary provided)".to_string());
+            let msg = format!(
+                "## Review Feedback (changes requested)\n\nReview job {} has requested changes:\n\n{}\n\nPlease address the feedback and complete the task.",
+                review_job_id, feedback
+            );
+            self.db.enqueue_message(assignee, &msg)?;
+        }
+
         // Emit AutoAssign so the crafter gets re-activated
         Ok(vec![RuleEffect::AutoAssign {
             job_id: craft_job.id,
