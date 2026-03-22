@@ -8,6 +8,9 @@ pub struct PersistentState {
     pub members: Vec<AgentState>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
+    /// Monotonic counter for member ID generation to avoid name collisions
+    /// after members are destroyed and new ones spawned.
+    member_counter: usize,
 }
 
 impl PersistentState {
@@ -19,6 +22,34 @@ impl PersistentState {
             members: Vec::new(),
             created_at: now,
             updated_at: now,
+            member_counter: 0,
+        }
+    }
+
+    /// Restore state from a saved file. The member_counter is set to
+    /// one past the highest existing member index to avoid name collisions.
+    pub fn restore(
+        session_name: String,
+        supervisors: Vec<AgentState>,
+        members: Vec<AgentState>,
+        created_at: DateTime<Utc>,
+        updated_at: DateTime<Utc>,
+    ) -> Self {
+        // Parse member IDs like "member-a" (0), "member-b" (1), etc.
+        // and find the max to set the counter past it.
+        let max_index = members
+            .iter()
+            .filter_map(|m| parse_member_index(m.id.as_ref()))
+            .max()
+            .map(|n| n + 1)
+            .unwrap_or(members.len());
+        Self {
+            session_name,
+            supervisors,
+            members,
+            created_at,
+            updated_at,
+            member_counter: max_index,
         }
     }
 
@@ -55,9 +86,13 @@ impl PersistentState {
         }
     }
 
-    /// Generate the next member ID (member-a, member-b, ..., member-z, member-aa, ...).
-    pub fn next_member_id(&self) -> AgentId {
-        AgentId::next_member(self.members.len())
+    /// Generate the next member ID using a monotonic counter.
+    /// IDs never repeat even after members are destroyed
+    /// (e.g., member-a, member-b, member-c, ... never reused).
+    pub fn next_member_id(&mut self) -> AgentId {
+        let id = AgentId::next_member(self.member_counter);
+        self.member_counter += 1;
+        id
     }
 
     /// Find the leader (AgentRole::Leader).
@@ -174,4 +209,20 @@ mod tests {
             AgentId::new("ri-1")
         );
     }
+}
+
+/// Parse a member ID like "member-a" → 0, "member-b" → 1, "member-aa" → 26.
+fn parse_member_index(id: &str) -> Option<usize> {
+    let suffix = id.strip_prefix("member-")?;
+    let mut result: usize = 0;
+    for (i, c) in suffix.chars().enumerate() {
+        if !c.is_ascii_lowercase() {
+            return None;
+        }
+        if i > 0 {
+            result = (result + 1) * 26;
+        }
+        result += (c as usize) - ('a' as usize);
+    }
+    Some(result)
 }

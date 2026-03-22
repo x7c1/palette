@@ -31,13 +31,13 @@ pub fn from_state_file(file: StateFile) -> Result<PersistentState, Error> {
     let created_at = parse_datetime(&file.created_at)?;
     let updated_at = parse_datetime(&file.updated_at)?;
 
-    Ok(PersistentState {
-        session_name: file.session_name,
+    Ok(PersistentState::restore(
+        file.session_name,
         supervisors,
         members,
         created_at,
         updated_at,
-    })
+    ))
 }
 
 fn to_agent_record(agent: &AgentState) -> AgentRecord {
