@@ -40,11 +40,11 @@ impl<S: TaskStore> TaskRuleEngine<S> {
 
         if self.all_children_done(&siblings, task_id)
             && let Some(parent) = self.store.get_task(parent_id)?
-            && parent.status != TaskStatus::Done
+            && parent.status != TaskStatus::Completed
         {
             effects.push(TaskEffect::TaskStatusChanged {
                 task_id: parent_id.clone(),
-                new_status: TaskStatus::Done,
+                new_status: TaskStatus::Completed,
             });
         }
 
@@ -87,7 +87,7 @@ impl<S: TaskStore> TaskRuleEngine<S> {
             let done = self
                 .store
                 .get_task(dep_id)?
-                .is_some_and(|d| d.status == TaskStatus::Done);
+                .is_some_and(|d| d.status == TaskStatus::Completed);
             if !done {
                 return Ok(false);
             }
@@ -98,6 +98,6 @@ impl<S: TaskStore> TaskRuleEngine<S> {
     fn all_children_done(&self, siblings: &[Task], just_completed: &TaskId) -> bool {
         siblings
             .iter()
-            .all(|s| s.status == TaskStatus::Done || s.id == *just_completed)
+            .all(|s| s.status == TaskStatus::Completed || s.id == *just_completed)
     }
 }

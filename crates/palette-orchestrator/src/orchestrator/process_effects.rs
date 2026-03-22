@@ -262,7 +262,7 @@ impl Orchestrator {
             .map_err(|e| crate::Error::Internal(e.to_string()))?;
 
         // Mark the completed task as Done
-        task_store.update_task_status(task_id, TaskStatus::Done)?;
+        task_store.update_task_status(task_id, TaskStatus::Completed)?;
 
         tracing::info!(task_id = %task_id, "task completed via job");
 
@@ -303,7 +303,7 @@ impl Orchestrator {
                         next.extend(follow_up);
                         job_effects.extend(new_job_effects);
                     }
-                    TaskStatus::Done => {
+                    TaskStatus::Completed => {
                         // Check workflow completion
                         if let Some(task) = task_store.get_task(task_id)?
                             && task.parent_id.is_none()

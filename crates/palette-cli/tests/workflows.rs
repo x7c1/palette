@@ -264,7 +264,7 @@ children:
         .get_task_state(&TaskId::new("2026/cascade-test/step-a"))
         .unwrap()
         .unwrap();
-    assert_eq!(step_a.status, TaskStatus::Done);
+    assert_eq!(step_a.status, TaskStatus::Completed);
 
     // Verify: step-b should now be Ready (dependency satisfied)
     let step_b = state
@@ -317,7 +317,7 @@ children:
         .get_task_state(&TaskId::new("2026/cascade-test/step-b"))
         .unwrap()
         .unwrap();
-    assert_eq!(step_b.status, TaskStatus::Done);
+    assert_eq!(step_b.status, TaskStatus::Completed);
 
     // Root task should be Done (all children complete)
     let root = state
@@ -325,7 +325,7 @@ children:
         .get_task_state(&TaskId::new("2026/cascade-test"))
         .unwrap()
         .unwrap();
-    assert_eq!(root.status, TaskStatus::Done);
+    assert_eq!(root.status, TaskStatus::Completed);
 }
 
 /// Craft InReview should propagate task completion through the task tree,
@@ -417,7 +417,7 @@ children:
         .get_task_state(&TaskId::new("e2e/ir-test/step-a/craft"))
         .unwrap()
         .unwrap();
-    assert_eq!(craft_task.status, TaskStatus::Done);
+    assert_eq!(craft_task.status, TaskStatus::Completed);
 
     // Verify: step-a/review task should now be Ready (dependency on craft satisfied)
     let review_task = state
@@ -537,7 +537,7 @@ children:
             .unwrap()
             .unwrap()
             .status,
-        TaskStatus::Done
+        TaskStatus::Completed
     );
     assert_eq!(
         state
@@ -607,7 +607,7 @@ children:
             .unwrap()
             .unwrap()
             .status,
-        TaskStatus::Done
+        TaskStatus::Completed
     );
 
     // step-a composite should be Done (both children Done)
@@ -618,7 +618,7 @@ children:
             .unwrap()
             .unwrap()
             .status,
-        TaskStatus::Done
+        TaskStatus::Completed
     );
 
     // step-b should now be Ready → InProgress (composite auto-transitions)
@@ -717,7 +717,7 @@ children:
             .unwrap()
             .unwrap()
             .status,
-        TaskStatus::Done
+        TaskStatus::Completed
     );
 
     // Root task Done
@@ -728,7 +728,7 @@ children:
             .unwrap()
             .unwrap()
             .status,
-        TaskStatus::Done
+        TaskStatus::Completed
     );
 
     // Workflow completed

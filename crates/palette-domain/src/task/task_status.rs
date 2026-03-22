@@ -12,7 +12,7 @@ pub enum TaskStatus {
     /// Task is paused due to an Escalation.
     Suspended,
     /// Task and all its child Tasks / Job are complete.
-    Done,
+    Completed,
 }
 
 impl TaskStatus {
@@ -22,7 +22,7 @@ impl TaskStatus {
             TaskStatus::Ready => "ready",
             TaskStatus::InProgress => "in_progress",
             TaskStatus::Suspended => "suspended",
-            TaskStatus::Done => "done",
+            TaskStatus::Completed => "completed",
         }
     }
 }
@@ -35,7 +35,9 @@ impl FromStr for TaskStatus {
             "ready" => Ok(TaskStatus::Ready),
             "in_progress" => Ok(TaskStatus::InProgress),
             "suspended" => Ok(TaskStatus::Suspended),
-            "done" => Ok(TaskStatus::Done),
+            "completed" => Ok(TaskStatus::Completed),
+            // Accept "done" for backwards compatibility with existing DB data
+            "done" => Ok(TaskStatus::Completed),
             _ => Err(format!("invalid task status: {s}")),
         }
     }
