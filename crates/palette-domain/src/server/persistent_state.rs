@@ -31,10 +31,10 @@ impl PersistentState {
         session_name: String,
         supervisors: Vec<AgentState>,
         members: Vec<AgentState>,
-        member_counter: usize,
         created_at: DateTime<Utc>,
         updated_at: DateTime<Utc>,
     ) -> Self {
+        let member_counter = members.len();
         Self {
             session_name,
             supervisors,
@@ -85,10 +85,6 @@ impl PersistentState {
         let id = AgentId::next_member(self.member_counter);
         self.member_counter += 1;
         id
-    }
-
-    pub fn member_counter(&self) -> usize {
-        self.member_counter
     }
 
     /// Find the leader (AgentRole::Leader).

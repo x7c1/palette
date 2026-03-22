@@ -14,7 +14,7 @@ impl AgentId {
     /// The random suffix prevents collisions across Palette restarts
     /// and future parallel workflow executions.
     pub fn next_member(sequence: usize) -> Self {
-        let random = random_hex(4);
+        let random = random_hex(8);
         Self(format!("member-{sequence}-{random}"))
     }
 }

@@ -7,8 +7,6 @@ pub struct StateFile {
     pub session_name: String,
     pub supervisors: Vec<AgentRecord>,
     pub members: Vec<AgentRecord>,
-    #[serde(default)]
-    pub member_counter: usize,
     pub created_at: String,
     pub updated_at: String,
 }
