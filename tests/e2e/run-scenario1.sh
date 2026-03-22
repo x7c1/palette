@@ -29,7 +29,8 @@ trap '"$SCRIPT_DIR/stop-palette.sh"' EXIT
 # --- Step 1: Reset and build ---
 echo "=== Step 1: Reset and build ==="
 scripts/reset.sh 2>&1
-rm -rf data/plans/*
+mkdir -p data/plans
+cp -r tests/e2e/fixtures/plans/* data/plans/
 cargo build 2>&1
 
 # --- Step 2: Start Palette ---
