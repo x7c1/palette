@@ -877,3 +877,190 @@ children:
         "craft job should be Done after all reviews approved"
     );
 }
+
+/// Test the full changes_requested flow:
+/// 1. Craft job reaches InReview → review task activated
+/// 2. Reviewer submits changes_requested → craft job reverts to InProgress
+/// 3. Crafter fixes and goes back to InReview → review job reactivated
+/// 4. Reviewer approves → craft job Done → craft task Completed
+#[tokio::test]
+async fn changes_requested_flow() {
+    use palette_domain::job::{CraftStatus, JobStatus as JStatus, ReviewStatus};
+    use palette_domain::review::{SubmitReviewRequest, Verdict};
+    use palette_domain::rule::RuleEffect;
+    use palette_domain::server::ServerEvent;
+    use palette_domain::task::{TaskId, TaskStatus};
+
+    let yaml = r#"
+task:
+  id: 2026/cr-test
+  title: CR test
+children:
+  - id: impl
+    type: craft
+    plan_path: test/impl
+    children:
+      - id: review
+        type: review
+"#;
+    let file = write_blueprint_file(yaml);
+
+    let (session_name, _guard) = test_session_name_with_guard("cr-flow");
+    let tmux = TmuxManager::new(session_name.clone());
+    tmux.create_session(&session_name).unwrap();
+    let (addr, state) = spawn_server(tmux, &session_name).await;
+
+    // Start workflow
+    let client = reqwest::Client::new();
+    let _: serde_json::Value = client
+        .post(format!("{addr}/workflows/start"))
+        .json(&serde_json::json!({ "blueprint_path": file.path().to_str().unwrap() }))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+
+    let wait = || tokio::time::sleep(tokio::time::Duration::from_millis(200));
+    wait().await;
+
+    // Get craft job
+    let craft_job = state
+        .db
+        .list_jobs(&palette_domain::job::JobFilter {
+            job_type: Some(palette_domain::job::JobType::Craft),
+            ..Default::default()
+        })
+        .unwrap();
+    assert_eq!(craft_job.len(), 1);
+    let craft_id = craft_job[0].id.clone();
+
+    // Simulate craft: Todo → InProgress → InReview
+    state
+        .db
+        .update_job_status(&craft_id, JStatus::Craft(CraftStatus::InProgress))
+        .unwrap();
+    state
+        .db
+        .update_job_status(&craft_id, JStatus::Craft(CraftStatus::InReview))
+        .unwrap();
+    let _ = state.event_tx.send(ServerEvent::ProcessEffects {
+        effects: vec![RuleEffect::StatusChanged {
+            job_id: craft_id.clone(),
+            new_status: JStatus::Craft(CraftStatus::InReview),
+        }],
+    });
+    wait().await;
+
+    // Review job should be created
+    let review_jobs = state
+        .db
+        .list_jobs(&palette_domain::job::JobFilter {
+            job_type: Some(palette_domain::job::JobType::Review),
+            ..Default::default()
+        })
+        .unwrap();
+    assert_eq!(review_jobs.len(), 1, "review job should be created");
+    let review_id = review_jobs[0].id.clone();
+
+    // Assign reviewer and submit changes_requested
+    state
+        .db
+        .assign_job(&review_id, &palette_domain::agent::AgentId::new("reviewer-1"))
+        .unwrap();
+
+    let sub = state
+        .db
+        .submit_review(
+            &review_id,
+            &SubmitReviewRequest {
+                verdict: Verdict::ChangesRequested,
+                summary: Some("Please fix X".to_string()),
+                comments: vec![],
+            },
+        )
+        .unwrap();
+
+    let effects = state.rules.on_review_submitted(&review_id, &sub).unwrap();
+    let _ = state.event_tx.send(ServerEvent::ProcessEffects { effects });
+    wait().await;
+
+    // Verify: review job should be ChangesRequested
+    let review_job = state.db.get_job(&review_id).unwrap().unwrap();
+    assert_eq!(
+        review_job.status,
+        JStatus::Review(ReviewStatus::ChangesRequested)
+    );
+
+    // Verify: craft job should be back to InProgress
+    let craft_job = state.db.get_job(&craft_id).unwrap().unwrap();
+    assert_eq!(
+        craft_job.status,
+        JStatus::Craft(CraftStatus::InProgress),
+        "craft job should revert to InProgress after changes_requested"
+    );
+
+    // Crafter fixes and goes back to InReview
+    state
+        .db
+        .update_job_status(&craft_id, JStatus::Craft(CraftStatus::InReview))
+        .unwrap();
+    let _ = state.event_tx.send(ServerEvent::ProcessEffects {
+        effects: vec![RuleEffect::StatusChanged {
+            job_id: craft_id.clone(),
+            new_status: JStatus::Craft(CraftStatus::InReview),
+        }],
+    });
+    wait().await;
+
+    // Verify: review job should be reactivated to InProgress
+    let review_job = state.db.get_job(&review_id).unwrap().unwrap();
+    assert_eq!(
+        review_job.status,
+        JStatus::Review(ReviewStatus::InProgress),
+        "review job should be reactivated for re-review"
+    );
+
+    // Reviewer approves this time
+    let sub2 = state
+        .db
+        .submit_review(
+            &review_id,
+            &SubmitReviewRequest {
+                verdict: Verdict::Approved,
+                summary: Some("LGTM".to_string()),
+                comments: vec![],
+            },
+        )
+        .unwrap();
+
+    let effects = state
+        .rules
+        .on_review_submitted(&review_id, &sub2)
+        .unwrap();
+    let _ = state.event_tx.send(ServerEvent::ProcessEffects { effects });
+    wait().await;
+
+    // Verify: review job Done, craft job Done, craft task Completed
+    let review_job = state.db.get_job(&review_id).unwrap().unwrap();
+    assert_eq!(review_job.status, JStatus::Review(ReviewStatus::Done));
+
+    let craft_job = state.db.get_job(&craft_id).unwrap().unwrap();
+    assert_eq!(
+        craft_job.status,
+        JStatus::Craft(CraftStatus::Done),
+        "craft job should be Done after approval"
+    );
+
+    let craft_task = state
+        .db
+        .get_task_state(&TaskId::new("2026/cr-test/impl"))
+        .unwrap()
+        .unwrap();
+    assert_eq!(
+        craft_task.status,
+        TaskStatus::Completed,
+        "craft task should be Completed after job Done + review child Completed"
+    );
+}

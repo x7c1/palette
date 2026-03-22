@@ -175,9 +175,16 @@ impl Orchestrator {
 
         let mut all_effects = chained;
 
-        // When a craft job reaches InReview, activate child review tasks
+        // When a craft job reaches InReview, activate child review tasks.
+        // On re-review (after changes_requested), reactivate ChangesRequested review jobs.
         if matches!(new_status, JobStatus::Craft(CraftStatus::InReview)) {
             let effects = self.activate_child_review_tasks(job_id)?;
+            all_effects.extend(effects);
+        }
+
+        // When a review job gets ChangesRequested, move parent craft job back to InProgress
+        if matches!(new_status, JobStatus::Review(ReviewStatus::ChangesRequested)) {
+            let effects = self.revert_parent_craft_to_in_progress(job_id)?;
             all_effects.extend(effects);
         }
 
@@ -222,15 +229,15 @@ impl Orchestrator {
             task_store.update_task_status(task_id, TaskStatus::InProgress)?;
         }
 
-        // Activate child review tasks
+        let mut job_effects = Vec::new();
+
+        // First pass: activate Pending children (initial review cycle)
         use palette_domain::rule::TaskRuleEngine;
         let task_engine = TaskRuleEngine::new(&task_store);
         let child_ids: Vec<TaskId> = children.iter().map(|c| c.id.clone()).collect();
         let task_effects = task_engine.resolve_ready_tasks(&child_ids)?;
 
-        let mut job_effects = Vec::new();
         let mut pending = task_effects;
-
         while !pending.is_empty() {
             let mut next = Vec::new();
             for effect in &pending {
@@ -255,7 +262,79 @@ impl Orchestrator {
             pending = next;
         }
 
+        // Second pass: reactivate ChangesRequested review jobs (re-review cycle)
+        for child in &children {
+            if let Some(review_job) = self.db.get_job_by_task_id(&child.id)?
+                && matches!(
+                    review_job.status,
+                    JobStatus::Review(ReviewStatus::ChangesRequested)
+                )
+            {
+                self.db.update_job_status(
+                    &review_job.id,
+                    JobStatus::Review(ReviewStatus::InProgress),
+                )?;
+                tracing::info!(
+                    job_id = %review_job.id,
+                    task_id = %child.id,
+                    "reactivated ChangesRequested review job for re-review"
+                );
+                job_effects.push(RuleEffect::AutoAssign {
+                    job_id: review_job.id.clone(),
+                });
+            }
+        }
+
         Ok(job_effects)
+    }
+
+    /// When a review job gets ChangesRequested, move the parent craft job
+    /// from InReview back to InProgress so the crafter can address feedback.
+    fn revert_parent_craft_to_in_progress(
+        &self,
+        review_job_id: &JobId,
+    ) -> crate::Result<Vec<RuleEffect>> {
+        let Some(review_job) = self.db.get_job(review_job_id)? else {
+            return Ok(vec![]);
+        };
+        let review_task_id = &review_job.task_id;
+        let Some(task_state) = self.db.get_task_state(review_task_id)? else {
+            return Ok(vec![]);
+        };
+
+        let task_store = TaskStoreImpl::from_db(&self.db, &task_state.workflow_id)
+            .map_err(|e| crate::Error::Internal(e.to_string()))?;
+
+        let Some(review_task) = task_store.get_task(review_task_id)? else {
+            return Ok(vec![]);
+        };
+
+        // Review task must have a parent (the craft task)
+        let Some(ref parent_id) = review_task.parent_id else {
+            return Ok(vec![]);
+        };
+
+        // Parent must have a craft job in InReview
+        let Some(craft_job) = self.db.get_job_by_task_id(parent_id)? else {
+            return Ok(vec![]);
+        };
+        if craft_job.status != JobStatus::Craft(CraftStatus::InReview) {
+            return Ok(vec![]);
+        }
+
+        // Move craft job back to InProgress
+        self.db
+            .update_job_status(&craft_job.id, JobStatus::Craft(CraftStatus::InProgress))?;
+        tracing::info!(
+            craft_job_id = %craft_job.id,
+            review_job_id = %review_job_id,
+            "craft job reverted to InProgress due to changes_requested"
+        );
+
+        // Emit AutoAssign so the crafter gets re-activated
+        Ok(vec![RuleEffect::AutoAssign {
+            job_id: craft_job.id,
+        }])
     }
 
     /// When a Job is Done, check if its task can be completed.
