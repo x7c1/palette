@@ -11,7 +11,7 @@ impl Database {
             sql.push_str(&format!(" AND type = ?{}", param_values.len()));
         }
         if let Some(ref s) = filter.status {
-            param_values.push(Box::new(s.clone()));
+            param_values.push(Box::new(s.as_str().to_string()));
             sql.push_str(&format!(" AND status = ?{}", param_values.len()));
         }
         if let Some(ref a) = filter.assignee {
