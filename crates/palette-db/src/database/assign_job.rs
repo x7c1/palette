@@ -2,11 +2,13 @@ use super::*;
 
 impl Database {
     /// Assign a job to a member and set status to in_progress.
-    pub fn assign_job(&self, job_id: &JobId, assignee: &AgentId) -> crate::Result<Job> {
-        let job = self.get_job(job_id)?.ok_or_else(|| JobError::NotFound {
-            job_id: job_id.clone(),
-        })?;
-        let in_progress = JobStatus::in_progress(job.job_type);
+    pub fn assign_job(
+        &self,
+        job_id: &JobId,
+        assignee: &AgentId,
+        job_type: JobType,
+    ) -> crate::Result<Job> {
+        let in_progress = JobStatus::in_progress(job_type);
         let conn = lock!(self.conn);
         let now = Utc::now().to_rfc3339();
         let updated = conn.execute(
@@ -40,7 +42,9 @@ mod tests {
         let db = test_db();
         create_craft(&db, "C-001", None);
 
-        let job = db.assign_job(&jid("C-001"), &aid("member-a")).unwrap();
+        let job = db
+            .assign_job(&jid("C-001"), &aid("member-a"), JobType::Craft)
+            .unwrap();
         assert_eq!(job.status, JobStatus::Craft(CraftStatus::InProgress));
         assert_eq!(job.assignee, Some(aid("member-a")));
         assert!(job.assigned_at.is_some());

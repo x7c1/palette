@@ -112,12 +112,18 @@ async fn scenario3_message_queuing_to_leader() {
         .db
         .update_job_status(&jid("R-A"), JobStatus::Review(ReviewStatus::Todo))
         .unwrap();
-    state.db.assign_job(&jid("R-A"), &aid("member-a")).unwrap();
+    state
+        .db
+        .assign_job(&jid("R-A"), &aid("member-a"), JobType::Review)
+        .unwrap();
     state
         .db
         .update_job_status(&jid("R-B"), JobStatus::Review(ReviewStatus::Todo))
         .unwrap();
-    state.db.assign_job(&jid("R-B"), &aid("member-b")).unwrap();
+    state
+        .db
+        .assign_job(&jid("R-B"), &aid("member-b"), JobType::Review)
+        .unwrap();
 
     // --- Both review members stop while review integrator is Working ---
 

@@ -49,7 +49,8 @@ mod tests {
         assert_eq!(assignable[1].id, jid("C-002")); // low priority second
 
         // Assign one — only the other remains assignable
-        db.assign_job(&jid("C-001"), &aid("m-a")).unwrap();
+        db.assign_job(&jid("C-001"), &aid("m-a"), JobType::Craft)
+            .unwrap();
         let assignable = db.find_assignable_jobs().unwrap();
         assert_eq!(assignable.len(), 1);
         assert_eq!(assignable[0].id, jid("C-002"));
@@ -66,7 +67,8 @@ mod tests {
         assert_eq!(assignable[0].id, jid("R-001"));
 
         // Assign review — no longer assignable
-        db.assign_job(&jid("R-001"), &aid("m-r")).unwrap();
+        db.assign_job(&jid("R-001"), &aid("m-r"), JobType::Review)
+            .unwrap();
         let assignable = db.find_assignable_jobs().unwrap();
         assert!(assignable.is_empty());
     }

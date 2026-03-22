@@ -495,7 +495,7 @@ children:
     let workflow_id =
         palette_domain::workflow::WorkflowId::new(resp_body["workflow_id"].as_str().unwrap());
 
-    use palette_domain::job::{CraftStatus, JobFilter, JobStatus as JStatus};
+    use palette_domain::job::{CraftStatus, JobFilter, JobStatus as JStatus, JobType};
     use palette_domain::rule::RuleEffect;
     use palette_domain::server::ServerEvent;
     use palette_domain::task::{TaskId, TaskStatus};
@@ -582,6 +582,7 @@ children:
         .assign_job(
             &review_a_id,
             &palette_domain::agent::AgentId::new("reviewer-a"),
+            JobType::Review,
         )
         .unwrap();
 
@@ -684,6 +685,7 @@ children:
         .assign_job(
             &review_b_id,
             &palette_domain::agent::AgentId::new("reviewer-b"),
+            JobType::Review,
         )
         .unwrap();
 
@@ -768,7 +770,7 @@ children:
         .unwrap();
     assert_eq!(resp.status(), 201);
 
-    use palette_domain::job::{CraftStatus, JobFilter, JobStatus as JStatus};
+    use palette_domain::job::{CraftStatus, JobFilter, JobStatus as JStatus, JobType};
     use palette_domain::rule::RuleEffect;
     use palette_domain::server::ServerEvent;
     let wait = || tokio::time::sleep(tokio::time::Duration::from_millis(200));
@@ -815,6 +817,7 @@ children:
         .assign_job(
             &review_1_id,
             &palette_domain::agent::AgentId::new("reviewer-1"),
+            JobType::Review,
         )
         .unwrap();
 
@@ -850,6 +853,7 @@ children:
         .assign_job(
             &review_2_id,
             &palette_domain::agent::AgentId::new("reviewer-2"),
+            JobType::Review,
         )
         .unwrap();
 
@@ -885,7 +889,7 @@ children:
 /// 4. Reviewer approves → craft job Done → craft task Completed
 #[tokio::test]
 async fn changes_requested_flow() {
-    use palette_domain::job::{CraftStatus, JobStatus as JStatus, ReviewStatus};
+    use palette_domain::job::{CraftStatus, JobStatus as JStatus, JobType, ReviewStatus};
     use palette_domain::review::{SubmitReviewRequest, Verdict};
     use palette_domain::rule::RuleEffect;
     use palette_domain::server::ServerEvent;
@@ -970,6 +974,7 @@ children:
         .assign_job(
             &review_id,
             &palette_domain::agent::AgentId::new("reviewer-1"),
+            JobType::Review,
         )
         .unwrap();
 

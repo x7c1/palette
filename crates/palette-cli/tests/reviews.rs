@@ -46,7 +46,7 @@ async fn review_submit_and_get_submissions() {
         .unwrap();
     state
         .db
-        .assign_job(&review_job.id, &AgentId::new("member-b"))
+        .assign_job(&review_job.id, &AgentId::new("member-b"), JobType::Review)
         .unwrap();
 
     let client = reqwest::Client::new();
@@ -119,7 +119,7 @@ async fn review_approved_completes_review_job() {
         .unwrap();
     state
         .db
-        .assign_job(&review_job.id, &AgentId::new("member-b"))
+        .assign_job(&review_job.id, &AgentId::new("member-b"), JobType::Review)
         .unwrap();
 
     let client = reqwest::Client::new();

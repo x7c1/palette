@@ -100,7 +100,7 @@ impl Orchestrator {
         infra.members.push(member);
 
         // Assign job
-        self.db.assign_job(job_id, &member_id)?;
+        self.db.assign_job(job_id, &member_id, job.job_type)?;
         tracing::info!(
             job_id = %job_id,
             member_id = %member_id,
@@ -730,7 +730,7 @@ mod tests {
         })
         .unwrap();
 
-        db.assign_job(&jid("R-001"), &AgentId::new("member-b"))
+        db.assign_job(&jid("R-001"), &AgentId::new("member-b"), JobType::Review)
             .unwrap();
 
         let sub = db
@@ -783,7 +783,7 @@ mod tests {
         })
         .unwrap();
 
-        db.assign_job(&jid("R-001"), &AgentId::new("member-b"))
+        db.assign_job(&jid("R-001"), &AgentId::new("member-b"), JobType::Review)
             .unwrap();
 
         let sub = db

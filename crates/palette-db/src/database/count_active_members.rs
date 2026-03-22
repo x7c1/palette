@@ -27,10 +27,12 @@ mod tests {
 
         assert_eq!(db.count_active_members().unwrap(), 0);
 
-        db.assign_job(&jid("C-001"), &aid("member-a")).unwrap();
+        db.assign_job(&jid("C-001"), &aid("member-a"), JobType::Craft)
+            .unwrap();
         assert_eq!(db.count_active_members().unwrap(), 1);
 
-        db.assign_job(&jid("C-002"), &aid("member-b")).unwrap();
+        db.assign_job(&jid("C-002"), &aid("member-b"), JobType::Craft)
+            .unwrap();
         assert_eq!(db.count_active_members().unwrap(), 2);
 
         db.update_job_status(&jid("C-001"), JobStatus::Craft(CraftStatus::InReview))
