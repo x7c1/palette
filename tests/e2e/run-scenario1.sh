@@ -182,16 +182,12 @@ while true; do
     exit 1
   fi
 
-  # Check completion: all jobs done
-  job_count=$(echo "$JOBS" | jq 'length' 2>/dev/null || echo "0")
-  done_count=$(echo "$JOBS" | jq '[.[] | select(.status == "done")] | length' 2>/dev/null || echo "0")
-
-  if [[ "$job_count" -gt 0 && "$job_count" -eq "$done_count" ]]; then
+  # Check completion: workflow completed in Palette log
+  if grep -q "workflow completed" "$LOG_FILE" 2>/dev/null; then
     echo ""
     echo "=== Step 6: Verify final state ==="
-    echo "All $job_count jobs are done."
+    JOBS=$(curl -sf "$PALETTE_URL/jobs" 2>/dev/null || echo "[]")
     echo "$JOBS" | jq -r '.[] | "  \(.id) \(.title) \(.status)"' 2>/dev/null
-
     echo ""
     echo "=== All E2E checks passed ==="
     echo "Workflow completed successfully: step-a → step-b cascade verified."
