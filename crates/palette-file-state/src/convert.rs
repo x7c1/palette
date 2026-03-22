@@ -11,6 +11,7 @@ pub fn to_state_file(state: &PersistentState) -> StateFile {
         session_name: state.session_name.clone(),
         supervisors: state.supervisors.iter().map(to_agent_record).collect(),
         members: state.members.iter().map(to_agent_record).collect(),
+        member_counter: state.member_counter(),
         created_at: state.created_at.to_rfc3339(),
         updated_at: state.updated_at.to_rfc3339(),
     }
@@ -35,6 +36,7 @@ pub fn from_state_file(file: StateFile) -> Result<PersistentState, Error> {
         file.session_name,
         supervisors,
         members,
+        file.member_counter,
         created_at,
         updated_at,
     ))

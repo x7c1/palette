@@ -26,30 +26,22 @@ impl PersistentState {
         }
     }
 
-    /// Restore state from a saved file. The member_counter is set to
-    /// one past the highest existing member index to avoid name collisions.
+    /// Restore state from a saved file.
     pub fn restore(
         session_name: String,
         supervisors: Vec<AgentState>,
         members: Vec<AgentState>,
+        member_counter: usize,
         created_at: DateTime<Utc>,
         updated_at: DateTime<Utc>,
     ) -> Self {
-        // Parse member IDs like "member-a" (0), "member-b" (1), etc.
-        // and find the max to set the counter past it.
-        let max_index = members
-            .iter()
-            .filter_map(|m| parse_member_index(m.id.as_ref()))
-            .max()
-            .map(|n| n + 1)
-            .unwrap_or(members.len());
         Self {
             session_name,
             supervisors,
             members,
             created_at,
             updated_at,
-            member_counter: max_index,
+            member_counter,
         }
     }
 
@@ -93,6 +85,10 @@ impl PersistentState {
         let id = AgentId::next_member(self.member_counter);
         self.member_counter += 1;
         id
+    }
+
+    pub fn member_counter(&self) -> usize {
+        self.member_counter
     }
 
     /// Find the leader (AgentRole::Leader).
@@ -209,20 +205,4 @@ mod tests {
             AgentId::new("ri-1")
         );
     }
-}
-
-/// Parse a member ID like "member-a" → 0, "member-b" → 1, "member-aa" → 26.
-fn parse_member_index(id: &str) -> Option<usize> {
-    let suffix = id.strip_prefix("member-")?;
-    let mut result: usize = 0;
-    for (i, c) in suffix.chars().enumerate() {
-        if !c.is_ascii_lowercase() {
-            return None;
-        }
-        if i > 0 {
-            result = (result + 1) * 26;
-        }
-        result += (c as usize) - ('a' as usize);
-    }
-    Some(result)
 }
