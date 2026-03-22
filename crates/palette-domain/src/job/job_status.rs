@@ -1,6 +1,6 @@
+use super::JobType;
 use super::craft_status::CraftStatus;
 use super::review_status::ReviewStatus;
-use super::JobType;
 
 /// Typed job status that pairs with the job type.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

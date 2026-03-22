@@ -179,13 +179,9 @@ mod tests {
     #[test]
     fn valid_craft_transitions() {
         assert!(validate_craft_transition(CraftStatus::Todo, CraftStatus::InProgress).is_ok());
-        assert!(
-            validate_craft_transition(CraftStatus::InProgress, CraftStatus::InReview).is_ok()
-        );
+        assert!(validate_craft_transition(CraftStatus::InProgress, CraftStatus::InReview).is_ok());
         assert!(validate_craft_transition(CraftStatus::InReview, CraftStatus::Done).is_ok());
-        assert!(
-            validate_craft_transition(CraftStatus::InReview, CraftStatus::InProgress).is_ok()
-        );
+        assert!(validate_craft_transition(CraftStatus::InReview, CraftStatus::InProgress).is_ok());
         assert!(validate_craft_transition(CraftStatus::Todo, CraftStatus::Escalated).is_ok());
     }
 
@@ -201,18 +197,12 @@ mod tests {
         assert!(validate_review_transition(ReviewStatus::Todo, ReviewStatus::InProgress).is_ok());
         assert!(validate_review_transition(ReviewStatus::InProgress, ReviewStatus::Done).is_ok());
         assert!(
-            validate_review_transition(
-                ReviewStatus::InProgress,
-                ReviewStatus::ChangesRequested
-            )
-            .is_ok()
+            validate_review_transition(ReviewStatus::InProgress, ReviewStatus::ChangesRequested)
+                .is_ok()
         );
         assert!(
-            validate_review_transition(
-                ReviewStatus::ChangesRequested,
-                ReviewStatus::InProgress
-            )
-            .is_ok()
+            validate_review_transition(ReviewStatus::ChangesRequested, ReviewStatus::InProgress)
+                .is_ok()
         );
     }
 
@@ -227,10 +217,12 @@ mod tests {
 
     #[test]
     fn cross_type_transition_is_invalid() {
-        assert!(validate_transition(
-            JobStatus::Craft(CraftStatus::InProgress),
-            JobStatus::Review(ReviewStatus::InProgress),
-        )
-        .is_err());
+        assert!(
+            validate_transition(
+                JobStatus::Craft(CraftStatus::InProgress),
+                JobStatus::Review(ReviewStatus::InProgress),
+            )
+            .is_err()
+        );
     }
 }

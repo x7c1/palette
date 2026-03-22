@@ -130,7 +130,7 @@ impl Orchestrator {
     }
 
     /// Determine the workspace volume for a job.
-    /// Craft jobs get a new volume; review jobs share the sibling craft job's volume (read-only).
+    /// Craft jobs get a new volume; review jobs share the parent craft job's volume (read-only).
     fn resolve_workspace(&self, job: &Job) -> crate::Result<Option<WorkspaceVolume>> {
         match job.job_type {
             JobType::Craft => Ok(Some(WorkspaceVolume {
@@ -138,16 +138,20 @@ impl Orchestrator {
                 read_only: false,
             })),
             JobType::Review => {
+                // Review is a child of craft, so find the parent task's craft job
                 let task_id = &job.task_id;
                 let Some(task_state) = self.db.get_task_state(task_id)? else {
                     return Ok(None);
                 };
                 let task_store = TaskStoreImpl::from_db(&self.db, &task_state.workflow_id)
                     .map_err(|e| crate::Error::Internal(e.to_string()))?;
-                let Some(craft_node) = task_store.tree().sibling_craft(task_id) else {
+                let Some(task) = task_store.get_task(task_id)? else {
                     return Ok(None);
                 };
-                let Some(craft_job) = self.db.get_job_by_task_id(&craft_node.id)? else {
+                let Some(ref parent_id) = task.parent_id else {
+                    return Ok(None);
+                };
+                let Some(craft_job) = self.db.get_job_by_task_id(parent_id)? else {
                     return Ok(None);
                 };
                 Ok(Some(WorkspaceVolume {
@@ -169,91 +173,36 @@ impl Orchestrator {
             tracing::info!(?e, "chained rule engine effect");
         }
 
-        // When a job is Done, propagate to its task and collect any new job effects.
         let mut all_effects = chained;
-        if new_status.is_done() {
-            let task_job_effects = self.propagate_task_completion(job_id)?;
-            all_effects.extend(task_job_effects);
-        }
 
-        // When a craft job reaches InReview, the craft work is finished and the task
-        // should be marked Done so that sibling review tasks become Ready.
+        // When a craft job reaches InReview, activate child review tasks
         if matches!(new_status, JobStatus::Craft(CraftStatus::InReview)) {
-            let task_job_effects = self.propagate_task_completion(job_id)?;
-            all_effects.extend(task_job_effects);
+            let effects = self.activate_child_review_tasks(job_id)?;
+            all_effects.extend(effects);
         }
 
-        // When a review job is Done (approved), mark the sibling craft job as Done too
-        // (it was left in InReview while awaiting review).
+        // When a review job is Done, check if the parent craft job should also become Done
         if matches!(new_status, JobStatus::Review(ReviewStatus::Done)) {
-            self.complete_sibling_craft_job(job_id)?;
+            let effects = self.try_complete_parent_craft_job(job_id)?;
+            all_effects.extend(effects);
+        }
+
+        // When a job is Done, try to complete its task (checking all conditions)
+        if new_status.is_done() {
+            let effects = self.try_complete_task(job_id)?;
+            all_effects.extend(effects);
         }
 
         Ok(all_effects)
     }
 
-    /// When a review job is Done, find and complete the sibling craft job
-    /// (which was left in InReview while awaiting review approval).
-    fn complete_sibling_craft_job(&self, review_job_id: &JobId) -> crate::Result<()> {
-        let Some(job) = self.db.get_job(review_job_id)? else {
-            return Ok(());
-        };
-        if job.job_type != JobType::Review {
-            return Ok(());
-        }
-        let review_task_id = &job.task_id;
-        let Some(task_state) = self.db.get_task_state(review_task_id)? else {
-            return Ok(());
-        };
-        let task_store = TaskStoreImpl::from_db(&self.db, &task_state.workflow_id)
-            .map_err(|e| crate::Error::Internal(e.to_string()))?;
-
-        let tree = task_store.tree();
-
-        // Check that ALL sibling review tasks have their jobs Done
-        let siblings = tree.siblings(review_task_id);
-        let all_reviews_done = siblings
-            .iter()
-            .filter(|s| s.job_type == Some(JobType::Review))
-            .all(|s| {
-                self.db
-                    .get_job_by_task_id(&s.id)
-                    .ok()
-                    .flatten()
-                    .is_some_and(|j| j.status.is_done())
-            });
-        if !all_reviews_done {
-            return Ok(());
-        }
-
-        // All reviews passed — mark sibling craft jobs as Done
-        let Some(craft_node) = tree.sibling_craft(review_task_id) else {
-            return Ok(());
-        };
-        let Some(craft_job) = self.db.get_job_by_task_id(&craft_node.id)? else {
-            return Ok(());
-        };
-        if matches!(craft_job.status, JobStatus::Craft(CraftStatus::InReview)) {
-            self.db
-                .update_job_status(&craft_job.id, JobStatus::Craft(CraftStatus::Done))?;
-            tracing::info!(
-                craft_job_id = %craft_job.id,
-                review_job_id = %review_job_id,
-                "craft job completed via approved review"
-            );
-        }
-        Ok(())
-    }
-
-    /// When a Job completes, mark its Task as Done and cascade effects through the tree.
-    /// Returns any RuleEffects (e.g. AutoAssign) generated by newly created Jobs.
-    fn propagate_task_completion(&self, job_id: &JobId) -> crate::Result<Vec<RuleEffect>> {
-        let Some(job) = self.db.get_job(job_id)? else {
+    /// When a Craft Job reaches InReview, activate its child review tasks.
+    /// The craft task stays InProgress; review tasks become Ready.
+    fn activate_child_review_tasks(&self, craft_job_id: &JobId) -> crate::Result<Vec<RuleEffect>> {
+        let Some(job) = self.db.get_job(craft_job_id)? else {
             return Ok(vec![]);
         };
         let task_id = &job.task_id;
-
-        // Look up the workflow for this task
         let Some(task_state) = self.db.get_task_state(task_id)? else {
             return Ok(vec![]);
         };
@@ -261,12 +210,148 @@ impl Orchestrator {
         let task_store = TaskStoreImpl::from_db(&self.db, &task_state.workflow_id)
             .map_err(|e| crate::Error::Internal(e.to_string()))?;
 
-        // Mark the completed task as Done
-        task_store.update_task_status(task_id, TaskStatus::Completed)?;
+        let children = task_store.get_child_tasks(task_id)?;
+        if children.is_empty() {
+            return Ok(vec![]);
+        }
 
-        tracing::info!(task_id = %task_id, "task completed via job");
+        // Ensure the craft task is InProgress (it should be, since its job is active)
+        if let Some(task) = task_store.get_task(task_id)?
+            && task.status != TaskStatus::InProgress
+        {
+            task_store.update_task_status(task_id, TaskStatus::InProgress)?;
+        }
+
+        // Activate child review tasks
+        use palette_domain::rule::TaskRuleEngine;
+        let task_engine = TaskRuleEngine::new(&task_store);
+        let child_ids: Vec<TaskId> = children.iter().map(|c| c.id.clone()).collect();
+        let task_effects = task_engine.resolve_ready_tasks(&child_ids)?;
+
+        let mut job_effects = Vec::new();
+        let mut pending = task_effects;
+
+        while !pending.is_empty() {
+            let mut next = Vec::new();
+            for effect in &pending {
+                let palette_domain::rule::TaskEffect::TaskStatusChanged {
+                    task_id,
+                    new_status,
+                } = effect
+                else {
+                    continue;
+                };
+
+                task_store.update_task_status(task_id, *new_status)?;
+                tracing::info!(task_id = %task_id, status = ?new_status, "review task activated");
+
+                if *new_status == TaskStatus::Ready {
+                    let (follow_up, effects) =
+                        self.activate_ready_task(task_id, &task_store, &task_engine)?;
+                    next.extend(follow_up);
+                    job_effects.extend(effects);
+                }
+            }
+            pending = next;
+        }
+
+        Ok(job_effects)
+    }
+
+    /// When a Job is Done, check if its task can be completed.
+    /// A task is complete when all children are Completed AND its own job (if any) is Done.
+    fn try_complete_task(&self, job_id: &JobId) -> crate::Result<Vec<RuleEffect>> {
+        let Some(job) = self.db.get_job(job_id)? else {
+            return Ok(vec![]);
+        };
+        let task_id = &job.task_id;
+        let Some(task_state) = self.db.get_task_state(task_id)? else {
+            return Ok(vec![]);
+        };
+
+        let task_store = TaskStoreImpl::from_db(&self.db, &task_state.workflow_id)
+            .map_err(|e| crate::Error::Internal(e.to_string()))?;
+
+        // Check if all children are Completed (if any)
+        let children = task_store.get_child_tasks(task_id)?;
+        let all_children_completed = children.iter().all(|c| c.status == TaskStatus::Completed);
+
+        if !all_children_completed && !children.is_empty() {
+            // Children not done yet; task stays InProgress
+            return Ok(vec![]);
+        }
+
+        // All conditions met: mark task as Completed
+        task_store.update_task_status(task_id, TaskStatus::Completed)?;
+        tracing::info!(task_id = %task_id, "task completed (job done + all children completed)");
 
         self.cascade_task_effects(task_id, &task_store)
+    }
+
+    /// When a review job becomes Done, check if all sibling review tasks under
+    /// the parent craft task are also done. If so, transition the parent craft job
+    /// from InReview to Done.
+    fn try_complete_parent_craft_job(
+        &self,
+        review_job_id: &JobId,
+    ) -> crate::Result<Vec<RuleEffect>> {
+        let Some(review_job) = self.db.get_job(review_job_id)? else {
+            return Ok(vec![]);
+        };
+        let review_task_id = &review_job.task_id;
+        let Some(task_state) = self.db.get_task_state(review_task_id)? else {
+            return Ok(vec![]);
+        };
+
+        let task_store = TaskStoreImpl::from_db(&self.db, &task_state.workflow_id)
+            .map_err(|e| crate::Error::Internal(e.to_string()))?;
+
+        let Some(review_task) = task_store.get_task(review_task_id)? else {
+            return Ok(vec![]);
+        };
+
+        // Review task must have a parent (the craft task)
+        let Some(ref parent_id) = review_task.parent_id else {
+            return Ok(vec![]);
+        };
+
+        // Parent must have a craft job in InReview
+        let Some(craft_job) = self.db.get_job_by_task_id(parent_id)? else {
+            return Ok(vec![]);
+        };
+        if craft_job.status != JobStatus::Craft(CraftStatus::InReview) {
+            return Ok(vec![]);
+        }
+
+        // Check if ALL review children of the parent have their jobs Done
+        let siblings = task_store.get_child_tasks(parent_id)?;
+        let all_reviews_done = siblings.iter().all(|child| {
+            if child.job_type != Some(JobType::Review) {
+                return true;
+            }
+            self.db
+                .get_job_by_task_id(&child.id)
+                .ok()
+                .flatten()
+                .is_some_and(|j| j.status.is_done())
+        });
+
+        if !all_reviews_done {
+            return Ok(vec![]);
+        }
+
+        // All review children are done — transition craft job to Done
+        self.db
+            .update_job_status(&craft_job.id, JobStatus::Craft(CraftStatus::Done))?;
+        tracing::info!(
+            craft_job_id = %craft_job.id,
+            "craft job completed (all child reviews done)"
+        );
+
+        Ok(vec![RuleEffect::StatusChanged {
+            job_id: craft_job.id,
+            new_status: JobStatus::Craft(CraftStatus::Done),
+        }])
     }
 
     /// Process cascading effects after a task completes.
@@ -293,17 +378,34 @@ impl Orchestrator {
                     continue;
                 };
 
-                task_store.update_task_status(task_id, *new_status)?;
-                tracing::info!(task_id = %task_id, status = ?new_status, "task status cascaded");
-
                 match new_status {
                     TaskStatus::Ready => {
+                        task_store.update_task_status(task_id, *new_status)?;
+                        tracing::info!(task_id = %task_id, status = ?new_status, "task status cascaded");
                         let (follow_up, new_job_effects) =
                             self.activate_ready_task(task_id, task_store, &task_engine)?;
                         next.extend(follow_up);
                         job_effects.extend(new_job_effects);
                     }
                     TaskStatus::Completed => {
+                        // Before marking parent as Completed, check its own Job (if any)
+                        let own_job_done = self
+                            .db
+                            .get_job_by_task_id(task_id)?
+                            .is_none_or(|j| j.status.is_done());
+
+                        if !own_job_done {
+                            // Parent has a job that isn't done yet; skip completion
+                            tracing::info!(
+                                task_id = %task_id,
+                                "all children completed but own job not done; deferring task completion"
+                            );
+                            continue;
+                        }
+
+                        task_store.update_task_status(task_id, *new_status)?;
+                        tracing::info!(task_id = %task_id, status = ?new_status, "task status cascaded");
+
                         // Check workflow completion
                         if let Some(task) = task_store.get_task(task_id)?
                             && task.parent_id.is_none()
@@ -331,7 +433,8 @@ impl Orchestrator {
     }
 
     /// Handle a task that just became Ready.
-    /// Leaf tasks get a Job created; composite tasks resolve their children.
+    /// Leaf tasks get a Job created; composite tasks with no job resolve their children.
+    /// Composite tasks with a job (e.g., craft tasks) also create their job.
     fn activate_ready_task(
         &self,
         task_id: &TaskId,
@@ -339,23 +442,19 @@ impl Orchestrator {
         task_engine: &palette_domain::rule::TaskRuleEngine<&TaskStoreImpl<'_>>,
     ) -> crate::Result<(Vec<palette_domain::rule::TaskEffect>, Vec<RuleEffect>)> {
         let children = task_store.get_child_tasks(task_id)?;
+
         if children.is_empty() {
             // Leaf task: create a job if it has a job_type
             let job_effects = if let Some(mut task) = task_store.get_task(task_id)?
                 && task.job_type.is_some()
             {
-                // For review tasks, inherit plan_path from sibling craft task
-                // so the reviewer reads the same plan document as the crafter
+                // For review tasks, inherit plan_path from parent craft task
                 if task.job_type == Some(JobType::Review)
                     && task.plan_path.is_none()
                     && let Some(ref parent_id) = task.parent_id
+                    && let Some(parent) = task_store.get_task(parent_id)?
                 {
-                    let siblings = task_store.get_child_tasks(parent_id)?;
-                    if let Some(craft) =
-                        siblings.iter().find(|s| s.job_type == Some(JobType::Craft))
-                    {
-                        task.plan_path = craft.plan_path.clone();
-                    }
+                    task.plan_path = parent.plan_path.clone();
                 }
                 self.create_job_for_ready_task(&task)?
             } else {
@@ -363,21 +462,36 @@ impl Orchestrator {
             };
             Ok((vec![], job_effects))
         } else {
-            // Composite task: transition to InProgress and resolve children
+            // Composite task: transition to InProgress
             task_store.update_task_status(task_id, TaskStatus::InProgress)?;
+
+            let mut job_effects = Vec::new();
+
+            // If composite task has a job_type (e.g., craft), create the job
+            // but do NOT resolve children — they are activated later
+            // (e.g., review children activate when craft job reaches InReview)
+            if let Some(task) = task_store.get_task(task_id)?
+                && task.job_type.is_some()
+            {
+                let effects = self.create_job_for_ready_task(&task)?;
+                job_effects.extend(effects);
+                return Ok((vec![], job_effects));
+            }
+
+            // Pure composite task (no job_type): resolve which children can become Ready
             let child_ids: Vec<TaskId> = children.iter().map(|c| c.id.clone()).collect();
             let task_effects = task_engine.resolve_ready_tasks(&child_ids)?;
-            Ok((task_effects, vec![]))
+            Ok((task_effects, job_effects))
         }
     }
 
-    /// Create a Job for a leaf task that just became Ready.
+    /// Create a Job for a task that just became Ready.
     /// Returns RuleEffects (e.g. AutoAssign) that should be processed by the caller.
     fn create_job_for_ready_task(
         &self,
         task: &palette_domain::task::Task,
     ) -> crate::Result<Vec<RuleEffect>> {
-        let job_type = task.job_type.expect("leaf task must have job_type");
+        let job_type = task.job_type.expect("task must have job_type");
         let job = self.db.create_job(&palette_domain::job::CreateJobRequest {
             id: Some(JobId::generate(job_type)),
             task_id: task.id.clone(),

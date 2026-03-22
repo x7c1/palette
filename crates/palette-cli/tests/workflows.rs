@@ -22,9 +22,9 @@ children:
       - id: api-plan
         type: craft
         plan_path: 2026/feature-x/planning/api-plan
-      - id: api-plan-review
-        type: review
-        depends_on: [api-plan]
+        children:
+          - id: api-plan-review
+            type: review
 
   - id: execution
     depends_on: [planning]
@@ -32,9 +32,9 @@ children:
       - id: api-impl
         type: craft
         plan_path: 2026/feature-x/execution/api-impl
-      - id: api-impl-review
-        type: review
-        depends_on: [api-impl]
+        children:
+          - id: api-impl-review
+            type: review
 "#;
 
 #[tokio::test]
@@ -60,15 +60,15 @@ async fn workflow_start_creates_task_tree() {
 
     let body: serde_json::Value = resp.json().await.unwrap();
     assert!(body["workflow_id"].as_str().unwrap().starts_with("wf-"));
-    // Root + planning + api-plan + api-plan-review + execution + api-impl + api-impl-review = 7
+    // Root + planning + api-plan + api-plan/api-plan-review + execution + api-impl + api-impl/api-impl-review = 7
     assert_eq!(body["task_count"].as_u64().unwrap(), 7);
 
     // Verify initial task status resolution via DB (status only):
     // - root: InProgress (has children)
     // - planning: InProgress (composite, was Ready then auto-transitioned)
     // - execution: Pending (depends on planning)
-    // - api-plan: Ready (no dependencies within planning)
-    // - api-plan-review: Pending (depends on api-plan)
+    // - api-plan: InProgress (composite craft with review child, job created)
+    // - api-plan/api-plan-review: Pending (activated when craft job reaches InReview)
     use palette_domain::task::{TaskId, TaskStatus};
 
     let root = state
@@ -97,16 +97,18 @@ async fn workflow_start_creates_task_tree() {
         .get_task_state(&TaskId::new("2026/feature-x/planning/api-plan"))
         .unwrap()
         .unwrap();
-    assert_eq!(api_plan.status, TaskStatus::Ready);
+    assert_eq!(api_plan.status, TaskStatus::InProgress);
 
     let api_plan_review = state
         .db
-        .get_task_state(&TaskId::new("2026/feature-x/planning/api-plan-review"))
+        .get_task_state(&TaskId::new(
+            "2026/feature-x/planning/api-plan/api-plan-review",
+        ))
         .unwrap()
         .unwrap();
     assert_eq!(api_plan_review.status, TaskStatus::Pending);
 
-    // Verify that a Job was created for the Ready craft task (api-plan)
+    // Verify that a Job was created for the craft task (api-plan)
     use palette_domain::job::JobFilter;
     let jobs = state
         .db
@@ -117,7 +119,7 @@ async fn workflow_start_creates_task_tree() {
         })
         .unwrap();
 
-    // Only api-plan should have a job (it's the only Ready leaf task with type: craft)
+    // Only api-plan should have a job (composite craft task with job_type)
     assert_eq!(jobs.len(), 1);
     assert_eq!(
         jobs[0].task_id.to_string(),
@@ -328,8 +330,8 @@ children:
     assert_eq!(root.status, TaskStatus::Completed);
 }
 
-/// Craft InReview should propagate task completion through the task tree,
-/// unblocking sibling review tasks and dependent tasks.
+/// Craft InReview should activate child review tasks.
+/// The craft task stays InProgress; review tasks become Ready with jobs.
 #[tokio::test]
 async fn craft_in_review_cascades_to_review_task() {
     let (session, _guard) = test_session_name_with_guard("wf-ir-cascade");
@@ -339,23 +341,21 @@ async fn craft_in_review_cascades_to_review_task() {
     let (base_url, state) = spawn_server(tmux, &session).await;
     let client = reqwest::Client::new();
 
-    // Blueprint: step-a has craft + review; step-b depends on step-a
+    // Blueprint: craft with review child; step-b depends on craft
     let yaml = r#"
 task:
   id: e2e/ir-test
   title: InReview cascade test
 
 children:
-  - id: step-a
+  - id: craft
+    type: craft
+    plan_path: test/craft
     children:
-      - id: craft
-        type: craft
-        plan_path: test/step-a-craft
       - id: review
         type: review
-        depends_on: [craft]
   - id: step-b
-    depends_on: [step-a]
+    depends_on: [craft]
     children:
       - id: craft
         type: craft
@@ -376,15 +376,15 @@ children:
     use palette_domain::job::{CraftStatus, JobFilter, JobStatus as JStatus, ReviewStatus};
     use palette_domain::task::{TaskId, TaskStatus};
 
-    // step-a/craft should have a Job in Todo state
+    // craft task should have a Job in Todo state (composite craft with children)
     let jobs = state.db.list_jobs(&JobFilter::default()).unwrap();
-    assert_eq!(jobs.len(), 1, "only step-a/craft job should exist");
+    assert_eq!(jobs.len(), 1, "only craft job should exist");
     let craft_job_id = &jobs[0].id;
 
-    // step-a/review should be Pending
+    // craft/review should be Pending (not activated until craft job reaches InReview)
     let review_task = state
         .db
-        .get_task_state(&TaskId::new("e2e/ir-test/step-a/review"))
+        .get_task_state(&TaskId::new("e2e/ir-test/craft/review"))
         .unwrap()
         .unwrap();
     assert_eq!(review_task.status, TaskStatus::Pending);
@@ -411,27 +411,27 @@ children:
 
     tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
 
-    // Verify: step-a/craft task should be Done
+    // Verify: craft task should still be InProgress (not completed yet, has children)
     let craft_task = state
         .db
-        .get_task_state(&TaskId::new("e2e/ir-test/step-a/craft"))
+        .get_task_state(&TaskId::new("e2e/ir-test/craft"))
         .unwrap()
         .unwrap();
-    assert_eq!(craft_task.status, TaskStatus::Completed);
+    assert_eq!(craft_task.status, TaskStatus::InProgress);
 
-    // Verify: step-a/review task should now be Ready (dependency on craft satisfied)
+    // Verify: craft/review task should now be Ready (activated by InReview)
     let review_task = state
         .db
-        .get_task_state(&TaskId::new("e2e/ir-test/step-a/review"))
+        .get_task_state(&TaskId::new("e2e/ir-test/craft/review"))
         .unwrap()
         .unwrap();
     assert_eq!(review_task.status, TaskStatus::Ready);
 
-    // Verify: a review Job was created for step-a/review
+    // Verify: a review Job was created for craft/review
     let all_jobs = state.db.list_jobs(&JobFilter::default()).unwrap();
     let review_jobs: Vec<_> = all_jobs
         .iter()
-        .filter(|j| j.task_id.to_string() == "e2e/ir-test/step-a/review")
+        .filter(|j| j.task_id.to_string() == "e2e/ir-test/craft/review")
         .collect();
     assert_eq!(review_jobs.len(), 1, "review job should be created");
     assert_eq!(
@@ -440,7 +440,7 @@ children:
         "review job should be in Todo status for AutoAssign"
     );
 
-    // step-b should still be Pending (step-a composite is not Done yet)
+    // step-b should still be Pending (craft task is not completed yet)
     let step_b = state
         .db
         .get_task_state(&TaskId::new("e2e/ir-test/step-b"))
@@ -449,8 +449,8 @@ children:
     assert_eq!(step_b.status, TaskStatus::Pending);
 }
 
-/// Full task tree cascade: craft InReview → review created → review Done →
-/// parent composite Done → sibling step-b Ready → step-b craft → workflow complete.
+/// Full task tree cascade: craft InReview → review child activated → review Done →
+/// craft job Done → craft task Completed → sibling step-b Ready → workflow complete.
 #[tokio::test]
 async fn full_task_tree_cascade_with_review() {
     let (session, _guard) = test_session_name_with_guard("wf-full-cascade");
@@ -467,22 +467,18 @@ task:
 
 children:
   - id: step-a
+    type: craft
+    plan_path: test/a-craft
     children:
-      - id: craft
-        type: craft
-        plan_path: test/a-craft
       - id: review
         type: review
-        depends_on: [craft]
   - id: step-b
     depends_on: [step-a]
+    type: craft
+    plan_path: test/b-craft
     children:
-      - id: craft
-        type: craft
-        plan_path: test/b-craft
       - id: review
         type: review
-        depends_on: [craft]
 "#;
     let blueprint_file = write_blueprint_file(yaml);
 
@@ -499,7 +495,7 @@ children:
     let workflow_id =
         palette_domain::workflow::WorkflowId::new(resp_body["workflow_id"].as_str().unwrap());
 
-    use palette_domain::job::{CraftStatus, JobFilter, JobStatus as JStatus, ReviewStatus};
+    use palette_domain::job::{CraftStatus, JobFilter, JobStatus as JStatus};
     use palette_domain::rule::RuleEffect;
     use palette_domain::server::ServerEvent;
     use palette_domain::task::{TaskId, TaskStatus};
@@ -511,6 +507,17 @@ children:
     let jobs = state.db.list_jobs(&JobFilter::default()).unwrap();
     assert_eq!(jobs.len(), 1);
     let craft_a_id = jobs[0].id.clone();
+
+    // step-a is InProgress (composite craft with review child, job created)
+    assert_eq!(
+        state
+            .db
+            .get_task_state(&TaskId::new("e2e/full/step-a"))
+            .unwrap()
+            .unwrap()
+            .status,
+        TaskStatus::InProgress
+    );
 
     state
         .db
@@ -529,16 +536,18 @@ children:
     });
     wait().await;
 
-    // step-a/craft task Done, step-a/review task Ready, review Job created
+    // step-a stays InProgress (craft job is InReview, review child activated)
     assert_eq!(
         state
             .db
-            .get_task_state(&TaskId::new("e2e/full/step-a/craft"))
+            .get_task_state(&TaskId::new("e2e/full/step-a"))
             .unwrap()
             .unwrap()
             .status,
-        TaskStatus::Completed
+        TaskStatus::InProgress
     );
+
+    // step-a/review should be Ready with a review Job
     assert_eq!(
         state
             .db
@@ -568,7 +577,6 @@ children:
     );
 
     // --- Phase 2: step-a review Done (approved) ---
-    // Review jobs start as Todo; transition to InProgress via assignment
     state
         .db
         .assign_job(
@@ -576,9 +584,7 @@ children:
             &palette_domain::agent::AgentId::new("reviewer-a"),
         )
         .unwrap();
-    // assign_job sets InProgress
 
-    // Submit approved verdict
     use palette_domain::review::{SubmitReviewRequest, Verdict};
     let sub = state
         .db
@@ -595,11 +601,10 @@ children:
     let engine = palette_domain::rule::RuleEngine::new(&*state.db, 5);
     let effects = engine.on_review_submitted(&review_a_id, &sub).unwrap();
 
-    // Effects should include craft_a Done (approved completes both review and craft jobs)
     let _ = state.event_tx.send(ServerEvent::ProcessEffects { effects });
     wait().await;
 
-    // step-a/review task should be Done
+    // step-a/review task should be Completed
     assert_eq!(
         state
             .db
@@ -610,7 +615,7 @@ children:
         TaskStatus::Completed
     );
 
-    // step-a composite should be Done (both children Done)
+    // step-a (craft task) should be Completed (review child done + own job Done)
     assert_eq!(
         state
             .db
@@ -621,7 +626,7 @@ children:
         TaskStatus::Completed
     );
 
-    // step-b should now be Ready → InProgress (composite auto-transitions)
+    // step-b should now be InProgress (composite craft, dependency satisfied)
     let step_b_status = state
         .db
         .get_task_state(&TaskId::new("e2e/full/step-b"))
@@ -630,21 +635,10 @@ children:
         .status;
     assert_eq!(step_b_status, TaskStatus::InProgress);
 
-    // step-b/craft should be Ready with a Job created
-    assert_eq!(
-        state
-            .db
-            .get_task_state(&TaskId::new("e2e/full/step-b/craft"))
-            .unwrap()
-            .unwrap()
-            .status,
-        TaskStatus::Ready
-    );
-
     let all_jobs = state.db.list_jobs(&JobFilter::default()).unwrap();
     let craft_b_job = all_jobs
         .iter()
-        .find(|j| j.task_id.as_ref() == "e2e/full/step-b/craft")
+        .find(|j| j.task_id.as_ref() == "e2e/full/step-b")
         .expect("step-b craft job should exist");
     let craft_b_id = craft_b_job.id.clone();
 
@@ -709,7 +703,7 @@ children:
     let _ = state.event_tx.send(ServerEvent::ProcessEffects { effects });
     wait().await;
 
-    // step-b composite Done
+    // step-b task (craft) should be Completed
     assert_eq!(
         state
             .db
@@ -720,7 +714,7 @@ children:
         TaskStatus::Completed
     );
 
-    // Root task Done
+    // Root task Completed
     assert_eq!(
         state
             .db
@@ -736,7 +730,7 @@ children:
     assert_eq!(wf.status, WorkflowStatus::Completed);
 }
 
-/// Craft job must NOT be marked Done until ALL sibling review jobs are Done.
+/// Craft job must NOT be marked Done until ALL child review jobs are Done.
 #[tokio::test]
 async fn craft_waits_for_all_reviews_before_done() {
     let (session, _guard) = test_session_name_with_guard("wf-multi-review");
@@ -746,24 +740,21 @@ async fn craft_waits_for_all_reviews_before_done() {
     let (base_url, state) = spawn_server(tmux, &session).await;
     let client = reqwest::Client::new();
 
-    // Blueprint: craft with two review siblings
+    // Blueprint: craft with two review children
     let yaml = r#"
 task:
   id: e2e/multi-review
   title: Multi review test
 
 children:
-  - id: step
+  - id: craft
+    type: craft
+    plan_path: test/craft
     children:
-      - id: craft
-        type: craft
-        plan_path: test/craft
       - id: review-1
         type: review
-        depends_on: [craft]
       - id: review-2
         type: review
-        depends_on: [craft]
 "#;
     let blueprint_file = write_blueprint_file(yaml);
 
@@ -802,14 +793,14 @@ children:
     });
     wait().await;
 
-    // Both review jobs should be created (review-1 and review-2 under step)
+    // Both review jobs should be created (review-1 and review-2 as children of craft)
     let all_jobs = state.db.list_jobs(&JobFilter::default()).unwrap();
     let mut review_jobs: Vec<_> = all_jobs
         .iter()
         .filter(|j| {
             j.task_id
                 .as_ref()
-                .starts_with("e2e/multi-review/step/review")
+                .starts_with("e2e/multi-review/craft/review")
         })
         .collect();
     review_jobs.sort_by_key(|j| j.task_id.to_string());

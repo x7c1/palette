@@ -99,9 +99,9 @@ children:
       - id: api-plan
         type: craft
         plan_path: 2026/feature-x/planning/api-plan
-      - id: api-plan-review
-        type: review
-        depends_on: [api-plan]
+        children:
+          - id: api-plan-review
+            type: review
 
   - id: execution
     depends_on: [planning]
@@ -128,10 +128,10 @@ children:
             &TaskId::new("2026/feature-x")
         );
         assert!(planning.job_type.is_none());
-        assert_eq!(planning.children.len(), 2);
+        assert_eq!(planning.children.len(), 1);
         assert!(planning.depends_on.is_empty());
 
-        // api-plan (leaf, craft)
+        // api-plan (composite craft with review child)
         let api_plan = tree
             .get(&TaskId::new("2026/feature-x/planning/api-plan"))
             .unwrap();
@@ -141,16 +141,20 @@ children:
             Some("2026/feature-x/planning/api-plan")
         );
         assert!(api_plan.depends_on.is_empty());
+        assert_eq!(api_plan.children.len(), 1);
 
-        // api-plan-review (leaf, review, depends on api-plan)
+        // api-plan-review (child of api-plan, review type)
         let review = tree
-            .get(&TaskId::new("2026/feature-x/planning/api-plan-review"))
+            .get(&TaskId::new(
+                "2026/feature-x/planning/api-plan/api-plan-review",
+            ))
             .unwrap();
         assert_eq!(review.job_type, Some(JobType::Review));
         assert_eq!(
-            review.depends_on,
-            vec![TaskId::new("2026/feature-x/planning/api-plan")]
+            review.parent_id.as_ref().unwrap(),
+            &TaskId::new("2026/feature-x/planning/api-plan")
         );
+        assert!(review.depends_on.is_empty());
 
         // execution (depends on planning)
         let execution = tree.get(&TaskId::new("2026/feature-x/execution")).unwrap();
@@ -159,7 +163,7 @@ children:
             vec![TaskId::new("2026/feature-x/planning")]
         );
 
-        // Total: root + planning + api-plan + api-plan-review + execution + api-impl = 6
+        // Total: root + planning + api-plan + api-plan/api-plan-review + execution + api-impl = 6
         assert_eq!(tree.task_ids().count(), 6);
     }
 }

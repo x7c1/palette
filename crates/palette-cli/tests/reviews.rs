@@ -74,7 +74,10 @@ async fn review_submit_and_get_submissions() {
 
     // Review job should be blocked
     let review = state.db.get_job(&JobId::new("R-001")).unwrap().unwrap();
-    assert_eq!(review.status, JobStatus::Review(ReviewStatus::ChangesRequested));
+    assert_eq!(
+        review.status,
+        JobStatus::Review(ReviewStatus::ChangesRequested)
+    );
 
     // Get submissions
     let submissions: Vec<serde_json::Value> = client

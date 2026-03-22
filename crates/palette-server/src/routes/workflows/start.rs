@@ -152,9 +152,21 @@ fn resolve_ready_cascade(task_store: &TaskStoreImpl<'_>) -> HandlerResult<Vec<Ta
 
             if *new_status == TaskStatus::Ready {
                 let children = task_store.get_child_tasks(task_id).map_err(internal_err)?;
+                let task = task_store.get_task(task_id).map_err(internal_err)?;
+
                 if children.is_empty() {
+                    // Leaf task: collect for job creation
+                    ready_leaf_ids.push(task_id.clone());
+                } else if task.as_ref().is_some_and(|t| t.job_type.is_some()) {
+                    // Composite task with job_type (e.g., craft with review children):
+                    // create job but do NOT resolve children — they activate later
+                    // (e.g., review children activate when craft job reaches InReview)
+                    task_store
+                        .update_task_status(task_id, TaskStatus::InProgress)
+                        .map_err(internal_err)?;
                     ready_leaf_ids.push(task_id.clone());
                 } else {
+                    // Pure composite task: resolve children
                     task_store
                         .update_task_status(task_id, TaskStatus::InProgress)
                         .map_err(internal_err)?;
