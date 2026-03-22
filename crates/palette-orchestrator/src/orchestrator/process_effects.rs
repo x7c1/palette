@@ -183,7 +183,10 @@ impl Orchestrator {
         }
 
         // When a review job gets ChangesRequested, move parent craft job back to InProgress
-        if matches!(new_status, JobStatus::Review(ReviewStatus::ChangesRequested)) {
+        if matches!(
+            new_status,
+            JobStatus::Review(ReviewStatus::ChangesRequested)
+        ) {
             let effects = self.revert_parent_craft_to_in_progress(job_id)?;
             all_effects.extend(effects);
         }

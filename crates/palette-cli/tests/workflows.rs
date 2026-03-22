@@ -967,7 +967,10 @@ children:
     // Assign reviewer and submit changes_requested
     state
         .db
-        .assign_job(&review_id, &palette_domain::agent::AgentId::new("reviewer-1"))
+        .assign_job(
+            &review_id,
+            &palette_domain::agent::AgentId::new("reviewer-1"),
+        )
         .unwrap();
 
     let sub = state
@@ -1035,10 +1038,7 @@ children:
         )
         .unwrap();
 
-    let effects = state
-        .rules
-        .on_review_submitted(&review_id, &sub2)
-        .unwrap();
+    let effects = state.rules.on_review_submitted(&review_id, &sub2).unwrap();
     let _ = state.event_tx.send(ServerEvent::ProcessEffects { effects });
     wait().await;
 
