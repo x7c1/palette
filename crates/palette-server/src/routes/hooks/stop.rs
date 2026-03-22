@@ -66,18 +66,15 @@ pub async fn handle_stop(
         for job in &member_jobs {
             match job.job_type {
                 palette_domain::job::JobType::Craft => {
-                    // Craft jobs: in_progress -> in_review.
-                    // But only if the job is currently in_progress (avoid loops
-                    // where re-assigned crafter immediately stops again).
-                    if !matches!(job.status, JobStatus::Craft(CraftStatus::InProgress)) {
+                    let in_review = JobStatus::Craft(CraftStatus::InReview);
+                    if palette_domain::rule::validate_transition(job.status, in_review).is_err() {
                         tracing::info!(
                             job_id = %job.id,
                             status = ?job.status,
-                            "skipping craft stop transition (not in_progress)"
+                            "skipping craft stop transition (invalid transition)"
                         );
                         continue;
                     }
-                    let in_review = JobStatus::Craft(CraftStatus::InReview);
                     if let Err(e) = state.db.update_job_status(&job.id, in_review) {
                         tracing::error!(job_id = %job.id, error = %e, "failed to transition job to in_review");
                         continue;
