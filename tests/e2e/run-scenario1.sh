@@ -30,7 +30,6 @@ trap '"$SCRIPT_DIR/stop-palette.sh"' EXIT
 echo "=== Step 1: Reset and build ==="
 scripts/reset.sh 2>&1
 rm -rf data/plans/*
-export RUST_MIN_STACK=33554432
 cargo build 2>&1
 
 # --- Step 2: Start Palette ---
@@ -94,11 +93,11 @@ STEP_A_CRAFT_STATUS=$(echo "$JOBS" | jq -r '.[] | select(.title == "craft") | .s
 # step-b should not have jobs yet
 STEP_B_JOB_COUNT=$(echo "$JOBS" | jq '[.[] | select(.title == "craft")] | length')
 
-if [[ "$STEP_A_CRAFT_STATUS" != "ready" ]]; then
-  echo "FAIL: Expected step-a/craft job status=ready, got '$STEP_A_CRAFT_STATUS'"
+if [[ "$STEP_A_CRAFT_STATUS" != "todo" ]]; then
+  echo "FAIL: Expected step-a/craft job status=todo, got '$STEP_A_CRAFT_STATUS'"
   exit 1
 fi
-echo "PASS: step-a/craft Job is ready"
+echo "PASS: step-a/craft Job is todo"
 
 if [[ "$STEP_B_JOB_COUNT" -ne 1 ]]; then
   echo "FAIL: Expected only 1 craft job (step-a), got $STEP_B_JOB_COUNT"

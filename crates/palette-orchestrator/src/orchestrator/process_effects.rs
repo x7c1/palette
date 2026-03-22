@@ -265,27 +265,34 @@ impl Orchestrator {
             pending = next;
         }
 
-        // Second pass: reactivate ChangesRequested review jobs (re-review cycle)
+        // Second pass: reactivate ChangesRequested review jobs (re-review cycle).
+        // Only reactivate if the review job is in ChangesRequested state.
+        // If it's already InProgress (reviewer still working) or Todo, skip it.
         for child in &children {
-            if let Some(review_job) = self.db.get_job_by_task_id(&child.id)?
-                && matches!(
-                    review_job.status,
-                    JobStatus::Review(ReviewStatus::ChangesRequested)
-                )
-            {
-                self.db.update_job_status(
-                    &review_job.id,
-                    JobStatus::Review(ReviewStatus::InProgress),
-                )?;
-                tracing::info!(
+            let Some(review_job) = self.db.get_job_by_task_id(&child.id)? else {
+                continue;
+            };
+            if !matches!(
+                review_job.status,
+                JobStatus::Review(ReviewStatus::ChangesRequested)
+            ) {
+                tracing::debug!(
                     job_id = %review_job.id,
-                    task_id = %child.id,
-                    "reactivated ChangesRequested review job for re-review"
+                    status = ?review_job.status,
+                    "skipping review job reactivation (not ChangesRequested)"
                 );
-                job_effects.push(RuleEffect::AutoAssign {
-                    job_id: review_job.id.clone(),
-                });
+                continue;
             }
+            self.db
+                .update_job_status(&review_job.id, JobStatus::Review(ReviewStatus::InProgress))?;
+            tracing::info!(
+                job_id = %review_job.id,
+                task_id = %child.id,
+                "reactivated ChangesRequested review job for re-review"
+            );
+            job_effects.push(RuleEffect::AutoAssign {
+                job_id: review_job.id.clone(),
+            });
         }
 
         Ok(job_effects)

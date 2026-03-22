@@ -12,9 +12,9 @@ children:
         repository:
           name: x7c1/palette
           branch: e2e-cascade
-      - id: review
-        type: review
-        depends_on: [craft]
+        children:
+          - id: review
+            type: review
 
   - id: step-b
     depends_on: [step-a]
@@ -26,6 +26,6 @@ children:
         repository:
           name: x7c1/palette
           branch: e2e-cascade
-      - id: review
-        type: review
-        depends_on: [craft]
+        children:
+          - id: review
+            type: review
