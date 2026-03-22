@@ -36,8 +36,6 @@ impl FromStr for TaskStatus {
             "in_progress" => Ok(TaskStatus::InProgress),
             "suspended" => Ok(TaskStatus::Suspended),
             "completed" => Ok(TaskStatus::Completed),
-            // Accept "done" for backwards compatibility with existing DB data
-            "done" => Ok(TaskStatus::Completed),
             _ => Err(format!("invalid task status: {s}")),
         }
     }
