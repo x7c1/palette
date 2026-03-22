@@ -124,7 +124,10 @@ async fn workflow_start_creates_task_tree() {
         "2026/feature-x/planning/api-plan"
     );
     assert_eq!(jobs[0].job_type, palette_domain::job::JobType::Craft);
-    assert_eq!(jobs[0].status, palette_domain::job::JobStatus::Ready);
+    assert_eq!(
+        jobs[0].status,
+        palette_domain::job::JobStatus::Craft(palette_domain::job::CraftStatus::Todo)
+    );
 }
 
 #[tokio::test]
@@ -204,10 +207,10 @@ children:
         .unwrap();
     assert_eq!(resp.status(), 201);
 
-    use palette_domain::job::{JobFilter, JobStatus as JStatus, JobType};
+    use palette_domain::job::{CraftStatus, JobFilter, JobStatus as JStatus, JobType};
     use palette_domain::task::{TaskId, TaskStatus};
 
-    // step-a should have a Job in Ready state
+    // step-a should have a Job in Todo state (craft)
     let jobs = state
         .db
         .list_jobs(&JobFilter {
@@ -231,13 +234,16 @@ children:
     let job_id = &jobs[0].id;
     state
         .db
-        .update_job_status(job_id, JStatus::InProgress)
+        .update_job_status(job_id, JStatus::Craft(CraftStatus::InProgress))
         .unwrap();
     state
         .db
-        .update_job_status(job_id, JStatus::InReview)
+        .update_job_status(job_id, JStatus::Craft(CraftStatus::InReview))
         .unwrap();
-    state.db.update_job_status(job_id, JStatus::Done).unwrap();
+    state
+        .db
+        .update_job_status(job_id, JStatus::Craft(CraftStatus::Done))
+        .unwrap();
 
     // Send StatusChanged effect to trigger orchestrator processing
     use palette_domain::rule::RuleEffect;
@@ -245,7 +251,7 @@ children:
     let _ = state.event_tx.send(ServerEvent::ProcessEffects {
         effects: vec![RuleEffect::StatusChanged {
             job_id: job_id.clone(),
-            new_status: JStatus::Done,
+            new_status: JStatus::Craft(CraftStatus::Done),
         }],
     });
 
@@ -285,25 +291,21 @@ children:
         .unwrap();
     state
         .db
-        .update_job_status(&step_b_job.id, JStatus::Ready)
+        .update_job_status(&step_b_job.id, JStatus::Craft(CraftStatus::InProgress))
         .unwrap();
     state
         .db
-        .update_job_status(&step_b_job.id, JStatus::InProgress)
+        .update_job_status(&step_b_job.id, JStatus::Craft(CraftStatus::InReview))
         .unwrap();
     state
         .db
-        .update_job_status(&step_b_job.id, JStatus::InReview)
-        .unwrap();
-    state
-        .db
-        .update_job_status(&step_b_job.id, JStatus::Done)
+        .update_job_status(&step_b_job.id, JStatus::Craft(CraftStatus::Done))
         .unwrap();
 
     let _ = state.event_tx.send(ServerEvent::ProcessEffects {
         effects: vec![RuleEffect::StatusChanged {
             job_id: step_b_job.id.clone(),
-            new_status: JStatus::Done,
+            new_status: JStatus::Craft(CraftStatus::Done),
         }],
     });
 
@@ -371,10 +373,10 @@ children:
         .unwrap();
     assert_eq!(resp.status(), 201);
 
-    use palette_domain::job::{JobFilter, JobStatus as JStatus};
+    use palette_domain::job::{CraftStatus, JobFilter, JobStatus as JStatus, ReviewStatus};
     use palette_domain::task::{TaskId, TaskStatus};
 
-    // step-a/craft should have a Job in Ready state
+    // step-a/craft should have a Job in Todo state
     let jobs = state.db.list_jobs(&JobFilter::default()).unwrap();
     assert_eq!(jobs.len(), 1, "only step-a/craft job should exist");
     let craft_job_id = &jobs[0].id;
@@ -390,11 +392,11 @@ children:
     // Simulate craft job reaching InReview (member stop hook path)
     state
         .db
-        .update_job_status(craft_job_id, JStatus::InProgress)
+        .update_job_status(craft_job_id, JStatus::Craft(CraftStatus::InProgress))
         .unwrap();
     state
         .db
-        .update_job_status(craft_job_id, JStatus::InReview)
+        .update_job_status(craft_job_id, JStatus::Craft(CraftStatus::InReview))
         .unwrap();
 
     // Send StatusChanged(InReview) — this is what the stop hook sends
@@ -403,7 +405,7 @@ children:
     let _ = state.event_tx.send(ServerEvent::ProcessEffects {
         effects: vec![RuleEffect::StatusChanged {
             job_id: craft_job_id.clone(),
-            new_status: JStatus::InReview,
+            new_status: JStatus::Craft(CraftStatus::InReview),
         }],
     });
 
@@ -434,7 +436,7 @@ children:
     assert_eq!(review_jobs.len(), 1, "review job should be created");
     assert_eq!(
         review_jobs[0].status,
-        JStatus::Todo,
+        JStatus::Review(ReviewStatus::Todo),
         "review job should be in Todo status for AutoAssign"
     );
 
@@ -497,7 +499,7 @@ children:
     let workflow_id =
         palette_domain::workflow::WorkflowId::new(resp_body["workflow_id"].as_str().unwrap());
 
-    use palette_domain::job::{JobFilter, JobStatus as JStatus};
+    use palette_domain::job::{CraftStatus, JobFilter, JobStatus as JStatus, ReviewStatus};
     use palette_domain::rule::RuleEffect;
     use palette_domain::server::ServerEvent;
     use palette_domain::task::{TaskId, TaskStatus};
@@ -512,17 +514,17 @@ children:
 
     state
         .db
-        .update_job_status(&craft_a_id, JStatus::InProgress)
+        .update_job_status(&craft_a_id, JStatus::Craft(CraftStatus::InProgress))
         .unwrap();
     state
         .db
-        .update_job_status(&craft_a_id, JStatus::InReview)
+        .update_job_status(&craft_a_id, JStatus::Craft(CraftStatus::InReview))
         .unwrap();
 
     let _ = state.event_tx.send(ServerEvent::ProcessEffects {
         effects: vec![RuleEffect::StatusChanged {
             job_id: craft_a_id.clone(),
-            new_status: JStatus::InReview,
+            new_status: JStatus::Craft(CraftStatus::InReview),
         }],
     });
     wait().await;
@@ -566,11 +568,7 @@ children:
     );
 
     // --- Phase 2: step-a review Done (approved) ---
-    // Review jobs start as Draft; transition to InProgress via assignment
-    state
-        .db
-        .update_job_status(&review_a_id, JStatus::Todo)
-        .unwrap();
+    // Review jobs start as Todo; transition to InProgress via assignment
     state
         .db
         .assign_job(
@@ -653,17 +651,17 @@ children:
     // --- Phase 3: step-b craft InReview → review → Done → workflow complete ---
     state
         .db
-        .update_job_status(&craft_b_id, JStatus::InProgress)
+        .update_job_status(&craft_b_id, JStatus::Craft(CraftStatus::InProgress))
         .unwrap();
     state
         .db
-        .update_job_status(&craft_b_id, JStatus::InReview)
+        .update_job_status(&craft_b_id, JStatus::Craft(CraftStatus::InReview))
         .unwrap();
 
     let _ = state.event_tx.send(ServerEvent::ProcessEffects {
         effects: vec![RuleEffect::StatusChanged {
             job_id: craft_b_id.clone(),
-            new_status: JStatus::InReview,
+            new_status: JStatus::Craft(CraftStatus::InReview),
         }],
     });
     wait().await;
@@ -687,10 +685,6 @@ children:
     let review_b_id = review_b_job.id.clone();
 
     // Approve step-b review
-    state
-        .db
-        .update_job_status(&review_b_id, JStatus::Todo)
-        .unwrap();
     state
         .db
         .assign_job(
@@ -783,7 +777,7 @@ children:
         .unwrap();
     assert_eq!(resp.status(), 201);
 
-    use palette_domain::job::{JobFilter, JobStatus as JStatus};
+    use palette_domain::job::{CraftStatus, JobFilter, JobStatus as JStatus};
     use palette_domain::rule::RuleEffect;
     use palette_domain::server::ServerEvent;
     let wait = || tokio::time::sleep(tokio::time::Duration::from_millis(200));
@@ -793,17 +787,17 @@ children:
     let craft_id = jobs[0].id.clone();
     state
         .db
-        .update_job_status(&craft_id, JStatus::InProgress)
+        .update_job_status(&craft_id, JStatus::Craft(CraftStatus::InProgress))
         .unwrap();
     state
         .db
-        .update_job_status(&craft_id, JStatus::InReview)
+        .update_job_status(&craft_id, JStatus::Craft(CraftStatus::InReview))
         .unwrap();
 
     let _ = state.event_tx.send(ServerEvent::ProcessEffects {
         effects: vec![RuleEffect::StatusChanged {
             job_id: craft_id.clone(),
-            new_status: JStatus::InReview,
+            new_status: JStatus::Craft(CraftStatus::InReview),
         }],
     });
     wait().await;
@@ -825,10 +819,6 @@ children:
     let review_2_id = review_jobs[1].id.clone();
 
     // Approve only review-1
-    state
-        .db
-        .update_job_status(&review_1_id, JStatus::Todo)
-        .unwrap();
     state
         .db
         .assign_job(
@@ -859,15 +849,11 @@ children:
     let craft_job = state.db.get_job(&craft_id).unwrap().unwrap();
     assert_eq!(
         craft_job.status,
-        JStatus::InReview,
+        JStatus::Craft(CraftStatus::InReview),
         "craft job must stay InReview until all reviews are Done"
     );
 
     // Now approve review-2
-    state
-        .db
-        .update_job_status(&review_2_id, JStatus::Todo)
-        .unwrap();
     state
         .db
         .assign_job(
@@ -896,7 +882,7 @@ children:
     let craft_job = state.db.get_job(&craft_id).unwrap().unwrap();
     assert_eq!(
         craft_job.status,
-        JStatus::Done,
+        JStatus::Craft(CraftStatus::Done),
         "craft job should be Done after all reviews approved"
     );
 }

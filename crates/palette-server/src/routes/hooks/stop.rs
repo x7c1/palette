@@ -5,7 +5,7 @@ use axum::{
     http::StatusCode,
 };
 use palette_domain::agent::{AgentId, AgentStatus};
-use palette_domain::job::{JobFilter, JobStatus};
+use palette_domain::job::{CraftStatus, JobFilter, JobStatus};
 use palette_domain::server::ServerEvent;
 use std::sync::Arc;
 
@@ -54,7 +54,7 @@ pub async fn handle_stop(
             .db
             .list_jobs(&JobFilter {
                 assignee: Some(member_id.clone()),
-                status: Some(JobStatus::InProgress),
+                status: Some("in_progress".to_string()),
                 ..Default::default()
             })
             .unwrap_or_default();
@@ -68,13 +68,14 @@ pub async fn handle_stop(
             match job.job_type {
                 palette_domain::job::JobType::Craft => {
                     // Craft jobs: in_progress -> in_review.
-                    if let Err(e) = state.db.update_job_status(&job.id, JobStatus::InReview) {
+                    let in_review = JobStatus::Craft(CraftStatus::InReview);
+                    if let Err(e) = state.db.update_job_status(&job.id, in_review) {
                         tracing::error!(job_id = %job.id, error = %e, "failed to transition job to in_review");
                         continue;
                     }
                     let mut effects = state
                         .rules
-                        .on_status_change(&job.id, JobStatus::InReview)
+                        .on_status_change(&job.id, in_review)
                         .unwrap_or_default();
                     for effect in &effects {
                         tracing::info!(?effect, "rule engine effect (member stop)");
@@ -84,7 +85,7 @@ pub async fn handle_stop(
                     // propagate task completion through the task tree.
                     effects.push(palette_domain::rule::RuleEffect::StatusChanged {
                         job_id: job.id.clone(),
-                        new_status: JobStatus::InReview,
+                        new_status: in_review,
                     });
                     let _ = state.event_tx.send(ServerEvent::ProcessEffects { effects });
                 }

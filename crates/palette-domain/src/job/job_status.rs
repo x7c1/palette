@@ -1,45 +1,35 @@
-use std::str::FromStr;
+use super::craft_status::CraftStatus;
+use super::review_status::ReviewStatus;
+use super::JobType;
 
+/// Typed job status that pairs with the job type.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum JobStatus {
-    Draft,
-    Ready,
-    Todo,
-    InProgress,
-    InReview,
-    Done,
-    Blocked,
-    Escalated,
+    Craft(CraftStatus),
+    Review(ReviewStatus),
 }
 
 impl JobStatus {
     pub fn as_str(&self) -> &'static str {
         match self {
-            JobStatus::Draft => "draft",
-            JobStatus::Ready => "ready",
-            JobStatus::Todo => "todo",
-            JobStatus::InProgress => "in_progress",
-            JobStatus::InReview => "in_review",
-            JobStatus::Done => "done",
-            JobStatus::Blocked => "blocked",
-            JobStatus::Escalated => "escalated",
+            JobStatus::Craft(s) => s.as_str(),
+            JobStatus::Review(s) => s.as_str(),
         }
     }
-}
 
-impl FromStr for JobStatus {
-    type Err = String;
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s {
-            "draft" => Ok(JobStatus::Draft),
-            "ready" => Ok(JobStatus::Ready),
-            "todo" => Ok(JobStatus::Todo),
-            "in_progress" => Ok(JobStatus::InProgress),
-            "in_review" => Ok(JobStatus::InReview),
-            "done" => Ok(JobStatus::Done),
-            "blocked" => Ok(JobStatus::Blocked),
-            "escalated" => Ok(JobStatus::Escalated),
-            _ => Err(format!("invalid job status: {s}")),
+    /// Parse a status string using the job type to determine the variant.
+    pub fn parse(s: &str, job_type: JobType) -> Result<Self, String> {
+        match job_type {
+            JobType::Craft => s.parse::<CraftStatus>().map(JobStatus::Craft),
+            JobType::Review => s.parse::<ReviewStatus>().map(JobStatus::Review),
         }
+    }
+
+    /// Returns true if the job is done (Craft::Done or Review::Done).
+    pub fn is_done(&self) -> bool {
+        matches!(
+            self,
+            JobStatus::Craft(CraftStatus::Done) | JobStatus::Review(ReviewStatus::Done)
+        )
     }
 }

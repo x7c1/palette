@@ -15,7 +15,7 @@ impl From<JobFilter> for domain::job::JobFilter {
     fn from(api: JobFilter) -> Self {
         Self {
             job_type: api.job_type.map(domain::job::JobType::from),
-            status: api.status.map(domain::job::JobStatus::from),
+            status: api.status.map(|s| s.as_str().to_string()),
             assignee: api.assignee.map(domain::agent::AgentId::new),
         }
     }

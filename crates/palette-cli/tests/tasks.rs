@@ -61,7 +61,7 @@ async fn job_api_create_and_list() {
 
     let job: serde_json::Value = resp.json().await.unwrap();
     assert_eq!(job["id"], "W-001");
-    assert_eq!(job["status"], "draft");
+    assert_eq!(job["status"], "todo");
 
     // Create a review job
     let resp = client
@@ -154,14 +154,7 @@ async fn job_api_update_with_rules() {
         .await
         .unwrap();
 
-    // Transition W-001: draft -> ready -> in_progress -> in_review
-    client
-        .post(format!("{base_url}/jobs/update"))
-        .json(&update_status("W-001", JobStatus::Ready))
-        .send()
-        .await
-        .unwrap();
-
+    // Transition W-001: todo -> in_progress -> in_review
     client
         .post(format!("{base_url}/jobs/update"))
         .json(&update_status("W-001", JobStatus::InProgress))
@@ -176,10 +169,10 @@ async fn job_api_update_with_rules() {
         .await
         .unwrap();
 
-    // Invalid transition should fail (in_review -> draft)
+    // Invalid transition should fail (in_review -> todo)
     let resp = client
         .post(format!("{base_url}/jobs/update"))
-        .json(&update_status("W-001", JobStatus::Draft))
+        .json(&update_status("W-001", JobStatus::Todo))
         .send()
         .await
         .unwrap();

@@ -27,7 +27,7 @@ async fn review_submit_and_get_submissions() {
     let (base_url, state) = spawn_server(tmux, &session).await;
 
     use palette_domain::agent::AgentId;
-    use palette_domain::job::{CreateJobRequest, JobId, JobStatus, JobType};
+    use palette_domain::job::{CreateJobRequest, JobId, JobStatus, JobType, ReviewStatus};
 
     let task_id = setup_review_task(&state, "task-R-001");
     let review_job = state
@@ -43,10 +43,6 @@ async fn review_submit_and_get_submissions() {
             priority: None,
             repository: None,
         })
-        .unwrap();
-    state
-        .db
-        .update_job_status(&review_job.id, JobStatus::Todo)
         .unwrap();
     state
         .db
@@ -78,7 +74,7 @@ async fn review_submit_and_get_submissions() {
 
     // Review job should be blocked
     let review = state.db.get_job(&JobId::new("R-001")).unwrap().unwrap();
-    assert_eq!(review.status, JobStatus::Blocked);
+    assert_eq!(review.status, JobStatus::Review(ReviewStatus::ChangesRequested));
 
     // Get submissions
     let submissions: Vec<serde_json::Value> = client
@@ -101,7 +97,7 @@ async fn review_approved_completes_review_job() {
     let (base_url, state) = spawn_server(tmux, &session).await;
 
     use palette_domain::agent::AgentId;
-    use palette_domain::job::{CreateJobRequest, JobId, JobStatus, JobType};
+    use palette_domain::job::{CreateJobRequest, JobId, JobStatus, JobType, ReviewStatus};
 
     let task_id = setup_review_task(&state, "task-R-001");
     let review_job = state
@@ -117,10 +113,6 @@ async fn review_approved_completes_review_job() {
             priority: None,
             repository: None,
         })
-        .unwrap();
-    state
-        .db
-        .update_job_status(&review_job.id, JobStatus::Todo)
         .unwrap();
     state
         .db
@@ -144,5 +136,5 @@ async fn review_approved_completes_review_job() {
 
     // Review job should be done
     let review = state.db.get_job(&JobId::new("R-001")).unwrap().unwrap();
-    assert_eq!(review.status, JobStatus::Done);
+    assert_eq!(review.status, JobStatus::Review(ReviewStatus::Done));
 }

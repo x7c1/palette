@@ -27,19 +27,15 @@ mod tests {
 
         assert_eq!(db.count_active_members().unwrap(), 0);
 
-        db.update_job_status(&jid("C-001"), JobStatus::Ready)
-            .unwrap();
         db.assign_job(&jid("C-001"), &aid("member-a")).unwrap();
         assert_eq!(db.count_active_members().unwrap(), 1);
 
-        db.update_job_status(&jid("C-002"), JobStatus::Ready)
-            .unwrap();
         db.assign_job(&jid("C-002"), &aid("member-b")).unwrap();
         assert_eq!(db.count_active_members().unwrap(), 2);
 
-        db.update_job_status(&jid("C-001"), JobStatus::InReview)
+        db.update_job_status(&jid("C-001"), JobStatus::Craft(CraftStatus::InReview))
             .unwrap();
-        db.update_job_status(&jid("C-001"), JobStatus::Done)
+        db.update_job_status(&jid("C-001"), JobStatus::Craft(CraftStatus::Done))
             .unwrap();
         assert_eq!(db.count_active_members().unwrap(), 1);
     }

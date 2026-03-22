@@ -6,7 +6,7 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use palette_db::CreateTaskRequest;
-use palette_domain::job::{CreateJobRequest, JobId, JobStatus, JobType};
+use palette_domain::job::{CraftStatus, CreateJobRequest, JobId, JobStatus, JobType, ReviewStatus};
 use palette_domain::rule::TaskEffect;
 use palette_domain::server::ServerEvent;
 use palette_domain::task::{TaskId, TaskStatus, TaskStore, TaskTree};
@@ -220,18 +220,15 @@ pub(crate) fn create_job_for_task(
         })
         .map_err(internal_err)?;
 
-    let initial_status = match job_type {
-        JobType::Craft => JobStatus::Ready,
-        JobType::Review => JobStatus::Todo,
+    // Job is already created as Todo; trigger auto-assign
+    let todo_status = match job_type {
+        JobType::Craft => JobStatus::Craft(CraftStatus::Todo),
+        JobType::Review => JobStatus::Review(ReviewStatus::Todo),
     };
-    state
-        .db
-        .update_job_status(&job.id, initial_status)
-        .map_err(internal_err)?;
 
     let effects = state
         .rules
-        .on_status_change(&job.id, initial_status)
+        .on_status_change(&job.id, todo_status)
         .map_err(internal_err)?;
 
     if !effects.is_empty() {
