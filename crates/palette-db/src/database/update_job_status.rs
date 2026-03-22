@@ -41,8 +41,8 @@ mod tests {
         .unwrap();
 
         let updated = db
-            .update_job_status(&jid("C-001"), JobStatus::InProgress)
+            .update_job_status(&jid("C-001"), JobStatus::Craft(CraftStatus::InProgress))
             .unwrap();
-        assert_eq!(updated.status, JobStatus::InProgress);
+        assert_eq!(updated.status, JobStatus::Craft(CraftStatus::InProgress));
     }
 }

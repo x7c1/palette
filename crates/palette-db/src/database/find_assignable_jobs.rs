@@ -1,12 +1,10 @@
 use super::*;
 
 impl Database {
-    /// Find jobs that are assignable:
-    /// - Craft jobs: status = 'ready' with no assignee
-    /// - Review jobs: status = 'todo' with no assignee
+    /// Find jobs that are assignable: status = 'todo' with no assignee.
     ///
-    /// Dependencies are now managed at the Task level by TaskRuleEngine,
-    /// so jobs only reach 'ready'/'todo' when their task dependencies are satisfied.
+    /// Dependencies are managed at the Task level by TaskRuleEngine,
+    /// so jobs only reach 'todo' when their task dependencies are satisfied.
     ///
     /// Returns jobs ordered by priority (high > medium > low > null).
     pub fn find_assignable_jobs(&self) -> crate::Result<Vec<Job>> {
@@ -14,11 +12,7 @@ impl Database {
         let mut stmt = conn.prepare(
             "SELECT t.id, t.task_id, t.type, t.title, t.plan_path, t.description, t.assignee, t.status, t.priority, t.repository, t.pr_url, t.created_at, t.updated_at, t.notes, t.assigned_at
              FROM jobs t
-             WHERE (
-               (t.type = 'craft' AND t.status = 'ready' AND t.assignee IS NULL)
-               OR
-               (t.type = 'review' AND t.status = 'todo' AND t.assignee IS NULL)
-             )
+             WHERE t.status = 'todo' AND t.assignee IS NULL
              ORDER BY
                CASE t.priority
                  WHEN 'high' THEN 0
@@ -48,22 +42,15 @@ mod tests {
         create_craft(&db, "C-001", Some(Priority::High));
         create_craft(&db, "C-002", Some(Priority::Low));
 
-        // Both in draft — not assignable
-        assert_eq!(db.find_assignable_jobs().unwrap().len(), 0);
-
-        // Set both to ready
-        db.update_job_status(&jid("C-001"), JobStatus::Ready)
-            .unwrap();
-        db.update_job_status(&jid("C-002"), JobStatus::Ready)
-            .unwrap();
-
+        // Both start as Todo — assignable immediately
         let assignable = db.find_assignable_jobs().unwrap();
         assert_eq!(assignable.len(), 2);
         assert_eq!(assignable[0].id, jid("C-001")); // high priority first
         assert_eq!(assignable[1].id, jid("C-002")); // low priority second
 
         // Assign one — only the other remains assignable
-        db.assign_job(&jid("C-001"), &aid("m-a")).unwrap();
+        db.assign_job(&jid("C-001"), &aid("m-a"), JobType::Craft)
+            .unwrap();
         let assignable = db.find_assignable_jobs().unwrap();
         assert_eq!(assignable.len(), 1);
         assert_eq!(assignable[0].id, jid("C-002"));
@@ -80,7 +67,8 @@ mod tests {
         assert_eq!(assignable[0].id, jid("R-001"));
 
         // Assign review — no longer assignable
-        db.assign_job(&jid("R-001"), &aid("m-r")).unwrap();
+        db.assign_job(&jid("R-001"), &aid("m-r"), JobType::Review)
+            .unwrap();
         let assignable = db.find_assignable_jobs().unwrap();
         assert!(assignable.is_empty());
     }

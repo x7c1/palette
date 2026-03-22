@@ -1,11 +1,8 @@
+mod craft_status;
+pub use craft_status::CraftStatus;
+
 mod create_job_request;
 pub use create_job_request::CreateJobRequest;
-
-mod priority;
-pub use priority::Priority;
-
-mod repository;
-pub use repository::Repository;
 
 #[allow(clippy::module_inception)]
 mod job;
@@ -28,6 +25,15 @@ pub use job_store::JobStore;
 
 mod job_type;
 pub use job_type::JobType;
+
+mod priority;
+pub use priority::Priority;
+
+mod repository;
+pub use repository::Repository;
+
+mod review_status;
+pub use review_status::ReviewStatus;
 
 mod transition_error;
 pub use transition_error::TransitionError;

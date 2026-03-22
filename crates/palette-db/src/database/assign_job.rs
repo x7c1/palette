@@ -2,12 +2,18 @@ use super::*;
 
 impl Database {
     /// Assign a job to a member and set status to in_progress.
-    pub fn assign_job(&self, job_id: &JobId, assignee: &AgentId) -> crate::Result<Job> {
+    pub fn assign_job(
+        &self,
+        job_id: &JobId,
+        assignee: &AgentId,
+        job_type: JobType,
+    ) -> crate::Result<Job> {
+        let in_progress = JobStatus::in_progress(job_type);
         let conn = lock!(self.conn);
         let now = Utc::now().to_rfc3339();
         let updated = conn.execute(
             "UPDATE jobs SET status = ?1, assignee = ?2, assigned_at = ?3, updated_at = ?4 WHERE id = ?5",
-            params![JobStatus::InProgress.as_str(), assignee.as_ref(), now, now, job_id.as_ref()],
+            params![in_progress.as_str(), assignee.as_ref(), now, now, job_id.as_ref()],
         )?;
         if updated == 0 {
             return Err(JobError::NotFound {
@@ -35,11 +41,11 @@ mod tests {
     fn assign_job_sets_assignee_and_status() {
         let db = test_db();
         create_craft(&db, "C-001", None);
-        db.update_job_status(&jid("C-001"), JobStatus::Ready)
-            .unwrap();
 
-        let job = db.assign_job(&jid("C-001"), &aid("member-a")).unwrap();
-        assert_eq!(job.status, JobStatus::InProgress);
+        let job = db
+            .assign_job(&jid("C-001"), &aid("member-a"), JobType::Craft)
+            .unwrap();
+        assert_eq!(job.status, JobStatus::Craft(CraftStatus::InProgress));
         assert_eq!(job.assignee, Some(aid("member-a")));
         assert!(job.assigned_at.is_some());
     }

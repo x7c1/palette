@@ -26,6 +26,13 @@ if tmux has-session -t "$SESSION_NAME" 2>/dev/null; then
   tmux kill-session -t "$SESSION_NAME"
 fi
 
+# Remove plans directory (including git history from previous runs)
+PLANS_DIR="$ROOT_DIR/data/plans"
+if [[ -d "$PLANS_DIR" ]]; then
+  echo "removing plans directory..."
+  rm -rf "$PLANS_DIR"
+fi
+
 # Remove data files (including SQLite WAL/SHM)
 for f in "$STATE_FILE" "$DB_FILE" "${DB_FILE}-wal" "${DB_FILE}-shm"; do
   if [[ -f "$f" ]]; then

@@ -10,7 +10,9 @@ impl Orchestrator {
                 .supervisors
                 .iter()
                 .chain(infra.members.iter())
-                .filter(|m| m.status == AgentStatus::Idle)
+                .filter(|m| {
+                    m.status == AgentStatus::Idle || m.status == AgentStatus::WaitingPermission
+                })
                 .map(|m| m.id.clone())
                 .collect();
 

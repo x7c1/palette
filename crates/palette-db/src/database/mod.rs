@@ -110,15 +110,25 @@ fn row_to_job(row: &rusqlite::Row) -> rusqlite::Result<Job> {
     let repository: Option<Repository> =
         repos_str.and_then(|s| repository_row::repository_from_json(&s));
 
+    let job_type: JobType = parse_column(row, "type")?;
+    let status_str: String = row.get("status")?;
+    let status = JobStatus::parse(&status_str, job_type).map_err(|e| {
+        rusqlite::Error::FromSqlConversionFailure(
+            0,
+            rusqlite::types::Type::Text,
+            Box::new(std::io::Error::new(std::io::ErrorKind::InvalidData, e)),
+        )
+    })?;
+
     Ok(Job {
         id: JobId::new(row.get::<_, String>("id")?),
         task_id: TaskId::new(row.get::<_, String>("task_id")?),
-        job_type: parse_column(row, "type")?,
+        job_type,
         title: row.get("title")?,
         plan_path: row.get("plan_path")?,
         description: row.get("description")?,
         assignee: row.get::<_, Option<String>>("assignee")?.map(AgentId::new),
-        status: parse_column(row, "status")?,
+        status,
         priority: row
             .get::<_, Option<String>>("priority")?
             .and_then(|s| s.parse().ok()),

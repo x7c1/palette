@@ -1,11 +1,12 @@
 use super::*;
 
 impl Database {
-    /// Count the number of craft jobs currently in_progress (active members).
+    /// Count the number of jobs currently in_progress (active members).
+    /// Includes both craft and review jobs since both consume a container.
     pub fn count_active_members(&self) -> crate::Result<usize> {
         let conn = lock!(self.conn);
         let count: i64 = conn.query_row(
-            "SELECT COUNT(*) FROM jobs WHERE type = 'craft' AND status = 'in_progress'",
+            "SELECT COUNT(*) FROM jobs WHERE status = 'in_progress'",
             [],
             |row| row.get(0),
         )?;
@@ -20,27 +21,27 @@ mod tests {
     use palette_domain::job::*;
 
     #[test]
-    fn count_active_members() {
+    fn counts_craft_and_review_members() {
         let db = test_db();
         create_craft(&db, "C-001", None);
-        create_craft(&db, "C-002", None);
+        create_review(&db, "R-001");
 
         assert_eq!(db.count_active_members().unwrap(), 0);
 
-        db.update_job_status(&jid("C-001"), JobStatus::Ready)
+        db.assign_job(&jid("C-001"), &aid("member-a"), JobType::Craft)
             .unwrap();
-        db.assign_job(&jid("C-001"), &aid("member-a")).unwrap();
         assert_eq!(db.count_active_members().unwrap(), 1);
 
-        db.update_job_status(&jid("C-002"), JobStatus::Ready)
+        db.assign_job(&jid("R-001"), &aid("member-b"), JobType::Review)
             .unwrap();
-        db.assign_job(&jid("C-002"), &aid("member-b")).unwrap();
         assert_eq!(db.count_active_members().unwrap(), 2);
 
-        db.update_job_status(&jid("C-001"), JobStatus::InReview)
-            .unwrap();
-        db.update_job_status(&jid("C-001"), JobStatus::Done)
+        db.update_job_status(&jid("C-001"), JobStatus::Craft(CraftStatus::InReview))
             .unwrap();
         assert_eq!(db.count_active_members().unwrap(), 1);
+
+        db.update_job_status(&jid("R-001"), JobStatus::Review(ReviewStatus::Done))
+            .unwrap();
+        assert_eq!(db.count_active_members().unwrap(), 0);
     }
 }

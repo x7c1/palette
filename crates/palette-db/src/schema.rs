@@ -61,7 +61,7 @@ CREATE TABLE IF NOT EXISTS workflows (
 CREATE TABLE IF NOT EXISTS tasks (
     id TEXT PRIMARY KEY,
     workflow_id TEXT NOT NULL,
-    status TEXT NOT NULL CHECK(status IN ('pending', 'ready', 'in_progress', 'suspended', 'done')),
+    status TEXT NOT NULL CHECK(status IN ('pending', 'ready', 'in_progress', 'suspended', 'completed')),
     FOREIGN KEY (workflow_id) REFERENCES workflows(id)
 );
 

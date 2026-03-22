@@ -1,11 +1,13 @@
 use super::RuleEffect;
-use crate::job::{JobError, JobId, JobStatus, JobStore, JobType, TransitionError};
+use crate::job::{
+    CraftStatus, JobError, JobId, JobStatus, JobStore, ReviewStatus, TransitionError,
+};
 use crate::review::{ReviewSubmission, Verdict};
 
 pub struct RuleEngine<S> {
     store: S,
     #[allow(dead_code)]
-    // TODO: re-enable when changes_requested is implemented for task tree model
+    // TODO: re-enable when escalation trigger conditions are designed
     max_review_rounds: u32,
 }
 
@@ -32,29 +34,28 @@ impl<S: JobStore> RuleEngine<S> {
 
         let mut effects = Vec::new();
 
-        match (job.job_type, new_status) {
-            // craft -> ready: trigger auto-assign evaluation
-            (JobType::Craft, JobStatus::Ready) => {
+        match new_status {
+            // Craft -> Todo: trigger auto-assign
+            JobStatus::Craft(CraftStatus::Todo) => {
                 effects.push(RuleEffect::AutoAssign {
                     job_id: job_id.clone(),
                 });
             }
-            // review -> todo: trigger auto-assign for reviewer member
-            (JobType::Review, JobStatus::Todo) => {
+            // Review -> Todo: trigger auto-assign
+            JobStatus::Review(ReviewStatus::Todo) => {
                 effects.push(RuleEffect::AutoAssign {
                     job_id: job_id.clone(),
                 });
             }
-            // craft -> in_review: task cascade handles review task activation
-            (JobType::Craft, JobStatus::InReview) => {}
-            // craft -> done: destroy member container, trigger auto-assign for waiting jobs
-            (JobType::Craft, JobStatus::Done) => {
+            // Craft -> InReview: task cascade handles review task activation
+            JobStatus::Craft(CraftStatus::InReview) => {}
+            // Craft -> Done: destroy member container, trigger auto-assign for waiting jobs
+            JobStatus::Craft(CraftStatus::Done) => {
                 if let Some(ref assignee) = job.assignee {
                     effects.push(RuleEffect::DestroyMember {
                         member_id: assignee.clone(),
                     });
                 }
-                // Check if any blocked jobs can now proceed
                 let assignable = self.store.find_assignable_jobs()?;
                 for j in assignable {
                     effects.push(RuleEffect::AutoAssign {
@@ -69,13 +70,6 @@ impl<S: JobStore> RuleEngine<S> {
     }
 
     /// Apply rules after a review submission. Returns side effects.
-    ///
-    /// In the task tree model, craft and review are sibling tasks. The craft task
-    /// is already Done (marked when its job reached InReview). This method only
-    /// needs to handle the review job's own status transitions:
-    /// - Approved: review job → Done → task cascade handles the rest
-    /// - ChangesRequested: review job → Done (with verdict recorded) → task cascade
-    ///   Note: changes_requested handling in the task tree model is a future design task
     pub fn on_review_submitted(
         &self,
         review_job_id: &JobId,
@@ -91,19 +85,23 @@ impl<S: JobStore> RuleEngine<S> {
 
         match submission.verdict {
             Verdict::ChangesRequested => {
-                // Review job → Blocked. The reviewer keeps their assignee for re-review.
-                // TODO: In the task tree model, changes_requested should trigger
-                // a new craft cycle. For now, the review stays blocked.
-                self.store
-                    .update_job_status(review_job_id, JobStatus::Blocked)?;
-            }
-            Verdict::Approved => {
-                // Review job → Done. Task cascade will propagate completion.
-                self.store
-                    .update_job_status(review_job_id, JobStatus::Done)?;
+                // Review job -> ChangesRequested. The reviewer keeps their assignee for re-review.
+                self.store.update_job_status(
+                    review_job_id,
+                    JobStatus::Review(ReviewStatus::ChangesRequested),
+                )?;
                 effects.push(RuleEffect::StatusChanged {
                     job_id: review_job_id.clone(),
-                    new_status: JobStatus::Done,
+                    new_status: JobStatus::Review(ReviewStatus::ChangesRequested),
+                });
+            }
+            Verdict::Approved => {
+                // Review job -> Done. Task cascade will propagate completion.
+                self.store
+                    .update_job_status(review_job_id, JobStatus::Review(ReviewStatus::Done))?;
+                effects.push(RuleEffect::StatusChanged {
+                    job_id: review_job_id.clone(),
+                    new_status: JobStatus::Review(ReviewStatus::Done),
                 });
                 if let Some(ref assignee) = review_job.assignee {
                     effects.push(RuleEffect::DestroyMember {
@@ -117,38 +115,61 @@ impl<S: JobStore> RuleEngine<S> {
     }
 }
 
-/// Validate a status transition.
-pub fn validate_transition(
-    job_type: JobType,
-    from: JobStatus,
-    to: JobStatus,
+/// Validate a craft status transition.
+pub fn validate_craft_transition(
+    from: CraftStatus,
+    to: CraftStatus,
 ) -> Result<(), TransitionError> {
-    let valid = match (job_type, from, to) {
-        // Craft transitions
-        (JobType::Craft, JobStatus::Draft, JobStatus::Ready) => true,
-        (JobType::Craft, JobStatus::Ready, JobStatus::InProgress) => true,
-        (JobType::Craft, JobStatus::InProgress, JobStatus::InReview) => true,
-        (JobType::Craft, JobStatus::InReview, JobStatus::Done) => true,
-        (JobType::Craft, JobStatus::InReview, JobStatus::InProgress) => true, // changes_requested
-        (JobType::Craft, JobStatus::InProgress, JobStatus::Blocked) => true,
-        (JobType::Craft, JobStatus::Blocked, JobStatus::InProgress) => true,
-        (JobType::Craft, _, JobStatus::Escalated) => true,
-
-        // Review transitions
-        (JobType::Review, JobStatus::Draft, JobStatus::Todo) => true,
-        (JobType::Review, JobStatus::Todo, JobStatus::InProgress) => true,
-        (JobType::Review, JobStatus::Blocked, JobStatus::Todo) => true,
-        (JobType::Review, JobStatus::InProgress, JobStatus::Done) => true,
-        (JobType::Review, JobStatus::InProgress, JobStatus::Blocked) => true, // changes_requested
-
-        _ => false,
-    };
+    let valid = matches!(
+        (from, to),
+        (CraftStatus::Todo, CraftStatus::InProgress)
+            | (CraftStatus::InProgress, CraftStatus::InReview)
+            | (CraftStatus::InReview, CraftStatus::Done)
+            | (CraftStatus::InReview, CraftStatus::InProgress) // changes_requested
+            | (_, CraftStatus::Escalated)
+    );
 
     if !valid {
-        return Err(TransitionError { job_type, from, to });
+        return Err(TransitionError {
+            from: JobStatus::Craft(from),
+            to: JobStatus::Craft(to),
+        });
     }
 
     Ok(())
+}
+
+/// Validate a review status transition.
+pub fn validate_review_transition(
+    from: ReviewStatus,
+    to: ReviewStatus,
+) -> Result<(), TransitionError> {
+    let valid = matches!(
+        (from, to),
+        (ReviewStatus::Todo, ReviewStatus::InProgress)
+            | (ReviewStatus::InProgress, ReviewStatus::Done)
+            | (ReviewStatus::InProgress, ReviewStatus::ChangesRequested)
+            | (ReviewStatus::ChangesRequested, ReviewStatus::InProgress) // re-review
+            | (_, ReviewStatus::Escalated)
+    );
+
+    if !valid {
+        return Err(TransitionError {
+            from: JobStatus::Review(from),
+            to: JobStatus::Review(to),
+        });
+    }
+
+    Ok(())
+}
+
+/// Validate a job status transition, dispatching by job type.
+pub fn validate_transition(from: JobStatus, to: JobStatus) -> Result<(), TransitionError> {
+    match (from, to) {
+        (JobStatus::Craft(f), JobStatus::Craft(t)) => validate_craft_transition(f, t),
+        (JobStatus::Review(f), JobStatus::Review(t)) => validate_review_transition(f, t),
+        _ => Err(TransitionError { from, to }),
+    }
 }
 
 #[cfg(test)]
@@ -156,27 +177,52 @@ mod tests {
     use super::*;
 
     #[test]
-    fn valid_transitions() {
-        assert!(validate_transition(JobType::Craft, JobStatus::Draft, JobStatus::Ready).is_ok());
+    fn valid_craft_transitions() {
+        assert!(validate_craft_transition(CraftStatus::Todo, CraftStatus::InProgress).is_ok());
+        assert!(validate_craft_transition(CraftStatus::InProgress, CraftStatus::InReview).is_ok());
+        assert!(validate_craft_transition(CraftStatus::InReview, CraftStatus::Done).is_ok());
+        assert!(validate_craft_transition(CraftStatus::InReview, CraftStatus::InProgress).is_ok());
+        assert!(validate_craft_transition(CraftStatus::Todo, CraftStatus::Escalated).is_ok());
+    }
+
+    #[test]
+    fn invalid_craft_transitions() {
+        assert!(validate_craft_transition(CraftStatus::Todo, CraftStatus::Done).is_err());
+        assert!(validate_craft_transition(CraftStatus::Todo, CraftStatus::InReview).is_err());
+        assert!(validate_craft_transition(CraftStatus::Done, CraftStatus::Todo).is_err());
+    }
+
+    #[test]
+    fn valid_review_transitions() {
+        assert!(validate_review_transition(ReviewStatus::Todo, ReviewStatus::InProgress).is_ok());
+        assert!(validate_review_transition(ReviewStatus::InProgress, ReviewStatus::Done).is_ok());
         assert!(
-            validate_transition(JobType::Craft, JobStatus::Ready, JobStatus::InProgress).is_ok()
+            validate_review_transition(ReviewStatus::InProgress, ReviewStatus::ChangesRequested)
+                .is_ok()
         );
         assert!(
-            validate_transition(JobType::Craft, JobStatus::InProgress, JobStatus::InReview).is_ok()
-        );
-        assert!(validate_transition(JobType::Craft, JobStatus::InReview, JobStatus::Done).is_ok());
-        assert!(
-            validate_transition(JobType::Craft, JobStatus::InReview, JobStatus::InProgress).is_ok()
+            validate_review_transition(ReviewStatus::ChangesRequested, ReviewStatus::InProgress)
+                .is_ok()
         );
     }
 
     #[test]
-    fn invalid_transitions() {
-        assert!(validate_transition(JobType::Craft, JobStatus::Draft, JobStatus::Done).is_err());
+    fn invalid_review_transitions() {
+        assert!(validate_review_transition(ReviewStatus::Todo, ReviewStatus::Done).is_err());
+        assert!(validate_review_transition(ReviewStatus::Done, ReviewStatus::Todo).is_err());
         assert!(
-            validate_transition(JobType::Craft, JobStatus::Draft, JobStatus::InProgress).is_err()
+            validate_review_transition(ReviewStatus::Todo, ReviewStatus::ChangesRequested).is_err()
         );
-        assert!(validate_transition(JobType::Craft, JobStatus::Done, JobStatus::Draft).is_err());
-        assert!(validate_transition(JobType::Review, JobStatus::Done, JobStatus::Todo).is_err());
+    }
+
+    #[test]
+    fn cross_type_transition_is_invalid() {
+        assert!(
+            validate_transition(
+                JobStatus::Craft(CraftStatus::InProgress),
+                JobStatus::Review(ReviewStatus::InProgress),
+            )
+            .is_err()
+        );
     }
 }

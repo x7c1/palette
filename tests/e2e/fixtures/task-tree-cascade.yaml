@@ -7,25 +7,27 @@ children:
     children:
       - id: craft
         type: craft
+        plan_path: step-a
         description: Create step-a.txt in the workspace root with content "Step A done" and commit it
         priority: high
         repository:
           name: x7c1/palette
           branch: e2e-cascade
-      - id: review
-        type: review
-        depends_on: [craft]
+        children:
+          - id: review
+            type: review
 
   - id: step-b
     depends_on: [step-a]
     children:
       - id: craft
         type: craft
+        plan_path: step-b
         description: Create step-b.txt in the workspace root with content "Step B done" and commit it
         priority: medium
         repository:
           name: x7c1/palette
           branch: e2e-cascade
-      - id: review
-        type: review
-        depends_on: [craft]
+        children:
+          - id: review
+            type: review

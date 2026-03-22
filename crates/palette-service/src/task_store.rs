@@ -221,7 +221,7 @@ children:
         let store = TaskStoreImpl::new(&db, tree, wf_id.clone(), statuses);
 
         store
-            .update_task_status(&TaskId::new("2026/test/a"), TaskStatus::Done)
+            .update_task_status(&TaskId::new("2026/test/a"), TaskStatus::Completed)
             .unwrap();
 
         // Verify in-memory cache is updated
@@ -229,14 +229,14 @@ children:
             .get_task(&TaskId::new("2026/test/a"))
             .unwrap()
             .unwrap();
-        assert_eq!(a.status, TaskStatus::Done);
+        assert_eq!(a.status, TaskStatus::Completed);
 
         // Verify DB is updated
         let state = db
             .get_task_state(&TaskId::new("2026/test/a"))
             .unwrap()
             .unwrap();
-        assert_eq!(state.status, TaskStatus::Done);
+        assert_eq!(state.status, TaskStatus::Completed);
     }
 
     #[test]
@@ -272,7 +272,7 @@ children:
         let (db, tree, wf_id) = setup();
         db.update_task_status(&TaskId::new("2026/test"), TaskStatus::InProgress)
             .unwrap();
-        db.update_task_status(&TaskId::new("2026/test/a"), TaskStatus::Done)
+        db.update_task_status(&TaskId::new("2026/test/a"), TaskStatus::Completed)
             .unwrap();
 
         let statuses = db.get_task_statuses(&wf_id).unwrap();
@@ -301,9 +301,9 @@ children:
         let (db, tree, wf_id) = setup();
         db.update_task_status(&TaskId::new("2026/test"), TaskStatus::InProgress)
             .unwrap();
-        db.update_task_status(&TaskId::new("2026/test/a"), TaskStatus::Done)
+        db.update_task_status(&TaskId::new("2026/test/a"), TaskStatus::Completed)
             .unwrap();
-        db.update_task_status(&TaskId::new("2026/test/b"), TaskStatus::Done)
+        db.update_task_status(&TaskId::new("2026/test/b"), TaskStatus::Completed)
             .unwrap();
 
         let statuses = db.get_task_statuses(&wf_id).unwrap();
@@ -317,7 +317,7 @@ children:
         assert!(effects.iter().any(|e| *e
             == TaskEffect::TaskStatusChanged {
                 task_id: TaskId::new("2026/test"),
-                new_status: TaskStatus::Done,
+                new_status: TaskStatus::Completed,
             }));
     }
 }

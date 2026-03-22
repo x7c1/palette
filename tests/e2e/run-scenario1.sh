@@ -29,8 +29,8 @@ trap '"$SCRIPT_DIR/stop-palette.sh"' EXIT
 # --- Step 1: Reset and build ---
 echo "=== Step 1: Reset and build ==="
 scripts/reset.sh 2>&1
-rm -rf data/plans/*
-export RUST_MIN_STACK=33554432
+mkdir -p data/plans
+cp -r tests/e2e/fixtures/plans/* data/plans/
 cargo build 2>&1
 
 # --- Step 2: Start Palette ---
@@ -94,11 +94,11 @@ STEP_A_CRAFT_STATUS=$(echo "$JOBS" | jq -r '.[] | select(.title == "craft") | .s
 # step-b should not have jobs yet
 STEP_B_JOB_COUNT=$(echo "$JOBS" | jq '[.[] | select(.title == "craft")] | length')
 
-if [[ "$STEP_A_CRAFT_STATUS" != "ready" ]]; then
-  echo "FAIL: Expected step-a/craft job status=ready, got '$STEP_A_CRAFT_STATUS'"
+if [[ "$STEP_A_CRAFT_STATUS" != "todo" ]]; then
+  echo "FAIL: Expected step-a/craft job status=todo, got '$STEP_A_CRAFT_STATUS'"
   exit 1
 fi
-echo "PASS: step-a/craft Job is ready"
+echo "PASS: step-a/craft Job is todo"
 
 if [[ "$STEP_B_JOB_COUNT" -ne 1 ]]; then
   echo "FAIL: Expected only 1 craft job (step-a), got $STEP_B_JOB_COUNT"
@@ -182,16 +182,12 @@ while true; do
     exit 1
   fi
 
-  # Check completion: all jobs done
-  job_count=$(echo "$JOBS" | jq 'length' 2>/dev/null || echo "0")
-  done_count=$(echo "$JOBS" | jq '[.[] | select(.status == "done")] | length' 2>/dev/null || echo "0")
-
-  if [[ "$job_count" -gt 0 && "$job_count" -eq "$done_count" ]]; then
+  # Check completion: workflow completed in Palette log
+  if grep -q "workflow completed" "$LOG_FILE" 2>/dev/null; then
     echo ""
     echo "=== Step 6: Verify final state ==="
-    echo "All $job_count jobs are done."
+    JOBS=$(curl -sf "$PALETTE_URL/jobs" 2>/dev/null || echo "[]")
     echo "$JOBS" | jq -r '.[] | "  \(.id) \(.title) \(.status)"' 2>/dev/null
-
     echo ""
     echo "=== All E2E checks passed ==="
     echo "Workflow completed successfully: step-a → step-b cascade verified."

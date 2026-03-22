@@ -4,7 +4,7 @@ use palette_domain::agent::{AgentRole, ContainerId};
 
 /// Workspace volume to mount in the container.
 pub struct WorkspaceVolume {
-    /// Docker named volume name (e.g., "palette-workspace-W-001").
+    /// Docker named volume name (e.g., "palette-workspace-C-a3f2b7e1").
     pub name: String,
     /// If true, mount as read-only.
     pub read_only: bool,

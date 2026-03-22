@@ -3,7 +3,7 @@ mod helper;
 use helper::{aid, capture_pane, jid, spawn_server, test_session_name_with_guard};
 use palette_db::CreateTaskRequest;
 use palette_domain::agent::{AgentRole, AgentState, AgentStatus, ContainerId};
-use palette_domain::job::{CreateJobRequest, JobStatus, JobType};
+use palette_domain::job::{CreateJobRequest, JobStatus, JobType, ReviewStatus};
 use palette_domain::task::TaskId;
 use palette_domain::workflow::WorkflowId;
 use palette_tmux::TmuxManager;
@@ -110,14 +110,20 @@ async fn scenario3_message_queuing_to_leader() {
 
     state
         .db
-        .update_job_status(&jid("R-A"), JobStatus::Ready)
+        .update_job_status(&jid("R-A"), JobStatus::Review(ReviewStatus::Todo))
         .unwrap();
-    state.db.assign_job(&jid("R-A"), &aid("member-a")).unwrap();
     state
         .db
-        .update_job_status(&jid("R-B"), JobStatus::Ready)
+        .assign_job(&jid("R-A"), &aid("member-a"), JobType::Review)
         .unwrap();
-    state.db.assign_job(&jid("R-B"), &aid("member-b")).unwrap();
+    state
+        .db
+        .update_job_status(&jid("R-B"), JobStatus::Review(ReviewStatus::Todo))
+        .unwrap();
+    state
+        .db
+        .assign_job(&jid("R-B"), &aid("member-b"), JobType::Review)
+        .unwrap();
 
     // --- Both review members stop while review integrator is Working ---
 

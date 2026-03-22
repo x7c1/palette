@@ -15,11 +15,7 @@ impl Database {
             .as_ref()
             .map(repository_row::repository_to_json);
 
-        // Craft jobs start as Draft; review jobs start as Todo
-        let initial_status = match req.job_type {
-            JobType::Craft => JobStatus::Draft,
-            JobType::Review => JobStatus::Todo,
-        };
+        let initial_status = JobStatus::todo(req.job_type);
 
         let tx = conn.transaction()?;
 
@@ -79,7 +75,7 @@ mod tests {
 
         assert_eq!(job.id, jid("C-001"));
         assert_eq!(job.job_type, JobType::Craft);
-        assert_eq!(job.status, JobStatus::Draft);
+        assert_eq!(job.status, JobStatus::Craft(CraftStatus::Todo));
         assert_eq!(job.priority, Some(Priority::High));
 
         let fetched = db.get_job(&jid("C-001")).unwrap().unwrap();
