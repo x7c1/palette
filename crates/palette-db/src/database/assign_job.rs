@@ -3,13 +3,15 @@ use super::*;
 impl Database {
     /// Assign a job to a member and set status to in_progress.
     pub fn assign_job(&self, job_id: &JobId, assignee: &AgentId) -> crate::Result<Job> {
+        let job = self.get_job(job_id)?.ok_or_else(|| JobError::NotFound {
+            job_id: job_id.clone(),
+        })?;
+        let in_progress = JobStatus::in_progress(job.job_type);
         let conn = lock!(self.conn);
         let now = Utc::now().to_rfc3339();
-        // Both craft and review use "in_progress" as the DB string
-        let status_str = CraftStatus::InProgress.as_str(); // same string for both types
         let updated = conn.execute(
             "UPDATE jobs SET status = ?1, assignee = ?2, assigned_at = ?3, updated_at = ?4 WHERE id = ?5",
-            params![status_str, assignee.as_ref(), now, now, job_id.as_ref()],
+            params![in_progress.as_str(), assignee.as_ref(), now, now, job_id.as_ref()],
         )?;
         if updated == 0 {
             return Err(JobError::NotFound {

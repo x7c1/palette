@@ -25,6 +25,14 @@ impl JobStatus {
         }
     }
 
+    /// Create an InProgress status for the given job type.
+    pub fn in_progress(job_type: JobType) -> Self {
+        match job_type {
+            JobType::Craft => JobStatus::Craft(CraftStatus::InProgress),
+            JobType::Review => JobStatus::Review(ReviewStatus::InProgress),
+        }
+    }
+
     /// Returns true if the job is done (Craft::Done or Review::Done).
     pub fn is_done(&self) -> bool {
         matches!(
