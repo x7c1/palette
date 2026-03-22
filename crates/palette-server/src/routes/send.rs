@@ -49,25 +49,13 @@ pub async fn handle_send(
             .unwrap_or(false)
     };
 
-    // Check if member is waiting for a permission prompt response.
-    // Permission responses must be sent immediately (bypass queue) to avoid deadlocks
-    // where the member is waiting for approval but the response is stuck behind
-    // queued messages that can't be delivered until the member resumes.
-    let is_waiting_permission = {
-        let infra = state.infra.lock().await;
-        infra
-            .find_member(&member_id)
-            .or_else(|| infra.find_supervisor(&member_id))
-            .is_some_and(|m| m.status == AgentStatus::WaitingPermission)
-    };
-
     // Also check if there are already pending messages (maintain ordering)
     let has_pending = state
         .db
         .has_pending_messages(&member_id)
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
-    let queued = if is_idle && !has_pending || is_waiting_permission {
+    let queued = if is_idle && !has_pending {
         // Send directly
         let terminal_target = {
             let infra = state.infra.lock().await;
