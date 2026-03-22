@@ -26,8 +26,9 @@ mod tests {
     #[test]
     fn update_job_status() {
         let db = test_db();
+        let task_id = setup_task(&db, "task-C-001");
         db.create_job(&CreateJobRequest {
-            task_id: None,
+            task_id,
             id: Some(jid("C-001")),
             job_type: JobType::Craft,
             title: "Craft".to_string(),
@@ -36,7 +37,6 @@ mod tests {
             assignee: None,
             priority: None,
             repository: None,
-            depends_on: vec![],
         })
         .unwrap();
 

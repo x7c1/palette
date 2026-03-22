@@ -47,9 +47,10 @@ pub fn jid(s: &str) -> JobId {
     JobId::new(s)
 }
 
-pub fn create_craft(id: &str, title: &str) -> CreateJobRequest {
+pub fn create_craft(id: &str, title: &str, task_id: &str) -> CreateJobRequest {
     CreateJobRequest {
         id: Some(id.to_string()),
+        task_id: task_id.to_string(),
         job_type: JobType::Craft,
         title: title.to_string(),
         plan_path: format!("test/{id}"),
@@ -57,13 +58,13 @@ pub fn create_craft(id: &str, title: &str) -> CreateJobRequest {
         assignee: None,
         priority: None,
         repository: None,
-        depends_on: vec![],
     }
 }
 
-pub fn create_review(id: &str, title: &str, depends_on: Vec<&str>) -> CreateJobRequest {
+pub fn create_review(id: &str, title: &str, task_id: &str) -> CreateJobRequest {
     CreateJobRequest {
         id: Some(id.to_string()),
+        task_id: task_id.to_string(),
         job_type: JobType::Review,
         title: title.to_string(),
         plan_path: format!("test/{id}"),
@@ -71,7 +72,6 @@ pub fn create_review(id: &str, title: &str, depends_on: Vec<&str>) -> CreateJobR
         assignee: None,
         priority: None,
         repository: None,
-        depends_on: depends_on.into_iter().map(String::from).collect(),
     }
 }
 

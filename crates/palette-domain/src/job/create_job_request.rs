@@ -5,7 +5,7 @@ use crate::task::TaskId;
 #[derive(Debug, Clone)]
 pub struct CreateJobRequest {
     pub id: Option<JobId>,
-    pub task_id: Option<TaskId>,
+    pub task_id: TaskId,
     pub job_type: JobType,
     pub title: String,
     pub plan_path: String,
@@ -13,5 +13,4 @@ pub struct CreateJobRequest {
     pub assignee: Option<AgentId>,
     pub priority: Option<Priority>,
     pub repository: Option<Repository>,
-    pub depends_on: Vec<JobId>,
 }

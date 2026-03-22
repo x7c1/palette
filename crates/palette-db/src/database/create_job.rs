@@ -28,7 +28,7 @@ impl Database {
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, NULL, ?11, ?12, NULL, NULL)",
             params![
                 id.as_ref(),
-                req.task_id.as_ref().map(|t| t.as_ref()),
+                req.task_id.as_ref(),
                 req.job_type.as_str(),
                 req.title,
                 req.plan_path,
@@ -41,13 +41,6 @@ impl Database {
                 now_str,
             ],
         )?;
-
-        for dep in &req.depends_on {
-            tx.execute(
-                "INSERT INTO dependencies (job_id, depends_on) VALUES (?1, ?2)",
-                params![id.as_ref(), dep.as_ref()],
-            )?;
-        }
 
         let job =
             query_job(&tx, &id)?.ok_or_else(|| Error::Job(JobError::NotFound { job_id: id }))?;
@@ -66,9 +59,10 @@ mod tests {
     #[test]
     fn create_and_get_job() {
         let db = test_db();
+        let task_id = setup_task(&db, "task-C-001");
         let job = db
             .create_job(&CreateJobRequest {
-                task_id: None,
+                task_id,
                 id: Some(jid("C-001")),
                 job_type: JobType::Craft,
                 title: "Implement feature".to_string(),
@@ -80,7 +74,6 @@ mod tests {
                     name: "x7c1/palette".to_string(),
                     branch: "feature/test".to_string(),
                 }),
-                depends_on: vec![],
             })
             .unwrap();
 
@@ -91,43 +84,5 @@ mod tests {
 
         let fetched = db.get_job(&jid("C-001")).unwrap().unwrap();
         assert_eq!(fetched.title, "Implement feature");
-    }
-
-    #[test]
-    fn create_job_with_dependencies() {
-        let db = test_db();
-        db.create_job(&CreateJobRequest {
-            task_id: None,
-            id: Some(jid("C-001")),
-            job_type: JobType::Craft,
-            title: "Craft job".to_string(),
-            plan_path: "test/C-001".to_string(),
-            description: None,
-            assignee: None,
-            priority: None,
-            repository: None,
-            depends_on: vec![],
-        })
-        .unwrap();
-
-        db.create_job(&CreateJobRequest {
-            task_id: None,
-            id: Some(jid("R-001")),
-            job_type: JobType::Review,
-            title: "Review job".to_string(),
-            plan_path: "test/R-001".to_string(),
-            description: None,
-            assignee: None,
-            priority: None,
-            repository: None,
-            depends_on: vec![jid("C-001")],
-        })
-        .unwrap();
-
-        let deps = db.get_dependencies(&jid("R-001")).unwrap();
-        assert_eq!(deps, vec![jid("C-001")]);
-
-        let dependents = db.get_dependents(&jid("C-001")).unwrap();
-        assert_eq!(dependents, vec![jid("R-001")]);
     }
 }

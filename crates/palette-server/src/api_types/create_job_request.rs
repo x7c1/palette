@@ -7,6 +7,7 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Serialize, Deserialize)]
 pub struct CreateJobRequest {
     pub id: Option<String>,
+    pub task_id: String,
     #[serde(rename = "type")]
     pub job_type: JobType,
     pub title: String,
@@ -15,8 +16,6 @@ pub struct CreateJobRequest {
     pub assignee: Option<String>,
     pub priority: Option<Priority>,
     pub repository: Option<Repository>,
-    #[serde(default)]
-    pub depends_on: Vec<String>,
 }
 
 // TODO: Replace From with TryFrom to validate external input (see plan 009-api-input-validation)
@@ -24,7 +23,7 @@ impl From<CreateJobRequest> for domain::job::CreateJobRequest {
     fn from(api: CreateJobRequest) -> Self {
         Self {
             id: api.id.map(domain::job::JobId::new),
-            task_id: None,
+            task_id: domain::task::TaskId::new(api.task_id),
             job_type: api.job_type.into(),
             title: api.title,
             plan_path: api.plan_path,
@@ -32,11 +31,6 @@ impl From<CreateJobRequest> for domain::job::CreateJobRequest {
             assignee: api.assignee.map(domain::agent::AgentId::new),
             priority: api.priority.map(domain::job::Priority::from),
             repository: api.repository.map(Into::into),
-            depends_on: api
-                .depends_on
-                .into_iter()
-                .map(domain::job::JobId::new)
-                .collect(),
         }
     }
 }

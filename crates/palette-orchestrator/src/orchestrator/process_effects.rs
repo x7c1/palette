@@ -134,9 +134,7 @@ impl Orchestrator {
                 read_only: false,
             })),
             JobType::Review => {
-                let Some(ref task_id) = job.task_id else {
-                    return Ok(None);
-                };
+                let task_id = &job.task_id;
                 let Some(task_state) = self.db.get_task_state(task_id)? else {
                     return Ok(None);
                 };
@@ -194,9 +192,7 @@ impl Orchestrator {
         if job.job_type != JobType::Review {
             return Ok(());
         }
-        let Some(ref review_task_id) = job.task_id else {
-            return Ok(());
-        };
+        let review_task_id = &job.task_id;
         let Some(task_state) = self.db.get_task_state(review_task_id)? else {
             return Ok(());
         };
@@ -245,9 +241,7 @@ impl Orchestrator {
         let Some(job) = self.db.get_job(job_id)? else {
             return Ok(vec![]);
         };
-        let Some(ref task_id) = job.task_id else {
-            return Ok(vec![]); // Legacy job without task association
-        };
+        let task_id = &job.task_id;
 
         // Look up the workflow for this task
         let Some(task_state) = self.db.get_task_state(task_id)? else {
@@ -340,21 +334,17 @@ impl Orchestrator {
             let job_effects = if let Some(mut task) = task_store.get_task(task_id)?
                 && task.job_type.is_some()
             {
-                // For review tasks, inherit plan_path and description from sibling craft task
-                // so the reviewer sees the same context as the crafter
+                // For review tasks, inherit plan_path from sibling craft task
+                // so the reviewer reads the same plan document as the crafter
                 if task.job_type == Some(JobType::Review)
+                    && task.plan_path.is_none()
                     && let Some(ref parent_id) = task.parent_id
                 {
                     let siblings = task_store.get_child_tasks(parent_id)?;
                     if let Some(craft) =
                         siblings.iter().find(|s| s.job_type == Some(JobType::Craft))
                     {
-                        if task.plan_path.is_none() {
-                            task.plan_path = craft.plan_path.clone();
-                        }
-                        if task.description.is_none() {
-                            task.description = craft.description.clone();
-                        }
+                        task.plan_path = craft.plan_path.clone();
                     }
                 }
                 self.create_job_for_ready_task(&task)?
@@ -380,7 +370,7 @@ impl Orchestrator {
         let job_type = task.job_type.expect("leaf task must have job_type");
         let job = self.db.create_job(&palette_domain::job::CreateJobRequest {
             id: Some(JobId::generate(job_type)),
-            task_id: Some(task.id.clone()),
+            task_id: task.id.clone(),
             job_type,
             title: task
                 .id
@@ -394,7 +384,6 @@ impl Orchestrator {
             assignee: None,
             priority: task.priority,
             repository: task.repository.clone(),
-            depends_on: vec![],
         })?;
 
         let initial_status = match job_type {
@@ -439,10 +428,12 @@ fn format_job_instruction(job: &Job) -> String {
 
 #[cfg(test)]
 mod tests {
-    use palette_db::Database;
+    use palette_db::{CreateTaskRequest, Database};
     use palette_domain::agent::*;
     use palette_domain::review::*;
     use palette_domain::rule::*;
+    use palette_domain::task::TaskId;
+    use palette_domain::workflow::WorkflowId;
 
     use palette_domain::job::*;
 
@@ -454,11 +445,23 @@ mod tests {
         JobId::new(s)
     }
 
+    fn setup_task(db: &Database, task_id: &str) -> TaskId {
+        let wf_id = WorkflowId::new(format!("wf-{task_id}"));
+        let t_id = TaskId::new(task_id);
+        let _ = db.create_workflow(&wf_id, "test/blueprint.yaml");
+        let _ = db.create_task(&CreateTaskRequest {
+            id: t_id.clone(),
+            workflow_id: wf_id,
+        });
+        t_id
+    }
+
     #[test]
     fn review_todo_triggers_auto_assign() {
         let db = setup_db();
+        let task_id = setup_task(&db, "task-R-001");
         db.create_job(&CreateJobRequest {
-            task_id: None,
+            task_id,
             id: Some(jid("R-001")),
             job_type: JobType::Review,
             title: "Review".to_string(),
@@ -467,7 +470,6 @@ mod tests {
             assignee: None,
             priority: None,
             repository: None,
-            depends_on: vec![],
         })
         .unwrap();
 
@@ -491,8 +493,9 @@ mod tests {
     #[test]
     fn approved_review_produces_done_and_destroy() {
         let db = setup_db();
+        let task_id = setup_task(&db, "task-R-001");
         db.create_job(&CreateJobRequest {
-            task_id: None,
+            task_id,
             id: Some(jid("R-001")),
             job_type: JobType::Review,
             title: "Review".to_string(),
@@ -501,7 +504,6 @@ mod tests {
             assignee: None,
             priority: None,
             repository: None,
-            depends_on: vec![],
         })
         .unwrap();
 
@@ -546,8 +548,9 @@ mod tests {
     #[test]
     fn changes_requested_blocks_review() {
         let db = setup_db();
+        let task_id = setup_task(&db, "task-R-001");
         db.create_job(&CreateJobRequest {
-            task_id: None,
+            task_id,
             id: Some(jid("R-001")),
             job_type: JobType::Review,
             title: "Review".to_string(),
@@ -556,7 +559,6 @@ mod tests {
             assignee: None,
             priority: None,
             repository: None,
-            depends_on: vec![],
         })
         .unwrap();
 

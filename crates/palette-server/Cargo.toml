@@ -20,8 +20,3 @@ tokio.workspace = true
 tracing.workspace = true
 
 [dev-dependencies]
-palette-orchestrator = { path = "../palette-orchestrator" }
-reqwest.workspace = true
-serde_json.workspace = true
-tempfile = "3"
-tokio.workspace = true

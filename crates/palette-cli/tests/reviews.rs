@@ -1,8 +1,22 @@
 mod helper;
 
 use helper::{spawn_server, test_session_name_with_guard};
+use palette_db::CreateTaskRequest;
+use palette_domain::task::TaskId;
+use palette_domain::workflow::WorkflowId;
 use palette_server::api_types::{ReviewCommentInput, SubmitReviewRequest, Verdict};
 use palette_tmux::TmuxManager;
+
+fn setup_review_task(state: &palette_server::AppState, task_name: &str) -> TaskId {
+    let wf_id = WorkflowId::new(format!("wf-{task_name}"));
+    let task_id = TaskId::new(task_name);
+    let _ = state.db.create_workflow(&wf_id, "test/blueprint.yaml");
+    let _ = state.db.create_task(&CreateTaskRequest {
+        id: task_id.clone(),
+        workflow_id: wf_id,
+    });
+    task_id
+}
 
 #[tokio::test]
 async fn review_submit_and_get_submissions() {
@@ -12,14 +26,14 @@ async fn review_submit_and_get_submissions() {
 
     let (base_url, state) = spawn_server(tmux, &session).await;
 
-    // Create a standalone review job (no Job-level depends_on needed in task tree model)
     use palette_domain::agent::AgentId;
     use palette_domain::job::{CreateJobRequest, JobId, JobStatus, JobType};
 
+    let task_id = setup_review_task(&state, "task-R-001");
     let review_job = state
         .db
         .create_job(&CreateJobRequest {
-            task_id: None,
+            task_id,
             id: Some(JobId::new("R-001")),
             job_type: JobType::Review,
             title: "Review".to_string(),
@@ -28,7 +42,6 @@ async fn review_submit_and_get_submissions() {
             assignee: None,
             priority: None,
             repository: None,
-            depends_on: vec![],
         })
         .unwrap();
     state
@@ -90,10 +103,11 @@ async fn review_approved_completes_review_job() {
     use palette_domain::agent::AgentId;
     use palette_domain::job::{CreateJobRequest, JobId, JobStatus, JobType};
 
+    let task_id = setup_review_task(&state, "task-R-001");
     let review_job = state
         .db
         .create_job(&CreateJobRequest {
-            task_id: None,
+            task_id,
             id: Some(JobId::new("R-001")),
             job_type: JobType::Review,
             title: "Review".to_string(),
@@ -102,7 +116,6 @@ async fn review_approved_completes_review_job() {
             assignee: None,
             priority: None,
             repository: None,
-            depends_on: vec![],
         })
         .unwrap();
     state

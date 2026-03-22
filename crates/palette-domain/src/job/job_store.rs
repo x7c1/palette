@@ -7,8 +7,6 @@ pub trait JobStore {
     type Error: From<JobError>;
 
     fn get_job(&self, id: &JobId) -> Result<Option<Job>, Self::Error>;
-    fn find_reviews_for_craft(&self, craft_id: &JobId) -> Result<Vec<Job>, Self::Error>;
-    fn find_crafts_for_review(&self, review_id: &JobId) -> Result<Vec<Job>, Self::Error>;
     fn update_job_status(&self, id: &JobId, status: JobStatus) -> Result<Job, Self::Error>;
     fn find_assignable_jobs(&self) -> Result<Vec<Job>, Self::Error>;
     fn get_review_submissions(
@@ -22,12 +20,6 @@ impl<T: JobStore> JobStore for &T {
 
     fn get_job(&self, id: &JobId) -> Result<Option<Job>, Self::Error> {
         (**self).get_job(id)
-    }
-    fn find_reviews_for_craft(&self, craft_id: &JobId) -> Result<Vec<Job>, Self::Error> {
-        (**self).find_reviews_for_craft(craft_id)
-    }
-    fn find_crafts_for_review(&self, review_id: &JobId) -> Result<Vec<Job>, Self::Error> {
-        (**self).find_crafts_for_review(review_id)
     }
     fn update_job_status(&self, id: &JobId, status: JobStatus) -> Result<Job, Self::Error> {
         (**self).update_job_status(id, status)
@@ -48,12 +40,6 @@ impl<T: JobStore> JobStore for std::sync::Arc<T> {
 
     fn get_job(&self, id: &JobId) -> Result<Option<Job>, Self::Error> {
         (**self).get_job(id)
-    }
-    fn find_reviews_for_craft(&self, craft_id: &JobId) -> Result<Vec<Job>, Self::Error> {
-        (**self).find_reviews_for_craft(craft_id)
-    }
-    fn find_crafts_for_review(&self, review_id: &JobId) -> Result<Vec<Job>, Self::Error> {
-        (**self).find_crafts_for_review(review_id)
     }
     fn update_job_status(&self, id: &JobId, status: JobStatus) -> Result<Job, Self::Error> {
         (**self).update_job_status(id, status)

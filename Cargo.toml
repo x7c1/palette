@@ -14,7 +14,11 @@ members = [
 ]
 
 [profile.dev]
+# Reduce debug info from default (2) to mitigate LLVM SIGSEGV on full rebuild.
+# To restore full debug info for a debugger: CARGO_PROFILE_DEV_DEBUG=2 cargo build
 debug = 1
+# Reduce from default (256) to mitigate LLVM SIGSEGV on full rebuild
+codegen-units = 16
 
 [workspace.package]
 edition = "2024"

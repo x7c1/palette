@@ -42,10 +42,3 @@ pub use verdict::Verdict;
 
 mod repository;
 pub use repository::Repository;
-
-pub mod blueprint;
-pub use blueprint::Blueprint;
-pub use blueprint::Task;
-
-mod blueprint_response;
-pub use blueprint_response::BlueprintResponse;
