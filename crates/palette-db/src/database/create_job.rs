@@ -15,11 +15,7 @@ impl Database {
             .as_ref()
             .map(repository_row::repository_to_json);
 
-        // Both craft and review jobs start as Todo
-        let initial_status = match req.job_type {
-            JobType::Craft => JobStatus::Craft(CraftStatus::Todo),
-            JobType::Review => JobStatus::Review(ReviewStatus::Todo),
-        };
+        let initial_status = JobStatus::todo(req.job_type);
 
         let tx = conn.transaction()?;
 

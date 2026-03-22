@@ -25,6 +25,14 @@ impl JobStatus {
         }
     }
 
+    /// Create a Todo status for the given job type.
+    pub fn todo(job_type: JobType) -> Self {
+        match job_type {
+            JobType::Craft => JobStatus::Craft(CraftStatus::Todo),
+            JobType::Review => JobStatus::Review(ReviewStatus::Todo),
+        }
+    }
+
     /// Create an InProgress status for the given job type.
     pub fn in_progress(job_type: JobType) -> Self {
         match job_type {

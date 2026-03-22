@@ -614,10 +614,7 @@ impl Orchestrator {
         })?;
 
         // Job is already created as Todo; trigger auto-assign
-        let todo_status = match job_type {
-            JobType::Craft => JobStatus::Craft(CraftStatus::Todo),
-            JobType::Review => JobStatus::Review(ReviewStatus::Todo),
-        };
+        let todo_status = JobStatus::todo(job_type);
         let rules = RuleEngine::new(&*self.db, 0);
         let effects = rules.on_status_change(&job.id, todo_status)?;
 
