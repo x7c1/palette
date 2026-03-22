@@ -5,7 +5,7 @@ use axum::{
     http::StatusCode,
 };
 use palette_domain::agent::{AgentId, AgentStatus};
-use palette_domain::job::{CraftStatus, JobFilter, JobStatus, ReviewStatus};
+use palette_domain::job::{CraftStatus, JobFilter, JobStatus};
 use palette_domain::server::ServerEvent;
 use std::sync::Arc;
 
@@ -50,22 +50,13 @@ pub async fn handle_stop(
 
     // Transition member's in_progress jobs and notify supervisors
     if let Some(ref supervisor_id) = supervisor_id {
-        let member_jobs: Vec<_> = state
+        let member_jobs = state
             .db
             .list_jobs(&JobFilter {
                 assignee: Some(member_id.clone()),
                 ..Default::default()
             })
-            .unwrap_or_default()
-            .into_iter()
-            .filter(|j| {
-                matches!(
-                    j.status,
-                    JobStatus::Craft(CraftStatus::InProgress)
-                        | JobStatus::Review(ReviewStatus::InProgress)
-                )
-            })
-            .collect();
+            .unwrap_or_default();
 
         let last_message = payload
             .get("last_assistant_message")
