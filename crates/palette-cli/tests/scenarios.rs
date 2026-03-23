@@ -8,6 +8,17 @@ use palette_domain::task::TaskId;
 use palette_domain::workflow::WorkflowId;
 use palette_tmux::TmuxManager;
 use serde_json::json;
+use std::io::Write;
+
+fn write_blueprint_file(yaml: &str) -> tempfile::NamedTempFile {
+    let mut f = tempfile::NamedTempFile::new().unwrap();
+    f.write_all(yaml.as_bytes()).unwrap();
+    f
+}
+
+fn tid(wf_id: &str, key_path: &str) -> TaskId {
+    TaskId::new(format!("{wf_id}:{key_path}"))
+}
 
 /// Scenario 3: Multiple review members stop while review integrator is working.
 /// Event notifications are queued and delivered one at a time on each leader stop.
@@ -32,6 +43,7 @@ async fn scenario3_message_queuing_to_leader() {
             terminal_target: ri_pane.clone(),
             status: AgentStatus::Working,
             session_id: None,
+            task_id: TaskId::new("task-ri"),
         });
         infra.members.push(AgentState {
             id: aid("member-a"),
@@ -41,6 +53,7 @@ async fn scenario3_message_queuing_to_leader() {
             terminal_target: _member_a_pane.clone(),
             status: AgentStatus::Working,
             session_id: None,
+            task_id: TaskId::new("task-R-A"),
         });
         infra.members.push(AgentState {
             id: aid("member-b"),
@@ -50,6 +63,7 @@ async fn scenario3_message_queuing_to_leader() {
             terminal_target: _member_b_pane.clone(),
             status: AgentStatus::Working,
             session_id: None,
+            task_id: TaskId::new("task-R-B"),
         });
     }
 
@@ -215,4 +229,467 @@ async fn scenario3_message_queuing_to_leader() {
             .unwrap(),
         "RI queue should be empty after all deliveries"
     );
+}
+
+/// Dynamic supervisor lifecycle:
+/// - Workflow start spawns root + phase-a supervisors
+/// - phase-a completion destroys its supervisor, phase-b gets a new one
+/// - Workflow completion destroys all supervisors
+#[tokio::test]
+async fn dynamic_supervisor_lifecycle() {
+    use palette_domain::job::{CraftStatus, JobFilter, JobStatus as JStatus};
+    use palette_domain::rule::RuleEffect;
+    use palette_domain::server::ServerEvent;
+    use palette_domain::task::TaskStatus;
+    use palette_domain::workflow::WorkflowStatus;
+
+    let yaml = r#"
+task:
+  key: sup-test
+  children:
+    - key: phase-a
+      children:
+        - key: craft
+          type: craft
+          plan_path: test/a-craft
+    - key: phase-b
+      depends_on: [phase-a]
+      children:
+        - key: craft
+          type: craft
+          plan_path: test/b-craft
+"#;
+
+    let (session, _guard) = test_session_name_with_guard("dyn-sup");
+    let tmux = TmuxManager::new(session.clone());
+    tmux.create_session(&session).unwrap();
+
+    let (base_url, state) = spawn_server(tmux, &session).await;
+    let client = reqwest::Client::new();
+    let blueprint_file = write_blueprint_file(yaml);
+
+    let wait = || tokio::time::sleep(tokio::time::Duration::from_millis(300));
+
+    // --- Phase 1: Start workflow ---
+    let resp = client
+        .post(format!("{base_url}/workflows/start"))
+        .json(&serde_json::json!({
+            "blueprint_path": blueprint_file.path().to_str().unwrap()
+        }))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), 201);
+    let body: serde_json::Value = resp.json().await.unwrap();
+    let wf_id = body["workflow_id"].as_str().unwrap();
+    let workflow_id = palette_domain::workflow::WorkflowId::new(wf_id);
+
+    wait().await;
+
+    // Verify task states
+    assert_eq!(
+        state
+            .db
+            .get_task_state(&tid(wf_id, "sup-test"))
+            .unwrap()
+            .unwrap()
+            .status,
+        TaskStatus::InProgress
+    );
+    assert_eq!(
+        state
+            .db
+            .get_task_state(&tid(wf_id, "sup-test/phase-a"))
+            .unwrap()
+            .unwrap()
+            .status,
+        TaskStatus::InProgress
+    );
+    assert_eq!(
+        state
+            .db
+            .get_task_state(&tid(wf_id, "sup-test/phase-b"))
+            .unwrap()
+            .unwrap()
+            .status,
+        TaskStatus::Pending
+    );
+
+    // Verify supervisors: root + phase-a = 2
+    {
+        let infra = state.infra.lock().await;
+        assert_eq!(
+            infra.supervisors.len(),
+            2,
+            "should have root + phase-a supervisors, got: {:?}",
+            infra
+                .supervisors
+                .iter()
+                .map(|s| (&s.id, &s.task_id))
+                .collect::<Vec<_>>()
+        );
+        assert!(
+            infra
+                .find_supervisor_for_task(&tid(wf_id, "sup-test"))
+                .is_some(),
+            "root supervisor should exist"
+        );
+        assert!(
+            infra
+                .find_supervisor_for_task(&tid(wf_id, "sup-test/phase-a"))
+                .is_some(),
+            "phase-a supervisor should exist"
+        );
+    }
+
+    // --- Phase 2: Complete phase-a/craft ---
+    let jobs = state.db.list_jobs(&JobFilter::default()).unwrap();
+    assert_eq!(jobs.len(), 1, "only phase-a/craft job should exist");
+    let craft_a_id = jobs[0].id.clone();
+
+    state
+        .db
+        .update_job_status(&craft_a_id, JStatus::Craft(CraftStatus::InProgress))
+        .unwrap();
+    state
+        .db
+        .update_job_status(&craft_a_id, JStatus::Craft(CraftStatus::InReview))
+        .unwrap();
+    state
+        .db
+        .update_job_status(&craft_a_id, JStatus::Craft(CraftStatus::Done))
+        .unwrap();
+
+    let _ = state.event_tx.send(ServerEvent::ProcessEffects {
+        effects: vec![RuleEffect::StatusChanged {
+            job_id: craft_a_id.clone(),
+            new_status: JStatus::Craft(CraftStatus::Done),
+        }],
+    });
+    wait().await;
+
+    // phase-a should be Completed
+    assert_eq!(
+        state
+            .db
+            .get_task_state(&tid(wf_id, "sup-test/phase-a"))
+            .unwrap()
+            .unwrap()
+            .status,
+        TaskStatus::Completed
+    );
+    // phase-b should be InProgress (dependency satisfied, pure composite activated)
+    assert_eq!(
+        state
+            .db
+            .get_task_state(&tid(wf_id, "sup-test/phase-b"))
+            .unwrap()
+            .unwrap()
+            .status,
+        TaskStatus::InProgress
+    );
+
+    // Verify supervisors: root + phase-b = 2 (phase-a destroyed, phase-b spawned)
+    {
+        let infra = state.infra.lock().await;
+        assert_eq!(
+            infra.supervisors.len(),
+            2,
+            "should have root + phase-b supervisors, got: {:?}",
+            infra
+                .supervisors
+                .iter()
+                .map(|s| (&s.id, &s.task_id))
+                .collect::<Vec<_>>()
+        );
+        assert!(
+            infra
+                .find_supervisor_for_task(&tid(wf_id, "sup-test/phase-a"))
+                .is_none(),
+            "phase-a supervisor should be destroyed"
+        );
+        assert!(
+            infra
+                .find_supervisor_for_task(&tid(wf_id, "sup-test/phase-b"))
+                .is_some(),
+            "phase-b supervisor should exist"
+        );
+    }
+
+    // --- Phase 3: Complete phase-b/craft ---
+    let all_jobs = state.db.list_jobs(&JobFilter::default()).unwrap();
+    let craft_b = all_jobs
+        .iter()
+        .find(|j| j.task_id.as_ref() == tid(wf_id, "sup-test/phase-b/craft").to_string())
+        .expect("phase-b/craft job should exist");
+    let craft_b_id = craft_b.id.clone();
+
+    state
+        .db
+        .update_job_status(&craft_b_id, JStatus::Craft(CraftStatus::InProgress))
+        .unwrap();
+    state
+        .db
+        .update_job_status(&craft_b_id, JStatus::Craft(CraftStatus::InReview))
+        .unwrap();
+    state
+        .db
+        .update_job_status(&craft_b_id, JStatus::Craft(CraftStatus::Done))
+        .unwrap();
+
+    let _ = state.event_tx.send(ServerEvent::ProcessEffects {
+        effects: vec![RuleEffect::StatusChanged {
+            job_id: craft_b_id.clone(),
+            new_status: JStatus::Craft(CraftStatus::Done),
+        }],
+    });
+    wait().await;
+
+    // All supervisors should be destroyed
+    {
+        let infra = state.infra.lock().await;
+        assert_eq!(
+            infra.supervisors.len(),
+            0,
+            "all supervisors should be destroyed, got: {:?}",
+            infra
+                .supervisors
+                .iter()
+                .map(|s| (&s.id, &s.task_id))
+                .collect::<Vec<_>>()
+        );
+    }
+
+    // Workflow should be completed
+    let wf = state.db.get_workflow(&workflow_id).unwrap().unwrap();
+    assert_eq!(wf.status, WorkflowStatus::Completed);
+}
+
+/// Dynamic ReviewIntegrator lifecycle:
+/// - Craft InReview spawns ReviewIntegrator for review-integrate composite
+/// - All reviews approved → ReviewIntegrator destroyed → workflow complete
+#[tokio::test]
+async fn dynamic_review_integrator_lifecycle() {
+    use palette_domain::job::{CraftStatus, JobFilter, JobStatus as JStatus, JobType};
+    use palette_domain::review::{SubmitReviewRequest, Verdict};
+    use palette_domain::rule::RuleEffect;
+    use palette_domain::server::ServerEvent;
+    use palette_domain::task::TaskStatus;
+    use palette_domain::workflow::WorkflowStatus;
+
+    let yaml = r#"
+task:
+  key: ri-test
+  children:
+    - key: craft
+      type: craft
+      plan_path: test/craft
+      children:
+        - key: review-integrate
+          type: review
+          children:
+            - key: review-1
+              type: review
+            - key: review-2
+              type: review
+"#;
+
+    let (session, _guard) = test_session_name_with_guard("dyn-ri");
+    let tmux = TmuxManager::new(session.clone());
+    tmux.create_session(&session).unwrap();
+
+    let (base_url, state) = spawn_server(tmux, &session).await;
+    let client = reqwest::Client::new();
+    let blueprint_file = write_blueprint_file(yaml);
+
+    let wait = || tokio::time::sleep(tokio::time::Duration::from_millis(300));
+
+    // Start workflow
+    let resp = client
+        .post(format!("{base_url}/workflows/start"))
+        .json(&serde_json::json!({
+            "blueprint_path": blueprint_file.path().to_str().unwrap()
+        }))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), 201);
+    let body: serde_json::Value = resp.json().await.unwrap();
+    let wf_id = body["workflow_id"].as_str().unwrap();
+    let workflow_id = palette_domain::workflow::WorkflowId::new(wf_id);
+
+    wait().await;
+
+    // Phase 1: Only root supervisor (craft composite doesn't get one)
+    {
+        let infra = state.infra.lock().await;
+        assert_eq!(
+            infra.supervisors.len(),
+            1,
+            "should have root supervisor only, got: {:?}",
+            infra
+                .supervisors
+                .iter()
+                .map(|s| (&s.id, &s.task_id, &s.role))
+                .collect::<Vec<_>>()
+        );
+    }
+
+    // Phase 2: Craft → InReview → should spawn ReviewIntegrator
+    let jobs = state.db.list_jobs(&JobFilter::default()).unwrap();
+    assert_eq!(jobs.len(), 1);
+    let craft_id = jobs[0].id.clone();
+
+    state
+        .db
+        .update_job_status(&craft_id, JStatus::Craft(CraftStatus::InProgress))
+        .unwrap();
+    state
+        .db
+        .update_job_status(&craft_id, JStatus::Craft(CraftStatus::InReview))
+        .unwrap();
+
+    let _ = state.event_tx.send(ServerEvent::ProcessEffects {
+        effects: vec![RuleEffect::StatusChanged {
+            job_id: craft_id.clone(),
+            new_status: JStatus::Craft(CraftStatus::InReview),
+        }],
+    });
+    wait().await;
+
+    // Verify: ReviewIntegrator spawned + review jobs created
+    {
+        let infra = state.infra.lock().await;
+        assert_eq!(
+            infra.supervisors.len(),
+            2,
+            "should have root Leader + ReviewIntegrator, got: {:?}",
+            infra
+                .supervisors
+                .iter()
+                .map(|s| (&s.id, &s.task_id, &s.role))
+                .collect::<Vec<_>>()
+        );
+        let ri_sup = infra
+            .find_supervisor_for_task(&tid(wf_id, "ri-test/craft/review-integrate"))
+            .expect("ReviewIntegrator supervisor should exist");
+        assert_eq!(ri_sup.role, AgentRole::ReviewIntegrator);
+    }
+
+    // review-1 and review-2 jobs should exist
+    let all_jobs = state.db.list_jobs(&JobFilter::default()).unwrap();
+    let review_jobs: Vec<_> = all_jobs
+        .iter()
+        .filter(|j| j.job_type == JobType::Review)
+        .collect();
+    // review-integrate has a Review Job + review-1 + review-2
+    assert!(
+        review_jobs.len() >= 2,
+        "at least review-1 and review-2 jobs should exist, got {} review jobs",
+        review_jobs.len()
+    );
+
+    // Phase 3: Approve review-1 and review-2
+    let review_1_job = all_jobs
+        .iter()
+        .find(|j| {
+            j.task_id.as_ref() == tid(wf_id, "ri-test/craft/review-integrate/review-1").to_string()
+        })
+        .expect("review-1 job should exist");
+    let review_2_job = all_jobs
+        .iter()
+        .find(|j| {
+            j.task_id.as_ref() == tid(wf_id, "ri-test/craft/review-integrate/review-2").to_string()
+        })
+        .expect("review-2 job should exist");
+
+    // Approve review-1
+    state
+        .db
+        .assign_job(&review_1_job.id, &aid("reviewer-1"), JobType::Review)
+        .unwrap();
+    let sub = state
+        .db
+        .submit_review(
+            &review_1_job.id,
+            &SubmitReviewRequest {
+                verdict: Verdict::Approved,
+                summary: Some("LGTM".to_string()),
+                comments: vec![],
+            },
+        )
+        .unwrap();
+    let effects = state
+        .rules
+        .on_review_submitted(&review_1_job.id, &sub)
+        .unwrap();
+    let _ = state.event_tx.send(ServerEvent::ProcessEffects { effects });
+    wait().await;
+
+    // Approve review-2
+    state
+        .db
+        .assign_job(&review_2_job.id, &aid("reviewer-2"), JobType::Review)
+        .unwrap();
+    let sub = state
+        .db
+        .submit_review(
+            &review_2_job.id,
+            &SubmitReviewRequest {
+                verdict: Verdict::Approved,
+                summary: Some("LGTM".to_string()),
+                comments: vec![],
+            },
+        )
+        .unwrap();
+    let effects = state
+        .rules
+        .on_review_submitted(&review_2_job.id, &sub)
+        .unwrap();
+    let _ = state.event_tx.send(ServerEvent::ProcessEffects { effects });
+    wait().await;
+
+    // Simulate ReviewIntegrator's integration decision:
+    // In production, the RI agent aggregates child reviews and submits a verdict.
+    let ri_job = all_jobs
+        .iter()
+        .find(|j| j.task_id.as_ref() == tid(wf_id, "ri-test/craft/review-integrate").to_string())
+        .expect("review-integrate job should exist");
+    state
+        .db
+        .assign_job(&ri_job.id, &aid("ri-agent"), JobType::Review)
+        .unwrap();
+    let sub = state
+        .db
+        .submit_review(
+            &ri_job.id,
+            &SubmitReviewRequest {
+                verdict: Verdict::Approved,
+                summary: Some("All reviews approved, integration OK".to_string()),
+                comments: vec![],
+            },
+        )
+        .unwrap();
+    let effects = state.rules.on_review_submitted(&ri_job.id, &sub).unwrap();
+    let _ = state.event_tx.send(ServerEvent::ProcessEffects { effects });
+    wait().await;
+
+    // All supervisors should be destroyed
+    {
+        let infra = state.infra.lock().await;
+        assert_eq!(
+            infra.supervisors.len(),
+            0,
+            "all supervisors should be destroyed after workflow completion, got: {:?}",
+            infra
+                .supervisors
+                .iter()
+                .map(|s| (&s.id, &s.task_id))
+                .collect::<Vec<_>>()
+        );
+    }
+
+    // Workflow should be completed
+    let wf = state.db.get_workflow(&workflow_id).unwrap().unwrap();
+    assert_eq!(wf.status, WorkflowStatus::Completed);
 }

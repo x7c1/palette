@@ -3,10 +3,9 @@ mod config;
 use config::Config;
 use palette_db::Database;
 use palette_docker::DockerManager;
-use palette_domain::agent::{AgentId, AgentRole, AgentState, AgentStatus};
 use palette_domain::rule::RuleEngine;
 use palette_domain::server::PersistentState;
-use palette_domain::terminal::{TerminalSessionName, TerminalTarget};
+use palette_domain::terminal::TerminalSessionName;
 use palette_orchestrator::Orchestrator;
 use palette_server::AppState;
 use palette_tmux::TmuxManager;
@@ -41,18 +40,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let state_path = PathBuf::from(&config.state_path);
     let infra = match palette_file_state::load(&state_path)? {
-        Some(state) if supervisors_alive(&state, &tmux) => {
-            tracing::info!("restored previous state (containers running)");
+        Some(state) => {
+            tracing::info!("restored previous state");
             state
         }
-        Some(stale) => {
-            tracing::warn!(
-                "previous state found but supervisors are not fully alive, re-bootstrapping"
+        None => {
+            tracing::info!(
+                "no previous state, starting fresh (supervisors spawn on workflow start)"
             );
-            cleanup_stale_containers(&stale, &docker);
-            bootstrap_supervisors(&config, &tmux, &docker, &state_path)?
+            PersistentState::new(config.tmux.session_name.clone())
         }
-        None => bootstrap_supervisors(&config, &tmux, &docker, &state_path)?,
     };
     let infra = Arc::new(tokio::sync::Mutex::new(infra));
 
@@ -97,140 +94,4 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     axum::serve(listener, app).await?;
 
     Ok(())
-}
-
-struct AgentSpec<'a> {
-    id: &'a AgentId,
-    name: &'a str,
-    role: AgentRole,
-    image: &'a str,
-    prompt: &'a str,
-    supervisor_id: &'a AgentId,
-}
-
-fn spawn_agent(
-    spec: &AgentSpec,
-    terminal_target: &TerminalTarget,
-    docker: &DockerManager,
-    tmux: &TmuxManager,
-    session_name: &str,
-    settings_template: &Path,
-) -> Result<AgentState, Box<dyn std::error::Error>> {
-    let container_id =
-        docker.create_container(spec.name, spec.image, spec.role, session_name, None, None)?;
-    docker.start_container(&container_id)?;
-    docker.write_settings(&container_id, settings_template, spec.id.as_ref())?;
-    DockerManager::copy_file_to_container(
-        &container_id,
-        Path::new(spec.prompt),
-        "/home/agent/prompt.md",
-    )?;
-    DockerManager::copy_dir_to_container(
-        &container_id,
-        Path::new("claude-code-plugin"),
-        "/home/agent/claude-code-plugin",
-    )?;
-
-    let cmd = DockerManager::claude_exec_command(&container_id, "/home/agent/prompt.md", spec.role);
-    tmux.send_keys(terminal_target, &cmd)?;
-    tracing::info!(name = spec.name, role = %spec.role, "launched Claude Code");
-
-    Ok(AgentState {
-        id: spec.id.clone(),
-        role: spec.role,
-        supervisor_id: spec.supervisor_id.clone(),
-        container_id,
-        terminal_target: terminal_target.clone(),
-        status: AgentStatus::Booting,
-        session_id: None,
-    })
-}
-
-/// Check if all supervisor containers and tmux panes from a restored state are still alive.
-fn supervisors_alive(state: &PersistentState, tmux: &TmuxManager) -> bool {
-    state.supervisors.iter().all(|s| {
-        let container_running = palette_docker::is_container_running(s.container_id.as_ref());
-        if !container_running {
-            tracing::warn!(id = %s.id, container = %s.container_id, "supervisor container not running");
-            return false;
-        }
-        let pane_alive = tmux
-            .is_terminal_alive(&s.terminal_target)
-            .unwrap_or(false);
-        if !pane_alive {
-            tracing::warn!(id = %s.id, target = %s.terminal_target, "supervisor tmux pane not found");
-        }
-        pane_alive
-    })
-}
-
-/// Stop and remove containers from a stale state before re-bootstrapping.
-fn cleanup_stale_containers(state: &PersistentState, docker: &DockerManager) {
-    for s in state.supervisors.iter().chain(state.members.iter()) {
-        if palette_docker::is_container_running(s.container_id.as_ref()) {
-            tracing::info!(id = %s.id, container = %s.container_id, "stopping stale container");
-            let _ = docker.stop_container(&s.container_id);
-        }
-        let _ = docker.remove_container(&s.container_id);
-    }
-}
-
-/// Bootstrap supervisors (main leader + optional review integrator).
-/// Members are spawned on-demand by the orchestrator.
-fn bootstrap_supervisors(
-    config: &Config,
-    tmux: &TmuxManager,
-    docker: &DockerManager,
-    state_path: &Path,
-) -> Result<PersistentState, Box<dyn std::error::Error>> {
-    let session_name = &config.tmux.session_name;
-    let settings_template = Path::new(&config.docker.settings_template);
-    let mut state = PersistentState::new(session_name.clone());
-    let empty_supervisor_id = AgentId::new("");
-
-    // Main leader
-    let leader_target = tmux.create_target("leader")?;
-    let leader_id = AgentId::new("leader-1");
-    let leader = spawn_agent(
-        &AgentSpec {
-            id: &leader_id,
-            name: "leader",
-            role: AgentRole::Leader,
-            image: &config.docker.leader_image,
-            prompt: &config.docker.leader_prompt,
-            supervisor_id: &empty_supervisor_id,
-        },
-        &leader_target,
-        docker,
-        tmux,
-        session_name,
-        settings_template,
-    )?;
-    state.supervisors.push(leader);
-
-    // Review integrator
-    let ri_target = tmux.create_target("review-integrator")?;
-    let ri_id = AgentId::new("review-integrator-1");
-    let ri = spawn_agent(
-        &AgentSpec {
-            id: &ri_id,
-            name: "review-integrator",
-            role: AgentRole::ReviewIntegrator,
-            image: &config.docker.review_integrator_image,
-            prompt: &config.docker.review_integrator_prompt,
-            supervisor_id: &empty_supervisor_id,
-        },
-        &ri_target,
-        docker,
-        tmux,
-        session_name,
-        settings_template,
-    )?;
-    state.supervisors.push(ri);
-
-    palette_file_state::save(&state, state_path)?;
-    tracing::info!(
-        "bootstrapped supervisors: main leader + review integrator (members spawn on-demand)"
-    );
-    Ok(state)
 }

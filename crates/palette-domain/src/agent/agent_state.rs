@@ -1,4 +1,5 @@
 use super::{AgentId, AgentRole, AgentSessionId, AgentStatus, ContainerId};
+use crate::task::TaskId;
 use crate::terminal::TerminalTarget;
 
 #[derive(Debug, Clone)]
@@ -10,4 +11,5 @@ pub struct AgentState {
     pub terminal_target: TerminalTarget,
     pub status: AgentStatus,
     pub session_id: Option<AgentSessionId>,
+    pub task_id: TaskId,
 }

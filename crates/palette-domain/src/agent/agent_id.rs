@@ -17,6 +17,18 @@ impl AgentId {
         let random = random_hex(8);
         Self(format!("member-{sequence}-{random}"))
     }
+
+    /// Generate a unique supervisor ID with a sequence number and random suffix.
+    /// The prefix is determined by the role (e.g., "leader-0-a3f2", "review-integrator-1-b7e1").
+    pub fn next_supervisor(sequence: usize, role: super::AgentRole) -> Self {
+        let prefix = match role {
+            super::AgentRole::Leader => "leader",
+            super::AgentRole::ReviewIntegrator => "review-integrator",
+            super::AgentRole::Member => "member",
+        };
+        let random = random_hex(8);
+        Self(format!("{prefix}-{sequence}-{random}"))
+    }
 }
 
 impl fmt::Display for AgentId {

@@ -9,6 +9,15 @@ STATE_FILE="$ROOT_DIR/data/state.json"
 DB_FILE="$ROOT_DIR/data/palette.db"
 SESSION_NAME="palette"
 
+# Stop Palette process if running
+port_pid=$(lsof -ti :7100 2>/dev/null || true)
+if [[ -n "$port_pid" ]]; then
+  echo "stopping Palette process (PID $port_pid)..."
+  kill "$port_pid" 2>/dev/null || true
+  sleep 1
+  kill -0 "$port_pid" 2>/dev/null && kill -9 "$port_pid" 2>/dev/null || true
+fi
+
 # Stop and remove containers listed in state.json
 if [[ -f "$STATE_FILE" ]]; then
   container_ids=$(jq -r '(.supervisors + .members)[] | .container_id' "$STATE_FILE" 2>/dev/null || true)

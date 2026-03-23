@@ -9,11 +9,12 @@ impl Orchestrator {
         &self,
         member_id: &AgentId,
         job_type: JobType,
+        supervisor_id: &AgentId,
         infra: &PersistentState,
         workspace: Option<WorkspaceVolume>,
     ) -> crate::Result<AgentState> {
         let session_name = &infra.session_name;
-        let supervisor_id = infra.supervisor_id_for_job_type(job_type);
+        let supervisor_id = supervisor_id.clone();
 
         // Create a new tmux pane by splitting from the assigned supervisor's pane
         let supervisor_state = infra
@@ -79,6 +80,7 @@ impl Orchestrator {
             terminal_target,
             status: AgentStatus::Booting,
             session_id: None,
+            task_id: palette_domain::task::TaskId::new(""),
         })
     }
 }

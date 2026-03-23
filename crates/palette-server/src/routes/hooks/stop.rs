@@ -96,14 +96,22 @@ pub async fn handle_stop(
                     let _ = state.event_tx.send(ServerEvent::ProcessEffects { effects });
                 }
                 palette_domain::job::JobType::Review => {
-                    // Review jobs: notify the member's supervisor (review integrator)
-                    // with findings so it can aggregate and submit a verdict.
-                    let report_msg = format!(
-                        "[review] member={} job={} type=review_complete message: {}",
-                        member_id, job.id, last_message,
-                    );
-                    if let Err(e) = state.db.enqueue_message(supervisor_id, &report_msg) {
-                        tracing::error!(error = %e, "failed to enqueue review report");
+                    // Only notify ReviewIntegrator supervisors (for multi-review aggregation).
+                    // Single-review results are handled mechanically by the orchestrator.
+                    let infra = state.infra.lock().await;
+                    let is_review_integrator =
+                        infra.find_supervisor(supervisor_id).is_some_and(|s| {
+                            s.role == palette_domain::agent::AgentRole::ReviewIntegrator
+                        });
+                    drop(infra);
+                    if is_review_integrator {
+                        let report_msg = format!(
+                            "[review] member={} job={} type=review_complete message: {}",
+                            member_id, job.id, last_message,
+                        );
+                        if let Err(e) = state.db.enqueue_message(supervisor_id, &report_msg) {
+                            tracing::error!(error = %e, "failed to enqueue review report");
+                        }
                     }
                 }
             }

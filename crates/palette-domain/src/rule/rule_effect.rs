@@ -1,5 +1,6 @@
-use crate::agent::AgentId;
+use crate::agent::{AgentId, AgentRole};
 use crate::job::{JobId, JobStatus};
+use crate::task::TaskId;
 
 /// Side effects produced by the rule engine after a state transition.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -15,4 +16,8 @@ pub enum RuleEffect {
     AutoAssign { job_id: JobId },
     /// A member's job is done; orchestrator should destroy its container.
     DestroyMember { member_id: AgentId },
+    /// A composite task needs a supervisor spawned before it becomes InProgress.
+    SpawnSupervisor { task_id: TaskId, role: AgentRole },
+    /// A composite task completed; destroy its supervisor.
+    DestroySupervisor { supervisor_id: AgentId },
 }

@@ -51,20 +51,23 @@ pub async fn handle_submit_review(
         tracing::info!(?effect, "review rule engine effect");
     }
 
-    // Notify leader about review results
-    {
+    // Notify the review member's supervisor about review results
+    if let Some(ref assignee) = job.assignee {
         let infra = state.infra.lock().await;
-        if let Some(leader) = infra.find_leader() {
+        if let Some(member) = infra.find_member(assignee)
+            && let Some(supervisor) = infra.find_supervisor(&member.supervisor_id)
+        {
             let verdict_str = match submission.verdict {
                 palette_domain::review::Verdict::Approved => "approved",
                 palette_domain::review::Verdict::ChangesRequested => "changes_requested",
             };
-            let notification = format!("[event] review={review_job_id} type={verdict_str}",);
-            let _ = state.db.enqueue_message(&leader.id, &notification);
+            let notification = format!("[event] review={review_job_id} type={verdict_str}");
+            let _ = state.db.enqueue_message(&supervisor.id, &notification);
             tracing::info!(
                 review_job_id = %review_job_id,
                 verdict = verdict_str,
-                "notified leader of review result"
+                supervisor_id = %supervisor.id,
+                "notified supervisor of review result"
             );
         }
     }

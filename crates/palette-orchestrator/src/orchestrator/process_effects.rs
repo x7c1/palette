@@ -1,3 +1,5 @@
+use std::collections::VecDeque;
+
 use super::Orchestrator;
 use palette_docker::WorkspaceVolume;
 use palette_domain::agent::AgentId;
@@ -7,20 +9,29 @@ use palette_domain::server::{PendingDelivery, PersistentState};
 use palette_domain::task::{TaskId, TaskStatus, TaskStore};
 use palette_service::TaskStoreImpl;
 
+pub(super) struct ProcessEffectsResult {
+    pub deliveries: Vec<PendingDelivery>,
+    pub spawned_supervisors: Vec<AgentId>,
+}
+
 impl Orchestrator {
-    /// Processes rule engine effects: auto-assign jobs, spawn/destroy members.
+    /// Processes rule engine effects: auto-assign jobs, spawn/destroy members/supervisors.
     /// Returns a list of messages that need to be sent to members via tmux.
+    ///
+    /// Effects are processed in FIFO order so that SpawnSupervisor is handled
+    /// before AutoAssign for child tasks.
     ///
     /// The caller is responsible for saving state after this function returns.
     pub(super) fn process_effects(
         &self,
         effects: &[RuleEffect],
         infra: &mut PersistentState,
-    ) -> crate::Result<Vec<PendingDelivery>> {
+    ) -> crate::Result<ProcessEffectsResult> {
         let mut deliveries = Vec::new();
-        let mut pending: Vec<RuleEffect> = effects.to_vec();
+        let mut spawned_supervisors = Vec::new();
+        let mut pending: VecDeque<RuleEffect> = effects.iter().cloned().collect();
 
-        while let Some(effect) = pending.pop() {
+        while let Some(effect) = pending.pop_front() {
             match &effect {
                 RuleEffect::AutoAssign { job_id } => {
                     self.handle_auto_assign(job_id, infra, &mut deliveries)?;
@@ -29,14 +40,28 @@ impl Orchestrator {
                     self.handle_destroy_member(member_id, infra);
                 }
                 RuleEffect::StatusChanged { job_id, new_status } => {
-                    let chained = self.handle_status_changed(job_id, *new_status)?;
+                    let chained = self.handle_status_changed(job_id, *new_status, infra)?;
                     pending.extend(chained);
+                }
+                RuleEffect::SpawnSupervisor { task_id, role } => {
+                    match self.handle_spawn_supervisor(task_id, *role, infra) {
+                        Ok(sup_id) => spawned_supervisors.push(sup_id),
+                        Err(e) => {
+                            tracing::error!(error = %e, task_id = %task_id, "failed to spawn supervisor");
+                        }
+                    }
+                }
+                RuleEffect::DestroySupervisor { supervisor_id } => {
+                    self.handle_destroy_supervisor(supervisor_id, infra);
                 }
                 _ => {}
             }
         }
 
-        Ok(deliveries)
+        Ok(ProcessEffectsResult {
+            deliveries,
+            spawned_supervisors,
+        })
     }
 
     fn handle_auto_assign(
@@ -93,14 +118,16 @@ impl Orchestrator {
         // Determine workspace volume based on job type
         let workspace = self.resolve_workspace(&job)?;
 
-        // Spawn a new member with supervisor_id based on job type
+        // Spawn a new member with supervisor from the task tree
         let task_state = self
             .db
             .get_task_state(&job.task_id)?
             .ok_or_else(|| crate::Error::Internal(format!("task not found: {}", job.task_id)))?;
+        let supervisor_id = self.find_supervisor_for_job(&job.task_id, infra)?;
         let seq = self.db.increment_member_counter(&task_state.workflow_id)?;
         let member_id = AgentId::next_member(seq);
-        let member = self.spawn_member(&member_id, job.job_type, infra, workspace)?;
+        let member =
+            self.spawn_member(&member_id, job.job_type, &supervisor_id, infra, workspace)?;
         let terminal_target = member.terminal_target.clone();
         infra.members.push(member);
 
@@ -130,6 +157,15 @@ impl Orchestrator {
             tracing::info!(member_id = %member_id, "destroying member container");
             let _ = self.docker.stop_container(&member.container_id);
             let _ = self.docker.remove_container(&member.container_id);
+            infra.touch();
+        }
+    }
+
+    fn handle_destroy_supervisor(&self, supervisor_id: &AgentId, infra: &mut PersistentState) {
+        if let Some(sup) = infra.remove_supervisor(supervisor_id) {
+            tracing::info!(supervisor_id = %supervisor_id, task_id = %sup.task_id, "destroying supervisor");
+            let _ = self.docker.stop_container(&sup.container_id);
+            let _ = self.docker.remove_container(&sup.container_id);
             infra.touch();
         }
     }
@@ -171,6 +207,7 @@ impl Orchestrator {
         &self,
         job_id: &JobId,
         new_status: JobStatus,
+        infra: &PersistentState,
     ) -> crate::Result<Vec<RuleEffect>> {
         let rules = RuleEngine::new(&*self.db, 0);
         let chained = rules.on_status_change(job_id, new_status)?;
@@ -204,7 +241,7 @@ impl Orchestrator {
 
         // When a job is Done, try to complete its task (checking all conditions)
         if new_status.is_done() {
-            let effects = self.try_complete_task(job_id)?;
+            let effects = self.try_complete_task(job_id, infra)?;
             all_effects.extend(effects);
         }
 
@@ -261,6 +298,19 @@ impl Orchestrator {
                 tracing::info!(task_id = %task_id, status = ?new_status, "review task activated");
 
                 if *new_status == TaskStatus::Ready {
+                    // If this is a review-integrate composite (has children + job_type: review),
+                    // spawn a ReviewIntegrator supervisor before activation
+                    let grandchildren = task_store.get_child_tasks(task_id)?;
+                    if !grandchildren.is_empty()
+                        && let Some(child_task) = task_store.get_task(task_id)?
+                        && child_task.job_type == Some(JobType::Review)
+                    {
+                        job_effects.push(RuleEffect::SpawnSupervisor {
+                            task_id: task_id.clone(),
+                            role: palette_domain::agent::AgentRole::ReviewIntegrator,
+                        });
+                    }
+
                     let (follow_up, effects) =
                         self.activate_ready_task(task_id, &task_store, &task_engine)?;
                     next.extend(follow_up);
@@ -368,7 +418,11 @@ impl Orchestrator {
 
     /// When a Job is Done, check if its task can be completed.
     /// A task is complete when all children are Completed AND its own job (if any) is Done.
-    fn try_complete_task(&self, job_id: &JobId) -> crate::Result<Vec<RuleEffect>> {
+    fn try_complete_task(
+        &self,
+        job_id: &JobId,
+        infra: &PersistentState,
+    ) -> crate::Result<Vec<RuleEffect>> {
         let Some(job) = self.db.get_job(job_id)? else {
             return Ok(vec![]);
         };
@@ -393,7 +447,18 @@ impl Orchestrator {
         task_store.update_task_status(task_id, TaskStatus::Completed)?;
         tracing::info!(task_id = %task_id, "task completed (job done + all children completed)");
 
-        self.cascade_task_effects(task_id, &task_store)
+        let mut effects = Vec::new();
+
+        // Destroy supervisor for this task if it had one
+        if let Some(sup) = infra.find_supervisor_for_task(task_id) {
+            effects.push(RuleEffect::DestroySupervisor {
+                supervisor_id: sup.id.clone(),
+            });
+        }
+
+        let cascade = self.cascade_task_effects(task_id, &task_store, infra)?;
+        effects.extend(cascade);
+        Ok(effects)
     }
 
     /// When a review job becomes Done, check if all sibling review tasks under
@@ -468,6 +533,7 @@ impl Orchestrator {
         &self,
         completed_task_id: &TaskId,
         task_store: &TaskStoreImpl<'_>,
+        infra: &PersistentState,
     ) -> crate::Result<Vec<RuleEffect>> {
         use palette_domain::rule::{TaskEffect, TaskRuleEngine};
 
@@ -513,6 +579,13 @@ impl Orchestrator {
 
                         task_store.update_task_status(task_id, *new_status)?;
                         tracing::info!(task_id = %task_id, status = ?new_status, "task status cascaded");
+
+                        // Destroy dynamic supervisor if this composite task had one
+                        if let Some(sup) = infra.find_supervisor_for_task(task_id) {
+                            job_effects.push(RuleEffect::DestroySupervisor {
+                                supervisor_id: sup.id.clone(),
+                            });
+                        }
 
                         // Check workflow completion
                         if let Some(task) = task_store.get_task(task_id)?
@@ -570,23 +643,32 @@ impl Orchestrator {
             };
             Ok((vec![], job_effects))
         } else {
-            // Composite task: transition to InProgress
-            task_store.update_task_status(task_id, TaskStatus::InProgress)?;
-
             let mut job_effects = Vec::new();
 
-            // If composite task has a job_type (e.g., craft), create the job
-            // but do NOT resolve children — they are activated later
-            // (e.g., review children activate when craft job reaches InReview)
+            // If composite task has a job_type, create the job.
+            // Craft composites: do NOT resolve children (activated on InReview).
+            // Review composites (review-integrate): resolve children immediately.
             if let Some(task) = task_store.get_task(task_id)?
                 && task.job_type.is_some()
             {
+                task_store.update_task_status(task_id, TaskStatus::InProgress)?;
                 let effects = self.create_job_for_ready_task(&task)?;
                 job_effects.extend(effects);
-                return Ok((vec![], job_effects));
+
+                if task.job_type == Some(JobType::Craft) {
+                    return Ok((vec![], job_effects));
+                }
+                // Review composite: fall through to resolve children
             }
 
-            // Pure composite task (no job_type): resolve which children can become Ready
+            // Pure composite task (no job_type): spawn supervisor before InProgress
+            job_effects.push(RuleEffect::SpawnSupervisor {
+                task_id: task_id.clone(),
+                role: palette_domain::agent::AgentRole::Leader,
+            });
+            task_store.update_task_status(task_id, TaskStatus::InProgress)?;
+
+            // Resolve which children can become Ready
             let child_ids: Vec<TaskId> = children.iter().map(|c| c.id.clone()).collect();
             let task_effects = task_engine.resolve_ready_tasks(&child_ids)?;
             Ok((task_effects, job_effects))
@@ -623,6 +705,37 @@ impl Orchestrator {
             "created job for ready task (cascade)"
         );
         Ok(effects)
+    }
+
+    /// Walk up the task tree to find the nearest supervisor for a job's task.
+    fn find_supervisor_for_job(
+        &self,
+        task_id: &TaskId,
+        infra: &PersistentState,
+    ) -> crate::Result<AgentId> {
+        let task_state = self
+            .db
+            .get_task_state(task_id)?
+            .ok_or_else(|| crate::Error::Internal(format!("task not found: {task_id}")))?;
+        let task_store = TaskStoreImpl::from_db(&self.db, &task_state.workflow_id)
+            .map_err(|e| crate::Error::Internal(e.to_string()))?;
+
+        let mut current_id = task_id.clone();
+        loop {
+            if let Some(sup) = infra.find_supervisor_for_task(&current_id) {
+                return Ok(sup.id.clone());
+            }
+            let task = task_store
+                .get_task(&current_id)?
+                .ok_or_else(|| crate::Error::Internal(format!("task not found: {current_id}")))?;
+            match task.parent_id {
+                Some(ref pid) => current_id = pid.clone(),
+                None => break,
+            }
+        }
+        Err(crate::Error::Internal(format!(
+            "no supervisor found for task {task_id}"
+        )))
     }
 }
 
