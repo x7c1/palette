@@ -106,15 +106,16 @@ pub async fn spawn_server(
     });
 
     // Start orchestrator event loop
-    let orchestrator = Arc::new(Orchestrator {
-        db: Arc::clone(&db),
+    let orchestrator = Arc::new(Orchestrator::new(
+        Arc::clone(&db),
         docker,
-        docker_config: test_docker_config(),
-        plan_dir: String::new(),
-        tmux: Arc::clone(&tmux),
-        infra: Arc::clone(&infra),
-        state_path: String::new(),
-    });
+        test_docker_config(),
+        String::new(),
+        Arc::clone(&tmux),
+        Arc::clone(&infra),
+        String::new(),
+        0,
+    ));
     orchestrator.start(event_rx);
 
     let app = create_router(state.clone());
