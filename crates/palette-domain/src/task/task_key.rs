@@ -23,3 +23,9 @@ impl AsRef<str> for TaskKey {
         &self.0
     }
 }
+
+impl PartialEq<&str> for TaskKey {
+    fn eq(&self, other: &&str) -> bool {
+        self.0 == *other
+    }
+}
