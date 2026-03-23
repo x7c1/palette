@@ -23,12 +23,12 @@ impl Database {
             + 1;
 
         tx.execute(
-            "INSERT INTO review_submissions (review_job_id, round, verdict, summary, created_at)
+            "INSERT INTO review_submissions (review_job_id, round, verdict_id, summary, created_at)
              VALUES (?1, ?2, ?3, ?4, ?5)",
             params![
                 review_job_id.as_ref(),
                 round,
-                req.verdict.as_str(),
+                crate::status_id::verdict_id(req.verdict),
                 req.summary,
                 now_str
             ],

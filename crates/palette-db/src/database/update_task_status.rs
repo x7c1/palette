@@ -7,8 +7,8 @@ impl Database {
     pub fn update_task_status(&self, id: &TaskId, status: TaskStatus) -> crate::Result<()> {
         let conn = lock!(self.conn);
         conn.execute(
-            "UPDATE tasks SET status = ?1 WHERE id = ?2",
-            params![status.as_str(), id.as_ref()],
+            "UPDATE tasks SET status_id = ?1 WHERE id = ?2",
+            params![crate::status_id::task_status_id(status), id.as_ref()],
         )?;
         Ok(())
     }

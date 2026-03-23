@@ -8,11 +8,11 @@ impl Database {
         let conn = lock!(self.conn);
         let now = chrono::Utc::now();
         conn.execute(
-            "INSERT INTO workflows (id, blueprint_path, status, started_at) VALUES (?1, ?2, ?3, ?4)",
+            "INSERT INTO workflows (id, blueprint_path, status_id, started_at) VALUES (?1, ?2, ?3, ?4)",
             params![
                 id.as_ref(),
                 blueprint_path,
-                WorkflowStatus::Active.as_str(),
+                crate::status_id::workflow_status_id(WorkflowStatus::Active),
                 now.to_rfc3339(),
             ],
         )?;

@@ -5,9 +5,14 @@ impl Database {
     /// Includes both craft and review jobs since both consume a container.
     pub fn count_active_members(&self) -> crate::Result<usize> {
         let conn = lock!(self.conn);
+        // Craft InProgress = 2, Review InProgress = 7
+        let craft_ip =
+            crate::status_id::craft_status_id(palette_domain::job::CraftStatus::InProgress);
+        let review_ip =
+            crate::status_id::review_status_id(palette_domain::job::ReviewStatus::InProgress);
         let count: i64 = conn.query_row(
-            "SELECT COUNT(*) FROM jobs WHERE status = 'in_progress'",
-            [],
+            "SELECT COUNT(*) FROM jobs WHERE status_id IN (?1, ?2)",
+            params![craft_ip, review_ip],
             |row| row.get(0),
         )?;
         Ok(count as usize)

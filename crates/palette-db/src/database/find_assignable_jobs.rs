@@ -9,10 +9,14 @@ impl Database {
     /// Returns jobs ordered by priority (high > medium > low > null).
     pub fn find_assignable_jobs(&self) -> crate::Result<Vec<Job>> {
         let conn = lock!(self.conn);
+        // Craft Todo = 1, Review Todo = 6
+        let craft_todo = crate::status_id::craft_status_id(palette_domain::job::CraftStatus::Todo);
+        let review_todo =
+            crate::status_id::review_status_id(palette_domain::job::ReviewStatus::Todo);
         let mut stmt = conn.prepare(
-            "SELECT t.id, t.task_id, t.type, t.title, t.plan_path, t.description, t.assignee, t.status, t.priority, t.repository, t.pr_url, t.created_at, t.updated_at, t.notes, t.assigned_at
+            "SELECT t.id, t.task_id, t.type_id, t.title, t.plan_path, t.description, t.assignee, t.status_id, t.priority, t.repository, t.pr_url, t.created_at, t.updated_at, t.notes, t.assigned_at
              FROM jobs t
-             WHERE t.status = 'todo' AND t.assignee IS NULL
+             WHERE t.status_id IN (?1, ?2) AND t.assignee IS NULL
              ORDER BY
                CASE t.priority
                  WHEN 'high' THEN 0
@@ -21,7 +25,7 @@ impl Database {
                  ELSE 3
                END",
         )?;
-        let rows = stmt.query_map([], row_to_job)?;
+        let rows = stmt.query_map(params![craft_todo, review_todo], row_to_job)?;
         let mut jobs = Vec::new();
         for row in rows {
             jobs.push(row?);

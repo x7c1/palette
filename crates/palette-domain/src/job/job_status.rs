@@ -17,14 +17,6 @@ impl JobStatus {
         }
     }
 
-    /// Parse a status string using the job type to determine the variant.
-    pub fn parse(s: &str, job_type: JobType) -> Result<Self, String> {
-        match job_type {
-            JobType::Craft => s.parse::<CraftStatus>().map(JobStatus::Craft),
-            JobType::Review => s.parse::<ReviewStatus>().map(JobStatus::Review),
-        }
-    }
-
     /// Create a Todo status for the given job type.
     pub fn todo(job_type: JobType) -> Self {
         match job_type {
