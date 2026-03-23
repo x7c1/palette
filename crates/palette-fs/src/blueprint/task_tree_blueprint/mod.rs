@@ -1,3 +1,5 @@
+mod to_task_tree;
+
 use super::TaskNode;
 use serde::Deserialize;
 use std::path::Path;
