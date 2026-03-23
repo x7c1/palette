@@ -8,7 +8,7 @@ impl Database {
         let conn = lock!(self.conn);
         conn.execute(
             "UPDATE tasks SET status_id = ?1 WHERE id = ?2",
-            params![crate::status_id::task_status_id(status), id.as_ref()],
+            params![crate::lookup::task_status_id(status), id.as_ref()],
         )?;
         Ok(())
     }

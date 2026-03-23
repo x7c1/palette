@@ -98,7 +98,7 @@ pub(super) fn id_conversion_error(e: String) -> rusqlite::Error {
 }
 
 fn row_to_job(row: &rusqlite::Row) -> rusqlite::Result<Job> {
-    use crate::status_id;
+    use crate::lookup;
     use palette_domain::task::TaskId;
 
     let repos_str: Option<String> = row.get("repository")?;
@@ -106,11 +106,11 @@ fn row_to_job(row: &rusqlite::Row) -> rusqlite::Result<Job> {
         repos_str.and_then(|s| repository_row::repository_from_json(&s));
 
     let type_id: i64 = row.get("type_id")?;
-    let job_type = status_id::job_type_from_id(type_id).map_err(id_conversion_error)?;
+    let job_type = lookup::job_type_from_id(type_id).map_err(id_conversion_error)?;
 
     let status_id_val: i64 = row.get("status_id")?;
     let status =
-        status_id::job_status_from_id(status_id_val, job_type).map_err(id_conversion_error)?;
+        lookup::job_status_from_id(status_id_val, job_type).map_err(id_conversion_error)?;
 
     Ok(Job {
         id: JobId::new(row.get::<_, String>("id")?),

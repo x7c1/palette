@@ -17,7 +17,7 @@ impl Database {
             params![
                 req.id.as_ref(),
                 req.workflow_id.as_ref(),
-                crate::status_id::task_status_id(TaskStatus::Pending),
+                crate::lookup::task_status_id(TaskStatus::Pending),
             ],
         )?;
         Ok(())

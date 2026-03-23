@@ -7,11 +7,11 @@ impl Database {
         let mut param_values: Vec<Box<dyn rusqlite::types::ToSql>> = Vec::new();
 
         if let Some(ref t) = filter.job_type {
-            param_values.push(Box::new(crate::status_id::job_type_id(*t)));
+            param_values.push(Box::new(crate::lookup::job_type_id(*t)));
             sql.push_str(&format!(" AND type_id = ?{}", param_values.len()));
         }
         if let Some(ref s) = filter.status {
-            param_values.push(Box::new(crate::status_id::job_status_id(*s)));
+            param_values.push(Box::new(crate::lookup::job_status_id(*s)));
             sql.push_str(&format!(" AND status_id = ?{}", param_values.len()));
         }
         if let Some(ref a) = filter.assignee {

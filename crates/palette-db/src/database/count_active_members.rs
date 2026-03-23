@@ -7,9 +7,9 @@ impl Database {
         let conn = lock!(self.conn);
         // Craft InProgress = 2, Review InProgress = 7
         let craft_ip =
-            crate::status_id::craft_status_id(palette_domain::job::CraftStatus::InProgress);
+            crate::lookup::craft_status_id(palette_domain::job::CraftStatus::InProgress);
         let review_ip =
-            crate::status_id::review_status_id(palette_domain::job::ReviewStatus::InProgress);
+            crate::lookup::review_status_id(palette_domain::job::ReviewStatus::InProgress);
         let count: i64 = conn.query_row(
             "SELECT COUNT(*) FROM jobs WHERE status_id IN (?1, ?2)",
             params![craft_ip, review_ip],

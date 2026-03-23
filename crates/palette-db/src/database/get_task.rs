@@ -8,7 +8,7 @@ use std::collections::HashMap;
 
 fn row_to_task_row(row: &rusqlite::Row) -> rusqlite::Result<TaskRow> {
     let status_id: i64 = row.get("status_id")?;
-    let status = crate::status_id::task_status_from_id(status_id).map_err(id_conversion_error)?;
+    let status = crate::lookup::task_status_from_id(status_id).map_err(id_conversion_error)?;
     Ok(TaskRow {
         id: TaskId::new(row.get::<_, String>("id")?),
         workflow_id: WorkflowId::new(row.get::<_, String>("workflow_id")?),

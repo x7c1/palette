@@ -28,7 +28,7 @@ impl Database {
             params![
                 review_job_id.as_ref(),
                 round,
-                crate::status_id::verdict_id(req.verdict),
+                crate::lookup::verdict_id(req.verdict),
                 req.summary,
                 now_str
             ],

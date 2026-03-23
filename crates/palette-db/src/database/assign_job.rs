@@ -13,7 +13,7 @@ impl Database {
         let now = Utc::now().to_rfc3339();
         let updated = conn.execute(
             "UPDATE jobs SET status_id = ?1, assignee = ?2, assigned_at = ?3, updated_at = ?4 WHERE id = ?5",
-            params![crate::status_id::job_status_id(in_progress), assignee.as_ref(), now, now, job_id.as_ref()],
+            params![crate::lookup::job_status_id(in_progress), assignee.as_ref(), now, now, job_id.as_ref()],
         )?;
         if updated == 0 {
             return Err(JobError::NotFound {

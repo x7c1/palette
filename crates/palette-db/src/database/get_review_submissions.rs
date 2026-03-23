@@ -12,7 +12,7 @@ impl Database {
         )?;
         let rows = stmt.query_map(params![review_job_id.as_ref()], |row| {
             let verdict_id: i64 = row.get(3)?;
-            let verdict = crate::status_id::verdict_from_id(verdict_id)
+            let verdict = crate::lookup::verdict_from_id(verdict_id)
                 .map_err(super::id_conversion_error)?;
             Ok(ReviewSubmission {
                 id: row.get(0)?,

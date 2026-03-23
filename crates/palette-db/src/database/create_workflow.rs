@@ -12,7 +12,7 @@ impl Database {
             params![
                 id.as_ref(),
                 blueprint_path,
-                crate::status_id::workflow_status_id(WorkflowStatus::Active),
+                crate::lookup::workflow_status_id(WorkflowStatus::Active),
                 now.to_rfc3339(),
             ],
         )?;

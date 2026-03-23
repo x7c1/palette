@@ -11,7 +11,7 @@ impl Database {
         )?;
         let mut rows = stmt.query_map(params![id.as_ref()], |row| {
             let status_id: i64 = row.get("status_id")?;
-            let status = crate::status_id::workflow_status_from_id(status_id)
+            let status = crate::lookup::workflow_status_from_id(status_id)
                 .map_err(super::id_conversion_error)?;
             Ok(Workflow {
                 id: WorkflowId::new(row.get::<_, String>("id")?),

@@ -6,7 +6,7 @@ impl Database {
         let now = Utc::now().to_rfc3339();
         let updated = conn.execute(
             "UPDATE jobs SET status_id = ?1, updated_at = ?2 WHERE id = ?3",
-            params![crate::status_id::job_status_id(status), now, id.as_ref()],
+            params![crate::lookup::job_status_id(status), now, id.as_ref()],
         )?;
         if updated == 0 {
             return Err(JobError::NotFound { job_id: id.clone() }.into());
