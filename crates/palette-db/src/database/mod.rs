@@ -82,7 +82,7 @@ fn parse_datetime(s: &str) -> DateTime<Utc> {
 /// Query a single job by ID from a connection or transaction.
 fn query_job(conn: &Connection, id: &JobId) -> crate::Result<Option<Job>> {
     let mut stmt = conn.prepare(
-        "SELECT id, task_id, type_id, title, plan_path, description, assignee, status_id, priority, repository, pr_url, created_at, updated_at, notes, assigned_at
+        "SELECT id, task_id, type_id, title, plan_path, description, assignee, status_id, priority_id, repository, pr_url, created_at, updated_at, notes, assigned_at
          FROM jobs WHERE id = ?1",
     )?;
     let mut rows = stmt.query_map(params![id.as_ref()], row_to_job)?;
@@ -122,8 +122,9 @@ fn row_to_job(row: &rusqlite::Row) -> rusqlite::Result<Job> {
         assignee: row.get::<_, Option<String>>("assignee")?.map(AgentId::new),
         status,
         priority: row
-            .get::<_, Option<String>>("priority")?
-            .and_then(|s| s.parse().ok()),
+            .get::<_, Option<i64>>("priority_id")?
+            .map(|id| lookup::priority_from_id(id).map_err(id_conversion_error))
+            .transpose()?,
         repository,
         pr_url: row.get("pr_url")?,
         created_at: parse_datetime(&row.get::<_, String>("created_at")?),

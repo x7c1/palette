@@ -8,6 +8,9 @@ pub use craft_status::{craft_status_from_id, craft_status_id};
 mod job_status;
 pub use job_status::{job_status_from_id, job_status_id};
 
+mod priority;
+pub use priority::{priority_from_id, priority_id};
+
 mod job_type;
 pub use job_type::{job_type_from_id, job_type_id};
 

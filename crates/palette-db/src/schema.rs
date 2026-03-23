@@ -31,6 +31,11 @@ CREATE TABLE IF NOT EXISTS verdict_types (
     name TEXT NOT NULL UNIQUE
 );
 
+CREATE TABLE IF NOT EXISTS priorities (
+    id INTEGER PRIMARY KEY,
+    name TEXT NOT NULL UNIQUE
+);
+
 -- Main tables
 
 CREATE TABLE IF NOT EXISTS workflows (
@@ -58,7 +63,7 @@ CREATE TABLE IF NOT EXISTS jobs (
     description TEXT,
     assignee TEXT,
     status_id INTEGER NOT NULL,
-    priority TEXT CHECK(priority IN ('high', 'medium', 'low') OR priority IS NULL),
+    priority_id INTEGER,
     repository TEXT,
     pr_url TEXT,
     created_at TEXT NOT NULL,
@@ -67,7 +72,8 @@ CREATE TABLE IF NOT EXISTS jobs (
     assigned_at TEXT,
     FOREIGN KEY (task_id) REFERENCES tasks(id),
     FOREIGN KEY (type_id) REFERENCES job_types(id),
-    FOREIGN KEY (status_id) REFERENCES job_statuses(id)
+    FOREIGN KEY (status_id) REFERENCES job_statuses(id),
+    FOREIGN KEY (priority_id) REFERENCES priorities(id)
 );
 
 CREATE TABLE IF NOT EXISTS review_submissions (
@@ -140,6 +146,11 @@ INSERT OR IGNORE INTO workflow_statuses (id, name) VALUES (3, 'completed');
 -- Verdict types
 INSERT OR IGNORE INTO verdict_types (id, name) VALUES (1, 'approved');
 INSERT OR IGNORE INTO verdict_types (id, name) VALUES (2, 'changes_requested');
+
+-- Priorities
+INSERT OR IGNORE INTO priorities (id, name) VALUES (1, 'high');
+INSERT OR IGNORE INTO priorities (id, name) VALUES (2, 'medium');
+INSERT OR IGNORE INTO priorities (id, name) VALUES (3, 'low');
 "#;
 
 pub(crate) fn initialize(conn: &Connection) -> rusqlite::Result<()> {
@@ -171,6 +182,7 @@ mod tests {
         assert!(tables.contains(&"task_statuses".to_string()));
         assert!(tables.contains(&"workflow_statuses".to_string()));
         assert!(tables.contains(&"verdict_types".to_string()));
+        assert!(tables.contains(&"priorities".to_string()));
         assert!(tables.contains(&"jobs".to_string()));
         assert!(tables.contains(&"review_submissions".to_string()));
         assert!(tables.contains(&"review_comments".to_string()));
