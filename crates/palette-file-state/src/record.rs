@@ -20,4 +20,5 @@ pub struct AgentRecord {
     pub terminal_target: String,
     pub status: String,
     pub session_id: Option<String>,
+    pub task_id: String,
 }

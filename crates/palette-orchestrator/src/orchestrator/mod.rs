@@ -6,6 +6,7 @@ mod resume_booting_watchers;
 mod save_state;
 mod spawn_member;
 mod spawn_readiness_watcher;
+mod spawn_supervisor;
 mod start;
 
 use palette_db::Database;

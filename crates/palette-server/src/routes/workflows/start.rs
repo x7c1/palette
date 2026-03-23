@@ -109,18 +109,26 @@ fn initialize_root(
     let task_store = TaskStoreImpl::new(&state.db, tree.clone(), workflow_id.clone(), statuses);
     let task_engine = TaskRuleEngine::new(&task_store);
 
-    // Root task → InProgress
+    // Root task: spawn supervisor, then → InProgress
     let root = task_store
         .get_task(task_store.root_id())
         .map_err(internal_err)?
         .ok_or_else(|| internal_err("root task not found"))?;
+
+    let mut effects = vec![RuleEffect::SpawnSupervisor {
+        task_id: root.id.clone(),
+        role: palette_domain::agent::AgentRole::Leader,
+    }];
+
     task_store
         .update_task_status(&root.id, TaskStatus::InProgress)
         .map_err(internal_err)?;
 
     // Resolve children recursively and create jobs
     let child_ids: Vec<TaskId> = root.children.iter().map(|c| c.id.clone()).collect();
-    activate_ready_children(state, &task_store, &task_engine, &child_ids)
+    let child_effects = activate_ready_children(state, &task_store, &task_engine, &child_ids)?;
+    effects.extend(child_effects);
+    Ok(effects)
 }
 
 /// Resolve which tasks become Ready, activate them, and recurse into composites.
@@ -168,8 +176,20 @@ fn activate_ready_children(
             }
             let job_effects = create_job(state, &task, job_type)?;
             effects.extend(job_effects);
+
+            // Review composites (review-integrate): resolve children immediately.
+            // Craft composites: children are activated later on InReview.
+            if !children.is_empty() && job_type == palette_domain::job::JobType::Review {
+                let ids: Vec<TaskId> = children.iter().map(|c| c.id.clone()).collect();
+                let child_effects = activate_ready_children(state, task_store, task_engine, &ids)?;
+                effects.extend(child_effects);
+            }
         } else if !children.is_empty() {
-            // Pure composite: InProgress and recurse into children
+            // Pure composite: spawn supervisor, then InProgress and recurse
+            effects.push(RuleEffect::SpawnSupervisor {
+                task_id: task_id.clone(),
+                role: palette_domain::agent::AgentRole::Leader,
+            });
             task_store
                 .update_task_status(task_id, TaskStatus::InProgress)
                 .map_err(internal_err)?;
@@ -202,11 +222,7 @@ fn create_job(
         })
         .map_err(internal_err)?;
 
-    let todo_status = palette_domain::job::JobStatus::todo(job_type);
-    let effects = state
-        .rules
-        .on_status_change(&job.id, todo_status)
-        .map_err(internal_err)?;
+    let effects = state.rules.on_job_created(&job.id).map_err(internal_err)?;
 
     tracing::info!(
         job_id = %job.id,

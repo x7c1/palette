@@ -19,12 +19,15 @@ impl<S: JobStore> RuleEngine<S> {
         }
     }
 
-    /// Apply rules after a job status change. Returns side effects.
-    pub fn on_status_change(
-        &self,
-        job_id: &JobId,
-        new_status: JobStatus,
-    ) -> Result<Vec<RuleEffect>, S::Error> {
+    /// Apply rules after a new job is created (Todo status). Returns side effects.
+    pub fn on_job_created(&self, job_id: &JobId) -> Result<Vec<RuleEffect>, S::Error> {
+        Ok(vec![RuleEffect::AssignNewJob {
+            job_id: job_id.clone(),
+        }])
+    }
+
+    /// Apply rules after a craft job completes. Returns side effects.
+    pub fn on_craft_done(&self, job_id: &JobId) -> Result<Vec<RuleEffect>, S::Error> {
         let job = self
             .store
             .get_job(job_id)?
@@ -33,39 +36,14 @@ impl<S: JobStore> RuleEngine<S> {
             })?;
 
         let mut effects = Vec::new();
-
-        match new_status {
-            // Craft -> Todo: trigger auto-assign
-            JobStatus::Craft(CraftStatus::Todo) => {
-                effects.push(RuleEffect::AutoAssign {
-                    job_id: job_id.clone(),
-                });
-            }
-            // Review -> Todo: trigger auto-assign
-            JobStatus::Review(ReviewStatus::Todo) => {
-                effects.push(RuleEffect::AutoAssign {
-                    job_id: job_id.clone(),
-                });
-            }
-            // Craft -> InReview: task cascade handles review task activation
-            JobStatus::Craft(CraftStatus::InReview) => {}
-            // Craft -> Done: destroy member container, trigger auto-assign for waiting jobs
-            JobStatus::Craft(CraftStatus::Done) => {
-                if let Some(ref assignee) = job.assignee {
-                    effects.push(RuleEffect::DestroyMember {
-                        member_id: assignee.clone(),
-                    });
-                }
-                let assignable = self.store.find_assignable_jobs()?;
-                for j in assignable {
-                    effects.push(RuleEffect::AutoAssign {
-                        job_id: j.id.clone(),
-                    });
-                }
-            }
-            _ => {}
+        if let Some(ref assignee) = job.assignee {
+            effects.push(RuleEffect::DestroyMember {
+                member_id: assignee.clone(),
+            });
         }
-
+        effects.push(RuleEffect::JobCompleted {
+            job_id: job_id.clone(),
+        });
         Ok(effects)
     }
 
@@ -75,7 +53,6 @@ impl<S: JobStore> RuleEngine<S> {
         review_job_id: &JobId,
         submission: &ReviewSubmission,
     ) -> Result<Vec<RuleEffect>, S::Error> {
-        let mut effects = Vec::new();
         let review_job = self
             .store
             .get_job(review_job_id)?
@@ -83,26 +60,21 @@ impl<S: JobStore> RuleEngine<S> {
                 job_id: review_job_id.clone(),
             })?;
 
+        let mut effects = vec![RuleEffect::ReviewVerdict {
+            review_job_id: review_job_id.clone(),
+            verdict: submission.verdict,
+        }];
+
         match submission.verdict {
             Verdict::ChangesRequested => {
-                // Review job -> ChangesRequested. The reviewer keeps their assignee for re-review.
                 self.store.update_job_status(
                     review_job_id,
                     JobStatus::Review(ReviewStatus::ChangesRequested),
                 )?;
-                effects.push(RuleEffect::StatusChanged {
-                    job_id: review_job_id.clone(),
-                    new_status: JobStatus::Review(ReviewStatus::ChangesRequested),
-                });
             }
             Verdict::Approved => {
-                // Review job -> Done. Task cascade will propagate completion.
                 self.store
                     .update_job_status(review_job_id, JobStatus::Review(ReviewStatus::Done))?;
-                effects.push(RuleEffect::StatusChanged {
-                    job_id: review_job_id.clone(),
-                    new_status: JobStatus::Review(ReviewStatus::Done),
-                });
                 if let Some(ref assignee) = review_job.assignee {
                     effects.push(RuleEffect::DestroyMember {
                         member_id: assignee.clone(),

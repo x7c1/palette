@@ -40,22 +40,30 @@ pub async fn handle_send(
     let member_id = AgentId::new(member_id_str.as_str());
 
     // Check if target can receive input — idle or waiting for permission
-    let is_idle = {
+    let (can_receive, is_waiting_permission) = {
         let infra = state.infra.lock().await;
         infra
             .find_member(&member_id)
             .or_else(|| infra.find_supervisor(&member_id))
-            .map(|m| m.status == AgentStatus::Idle || m.status == AgentStatus::WaitingPermission)
-            .unwrap_or(false)
+            .map(|m| {
+                let can =
+                    m.status == AgentStatus::Idle || m.status == AgentStatus::WaitingPermission;
+                let waiting = m.status == AgentStatus::WaitingPermission;
+                (can, waiting)
+            })
+            .unwrap_or((false, false))
     };
 
-    // Also check if there are already pending messages (maintain ordering)
+    // Also check if there are already pending messages (maintain ordering).
+    // However, permission approvals bypass the queue — they are tmux key presses
+    // orthogonal to queued instruction messages. Without this bypass, a pending
+    // instruction blocks the approval key, creating a deadlock.
     let has_pending = state
         .db
         .has_pending_messages(&member_id)
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
-    let queued = if is_idle && !has_pending {
+    let queued = if can_receive && (!has_pending || is_waiting_permission) {
         // Send directly
         let terminal_target = {
             let infra = state.infra.lock().await;

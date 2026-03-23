@@ -1,0 +1,28 @@
+task:
+  key: dynamic-supervisor
+  children:
+    - key: phase-a
+      children:
+        - key: craft
+          type: craft
+          plan_path: step-a
+          priority: high
+          repository:
+            name: x7c1/palette
+            branch: e2e-dynamic-sup
+          children:
+            - key: review
+              type: review
+    - key: phase-b
+      depends_on: [phase-a]
+      children:
+        - key: craft
+          type: craft
+          plan_path: step-b
+          priority: medium
+          repository:
+            name: x7c1/palette
+            branch: e2e-dynamic-sup
+          children:
+            - key: review
+              type: review

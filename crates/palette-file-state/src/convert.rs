@@ -49,6 +49,7 @@ fn to_agent_record(agent: &AgentState) -> AgentRecord {
         terminal_target: agent.terminal_target.as_ref().to_string(),
         status: status_to_str(agent.status),
         session_id: agent.session_id.as_ref().map(|s| s.to_string()),
+        task_id: agent.task_id.to_string(),
     }
 }
 
@@ -61,6 +62,7 @@ fn from_agent_record(record: AgentRecord) -> Result<AgentState, Error> {
         terminal_target: TerminalTarget::new(record.terminal_target),
         status: parse_status(&record.status)?,
         session_id: record.session_id.map(AgentSessionId::new),
+        task_id: palette_domain::task::TaskId::new(record.task_id),
     })
 }
 

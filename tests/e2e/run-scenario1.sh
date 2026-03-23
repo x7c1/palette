@@ -76,12 +76,12 @@ TASK_COUNT=$(echo "$RESPONSE" | jq -r '.task_count')
 echo "Workflow ID: $WORKFLOW_ID"
 echo "Task count: $TASK_COUNT"
 
-# root + step-a + step-a/craft + step-a/review + step-b + step-b/craft + step-b/review = 7
-if [[ "$TASK_COUNT" -ne 7 ]]; then
-  echo "FAIL: Expected task_count=7, got $TASK_COUNT"
+# root + step-a + step-a/review + step-b + step-b/review = 5
+if [[ "$TASK_COUNT" -ne 5 ]]; then
+  echo "FAIL: Expected task_count=5, got $TASK_COUNT"
   exit 1
 fi
-echo "PASS: task_count is 7"
+echo "PASS: task_count is 5"
 
 # --- Step 4: Check initial state ---
 echo ""

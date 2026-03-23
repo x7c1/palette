@@ -1,5 +1,6 @@
 use palette_domain::agent::{AgentId, AgentRole, AgentState, AgentStatus, ContainerId};
 use palette_domain::server::PersistentState;
+use palette_domain::task::TaskId;
 use palette_domain::terminal::TerminalTarget;
 
 fn aid(s: &str) -> AgentId {
@@ -20,6 +21,7 @@ fn save_and_load_state() {
         terminal_target: TerminalTarget::new("test-session:member-a"),
         status: AgentStatus::Idle,
         session_id: None,
+        task_id: TaskId::new("task-member-a"),
     });
 
     palette_file_state::save(&state, &path).unwrap();

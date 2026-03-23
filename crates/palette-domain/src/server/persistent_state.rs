@@ -1,5 +1,5 @@
-use crate::agent::{AgentId, AgentRole, AgentState, ContainerId};
-use crate::job::JobType;
+use crate::agent::{AgentId, AgentState, ContainerId};
+use crate::task::TaskId;
 use chrono::{DateTime, Utc};
 
 pub struct PersistentState {
@@ -72,33 +72,17 @@ impl PersistentState {
         }
     }
 
-    /// Find the leader (AgentRole::Leader).
-    pub fn find_leader(&self) -> Option<&AgentState> {
-        self.supervisors
-            .iter()
-            .find(|l| l.role == AgentRole::Leader)
+    /// Find the supervisor assigned to a specific composite task.
+    pub fn find_supervisor_for_task(&self, task_id: &TaskId) -> Option<&AgentState> {
+        self.supervisors.iter().find(|s| s.task_id == *task_id)
     }
 
-    /// Find the review integrator.
-    pub fn find_review_integrator(&self) -> Option<&AgentState> {
-        self.supervisors
-            .iter()
-            .find(|l| l.role == AgentRole::ReviewIntegrator)
-    }
-
-    /// Determine the supervisor_id for a new member based on job type.
-    /// Craft jobs → leader, Review jobs → review integrator (fallback to leader).
-    pub fn supervisor_id_for_job_type(&self, job_type: JobType) -> AgentId {
-        match job_type {
-            JobType::Review => self
-                .find_review_integrator()
-                .or_else(|| self.find_leader())
-                .map(|l| l.id.clone())
-                .unwrap_or_else(|| AgentId::new("")),
-            JobType::Craft => self
-                .find_leader()
-                .map(|l| l.id.clone())
-                .unwrap_or_else(|| AgentId::new("")),
+    /// Remove a supervisor by ID, returning the removed state.
+    pub fn remove_supervisor(&mut self, id: &AgentId) -> Option<AgentState> {
+        if let Some(pos) = self.supervisors.iter().position(|s| s.id == *id) {
+            Some(self.supervisors.remove(pos))
+        } else {
+            None
         }
     }
 
@@ -110,10 +94,11 @@ impl PersistentState {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::agent::AgentStatus;
+    use crate::agent::{AgentRole, AgentStatus};
     use crate::terminal::TerminalTarget;
 
     fn make_supervisor(id: &str, role: AgentRole) -> AgentState {
+        use crate::task::TaskId;
         AgentState {
             id: AgentId::new(id),
             role,
@@ -122,11 +107,12 @@ mod tests {
             terminal_target: TerminalTarget::new(format!("pane-{id}")),
             status: AgentStatus::Idle,
             session_id: None,
+            task_id: TaskId::new(format!("task-{id}")),
         }
     }
 
     #[test]
-    fn supervisor_id_for_craft_returns_leader() {
+    fn find_supervisor_for_task_returns_matching() {
         let mut state = PersistentState::new("test".to_string());
         state
             .supervisors
@@ -136,13 +122,28 @@ mod tests {
             .push(make_supervisor("ri-1", AgentRole::ReviewIntegrator));
 
         assert_eq!(
-            state.supervisor_id_for_job_type(JobType::Craft),
+            state
+                .find_supervisor_for_task(&TaskId::new("task-leader-1"))
+                .unwrap()
+                .id,
             AgentId::new("leader-1")
         );
+        assert_eq!(
+            state
+                .find_supervisor_for_task(&TaskId::new("task-ri-1"))
+                .unwrap()
+                .id,
+            AgentId::new("ri-1")
+        );
+        assert!(
+            state
+                .find_supervisor_for_task(&TaskId::new("nonexistent"))
+                .is_none()
+        );
     }
 
     #[test]
-    fn supervisor_id_for_review_returns_review_integrator() {
+    fn remove_supervisor_returns_removed() {
         let mut state = PersistentState::new("test".to_string());
         state
             .supervisors
@@ -151,39 +152,15 @@ mod tests {
             .supervisors
             .push(make_supervisor("ri-1", AgentRole::ReviewIntegrator));
 
-        assert_eq!(
-            state.supervisor_id_for_job_type(JobType::Review),
-            AgentId::new("ri-1")
-        );
-    }
+        let removed = state.remove_supervisor(&AgentId::new("leader-1"));
+        assert!(removed.is_some());
+        assert_eq!(removed.unwrap().id, AgentId::new("leader-1"));
+        assert_eq!(state.supervisors.len(), 1);
 
-    #[test]
-    fn supervisor_id_for_review_falls_back_to_leader() {
-        let mut state = PersistentState::new("test".to_string());
-        state
-            .supervisors
-            .push(make_supervisor("leader-1", AgentRole::Leader));
-
-        assert_eq!(
-            state.supervisor_id_for_job_type(JobType::Review),
-            AgentId::new("leader-1")
-        );
-    }
-
-    #[test]
-    fn find_leader_and_review_integrator() {
-        let mut state = PersistentState::new("test".to_string());
-        state
-            .supervisors
-            .push(make_supervisor("leader-1", AgentRole::Leader));
-        state
-            .supervisors
-            .push(make_supervisor("ri-1", AgentRole::ReviewIntegrator));
-
-        assert_eq!(state.find_leader().unwrap().id, AgentId::new("leader-1"));
-        assert_eq!(
-            state.find_review_integrator().unwrap().id,
-            AgentId::new("ri-1")
+        assert!(
+            state
+                .remove_supervisor(&AgentId::new("nonexistent"))
+                .is_none()
         );
     }
 }

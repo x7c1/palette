@@ -79,31 +79,28 @@ pub async fn handle_stop(
                         tracing::error!(job_id = %job.id, error = %e, "failed to transition job to in_review");
                         continue;
                     }
-                    let mut effects = state
-                        .rules
-                        .on_status_change(&job.id, in_review)
-                        .unwrap_or_default();
-                    for effect in &effects {
-                        tracing::info!(?effect, "rule engine effect (member stop)");
-                    }
-
-                    // Always notify orchestrator of the status change so it can
-                    // propagate task completion through the task tree.
-                    effects.push(palette_domain::rule::RuleEffect::StatusChanged {
-                        job_id: job.id.clone(),
-                        new_status: in_review,
-                    });
+                    let effects = vec![palette_domain::rule::RuleEffect::CraftReadyForReview {
+                        craft_job_id: job.id.clone(),
+                    }];
                     let _ = state.event_tx.send(ServerEvent::ProcessEffects { effects });
                 }
                 palette_domain::job::JobType::Review => {
-                    // Review jobs: notify the member's supervisor (review integrator)
-                    // with findings so it can aggregate and submit a verdict.
-                    let report_msg = format!(
-                        "[review] member={} job={} type=review_complete message: {}",
-                        member_id, job.id, last_message,
-                    );
-                    if let Err(e) = state.db.enqueue_message(supervisor_id, &report_msg) {
-                        tracing::error!(error = %e, "failed to enqueue review report");
+                    // Only notify ReviewIntegrator supervisors (for multi-review aggregation).
+                    // Single-review results are handled mechanically by the orchestrator.
+                    let infra = state.infra.lock().await;
+                    let is_review_integrator =
+                        infra.find_supervisor(supervisor_id).is_some_and(|s| {
+                            s.role == palette_domain::agent::AgentRole::ReviewIntegrator
+                        });
+                    drop(infra);
+                    if is_review_integrator {
+                        let report_msg = format!(
+                            "[review] member={} job={} type=review_complete message: {}",
+                            member_id, job.id, last_message,
+                        );
+                        if let Err(e) = state.db.enqueue_message(supervisor_id, &report_msg) {
+                            tracing::error!(error = %e, "failed to enqueue review report");
+                        }
                     }
                 }
             }
