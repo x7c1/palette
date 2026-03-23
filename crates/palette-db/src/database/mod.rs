@@ -39,6 +39,7 @@ mod get_review_comments;
 mod get_review_submissions;
 mod get_workflow;
 mod has_pending_messages;
+mod increment_member_counter;
 mod list_jobs;
 mod submit_review;
 mod update_job_status;
@@ -82,7 +83,7 @@ fn parse_datetime(s: &str) -> DateTime<Utc> {
 /// Query a single job by ID from a connection or transaction.
 fn query_job(conn: &Connection, id: &JobId) -> crate::Result<Option<Job>> {
     let mut stmt = conn.prepare(
-        "SELECT id, task_id, type_id, title, plan_path, description, assignee, status_id, priority_id, repository, pr_url, created_at, updated_at, notes, assigned_at
+        "SELECT id, task_id, type_id, title, plan_path, assignee, status_id, priority_id, repository, pr_url, created_at, updated_at, notes, assigned_at
          FROM jobs WHERE id = ?1",
     )?;
     let mut rows = stmt.query_map(params![id.as_ref()], row_to_job)?;
@@ -118,7 +119,6 @@ fn row_to_job(row: &rusqlite::Row) -> rusqlite::Result<Job> {
         job_type,
         title: row.get("title")?,
         plan_path: row.get("plan_path")?,
-        description: row.get("description")?,
         assignee: row.get::<_, Option<String>>("assignee")?.map(AgentId::new),
         status,
         priority: row
@@ -179,7 +179,6 @@ pub(crate) mod test_helpers {
             job_type: JobType::Craft,
             title: format!("Job {id}"),
             plan_path: format!("test/{id}"),
-            description: None,
             assignee: None,
             priority,
             repository: None,
@@ -195,7 +194,6 @@ pub(crate) mod test_helpers {
             job_type: JobType::Review,
             title: format!("Review {id}"),
             plan_path: format!("test/{id}"),
-            description: None,
             assignee: None,
             priority: None,
             repository: None,

@@ -8,9 +8,6 @@ pub struct PersistentState {
     pub members: Vec<AgentState>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
-    /// Monotonic counter for member ID generation to avoid name collisions
-    /// after members are destroyed and new ones spawned.
-    member_counter: usize,
 }
 
 impl PersistentState {
@@ -22,7 +19,6 @@ impl PersistentState {
             members: Vec::new(),
             created_at: now,
             updated_at: now,
-            member_counter: 0,
         }
     }
 
@@ -34,14 +30,12 @@ impl PersistentState {
         created_at: DateTime<Utc>,
         updated_at: DateTime<Utc>,
     ) -> Self {
-        let member_counter = members.len();
         Self {
             session_name,
             supervisors,
             members,
             created_at,
             updated_at,
-            member_counter,
         }
     }
 
@@ -76,15 +70,6 @@ impl PersistentState {
         } else {
             None
         }
-    }
-
-    /// Generate the next member ID using a monotonic counter.
-    /// IDs never repeat even after members are destroyed
-    /// (e.g., member-a, member-b, member-c, ... never reused).
-    pub fn next_member_id(&mut self) -> AgentId {
-        let id = AgentId::next_member(self.member_counter);
-        self.member_counter += 1;
-        id
     }
 
     /// Find the leader (AgentRole::Leader).

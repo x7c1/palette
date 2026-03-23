@@ -94,7 +94,12 @@ impl Orchestrator {
         let workspace = self.resolve_workspace(&job)?;
 
         // Spawn a new member with supervisor_id based on job type
-        let member_id = infra.next_member_id();
+        let task_state = self
+            .db
+            .get_task_state(&job.task_id)?
+            .ok_or_else(|| crate::Error::Internal(format!("task not found: {}", job.task_id)))?;
+        let seq = self.db.increment_member_counter(&task_state.workflow_id)?;
+        let member_id = AgentId::next_member(seq);
         let member = self.spawn_member(&member_id, job.job_type, infra, workspace)?;
         let terminal_target = member.terminal_target.clone();
         infra.members.push(member);
@@ -599,15 +604,8 @@ impl Orchestrator {
             id: Some(JobId::generate(job_type)),
             task_id: task.id.clone(),
             job_type,
-            title: task
-                .id
-                .as_ref()
-                .rsplit('/')
-                .next()
-                .unwrap_or("task")
-                .to_string(),
+            title: task.key.to_string(),
             plan_path: task.plan_path.clone().unwrap_or_default(),
-            description: task.description.clone(),
             assignee: None,
             priority: task.priority,
             repository: task.repository.clone(),
@@ -637,9 +635,6 @@ fn format_job_instruction(job: &Job) -> String {
         "## Task: {}\n\nID: {}\nPlan: {}/{}\n",
         job.title, job.id, PLAN_DIR_MOUNT, job.plan_path
     );
-    if let Some(ref desc) = job.description {
-        msg.push_str(&format!("\n{desc}\n"));
-    }
     if let Some(ref repo) = job.repository {
         msg.push_str(&format!(
             "\nRepository: {} (branch: {})\n",
@@ -690,7 +685,6 @@ mod tests {
             job_type: JobType::Review,
             title: "Review".to_string(),
             plan_path: "test/R-001".to_string(),
-            description: None,
             assignee: None,
             priority: None,
             repository: None,
@@ -720,7 +714,6 @@ mod tests {
             job_type: JobType::Review,
             title: "Review".to_string(),
             plan_path: "test/R-001".to_string(),
-            description: None,
             assignee: None,
             priority: None,
             repository: None,
@@ -773,7 +766,6 @@ mod tests {
             job_type: JobType::Review,
             title: "Review".to_string(),
             plan_path: "test/R-001".to_string(),
-            description: None,
             assignee: None,
             priority: None,
             repository: None,

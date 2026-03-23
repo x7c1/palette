@@ -1,4 +1,4 @@
-use super::TaskId;
+use super::{TaskId, TaskKey};
 use crate::job::{JobType, Priority, Repository};
 use std::collections::HashMap;
 
@@ -15,10 +15,9 @@ pub struct TaskTree {
 pub struct TaskTreeNode {
     pub id: TaskId,
     pub parent_id: Option<TaskId>,
-    pub title: String,
+    pub key: TaskKey,
     pub plan_path: Option<String>,
     pub job_type: Option<JobType>,
-    pub description: Option<String>,
     pub priority: Option<Priority>,
     pub repository: Option<Repository>,
     pub children: Vec<TaskId>,
@@ -69,5 +68,10 @@ impl TaskTree {
         self.siblings(id)
             .into_iter()
             .find(|s| s.job_type == Some(JobType::Craft))
+    }
+
+    /// Find a node by its key.
+    pub fn find_by_key(&self, key: &str) -> Option<&TaskTreeNode> {
+        self.nodes.values().find(|n| n.key.as_ref() == key)
     }
 }

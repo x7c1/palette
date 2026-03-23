@@ -13,7 +13,7 @@ impl Database {
         let craft_todo = crate::lookup::craft_status_id(palette_domain::job::CraftStatus::Todo);
         let review_todo = crate::lookup::review_status_id(palette_domain::job::ReviewStatus::Todo);
         let mut stmt = conn.prepare(
-            "SELECT t.id, t.task_id, t.type_id, t.title, t.plan_path, t.description, t.assignee, t.status_id, t.priority_id, t.repository, t.pr_url, t.created_at, t.updated_at, t.notes, t.assigned_at
+            "SELECT t.id, t.task_id, t.type_id, t.title, t.plan_path, t.assignee, t.status_id, t.priority_id, t.repository, t.pr_url, t.created_at, t.updated_at, t.notes, t.assigned_at
              FROM jobs t
              WHERE t.status_id IN (?1, ?2) AND t.assignee IS NULL
              ORDER BY

@@ -1,33 +1,25 @@
 task:
-  id: e2e/task-tree-cascade
-  title: "E2E: Task Tree Cascade"
+  key: task-tree-cascade
+  children:
+    - key: step-a
+      type: craft
+      plan_path: step-a
+      priority: high
+      repository:
+        name: x7c1/palette
+        branch: e2e-cascade
+      children:
+        - key: review
+          type: review
 
-children:
-  - id: step-a
-    children:
-      - id: craft
-        type: craft
-        plan_path: step-a
-        description: Create step-a.txt in the workspace root with content "Step A done" and commit it
-        priority: high
-        repository:
-          name: x7c1/palette
-          branch: e2e-cascade
-        children:
-          - id: review
-            type: review
-
-  - id: step-b
-    depends_on: [step-a]
-    children:
-      - id: craft
-        type: craft
-        plan_path: step-b
-        description: Create step-b.txt in the workspace root with content "Step B done" and commit it
-        priority: medium
-        repository:
-          name: x7c1/palette
-          branch: e2e-cascade
-        children:
-          - id: review
-            type: review
+    - key: step-b
+      type: craft
+      depends_on: [step-a]
+      plan_path: step-b
+      priority: medium
+      repository:
+        name: x7c1/palette
+        branch: e2e-cascade
+      children:
+        - key: review
+          type: review
