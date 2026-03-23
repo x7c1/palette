@@ -13,32 +13,25 @@ fn write_blueprint_file(yaml: &str) -> tempfile::NamedTempFile {
 
 const TASK_TREE_YAML: &str = r#"
 task:
-  id: 2026/feature-x
-  title: Add feature X
+  key: 2026/feature-x
   children:
-    - id: planning
-      title: Planning
+    - key: planning
       children:
-        - id: api-plan
-          title: Api Plan
+        - key: api-plan
           type: craft
           plan_path: 2026/feature-x/planning/api-plan
           children:
-            - id: api-plan-review
-              title: Api Plan Review
+            - key: api-plan-review
               type: review
 
-    - id: execution
-      title: Execution
+    - key: execution
       depends_on: [planning]
       children:
-        - id: api-impl
-          title: Api Impl
+        - key: api-impl
           type: craft
           plan_path: 2026/feature-x/execution/api-impl
           children:
-            - id: api-impl-review
-              title: Api Impl Review
+            - key: api-impl-review
               type: review
 "#;
 
@@ -190,15 +183,12 @@ async fn job_completion_cascades_through_task_tree() {
 
     let yaml = r#"
 task:
-  id: 2026/cascade-test
-  title: Cascade test
+  key: 2026/cascade-test
   children:
-    - id: step-a
-      title: Step A
+    - key: step-a
       type: craft
       plan_path: test/step-a
-    - id: step-b
-      title: Step B
+    - key: step-b
       type: craft
       plan_path: test/step-b
       depends_on: [step-a]
@@ -350,23 +340,18 @@ async fn craft_in_review_cascades_to_review_task() {
     // Blueprint: craft with review child; step-b depends on craft
     let yaml = r#"
 task:
-  id: e2e/ir-test
-  title: InReview cascade test
+  key: e2e/ir-test
   children:
-    - id: craft
-      title: Craft
+    - key: craft
       type: craft
       plan_path: test/craft
       children:
-        - id: review
-          title: Review
+        - key: review
           type: review
-    - id: step-b
-      title: Step B
+    - key: step-b
       depends_on: [craft]
       children:
-        - id: craft
-          title: Craft
+        - key: craft
           type: craft
           plan_path: test/step-b-craft
 "#;
@@ -471,25 +456,20 @@ async fn full_task_tree_cascade_with_review() {
 
     let yaml = r#"
 task:
-  id: e2e/full
-  title: Full cascade test
+  key: e2e/full
   children:
-    - id: step-a
-      title: Step A
+    - key: step-a
       type: craft
       plan_path: test/a-craft
       children:
-        - id: review
-          title: Review
+        - key: review
           type: review
-    - id: step-b
-      title: Step B
+    - key: step-b
       depends_on: [step-a]
       type: craft
       plan_path: test/b-craft
       children:
-        - id: review
-          title: Review
+        - key: review
           type: review
 "#;
     let blueprint_file = write_blueprint_file(yaml);
@@ -757,19 +737,15 @@ async fn craft_waits_for_all_reviews_before_done() {
     // Blueprint: craft with two review children
     let yaml = r#"
 task:
-  id: e2e/multi-review
-  title: Multi review test
+  key: e2e/multi-review
   children:
-    - id: craft
-      title: Craft
+    - key: craft
       type: craft
       plan_path: test/craft
       children:
-        - id: review-1
-          title: Review 1
+        - key: review-1
           type: review
-        - id: review-2
-          title: Review 2
+        - key: review-2
           type: review
 "#;
     let blueprint_file = write_blueprint_file(yaml);
@@ -911,16 +887,13 @@ async fn changes_requested_flow() {
 
     let yaml = r#"
 task:
-  id: 2026/cr-test
-  title: CR test
+  key: 2026/cr-test
   children:
-    - id: impl
-      title: Impl
+    - key: impl
       type: craft
       plan_path: test/impl
       children:
-        - id: review
-          title: Review
+        - key: review
           type: review
 "#;
     let file = write_blueprint_file(yaml);

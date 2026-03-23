@@ -604,13 +604,7 @@ impl Orchestrator {
             id: Some(JobId::generate(job_type)),
             task_id: task.id.clone(),
             job_type,
-            title: task
-                .id
-                .as_ref()
-                .rsplit('/')
-                .next()
-                .unwrap_or("task")
-                .to_string(),
+            title: task.key.clone(),
             plan_path: task.plan_path.clone().unwrap_or_default(),
             description: task.description.clone(),
             assignee: None,

@@ -35,7 +35,7 @@ pub async fn handle_start_workflow(
         .map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))?;
 
     let workflow_id = WorkflowId::generate();
-    let tree = blueprint.to_task_tree();
+    let tree = blueprint.to_task_tree(&workflow_id);
 
     let task_count = register_tasks(&state, &workflow_id, &tree, &req.blueprint_path)?;
 
@@ -194,13 +194,7 @@ fn create_job(
             id: Some(palette_domain::job::JobId::generate(job_type)),
             task_id: task.id.clone(),
             job_type,
-            title: task
-                .id
-                .as_ref()
-                .rsplit('/')
-                .next()
-                .unwrap_or("task")
-                .to_string(),
+            title: task.key.clone(),
             plan_path: task.plan_path.clone().unwrap_or_default(),
             description: task.description.clone(),
             assignee: None,

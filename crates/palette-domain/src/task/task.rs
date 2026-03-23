@@ -12,7 +12,7 @@ pub struct Task {
     pub id: TaskId,
     pub workflow_id: WorkflowId,
     pub parent_id: Option<TaskId>,
-    pub title: String,
+    pub key: String,
     pub plan_path: Option<String>,
     pub job_type: Option<JobType>,
     pub description: Option<String>,

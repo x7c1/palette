@@ -1,9 +1,7 @@
 task:
-  id: e2e/task-tree-cascade
-  title: "E2E: Task Tree Cascade"
+  key: task-tree-cascade
   children:
-    - id: step-a
-      title: "Step A: Create file"
+    - key: step-a
       type: craft
       plan_path: step-a
       description: Create step-a.txt in the workspace root with content "Step A done" and commit it
@@ -12,12 +10,10 @@ task:
         name: x7c1/palette
         branch: e2e-cascade
       children:
-        - id: review
-          title: Review step A
+        - key: review
           type: review
 
-    - id: step-b
-      title: "Step B: Create file"
+    - key: step-b
       type: craft
       depends_on: [step-a]
       plan_path: step-b
@@ -27,6 +23,5 @@ task:
         name: x7c1/palette
         branch: e2e-cascade
       children:
-        - id: review
-          title: Review step B
+        - key: review
           type: review

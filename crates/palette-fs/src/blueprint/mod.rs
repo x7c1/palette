@@ -60,8 +60,7 @@ pub struct TaskTreeBlueprint {
 /// A node in the Blueprint's Task tree.
 #[derive(Debug, Deserialize)]
 pub struct TaskNode {
-    pub id: String,
-    pub title: String,
+    pub key: String,
     pub plan_path: Option<String>,
     #[serde(rename = "type")]
     pub job_type: Option<JobTypeYaml>,
@@ -131,39 +130,32 @@ mod tests {
     fn parse_nested_task_tree() {
         let yaml = r#"
 task:
-  id: 2026/feature-x
-  title: Add feature X
+  key: feature-x
   children:
-    - id: planning
-      title: Planning phase
+    - key: planning
       children:
-        - id: api-plan
-          title: API plan
+        - key: api-plan
           type: craft
-          plan_path: 2026/feature-x/planning/api-plan
-        - id: api-plan-review
-          title: API plan review
+          plan_path: planning/api-plan
+        - key: api-plan-review
           type: review
           depends_on: [api-plan]
 
-    - id: execution
-      title: Execution phase
+    - key: execution
       depends_on: [planning]
       children:
-        - id: api-impl
-          title: API implementation
+        - key: api-impl
           type: craft
-          plan_path: 2026/feature-x/execution/api-impl
+          plan_path: execution/api-impl
           repository:
             name: x7c1/palette
             branch: feature/x-api-impl
-        - id: api-impl-review
-          title: API implementation review
+        - key: api-impl-review
           type: review
           depends_on: [api-impl]
 "#;
         let blueprint: TaskTreeBlueprint = serde_yaml::from_str(yaml).unwrap();
-        assert_eq!(blueprint.task.id, "2026/feature-x");
+        assert_eq!(blueprint.task.key, "feature-x");
         assert_eq!(blueprint.task.children.len(), 2);
 
         let planning = &blueprint.task.children[0];
@@ -179,12 +171,12 @@ task:
         let mut f = tempfile::NamedTempFile::new().unwrap();
         std::io::Write::write_all(
             &mut f,
-            b"task:\n  id: test\n  title: Test\n  children:\n    - id: a\n      title: Task A\n      type: craft\n",
+            b"task:\n  key: test\n  children:\n    - key: task-a\n      type: craft\n",
         )
         .unwrap();
 
         let bp = read_blueprint(f.path()).unwrap();
-        assert_eq!(bp.task.id, "test");
+        assert_eq!(bp.task.key, "test");
         assert_eq!(bp.task.children.len(), 1);
     }
 }

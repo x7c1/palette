@@ -41,7 +41,7 @@ impl<'a> TaskStoreImpl<'a> {
 
         let blueprint = palette_fs::read_blueprint(std::path::Path::new(&workflow.blueprint_path))
             .map_err(Error::Blueprint)?;
-        let tree = blueprint.to_task_tree();
+        let tree = blueprint.to_task_tree(workflow_id);
         let statuses = db.get_task_statuses(workflow_id).map_err(Error::Db)?;
 
         Ok(Self::new(db, tree, workflow_id.clone(), statuses))
@@ -73,7 +73,7 @@ impl<'a> TaskStoreImpl<'a> {
             id: node.id.clone(),
             workflow_id: self.workflow_id.clone(),
             parent_id: node.parent_id.clone(),
-            title: node.title.clone(),
+            key: node.key.clone(),
             plan_path: node.plan_path.clone(),
             job_type: node.job_type,
             description: node.description.clone(),
@@ -144,21 +144,18 @@ mod tests {
 
         let yaml = r#"
 task:
-  id: 2026/test
-  title: Test
+  key: root
   children:
-    - id: a
-      title: A
+    - key: a
       type: craft
       plan_path: test/a
-    - id: b
-      title: B
+    - key: b
       type: craft
       plan_path: test/b
       depends_on: [a]
 "#;
         let blueprint: palette_fs::TaskTreeBlueprint = serde_yaml::from_str(yaml).unwrap();
-        let tree = blueprint.to_task_tree();
+        let tree = blueprint.to_task_tree(&wf_id);
 
         // Register tasks in DB
         for task_id in tree.task_ids() {
@@ -172,71 +169,69 @@ task:
         (db, tree, wf_id)
     }
 
+    /// Helper to get TaskId by key from the tree.
+    fn id(tree: &TaskTree, key: &str) -> TaskId {
+        tree.find_by_key(key).unwrap().id.clone()
+    }
+
     #[test]
     fn get_task_returns_full_task() {
         let (db, tree, wf_id) = setup();
-        db.update_task_status(&TaskId::new("2026/test"), TaskStatus::InProgress)
+        let root_id = id(&tree, "root");
+        let a_id = id(&tree, "a");
+
+        db.update_task_status(&root_id, TaskStatus::InProgress)
             .unwrap();
-        db.update_task_status(&TaskId::new("2026/test/a"), TaskStatus::Ready)
-            .unwrap();
+        db.update_task_status(&a_id, TaskStatus::Ready).unwrap();
 
         let statuses = db.get_task_statuses(&wf_id).unwrap();
         let store = TaskStoreImpl::new(&db, tree, wf_id.clone(), statuses);
 
-        let root = store.get_task(&TaskId::new("2026/test")).unwrap().unwrap();
-        assert_eq!(root.title, "Test");
+        let root = store.get_task(&root_id).unwrap().unwrap();
+        assert_eq!(root.key, "root");
         assert_eq!(root.status, TaskStatus::InProgress);
         assert_eq!(root.workflow_id, wf_id);
         assert_eq!(root.children.len(), 2);
 
-        let a = store
-            .get_task(&TaskId::new("2026/test/a"))
-            .unwrap()
-            .unwrap();
+        let a = store.get_task(&a_id).unwrap().unwrap();
         assert_eq!(a.job_type, Some(JobType::Craft));
         assert_eq!(a.status, TaskStatus::Ready);
         assert!(a.depends_on.is_empty());
 
-        let b = store
-            .get_task(&TaskId::new("2026/test/b"))
-            .unwrap()
-            .unwrap();
+        let b_id = id(&store.tree(), "b");
+        let b = store.get_task(&b_id).unwrap().unwrap();
         assert_eq!(b.status, TaskStatus::Pending);
-        assert_eq!(b.depends_on, vec![TaskId::new("2026/test/a")]);
+        assert_eq!(b.depends_on, vec![a_id]);
     }
 
     #[test]
     fn get_child_tasks_returns_children() {
         let (db, tree, wf_id) = setup();
+        let root_id = id(&tree, "root");
         let statuses = db.get_task_statuses(&wf_id).unwrap();
         let store = TaskStoreImpl::new(&db, tree, wf_id, statuses);
 
-        let children = store.get_child_tasks(&TaskId::new("2026/test")).unwrap();
+        let children = store.get_child_tasks(&root_id).unwrap();
         assert_eq!(children.len(), 2);
     }
 
     #[test]
     fn update_task_status_writes_to_db() {
         let (db, tree, wf_id) = setup();
+        let a_id = id(&tree, "a");
         let statuses = db.get_task_statuses(&wf_id).unwrap();
         let store = TaskStoreImpl::new(&db, tree, wf_id.clone(), statuses);
 
         store
-            .update_task_status(&TaskId::new("2026/test/a"), TaskStatus::Completed)
+            .update_task_status(&a_id, TaskStatus::Completed)
             .unwrap();
 
         // Verify in-memory cache is updated
-        let a = store
-            .get_task(&TaskId::new("2026/test/a"))
-            .unwrap()
-            .unwrap();
+        let a = store.get_task(&a_id).unwrap().unwrap();
         assert_eq!(a.status, TaskStatus::Completed);
 
         // Verify DB is updated
-        let state = db
-            .get_task_state(&TaskId::new("2026/test/a"))
-            .unwrap()
-            .unwrap();
+        let state = db.get_task_state(&a_id).unwrap().unwrap();
         assert_eq!(state.status, TaskStatus::Completed);
     }
 
@@ -245,14 +240,18 @@ task:
         use palette_domain::rule::{TaskEffect, TaskRuleEngine};
 
         let (db, tree, wf_id) = setup();
-        db.update_task_status(&TaskId::new("2026/test"), TaskStatus::InProgress)
+        let root_id = id(&tree, "root");
+        let a_id = id(&tree, "a");
+        let b_id = id(&tree, "b");
+
+        db.update_task_status(&root_id, TaskStatus::InProgress)
             .unwrap();
 
         let statuses = db.get_task_statuses(&wf_id).unwrap();
         let store = TaskStoreImpl::new(&db, tree, wf_id, statuses);
         let engine = TaskRuleEngine::new(&store);
 
-        let task_ids = vec![TaskId::new("2026/test/a"), TaskId::new("2026/test/b")];
+        let task_ids = vec![a_id.clone(), b_id];
         let effects = engine.resolve_ready_tasks(&task_ids).unwrap();
 
         // Only 'a' should become Ready (b depends on a)
@@ -260,7 +259,7 @@ task:
         assert_eq!(
             effects[0],
             TaskEffect::TaskStatusChanged {
-                task_id: TaskId::new("2026/test/a"),
+                task_id: a_id,
                 new_status: TaskStatus::Ready,
             }
         );
@@ -271,25 +270,26 @@ task:
         use palette_domain::rule::{TaskEffect, TaskRuleEngine};
 
         let (db, tree, wf_id) = setup();
-        db.update_task_status(&TaskId::new("2026/test"), TaskStatus::InProgress)
+        let root_id = id(&tree, "root");
+        let a_id = id(&tree, "a");
+        let b_id = id(&tree, "b");
+
+        db.update_task_status(&root_id, TaskStatus::InProgress)
             .unwrap();
-        db.update_task_status(&TaskId::new("2026/test/a"), TaskStatus::Completed)
-            .unwrap();
+        db.update_task_status(&a_id, TaskStatus::Completed).unwrap();
 
         let statuses = db.get_task_statuses(&wf_id).unwrap();
         let store = TaskStoreImpl::new(&db, tree, wf_id, statuses);
         let engine = TaskRuleEngine::new(&store);
 
-        let effects = engine
-            .on_task_completed(&TaskId::new("2026/test/a"))
-            .unwrap();
+        let effects = engine.on_task_completed(&a_id).unwrap();
 
         // b should become Ready (dependency on a is satisfied)
         assert_eq!(effects.len(), 1);
         assert_eq!(
             effects[0],
             TaskEffect::TaskStatusChanged {
-                task_id: TaskId::new("2026/test/b"),
+                task_id: b_id,
                 new_status: TaskStatus::Ready,
             }
         );
@@ -300,24 +300,24 @@ task:
         use palette_domain::rule::{TaskEffect, TaskRuleEngine};
 
         let (db, tree, wf_id) = setup();
-        db.update_task_status(&TaskId::new("2026/test"), TaskStatus::InProgress)
+        let root_id = id(&tree, "root");
+        let a_id = id(&tree, "a");
+        let b_id = id(&tree, "b");
+
+        db.update_task_status(&root_id, TaskStatus::InProgress)
             .unwrap();
-        db.update_task_status(&TaskId::new("2026/test/a"), TaskStatus::Completed)
-            .unwrap();
-        db.update_task_status(&TaskId::new("2026/test/b"), TaskStatus::Completed)
-            .unwrap();
+        db.update_task_status(&a_id, TaskStatus::Completed).unwrap();
+        db.update_task_status(&b_id, TaskStatus::Completed).unwrap();
 
         let statuses = db.get_task_statuses(&wf_id).unwrap();
         let store = TaskStoreImpl::new(&db, tree, wf_id, statuses);
         let engine = TaskRuleEngine::new(&store);
 
-        let effects = engine
-            .on_task_completed(&TaskId::new("2026/test/b"))
-            .unwrap();
+        let effects = engine.on_task_completed(&b_id).unwrap();
 
         assert!(effects.iter().any(|e| *e
             == TaskEffect::TaskStatusChanged {
-                task_id: TaskId::new("2026/test"),
+                task_id: root_id.clone(),
                 new_status: TaskStatus::Completed,
             }));
     }

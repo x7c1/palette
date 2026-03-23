@@ -1,24 +1,30 @@
 use super::{TaskNode, TaskTreeBlueprint};
 use palette_domain::job::{JobType, Priority, Repository};
 use palette_domain::task::{TaskId, TaskTree, TaskTreeNode};
+use palette_domain::workflow::WorkflowId;
 use std::collections::HashMap;
 
 impl TaskTreeBlueprint {
     /// Convert this Blueprint into a domain TaskTree.
-    pub fn to_task_tree(&self) -> TaskTree {
+    ///
+    /// Task IDs are built as `{workflow_id}:{key_path}` where key_path
+    /// is the `/`-separated path of keys from root to the node.
+    pub fn to_task_tree(&self, workflow_id: &WorkflowId) -> TaskTree {
         let root = &self.task;
-        let root_id = TaskId::new(&root.id);
+        let wf = workflow_id.as_ref();
+        let root_id = TaskId::new(format!("{wf}:{}", root.key));
         let mut nodes = HashMap::new();
 
-        insert_node(&root.id, &root_id, None, root, &mut nodes);
-        collect_nodes(&root.id, &root_id, &root.children, &mut nodes);
+        insert_node(wf, &root.key, &root_id, None, root, &mut nodes);
+        collect_nodes(wf, &root.key, &root_id, &root.children, &mut nodes);
 
         TaskTree::new(root_id, nodes)
     }
 }
 
 fn insert_node(
-    id_str: &str,
+    wf: &str,
+    key_path: &str,
     task_id: &TaskId,
     parent_id: Option<&TaskId>,
     node: &TaskNode,
@@ -27,14 +33,15 @@ fn insert_node(
     let child_ids: Vec<TaskId> = node
         .children
         .iter()
-        .map(|c| TaskId::new(format!("{id_str}/{}", c.id)))
+        .map(|c| TaskId::new(format!("{wf}:{key_path}/{}", c.key)))
         .collect();
 
     let depends_on: Vec<TaskId> = if let Some(parent) = parent_id {
-        let parent_str = parent.as_ref();
+        // depends_on references sibling keys; parent's key_path is the prefix
+        let parent_key_path = &parent.as_ref()[wf.len() + 1..]; // skip "wf:" prefix
         node.depends_on
             .iter()
-            .map(|dep| TaskId::new(format!("{parent_str}/{dep}")))
+            .map(|dep| TaskId::new(format!("{wf}:{parent_key_path}/{dep}")))
             .collect()
     } else {
         vec![]
@@ -45,7 +52,7 @@ fn insert_node(
         TaskTreeNode {
             id: task_id.clone(),
             parent_id: parent_id.cloned(),
-            title: node.title.clone(),
+            key: node.key.clone(),
             plan_path: node.plan_path.clone(),
             job_type: node.job_type.map(JobType::from),
             description: node.description.clone(),
@@ -58,17 +65,19 @@ fn insert_node(
 }
 
 fn collect_nodes(
-    parent_id_str: &str,
+    wf: &str,
+    parent_key_path: &str,
     parent_task_id: &TaskId,
     children: &[TaskNode],
     nodes: &mut HashMap<TaskId, TaskTreeNode>,
 ) {
     for child in children {
-        let child_id_str = format!("{parent_id_str}/{}", child.id);
-        let child_task_id = TaskId::new(&child_id_str);
+        let child_key_path = format!("{parent_key_path}/{}", child.key);
+        let child_task_id = TaskId::new(format!("{wf}:{child_key_path}"));
 
         insert_node(
-            &child_id_str,
+            wf,
+            &child_key_path,
             &child_task_id,
             Some(parent_task_id),
             child,
@@ -76,7 +85,7 @@ fn collect_nodes(
         );
 
         if !child.children.is_empty() {
-            collect_nodes(&child_id_str, &child_task_id, &child.children, nodes);
+            collect_nodes(wf, &child_key_path, &child_task_id, &child.children, nodes);
         }
     }
 }
@@ -88,86 +97,63 @@ mod tests {
 
     #[test]
     fn builds_flat_index_from_nested_blueprint() {
+        let wf_id = WorkflowId::new("wf-test");
         let yaml = r#"
 task:
-  id: 2026/feature-x
-  title: Add feature X
+  key: feature-x
   children:
-    - id: planning
-      title: Planning phase
+    - key: planning
       children:
-        - id: api-plan
-          title: API plan
+        - key: api-plan
           type: craft
-          plan_path: 2026/feature-x/planning/api-plan
+          plan_path: planning/api-plan
           children:
-            - id: api-plan-review
-              title: API plan review
+            - key: api-plan-review
               type: review
 
-    - id: execution
-      title: Execution phase
+    - key: execution
       depends_on: [planning]
       children:
-        - id: api-impl
-          title: API implementation
+        - key: api-impl
           type: craft
-          plan_path: 2026/feature-x/execution/api-impl
+          plan_path: execution/api-impl
 "#;
         let blueprint: TaskTreeBlueprint = serde_yaml::from_str(yaml).unwrap();
-        let tree = blueprint.to_task_tree();
+        let tree = blueprint.to_task_tree(&wf_id);
 
         // Root
-        assert_eq!(tree.root_id(), &TaskId::new("2026/feature-x"));
-        let root = tree.get(&TaskId::new("2026/feature-x")).unwrap();
-        assert_eq!(root.title, "Add feature X");
+        assert_eq!(tree.root_id(), &TaskId::new("wf-test:feature-x"));
+        let root = tree.find_by_key("feature-x").unwrap();
+        assert_eq!(root.key, "feature-x");
         assert!(root.parent_id.is_none());
         assert_eq!(root.children.len(), 2);
 
         // planning (composite, no job_type)
-        let planning = tree.get(&TaskId::new("2026/feature-x/planning")).unwrap();
-        assert_eq!(planning.title, "Planning phase");
-        assert_eq!(
-            planning.parent_id.as_ref().unwrap(),
-            &TaskId::new("2026/feature-x")
-        );
+        let planning = tree.find_by_key("planning").unwrap();
+        assert_eq!(planning.id, TaskId::new("wf-test:feature-x/planning"));
+        assert_eq!(planning.parent_id.as_ref().unwrap(), tree.root_id());
         assert!(planning.job_type.is_none());
         assert_eq!(planning.children.len(), 1);
         assert!(planning.depends_on.is_empty());
 
         // api-plan (composite craft with review child)
-        let api_plan = tree
-            .get(&TaskId::new("2026/feature-x/planning/api-plan"))
-            .unwrap();
+        let api_plan = tree.find_by_key("api-plan").unwrap();
         assert_eq!(api_plan.job_type, Some(JobType::Craft));
-        assert_eq!(
-            api_plan.plan_path.as_deref(),
-            Some("2026/feature-x/planning/api-plan")
-        );
+        assert_eq!(api_plan.plan_path.as_deref(), Some("planning/api-plan"));
         assert!(api_plan.depends_on.is_empty());
         assert_eq!(api_plan.children.len(), 1);
 
         // api-plan-review (child of api-plan, review type)
-        let review = tree
-            .get(&TaskId::new(
-                "2026/feature-x/planning/api-plan/api-plan-review",
-            ))
-            .unwrap();
+        let review = tree.find_by_key("api-plan-review").unwrap();
         assert_eq!(review.job_type, Some(JobType::Review));
-        assert_eq!(
-            review.parent_id.as_ref().unwrap(),
-            &TaskId::new("2026/feature-x/planning/api-plan")
-        );
+        assert_eq!(review.parent_id.as_ref().unwrap(), &api_plan.id);
         assert!(review.depends_on.is_empty());
 
         // execution (depends on planning)
-        let execution = tree.get(&TaskId::new("2026/feature-x/execution")).unwrap();
-        assert_eq!(
-            execution.depends_on,
-            vec![TaskId::new("2026/feature-x/planning")]
-        );
+        let execution = tree.find_by_key("execution").unwrap();
+        assert_eq!(execution.depends_on, vec![planning.id.clone()]);
 
-        // Total: root + planning + api-plan + api-plan/api-plan-review + execution + api-impl = 6
+        // Total: root + planning + api-plan + api-plan-review + execution + api-impl = 6
         assert_eq!(tree.task_ids().count(), 6);
     }
 }
