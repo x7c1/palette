@@ -71,17 +71,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Ensure plan_dir exists on the host
     std::fs::create_dir_all(&config.plan_dir)?;
 
-    let member_counter = infra.lock().await.members.len();
-    let orchestrator = Arc::new(Orchestrator::new(
-        Arc::clone(&db),
+    let orchestrator = Arc::new(Orchestrator {
+        db: Arc::clone(&db),
         docker,
-        config.docker,
-        config.plan_dir.clone(),
-        Arc::clone(&tmux),
-        Arc::clone(&infra),
-        config.state_path.clone(),
-        member_counter,
-    ));
+        docker_config: config.docker,
+        plan_dir: config.plan_dir.clone(),
+        tmux: Arc::clone(&tmux),
+        infra: Arc::clone(&infra),
+        state_path: config.state_path.clone(),
+    });
 
     // Resume readiness watchers for agents that were booting when we last shut down
     {

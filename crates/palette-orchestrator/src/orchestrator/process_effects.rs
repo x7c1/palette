@@ -94,7 +94,7 @@ impl Orchestrator {
         let workspace = self.resolve_workspace(&job)?;
 
         // Spawn a new member with supervisor_id based on job type
-        let member_id = self.next_member_id();
+        let member_id = infra.next_member_id();
         let member = self.spawn_member(&member_id, job.job_type, infra, workspace)?;
         let terminal_target = member.terminal_target.clone();
         infra.members.push(member);
