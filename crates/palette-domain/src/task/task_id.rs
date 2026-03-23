@@ -9,6 +9,8 @@ use std::fmt;
 pub struct TaskId(String);
 
 impl TaskId {
+    // TODO: validate that id matches the {workflow_id}:{key_path} format
+    //       (see plan 011-api-input-validation)
     pub fn new(id: impl Into<String>) -> Self {
         Self(id.into())
     }
