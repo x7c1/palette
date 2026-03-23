@@ -4,6 +4,8 @@ use helper::{spawn_server, test_session_name_with_guard};
 use palette_tmux::TmuxManager;
 use std::io::Write;
 
+use palette_domain::task::TaskId;
+
 /// Write YAML to a temp file and return the path.
 fn write_blueprint_file(yaml: &str) -> tempfile::NamedTempFile {
     let mut f = tempfile::NamedTempFile::new().unwrap();
@@ -11,9 +13,14 @@ fn write_blueprint_file(yaml: &str) -> tempfile::NamedTempFile {
     f
 }
 
+/// Build a TaskId from a workflow ID and key path.
+fn tid(wf_id: &str, key_path: &str) -> TaskId {
+    TaskId::new(format!("{wf_id}:{key_path}"))
+}
+
 const TASK_TREE_YAML: &str = r#"
 task:
-  key: 2026/feature-x
+  key: feature-x
   children:
     - key: planning
       children:
@@ -57,51 +64,44 @@ async fn workflow_start_creates_task_tree() {
     assert_eq!(resp.status(), 201);
 
     let body: serde_json::Value = resp.json().await.unwrap();
-    assert!(body["workflow_id"].as_str().unwrap().starts_with("wf-"));
+    let wf_id = body["workflow_id"].as_str().unwrap();
+    assert!(wf_id.starts_with("wf-"));
     // Root + planning + api-plan + api-plan/api-plan-review + execution + api-impl + api-impl/api-impl-review = 7
     assert_eq!(body["task_count"].as_u64().unwrap(), 7);
 
-    // Verify initial task status resolution via DB (status only):
-    // - root: InProgress (has children)
-    // - planning: InProgress (composite, was Ready then auto-transitioned)
-    // - execution: Pending (depends on planning)
-    // - api-plan: InProgress (composite craft with review child, job created)
-    // - api-plan/api-plan-review: Pending (activated when craft job reaches InReview)
-    use palette_domain::task::{TaskId, TaskStatus};
+    use palette_domain::task::TaskStatus;
 
     let root = state
         .db
-        .get_task_state(&TaskId::new("2026/feature-x"))
+        .get_task_state(&tid(wf_id, "feature-x"))
         .unwrap()
         .unwrap();
     assert_eq!(root.status, TaskStatus::InProgress);
 
     let planning = state
         .db
-        .get_task_state(&TaskId::new("2026/feature-x/planning"))
+        .get_task_state(&tid(wf_id, "feature-x/planning"))
         .unwrap()
         .unwrap();
     assert_eq!(planning.status, TaskStatus::InProgress);
 
     let execution = state
         .db
-        .get_task_state(&TaskId::new("2026/feature-x/execution"))
+        .get_task_state(&tid(wf_id, "feature-x/execution"))
         .unwrap()
         .unwrap();
     assert_eq!(execution.status, TaskStatus::Pending);
 
     let api_plan = state
         .db
-        .get_task_state(&TaskId::new("2026/feature-x/planning/api-plan"))
+        .get_task_state(&tid(wf_id, "feature-x/planning/api-plan"))
         .unwrap()
         .unwrap();
     assert_eq!(api_plan.status, TaskStatus::InProgress);
 
     let api_plan_review = state
         .db
-        .get_task_state(&TaskId::new(
-            "2026/feature-x/planning/api-plan/api-plan-review",
-        ))
+        .get_task_state(&tid(wf_id, "feature-x/planning/api-plan/api-plan-review"))
         .unwrap()
         .unwrap();
     assert_eq!(api_plan_review.status, TaskStatus::Pending);
@@ -119,10 +119,7 @@ async fn workflow_start_creates_task_tree() {
 
     // Only api-plan should have a job (composite craft task with job_type)
     assert_eq!(jobs.len(), 1);
-    assert_eq!(
-        jobs[0].task_id.to_string(),
-        "2026/feature-x/planning/api-plan"
-    );
+    assert_eq!(jobs[0].task_id, tid(wf_id, "feature-x/planning/api-plan"));
     assert_eq!(jobs[0].job_type, palette_domain::job::JobType::Craft);
     assert_eq!(
         jobs[0].status,
@@ -183,7 +180,7 @@ async fn job_completion_cascades_through_task_tree() {
 
     let yaml = r#"
 task:
-  key: 2026/cascade-test
+  key: cascade-test
   children:
     - key: step-a
       type: craft
@@ -204,9 +201,11 @@ task:
         .await
         .unwrap();
     assert_eq!(resp.status(), 201);
+    let resp_body: serde_json::Value = resp.json().await.unwrap();
+    let wf_id = resp_body["workflow_id"].as_str().unwrap();
 
     use palette_domain::job::{CraftStatus, JobFilter, JobStatus as JStatus, JobType};
-    use palette_domain::task::{TaskId, TaskStatus};
+    use palette_domain::task::TaskStatus;
 
     // step-a should have a Job in Todo state (craft)
     let jobs = state
@@ -218,12 +217,12 @@ task:
         })
         .unwrap();
     assert_eq!(jobs.len(), 1);
-    assert_eq!(jobs[0].task_id.to_string(), "2026/cascade-test/step-a");
+    assert_eq!(jobs[0].task_id, tid(wf_id, "cascade-test/step-a"));
 
     // step-b should be Pending (depends on step-a)
     let step_b = state
         .db
-        .get_task_state(&TaskId::new("2026/cascade-test/step-b"))
+        .get_task_state(&tid(&wf_id, "cascade-test/step-b"))
         .unwrap()
         .unwrap();
     assert_eq!(step_b.status, TaskStatus::Pending);
@@ -259,7 +258,7 @@ task:
     // Verify: step-a task should be Done
     let step_a = state
         .db
-        .get_task_state(&TaskId::new("2026/cascade-test/step-a"))
+        .get_task_state(&tid(&wf_id, "cascade-test/step-a"))
         .unwrap()
         .unwrap();
     assert_eq!(step_a.status, TaskStatus::Completed);
@@ -267,7 +266,7 @@ task:
     // Verify: step-b should now be Ready (dependency satisfied)
     let step_b = state
         .db
-        .get_task_state(&TaskId::new("2026/cascade-test/step-b"))
+        .get_task_state(&tid(&wf_id, "cascade-test/step-b"))
         .unwrap()
         .unwrap();
     assert_eq!(step_b.status, TaskStatus::Ready);
@@ -277,7 +276,7 @@ task:
         .db
         .create_job(&palette_domain::job::CreateJobRequest {
             id: Some(palette_domain::job::JobId::new("C-step-b")),
-            task_id: TaskId::new("2026/cascade-test/step-b"),
+            task_id: tid(&wf_id, "cascade-test/step-b"),
             job_type: JobType::Craft,
             title: "step-b".to_string(),
             plan_path: "test/step-b".to_string(),
@@ -312,7 +311,7 @@ task:
     // step-b task should be Done
     let step_b = state
         .db
-        .get_task_state(&TaskId::new("2026/cascade-test/step-b"))
+        .get_task_state(&tid(&wf_id, "cascade-test/step-b"))
         .unwrap()
         .unwrap();
     assert_eq!(step_b.status, TaskStatus::Completed);
@@ -320,7 +319,7 @@ task:
     // Root task should be Done (all children complete)
     let root = state
         .db
-        .get_task_state(&TaskId::new("2026/cascade-test"))
+        .get_task_state(&tid(&wf_id, "cascade-test"))
         .unwrap()
         .unwrap();
     assert_eq!(root.status, TaskStatus::Completed);
@@ -340,7 +339,7 @@ async fn craft_in_review_cascades_to_review_task() {
     // Blueprint: craft with review child; step-b depends on craft
     let yaml = r#"
 task:
-  key: e2e/ir-test
+  key: ir-test
   children:
     - key: craft
       type: craft
@@ -366,9 +365,11 @@ task:
         .await
         .unwrap();
     assert_eq!(resp.status(), 201);
+    let resp_body: serde_json::Value = resp.json().await.unwrap();
+    let wf_id = resp_body["workflow_id"].as_str().unwrap();
 
     use palette_domain::job::{CraftStatus, JobFilter, JobStatus as JStatus, ReviewStatus};
-    use palette_domain::task::{TaskId, TaskStatus};
+    use palette_domain::task::TaskStatus;
 
     // craft task should have a Job in Todo state (composite craft with children)
     let jobs = state.db.list_jobs(&JobFilter::default()).unwrap();
@@ -378,7 +379,7 @@ task:
     // craft/review should be Pending (not activated until craft job reaches InReview)
     let review_task = state
         .db
-        .get_task_state(&TaskId::new("e2e/ir-test/craft/review"))
+        .get_task_state(&tid(&wf_id, "ir-test/craft/review"))
         .unwrap()
         .unwrap();
     assert_eq!(review_task.status, TaskStatus::Pending);
@@ -408,7 +409,7 @@ task:
     // Verify: craft task should still be InProgress (not completed yet, has children)
     let craft_task = state
         .db
-        .get_task_state(&TaskId::new("e2e/ir-test/craft"))
+        .get_task_state(&tid(&wf_id, "ir-test/craft"))
         .unwrap()
         .unwrap();
     assert_eq!(craft_task.status, TaskStatus::InProgress);
@@ -416,7 +417,7 @@ task:
     // Verify: craft/review task should now be Ready (activated by InReview)
     let review_task = state
         .db
-        .get_task_state(&TaskId::new("e2e/ir-test/craft/review"))
+        .get_task_state(&tid(&wf_id, "ir-test/craft/review"))
         .unwrap()
         .unwrap();
     assert_eq!(review_task.status, TaskStatus::Ready);
@@ -425,7 +426,7 @@ task:
     let all_jobs = state.db.list_jobs(&JobFilter::default()).unwrap();
     let review_jobs: Vec<_> = all_jobs
         .iter()
-        .filter(|j| j.task_id.to_string() == "e2e/ir-test/craft/review")
+        .filter(|j| j.task_id.to_string() == tid(&wf_id, "ir-test/craft/review").to_string())
         .collect();
     assert_eq!(review_jobs.len(), 1, "review job should be created");
     assert_eq!(
@@ -437,7 +438,7 @@ task:
     // step-b should still be Pending (craft task is not completed yet)
     let step_b = state
         .db
-        .get_task_state(&TaskId::new("e2e/ir-test/step-b"))
+        .get_task_state(&tid(&wf_id, "ir-test/step-b"))
         .unwrap()
         .unwrap();
     assert_eq!(step_b.status, TaskStatus::Pending);
@@ -456,7 +457,7 @@ async fn full_task_tree_cascade_with_review() {
 
     let yaml = r#"
 task:
-  key: e2e/full
+  key: full
   children:
     - key: step-a
       type: craft
@@ -484,13 +485,13 @@ task:
         .unwrap();
     assert_eq!(resp.status(), 201);
     let resp_body: serde_json::Value = resp.json().await.unwrap();
-    let workflow_id =
-        palette_domain::workflow::WorkflowId::new(resp_body["workflow_id"].as_str().unwrap());
+    let wf_id = resp_body["workflow_id"].as_str().unwrap();
+    let workflow_id = palette_domain::workflow::WorkflowId::new(wf_id);
 
     use palette_domain::job::{CraftStatus, JobFilter, JobStatus as JStatus, JobType};
     use palette_domain::rule::RuleEffect;
     use palette_domain::server::ServerEvent;
-    use palette_domain::task::{TaskId, TaskStatus};
+    use palette_domain::task::TaskStatus;
     use palette_domain::workflow::WorkflowStatus;
 
     let wait = || tokio::time::sleep(tokio::time::Duration::from_millis(200));
@@ -504,7 +505,7 @@ task:
     assert_eq!(
         state
             .db
-            .get_task_state(&TaskId::new("e2e/full/step-a"))
+            .get_task_state(&tid(&wf_id, "full/step-a"))
             .unwrap()
             .unwrap()
             .status,
@@ -532,7 +533,7 @@ task:
     assert_eq!(
         state
             .db
-            .get_task_state(&TaskId::new("e2e/full/step-a"))
+            .get_task_state(&tid(&wf_id, "full/step-a"))
             .unwrap()
             .unwrap()
             .status,
@@ -543,7 +544,7 @@ task:
     assert_eq!(
         state
             .db
-            .get_task_state(&TaskId::new("e2e/full/step-a/review"))
+            .get_task_state(&tid(&wf_id, "full/step-a/review"))
             .unwrap()
             .unwrap()
             .status,
@@ -553,7 +554,7 @@ task:
     let all_jobs = state.db.list_jobs(&JobFilter::default()).unwrap();
     let review_a_job = all_jobs
         .iter()
-        .find(|j| j.task_id.as_ref() == "e2e/full/step-a/review")
+        .find(|j| j.task_id.as_ref() == tid(&wf_id, "full/step-a/review").to_string())
         .expect("review job should exist");
     let review_a_id = review_a_job.id.clone();
 
@@ -561,7 +562,7 @@ task:
     assert_eq!(
         state
             .db
-            .get_task_state(&TaskId::new("e2e/full/step-b"))
+            .get_task_state(&tid(&wf_id, "full/step-b"))
             .unwrap()
             .unwrap()
             .status,
@@ -601,7 +602,7 @@ task:
     assert_eq!(
         state
             .db
-            .get_task_state(&TaskId::new("e2e/full/step-a/review"))
+            .get_task_state(&tid(&wf_id, "full/step-a/review"))
             .unwrap()
             .unwrap()
             .status,
@@ -612,7 +613,7 @@ task:
     assert_eq!(
         state
             .db
-            .get_task_state(&TaskId::new("e2e/full/step-a"))
+            .get_task_state(&tid(&wf_id, "full/step-a"))
             .unwrap()
             .unwrap()
             .status,
@@ -622,7 +623,7 @@ task:
     // step-b should now be InProgress (composite craft, dependency satisfied)
     let step_b_status = state
         .db
-        .get_task_state(&TaskId::new("e2e/full/step-b"))
+        .get_task_state(&tid(&wf_id, "full/step-b"))
         .unwrap()
         .unwrap()
         .status;
@@ -631,7 +632,7 @@ task:
     let all_jobs = state.db.list_jobs(&JobFilter::default()).unwrap();
     let craft_b_job = all_jobs
         .iter()
-        .find(|j| j.task_id.as_ref() == "e2e/full/step-b")
+        .find(|j| j.task_id.as_ref() == tid(&wf_id, "full/step-b").to_string())
         .expect("step-b craft job should exist");
     let craft_b_id = craft_b_job.id.clone();
 
@@ -657,7 +658,7 @@ task:
     assert_eq!(
         state
             .db
-            .get_task_state(&TaskId::new("e2e/full/step-b/review"))
+            .get_task_state(&tid(&wf_id, "full/step-b/review"))
             .unwrap()
             .unwrap()
             .status,
@@ -667,7 +668,7 @@ task:
     let all_jobs = state.db.list_jobs(&JobFilter::default()).unwrap();
     let review_b_job = all_jobs
         .iter()
-        .find(|j| j.task_id.as_ref() == "e2e/full/step-b/review")
+        .find(|j| j.task_id.as_ref() == tid(&wf_id, "full/step-b/review").to_string())
         .expect("step-b review job should exist");
     let review_b_id = review_b_job.id.clone();
 
@@ -701,7 +702,7 @@ task:
     assert_eq!(
         state
             .db
-            .get_task_state(&TaskId::new("e2e/full/step-b"))
+            .get_task_state(&tid(&wf_id, "full/step-b"))
             .unwrap()
             .unwrap()
             .status,
@@ -712,7 +713,7 @@ task:
     assert_eq!(
         state
             .db
-            .get_task_state(&TaskId::new("e2e/full"))
+            .get_task_state(&tid(&wf_id, "full"))
             .unwrap()
             .unwrap()
             .status,
@@ -737,7 +738,7 @@ async fn craft_waits_for_all_reviews_before_done() {
     // Blueprint: craft with two review children
     let yaml = r#"
 task:
-  key: e2e/multi-review
+  key: multi-review
   children:
     - key: craft
       type: craft
@@ -759,6 +760,8 @@ task:
         .await
         .unwrap();
     assert_eq!(resp.status(), 201);
+    let resp_body: serde_json::Value = resp.json().await.unwrap();
+    let wf_id = resp_body["workflow_id"].as_str().unwrap();
 
     use palette_domain::job::{CraftStatus, JobFilter, JobStatus as JStatus, JobType};
     use palette_domain::rule::RuleEffect;
@@ -786,14 +789,11 @@ task:
     wait().await;
 
     // Both review jobs should be created (review-1 and review-2 as children of craft)
+    let review_prefix = format!("{wf_id}:multi-review/craft/review");
     let all_jobs = state.db.list_jobs(&JobFilter::default()).unwrap();
     let mut review_jobs: Vec<_> = all_jobs
         .iter()
-        .filter(|j| {
-            j.task_id
-                .as_ref()
-                .starts_with("e2e/multi-review/craft/review")
-        })
+        .filter(|j| j.task_id.as_ref().starts_with(&review_prefix))
         .collect();
     review_jobs.sort_by_key(|j| j.task_id.to_string());
     assert_eq!(review_jobs.len(), 2, "both review jobs should be created");
@@ -883,11 +883,11 @@ async fn changes_requested_flow() {
     use palette_domain::review::{SubmitReviewRequest, Verdict};
     use palette_domain::rule::RuleEffect;
     use palette_domain::server::ServerEvent;
-    use palette_domain::task::{TaskId, TaskStatus};
+    use palette_domain::task::TaskStatus;
 
     let yaml = r#"
 task:
-  key: 2026/cr-test
+  key: cr-test
   children:
     - key: impl
       type: craft
@@ -905,7 +905,7 @@ task:
 
     // Start workflow
     let client = reqwest::Client::new();
-    let _: serde_json::Value = client
+    let resp_body: serde_json::Value = client
         .post(format!("{addr}/workflows/start"))
         .json(&serde_json::json!({ "blueprint_path": file.path().to_str().unwrap() }))
         .send()
@@ -914,6 +914,7 @@ task:
         .json()
         .await
         .unwrap();
+    let wf_id = resp_body["workflow_id"].as_str().unwrap();
 
     let wait = || tokio::time::sleep(tokio::time::Duration::from_millis(200));
     wait().await;
@@ -1049,7 +1050,7 @@ task:
 
     let craft_task = state
         .db
-        .get_task_state(&TaskId::new("2026/cr-test/impl"))
+        .get_task_state(&tid(&wf_id, "cr-test/impl"))
         .unwrap()
         .unwrap();
     assert_eq!(
