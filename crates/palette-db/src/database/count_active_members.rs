@@ -6,8 +6,7 @@ impl Database {
     pub fn count_active_members(&self) -> crate::Result<usize> {
         let conn = lock!(self.conn);
         // Craft InProgress = 2, Review InProgress = 7
-        let craft_ip =
-            crate::lookup::craft_status_id(palette_domain::job::CraftStatus::InProgress);
+        let craft_ip = crate::lookup::craft_status_id(palette_domain::job::CraftStatus::InProgress);
         let review_ip =
             crate::lookup::review_status_id(palette_domain::job::ReviewStatus::InProgress);
         let count: i64 = conn.query_row(

@@ -1,6 +1,6 @@
 use palette_domain::job::{JobStatus, JobType};
 
-use super::{craft_status_id, craft_status_from_id, review_status_id, review_status_from_id};
+use super::{craft_status_from_id, craft_status_id, review_status_from_id, review_status_id};
 
 pub fn job_status_id(status: JobStatus) -> i64 {
     match status {
