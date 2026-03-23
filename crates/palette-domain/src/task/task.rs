@@ -1,4 +1,4 @@
-use super::{TaskId, TaskStatus};
+use super::{TaskId, TaskKey, TaskStatus};
 use crate::job::{JobType, Priority, Repository};
 use crate::workflow::WorkflowId;
 
@@ -12,7 +12,7 @@ pub struct Task {
     pub id: TaskId,
     pub workflow_id: WorkflowId,
     pub parent_id: Option<TaskId>,
-    pub key: String,
+    pub key: TaskKey,
     pub plan_path: Option<String>,
     pub job_type: Option<JobType>,
     pub priority: Option<Priority>,

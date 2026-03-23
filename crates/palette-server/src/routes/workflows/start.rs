@@ -194,7 +194,7 @@ fn create_job(
             id: Some(palette_domain::job::JobId::generate(job_type)),
             task_id: task.id.clone(),
             job_type,
-            title: task.key.clone(),
+            title: task.key.to_string(),
             plan_path: task.plan_path.clone().unwrap_or_default(),
             assignee: None,
             priority: task.priority,
