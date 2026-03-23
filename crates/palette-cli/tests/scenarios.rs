@@ -361,9 +361,8 @@ task:
         .unwrap();
 
     let _ = state.event_tx.send(ServerEvent::ProcessEffects {
-        effects: vec![RuleEffect::StatusChanged {
+        effects: vec![RuleEffect::JobCompleted {
             job_id: craft_a_id.clone(),
-            new_status: JStatus::Craft(CraftStatus::Done),
         }],
     });
     wait().await;
@@ -438,9 +437,8 @@ task:
         .unwrap();
 
     let _ = state.event_tx.send(ServerEvent::ProcessEffects {
-        effects: vec![RuleEffect::StatusChanged {
+        effects: vec![RuleEffect::JobCompleted {
             job_id: craft_b_id.clone(),
-            new_status: JStatus::Craft(CraftStatus::Done),
         }],
     });
     wait().await;
@@ -550,9 +548,8 @@ task:
         .unwrap();
 
     let _ = state.event_tx.send(ServerEvent::ProcessEffects {
-        effects: vec![RuleEffect::StatusChanged {
-            job_id: craft_id.clone(),
-            new_status: JStatus::Craft(CraftStatus::InReview),
+        effects: vec![RuleEffect::CraftReadyForReview {
+            craft_job_id: craft_id.clone(),
         }],
     });
     wait().await;

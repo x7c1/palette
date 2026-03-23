@@ -79,20 +79,9 @@ pub async fn handle_stop(
                         tracing::error!(job_id = %job.id, error = %e, "failed to transition job to in_review");
                         continue;
                     }
-                    let mut effects = state
-                        .rules
-                        .on_status_change(&job.id, in_review)
-                        .unwrap_or_default();
-                    for effect in &effects {
-                        tracing::info!(?effect, "rule engine effect (member stop)");
-                    }
-
-                    // Always notify orchestrator of the status change so it can
-                    // propagate task completion through the task tree.
-                    effects.push(palette_domain::rule::RuleEffect::StatusChanged {
-                        job_id: job.id.clone(),
-                        new_status: in_review,
-                    });
+                    let effects = vec![palette_domain::rule::RuleEffect::CraftReadyForReview {
+                        craft_job_id: job.id.clone(),
+                    }];
                     let _ = state.event_tx.send(ServerEvent::ProcessEffects { effects });
                 }
                 palette_domain::job::JobType::Review => {

@@ -222,11 +222,7 @@ fn create_job(
         })
         .map_err(internal_err)?;
 
-    let todo_status = palette_domain::job::JobStatus::todo(job_type);
-    let effects = state
-        .rules
-        .on_status_change(&job.id, todo_status)
-        .map_err(internal_err)?;
+    let effects = state.rules.on_job_created(&job.id).map_err(internal_err)?;
 
     tracing::info!(
         job_id = %job.id,
