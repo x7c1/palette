@@ -146,15 +146,14 @@ mod tests {
 task:
   id: 2026/test
   title: Test
-
-children:
-  - id: a
-    type: craft
-    plan_path: test/a
-  - id: b
-    type: craft
-    plan_path: test/b
-    depends_on: [a]
+  children:
+    - id: a
+      type: craft
+      plan_path: test/a
+    - id: b
+      type: craft
+      plan_path: test/b
+      depends_on: [a]
 "#;
         let blueprint: palette_fs::TaskTreeBlueprint = serde_yaml::from_str(yaml).unwrap();
         let tree = blueprint.to_task_tree();

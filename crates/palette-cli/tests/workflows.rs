@@ -15,26 +15,25 @@ const TASK_TREE_YAML: &str = r#"
 task:
   id: 2026/feature-x
   title: Add feature X
+  children:
+    - id: planning
+      children:
+        - id: api-plan
+          type: craft
+          plan_path: 2026/feature-x/planning/api-plan
+          children:
+            - id: api-plan-review
+              type: review
 
-children:
-  - id: planning
-    children:
-      - id: api-plan
-        type: craft
-        plan_path: 2026/feature-x/planning/api-plan
-        children:
-          - id: api-plan-review
-            type: review
-
-  - id: execution
-    depends_on: [planning]
-    children:
-      - id: api-impl
-        type: craft
-        plan_path: 2026/feature-x/execution/api-impl
-        children:
-          - id: api-impl-review
-            type: review
+    - id: execution
+      depends_on: [planning]
+      children:
+        - id: api-impl
+          type: craft
+          plan_path: 2026/feature-x/execution/api-impl
+          children:
+            - id: api-impl-review
+              type: review
 "#;
 
 #[tokio::test]
@@ -187,15 +186,14 @@ async fn job_completion_cascades_through_task_tree() {
 task:
   id: 2026/cascade-test
   title: Cascade test
-
-children:
-  - id: step-a
-    type: craft
-    plan_path: test/step-a
-  - id: step-b
-    type: craft
-    plan_path: test/step-b
-    depends_on: [step-a]
+  children:
+    - id: step-a
+      type: craft
+      plan_path: test/step-a
+    - id: step-b
+      type: craft
+      plan_path: test/step-b
+      depends_on: [step-a]
 "#;
     let blueprint_file = write_blueprint_file(yaml);
 
@@ -346,20 +344,19 @@ async fn craft_in_review_cascades_to_review_task() {
 task:
   id: e2e/ir-test
   title: InReview cascade test
-
-children:
-  - id: craft
-    type: craft
-    plan_path: test/craft
-    children:
-      - id: review
-        type: review
-  - id: step-b
-    depends_on: [craft]
-    children:
-      - id: craft
-        type: craft
-        plan_path: test/step-b-craft
+  children:
+    - id: craft
+      type: craft
+      plan_path: test/craft
+      children:
+        - id: review
+          type: review
+    - id: step-b
+      depends_on: [craft]
+      children:
+        - id: craft
+          type: craft
+          plan_path: test/step-b-craft
 "#;
     let blueprint_file = write_blueprint_file(yaml);
 
@@ -464,21 +461,20 @@ async fn full_task_tree_cascade_with_review() {
 task:
   id: e2e/full
   title: Full cascade test
-
-children:
-  - id: step-a
-    type: craft
-    plan_path: test/a-craft
-    children:
-      - id: review
-        type: review
-  - id: step-b
-    depends_on: [step-a]
-    type: craft
-    plan_path: test/b-craft
-    children:
-      - id: review
-        type: review
+  children:
+    - id: step-a
+      type: craft
+      plan_path: test/a-craft
+      children:
+        - id: review
+          type: review
+    - id: step-b
+      depends_on: [step-a]
+      type: craft
+      plan_path: test/b-craft
+      children:
+        - id: review
+          type: review
 "#;
     let blueprint_file = write_blueprint_file(yaml);
 
@@ -747,16 +743,15 @@ async fn craft_waits_for_all_reviews_before_done() {
 task:
   id: e2e/multi-review
   title: Multi review test
-
-children:
-  - id: craft
-    type: craft
-    plan_path: test/craft
-    children:
-      - id: review-1
-        type: review
-      - id: review-2
-        type: review
+  children:
+    - id: craft
+      type: craft
+      plan_path: test/craft
+      children:
+        - id: review-1
+          type: review
+        - id: review-2
+          type: review
 "#;
     let blueprint_file = write_blueprint_file(yaml);
 
@@ -899,13 +894,13 @@ async fn changes_requested_flow() {
 task:
   id: 2026/cr-test
   title: CR test
-children:
-  - id: impl
-    type: craft
-    plan_path: test/impl
-    children:
-      - id: review
-        type: review
+  children:
+    - id: impl
+      type: craft
+      plan_path: test/impl
+      children:
+        - id: review
+          type: review
 "#;
     let file = write_blueprint_file(yaml);
 

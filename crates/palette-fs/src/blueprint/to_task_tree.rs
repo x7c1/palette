@@ -10,6 +10,7 @@ impl TaskTreeBlueprint {
         let mut nodes = HashMap::new();
 
         let child_ids: Vec<TaskId> = self
+            .task
             .children
             .iter()
             .map(|c| TaskId::new(format!("{}/{}", self.task.id, c.id)))
@@ -31,7 +32,7 @@ impl TaskTreeBlueprint {
             },
         );
 
-        collect_nodes(&self.task.id, &root_id, &self.children, &mut nodes);
+        collect_nodes(&self.task.id, &root_id, &self.task.children, &mut nodes);
 
         TaskTree::new(root_id, nodes)
     }
@@ -92,23 +93,22 @@ mod tests {
 task:
   id: 2026/feature-x
   title: Add feature X
+  children:
+    - id: planning
+      children:
+        - id: api-plan
+          type: craft
+          plan_path: 2026/feature-x/planning/api-plan
+          children:
+            - id: api-plan-review
+              type: review
 
-children:
-  - id: planning
-    children:
-      - id: api-plan
-        type: craft
-        plan_path: 2026/feature-x/planning/api-plan
-        children:
-          - id: api-plan-review
-            type: review
-
-  - id: execution
-    depends_on: [planning]
-    children:
-      - id: api-impl
-        type: craft
-        plan_path: 2026/feature-x/execution/api-impl
+    - id: execution
+      depends_on: [planning]
+      children:
+        - id: api-impl
+          type: craft
+          plan_path: 2026/feature-x/execution/api-impl
 "#;
         let blueprint: TaskTreeBlueprint = serde_yaml::from_str(yaml).unwrap();
         let tree = blueprint.to_task_tree();

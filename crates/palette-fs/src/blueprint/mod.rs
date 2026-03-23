@@ -55,8 +55,6 @@ impl std::error::Error for BlueprintReadError {}
 #[derive(Debug, Deserialize)]
 pub struct TaskTreeBlueprint {
     pub task: TaskTreeRoot,
-    #[serde(default)]
-    pub children: Vec<TaskNode>,
 }
 
 /// Root task identity.
@@ -65,6 +63,8 @@ pub struct TaskTreeRoot {
     pub id: String,
     pub title: String,
     pub plan_path: Option<String>,
+    #[serde(default)]
+    pub children: Vec<TaskNode>,
 }
 
 /// A node in the Blueprint's Task tree.
@@ -144,39 +144,38 @@ mod tests {
 task:
   id: 2026/feature-x
   title: Add feature X
+  children:
+    - id: planning
+      children:
+        - id: api-plan
+          type: craft
+          plan_path: 2026/feature-x/planning/api-plan
+        - id: api-plan-review
+          type: review
+          depends_on: [api-plan]
 
-children:
-  - id: planning
-    children:
-      - id: api-plan
-        type: craft
-        plan_path: 2026/feature-x/planning/api-plan
-      - id: api-plan-review
-        type: review
-        depends_on: [api-plan]
-
-  - id: execution
-    depends_on: [planning]
-    children:
-      - id: api-impl
-        type: craft
-        plan_path: 2026/feature-x/execution/api-impl
-        repository:
-          name: x7c1/palette
-          branch: feature/x-api-impl
-      - id: api-impl-review
-        type: review
-        depends_on: [api-impl]
+    - id: execution
+      depends_on: [planning]
+      children:
+        - id: api-impl
+          type: craft
+          plan_path: 2026/feature-x/execution/api-impl
+          repository:
+            name: x7c1/palette
+            branch: feature/x-api-impl
+        - id: api-impl-review
+          type: review
+          depends_on: [api-impl]
 "#;
         let blueprint: TaskTreeBlueprint = serde_yaml::from_str(yaml).unwrap();
         assert_eq!(blueprint.task.id, "2026/feature-x");
-        assert_eq!(blueprint.children.len(), 2);
+        assert_eq!(blueprint.task.children.len(), 2);
 
-        let planning = &blueprint.children[0];
+        let planning = &blueprint.task.children[0];
         assert_eq!(planning.children.len(), 2);
         assert!(planning.job_type.is_none());
 
-        let execution = &blueprint.children[1];
+        let execution = &blueprint.task.children[1];
         assert_eq!(execution.depends_on, vec!["planning"]);
     }
 
@@ -185,12 +184,12 @@ children:
         let mut f = tempfile::NamedTempFile::new().unwrap();
         std::io::Write::write_all(
             &mut f,
-            b"task:\n  id: test\n  title: Test\nchildren:\n  - id: a\n    type: craft\n",
+            b"task:\n  id: test\n  title: Test\n  children:\n    - id: a\n      type: craft\n",
         )
         .unwrap();
 
         let bp = read_blueprint(f.path()).unwrap();
         assert_eq!(bp.task.id, "test");
-        assert_eq!(bp.children.len(), 1);
+        assert_eq!(bp.task.children.len(), 1);
     }
 }
