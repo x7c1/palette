@@ -64,7 +64,6 @@ pub struct TaskNode {
     pub plan_path: Option<String>,
     #[serde(rename = "type")]
     pub job_type: Option<JobTypeYaml>,
-    pub description: Option<String>,
     pub priority: Option<PriorityYaml>,
     pub repository: Option<RepositoryYaml>,
     #[serde(default)]

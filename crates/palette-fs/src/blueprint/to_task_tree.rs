@@ -55,7 +55,6 @@ fn insert_node(
             key: node.key.clone(),
             plan_path: node.plan_path.clone(),
             job_type: node.job_type.map(JobType::from),
-            description: node.description.clone(),
             priority: node.priority.map(Priority::from),
             repository: node.repository.clone().map(Repository::from),
             children: child_ids,

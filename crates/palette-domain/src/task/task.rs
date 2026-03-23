@@ -15,7 +15,6 @@ pub struct Task {
     pub key: String,
     pub plan_path: Option<String>,
     pub job_type: Option<JobType>,
-    pub description: Option<String>,
     pub priority: Option<Priority>,
     pub repository: Option<Repository>,
     pub status: TaskStatus,

@@ -4,7 +4,6 @@ task:
     - key: step-a
       type: craft
       plan_path: step-a
-      description: Create step-a.txt in the workspace root with content "Step A done" and commit it
       priority: high
       repository:
         name: x7c1/palette
@@ -17,7 +16,6 @@ task:
       type: craft
       depends_on: [step-a]
       plan_path: step-b
-      description: Create step-b.txt in the workspace root with content "Step B done" and commit it
       priority: medium
       repository:
         name: x7c1/palette

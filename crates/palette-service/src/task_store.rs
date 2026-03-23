@@ -76,7 +76,6 @@ impl<'a> TaskStoreImpl<'a> {
             key: node.key.clone(),
             plan_path: node.plan_path.clone(),
             job_type: node.job_type,
-            description: node.description.clone(),
             priority: node.priority,
             repository: node.repository.clone(),
             status,

@@ -196,7 +196,7 @@ fn create_job(
             job_type,
             title: task.key.clone(),
             plan_path: task.plan_path.clone().unwrap_or_default(),
-            description: task.description.clone(),
+            description: None,
             assignee: None,
             priority: task.priority,
             repository: task.repository.clone(),

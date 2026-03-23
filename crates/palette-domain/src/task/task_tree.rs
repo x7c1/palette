@@ -18,7 +18,6 @@ pub struct TaskTreeNode {
     pub key: String,
     pub plan_path: Option<String>,
     pub job_type: Option<JobType>,
-    pub description: Option<String>,
     pub priority: Option<Priority>,
     pub repository: Option<Repository>,
     pub children: Vec<TaskId>,
