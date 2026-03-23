@@ -12,8 +12,8 @@ impl Database {
         let conn = lock!(self.conn);
         let now = Utc::now().to_rfc3339();
         let updated = conn.execute(
-            "UPDATE jobs SET status = ?1, assignee = ?2, assigned_at = ?3, updated_at = ?4 WHERE id = ?5",
-            params![in_progress.as_str(), assignee.as_ref(), now, now, job_id.as_ref()],
+            "UPDATE jobs SET status_id = ?1, assignee = ?2, assigned_at = ?3, updated_at = ?4 WHERE id = ?5",
+            params![crate::lookup::job_status_id(in_progress), assignee.as_ref(), now, now, job_id.as_ref()],
         )?;
         if updated == 0 {
             return Err(JobError::NotFound {

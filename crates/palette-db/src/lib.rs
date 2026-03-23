@@ -8,4 +8,5 @@ pub use database::CreateTaskRequest;
 pub use database::Database;
 
 mod job_store;
+pub(crate) mod lookup;
 mod schema;

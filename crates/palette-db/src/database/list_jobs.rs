@@ -3,16 +3,16 @@ use super::*;
 impl Database {
     pub fn list_jobs(&self, filter: &JobFilter) -> crate::Result<Vec<Job>> {
         let conn = lock!(self.conn);
-        let mut sql = "SELECT id, task_id, type, title, plan_path, description, assignee, status, priority, repository, pr_url, created_at, updated_at, notes, assigned_at FROM jobs WHERE 1=1".to_string();
+        let mut sql = "SELECT id, task_id, type_id, title, plan_path, description, assignee, status_id, priority_id, repository, pr_url, created_at, updated_at, notes, assigned_at FROM jobs WHERE 1=1".to_string();
         let mut param_values: Vec<Box<dyn rusqlite::types::ToSql>> = Vec::new();
 
         if let Some(ref t) = filter.job_type {
-            param_values.push(Box::new(t.as_str().to_string()));
-            sql.push_str(&format!(" AND type = ?{}", param_values.len()));
+            param_values.push(Box::new(crate::lookup::job_type_id(*t)));
+            sql.push_str(&format!(" AND type_id = ?{}", param_values.len()));
         }
         if let Some(ref s) = filter.status {
-            param_values.push(Box::new(s.as_str().to_string()));
-            sql.push_str(&format!(" AND status = ?{}", param_values.len()));
+            param_values.push(Box::new(crate::lookup::job_status_id(*s)));
+            sql.push_str(&format!(" AND status_id = ?{}", param_values.len()));
         }
         if let Some(ref a) = filter.assignee {
             param_values.push(Box::new(a.as_ref().to_string()));

@@ -20,18 +20,18 @@ impl Database {
         let tx = conn.transaction()?;
 
         tx.execute(
-            "INSERT INTO jobs (id, task_id, type, title, plan_path, description, assignee, status, priority, repository, pr_url, created_at, updated_at, notes, assigned_at)
+            "INSERT INTO jobs (id, task_id, type_id, title, plan_path, description, assignee, status_id, priority_id, repository, pr_url, created_at, updated_at, notes, assigned_at)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, NULL, ?11, ?12, NULL, NULL)",
             params![
                 id.as_ref(),
                 req.task_id.as_ref(),
-                req.job_type.as_str(),
+                crate::lookup::job_type_id(req.job_type),
                 req.title,
                 req.plan_path,
                 req.description,
                 req.assignee.as_ref().map(|a| a.as_ref()),
-                initial_status.as_str(),
-                req.priority.map(|p| p.as_str()),
+                crate::lookup::job_status_id(initial_status),
+                req.priority.map(crate::lookup::priority_id),
                 repos_json,
                 now_str,
                 now_str,

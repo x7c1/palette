@@ -82,43 +82,35 @@ fn parse_datetime(s: &str) -> DateTime<Utc> {
 /// Query a single job by ID from a connection or transaction.
 fn query_job(conn: &Connection, id: &JobId) -> crate::Result<Option<Job>> {
     let mut stmt = conn.prepare(
-        "SELECT id, task_id, type, title, plan_path, description, assignee, status, priority, repository, pr_url, created_at, updated_at, notes, assigned_at
+        "SELECT id, task_id, type_id, title, plan_path, description, assignee, status_id, priority_id, repository, pr_url, created_at, updated_at, notes, assigned_at
          FROM jobs WHERE id = ?1",
     )?;
     let mut rows = stmt.query_map(params![id.as_ref()], row_to_job)?;
     rows.next().transpose().map_err(Into::into)
 }
 
-pub(super) fn parse_column<T: std::str::FromStr<Err = String>>(
-    row: &rusqlite::Row,
-    column: &str,
-) -> rusqlite::Result<T> {
-    let s: String = row.get(column)?;
-    s.parse().map_err(|e: String| {
-        rusqlite::Error::FromSqlConversionFailure(
-            0,
-            rusqlite::types::Type::Text,
-            Box::new(std::io::Error::new(std::io::ErrorKind::InvalidData, e)),
-        )
-    })
+pub(super) fn id_conversion_error(e: String) -> rusqlite::Error {
+    rusqlite::Error::FromSqlConversionFailure(
+        0,
+        rusqlite::types::Type::Integer,
+        Box::new(std::io::Error::new(std::io::ErrorKind::InvalidData, e)),
+    )
 }
 
 fn row_to_job(row: &rusqlite::Row) -> rusqlite::Result<Job> {
+    use crate::lookup;
     use palette_domain::task::TaskId;
 
     let repos_str: Option<String> = row.get("repository")?;
     let repository: Option<Repository> =
         repos_str.and_then(|s| repository_row::repository_from_json(&s));
 
-    let job_type: JobType = parse_column(row, "type")?;
-    let status_str: String = row.get("status")?;
-    let status = JobStatus::parse(&status_str, job_type).map_err(|e| {
-        rusqlite::Error::FromSqlConversionFailure(
-            0,
-            rusqlite::types::Type::Text,
-            Box::new(std::io::Error::new(std::io::ErrorKind::InvalidData, e)),
-        )
-    })?;
+    let type_id: i64 = row.get("type_id")?;
+    let job_type = lookup::job_type_from_id(type_id).map_err(id_conversion_error)?;
+
+    let status_id_val: i64 = row.get("status_id")?;
+    let status =
+        lookup::job_status_from_id(status_id_val, job_type).map_err(id_conversion_error)?;
 
     Ok(Job {
         id: JobId::new(row.get::<_, String>("id")?),
@@ -130,8 +122,9 @@ fn row_to_job(row: &rusqlite::Row) -> rusqlite::Result<Job> {
         assignee: row.get::<_, Option<String>>("assignee")?.map(AgentId::new),
         status,
         priority: row
-            .get::<_, Option<String>>("priority")?
-            .and_then(|s| s.parse().ok()),
+            .get::<_, Option<i64>>("priority_id")?
+            .map(|id| lookup::priority_from_id(id).map_err(id_conversion_error))
+            .transpose()?,
         repository,
         pr_url: row.get("pr_url")?,
         created_at: parse_datetime(&row.get::<_, String>("created_at")?),

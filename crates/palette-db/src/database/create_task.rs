@@ -13,11 +13,11 @@ impl Database {
     pub fn create_task(&self, req: &CreateTaskRequest) -> crate::Result<()> {
         let conn = lock!(self.conn);
         conn.execute(
-            "INSERT INTO tasks (id, workflow_id, status) VALUES (?1, ?2, ?3)",
+            "INSERT INTO tasks (id, workflow_id, status_id) VALUES (?1, ?2, ?3)",
             params![
                 req.id.as_ref(),
                 req.workflow_id.as_ref(),
-                TaskStatus::Pending.as_str(),
+                crate::lookup::task_status_id(TaskStatus::Pending),
             ],
         )?;
         Ok(())
