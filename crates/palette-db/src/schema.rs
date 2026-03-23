@@ -61,7 +61,6 @@ CREATE TABLE IF NOT EXISTS jobs (
     type_id INTEGER NOT NULL,
     title TEXT NOT NULL,
     plan_path TEXT NOT NULL,
-    description TEXT,
     assignee TEXT,
     status_id INTEGER NOT NULL,
     priority_id INTEGER,

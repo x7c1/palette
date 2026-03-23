@@ -280,7 +280,6 @@ task:
             job_type: JobType::Craft,
             title: "step-b".to_string(),
             plan_path: "test/step-b".to_string(),
-            description: None,
             assignee: None,
             priority: None,
             repository: None,

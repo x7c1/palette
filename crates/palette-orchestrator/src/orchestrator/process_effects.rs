@@ -606,7 +606,6 @@ impl Orchestrator {
             job_type,
             title: task.key.clone(),
             plan_path: task.plan_path.clone().unwrap_or_default(),
-            description: None,
             assignee: None,
             priority: task.priority,
             repository: task.repository.clone(),
@@ -636,9 +635,6 @@ fn format_job_instruction(job: &Job) -> String {
         "## Task: {}\n\nID: {}\nPlan: {}/{}\n",
         job.title, job.id, PLAN_DIR_MOUNT, job.plan_path
     );
-    if let Some(ref desc) = job.description {
-        msg.push_str(&format!("\n{desc}\n"));
-    }
     if let Some(ref repo) = job.repository {
         msg.push_str(&format!(
             "\nRepository: {} (branch: {})\n",
@@ -689,7 +685,6 @@ mod tests {
             job_type: JobType::Review,
             title: "Review".to_string(),
             plan_path: "test/R-001".to_string(),
-            description: None,
             assignee: None,
             priority: None,
             repository: None,
@@ -719,7 +714,6 @@ mod tests {
             job_type: JobType::Review,
             title: "Review".to_string(),
             plan_path: "test/R-001".to_string(),
-            description: None,
             assignee: None,
             priority: None,
             repository: None,
@@ -772,7 +766,6 @@ mod tests {
             job_type: JobType::Review,
             title: "Review".to_string(),
             plan_path: "test/R-001".to_string(),
-            description: None,
             assignee: None,
             priority: None,
             repository: None,
