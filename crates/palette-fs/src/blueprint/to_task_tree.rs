@@ -6,36 +6,55 @@ use std::collections::HashMap;
 impl TaskTreeBlueprint {
     /// Convert this Blueprint into a domain TaskTree.
     pub fn to_task_tree(&self) -> TaskTree {
-        let root_id = TaskId::new(&self.task.id);
+        let root = &self.task;
+        let root_id = TaskId::new(&root.id);
         let mut nodes = HashMap::new();
 
-        let child_ids: Vec<TaskId> = self
-            .task
-            .children
-            .iter()
-            .map(|c| TaskId::new(format!("{}/{}", self.task.id, c.id)))
-            .collect();
-
-        nodes.insert(
-            root_id.clone(),
-            TaskTreeNode {
-                id: root_id.clone(),
-                parent_id: None,
-                title: self.task.title.clone(),
-                plan_path: self.task.plan_path.clone(),
-                job_type: None,
-                description: None,
-                priority: None,
-                repository: None,
-                children: child_ids,
-                depends_on: vec![],
-            },
-        );
-
-        collect_nodes(&self.task.id, &root_id, &self.task.children, &mut nodes);
+        insert_node(&root.id, &root_id, None, root, &mut nodes);
+        collect_nodes(&root.id, &root_id, &root.children, &mut nodes);
 
         TaskTree::new(root_id, nodes)
     }
+}
+
+fn insert_node(
+    id_str: &str,
+    task_id: &TaskId,
+    parent_id: Option<&TaskId>,
+    node: &TaskNode,
+    nodes: &mut HashMap<TaskId, TaskTreeNode>,
+) {
+    let child_ids: Vec<TaskId> = node
+        .children
+        .iter()
+        .map(|c| TaskId::new(format!("{id_str}/{}", c.id)))
+        .collect();
+
+    let depends_on: Vec<TaskId> = if let Some(parent) = parent_id {
+        let parent_str = parent.as_ref();
+        node.depends_on
+            .iter()
+            .map(|dep| TaskId::new(format!("{parent_str}/{dep}")))
+            .collect()
+    } else {
+        vec![]
+    };
+
+    nodes.insert(
+        task_id.clone(),
+        TaskTreeNode {
+            id: task_id.clone(),
+            parent_id: parent_id.cloned(),
+            title: node.title.clone(),
+            plan_path: node.plan_path.clone(),
+            job_type: node.job_type.map(JobType::from),
+            description: node.description.clone(),
+            priority: node.priority.map(Priority::from),
+            repository: node.repository.clone().map(Repository::from),
+            children: child_ids,
+            depends_on,
+        },
+    );
 }
 
 fn collect_nodes(
@@ -48,32 +67,12 @@ fn collect_nodes(
         let child_id_str = format!("{parent_id_str}/{}", child.id);
         let child_task_id = TaskId::new(&child_id_str);
 
-        let grandchild_ids: Vec<TaskId> = child
-            .children
-            .iter()
-            .map(|gc| TaskId::new(format!("{child_id_str}/{}", gc.id)))
-            .collect();
-
-        let depends_on: Vec<TaskId> = child
-            .depends_on
-            .iter()
-            .map(|dep| TaskId::new(format!("{parent_id_str}/{dep}")))
-            .collect();
-
-        nodes.insert(
-            child_task_id.clone(),
-            TaskTreeNode {
-                id: child_task_id.clone(),
-                parent_id: Some(parent_task_id.clone()),
-                title: child.title.clone().unwrap_or_else(|| child.id.clone()),
-                plan_path: child.plan_path.clone(),
-                job_type: child.job_type.map(JobType::from),
-                description: child.description.clone(),
-                priority: child.priority.map(Priority::from),
-                repository: child.repository.clone().map(Repository::from),
-                children: grandchild_ids,
-                depends_on,
-            },
+        insert_node(
+            &child_id_str,
+            &child_task_id,
+            Some(parent_task_id),
+            child,
+            nodes,
         );
 
         if !child.children.is_empty() {
@@ -95,18 +94,23 @@ task:
   title: Add feature X
   children:
     - id: planning
+      title: Planning phase
       children:
         - id: api-plan
+          title: API plan
           type: craft
           plan_path: 2026/feature-x/planning/api-plan
           children:
             - id: api-plan-review
+              title: API plan review
               type: review
 
     - id: execution
+      title: Execution phase
       depends_on: [planning]
       children:
         - id: api-impl
+          title: API implementation
           type: craft
           plan_path: 2026/feature-x/execution/api-impl
 "#;
@@ -122,7 +126,7 @@ task:
 
         // planning (composite, no job_type)
         let planning = tree.get(&TaskId::new("2026/feature-x/planning")).unwrap();
-        assert_eq!(planning.title, "planning");
+        assert_eq!(planning.title, "Planning phase");
         assert_eq!(
             planning.parent_id.as_ref().unwrap(),
             &TaskId::new("2026/feature-x")

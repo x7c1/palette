@@ -54,25 +54,14 @@ impl std::error::Error for BlueprintReadError {}
 /// Root of a Blueprint YAML document.
 #[derive(Debug, Deserialize)]
 pub struct TaskTreeBlueprint {
-    pub task: TaskTreeRoot,
-}
-
-/// Root task identity.
-#[derive(Debug, Deserialize)]
-pub struct TaskTreeRoot {
-    pub id: String,
-    pub title: String,
-    pub plan_path: Option<String>,
-    #[serde(default)]
-    pub children: Vec<TaskNode>,
+    pub task: TaskNode,
 }
 
 /// A node in the Blueprint's Task tree.
 #[derive(Debug, Deserialize)]
 pub struct TaskNode {
     pub id: String,
-    #[serde(default)]
-    pub title: Option<String>,
+    pub title: String,
     pub plan_path: Option<String>,
     #[serde(rename = "type")]
     pub job_type: Option<JobTypeYaml>,
@@ -146,24 +135,30 @@ task:
   title: Add feature X
   children:
     - id: planning
+      title: Planning phase
       children:
         - id: api-plan
+          title: API plan
           type: craft
           plan_path: 2026/feature-x/planning/api-plan
         - id: api-plan-review
+          title: API plan review
           type: review
           depends_on: [api-plan]
 
     - id: execution
+      title: Execution phase
       depends_on: [planning]
       children:
         - id: api-impl
+          title: API implementation
           type: craft
           plan_path: 2026/feature-x/execution/api-impl
           repository:
             name: x7c1/palette
             branch: feature/x-api-impl
         - id: api-impl-review
+          title: API implementation review
           type: review
           depends_on: [api-impl]
 "#;
@@ -184,7 +179,7 @@ task:
         let mut f = tempfile::NamedTempFile::new().unwrap();
         std::io::Write::write_all(
             &mut f,
-            b"task:\n  id: test\n  title: Test\n  children:\n    - id: a\n      type: craft\n",
+            b"task:\n  id: test\n  title: Test\n  children:\n    - id: a\n      title: Task A\n      type: craft\n",
         )
         .unwrap();
 

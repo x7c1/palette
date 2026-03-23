@@ -148,9 +148,11 @@ task:
   title: Test
   children:
     - id: a
+      title: A
       type: craft
       plan_path: test/a
     - id: b
+      title: B
       type: craft
       plan_path: test/b
       depends_on: [a]

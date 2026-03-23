@@ -17,22 +17,28 @@ task:
   title: Add feature X
   children:
     - id: planning
+      title: Planning
       children:
         - id: api-plan
+          title: Api Plan
           type: craft
           plan_path: 2026/feature-x/planning/api-plan
           children:
             - id: api-plan-review
+              title: Api Plan Review
               type: review
 
     - id: execution
+      title: Execution
       depends_on: [planning]
       children:
         - id: api-impl
+          title: Api Impl
           type: craft
           plan_path: 2026/feature-x/execution/api-impl
           children:
             - id: api-impl-review
+              title: Api Impl Review
               type: review
 "#;
 
@@ -188,9 +194,11 @@ task:
   title: Cascade test
   children:
     - id: step-a
+      title: Step A
       type: craft
       plan_path: test/step-a
     - id: step-b
+      title: Step B
       type: craft
       plan_path: test/step-b
       depends_on: [step-a]
@@ -346,15 +354,19 @@ task:
   title: InReview cascade test
   children:
     - id: craft
+      title: Craft
       type: craft
       plan_path: test/craft
       children:
         - id: review
+          title: Review
           type: review
     - id: step-b
+      title: Step B
       depends_on: [craft]
       children:
         - id: craft
+          title: Craft
           type: craft
           plan_path: test/step-b-craft
 "#;
@@ -463,17 +475,21 @@ task:
   title: Full cascade test
   children:
     - id: step-a
+      title: Step A
       type: craft
       plan_path: test/a-craft
       children:
         - id: review
+          title: Review
           type: review
     - id: step-b
+      title: Step B
       depends_on: [step-a]
       type: craft
       plan_path: test/b-craft
       children:
         - id: review
+          title: Review
           type: review
 "#;
     let blueprint_file = write_blueprint_file(yaml);
@@ -745,12 +761,15 @@ task:
   title: Multi review test
   children:
     - id: craft
+      title: Craft
       type: craft
       plan_path: test/craft
       children:
         - id: review-1
+          title: Review 1
           type: review
         - id: review-2
+          title: Review 2
           type: review
 "#;
     let blueprint_file = write_blueprint_file(yaml);
@@ -896,10 +915,12 @@ task:
   title: CR test
   children:
     - id: impl
+      title: Impl
       type: craft
       plan_path: test/impl
       children:
         - id: review
+          title: Review
           type: review
 "#;
     let file = write_blueprint_file(yaml);
