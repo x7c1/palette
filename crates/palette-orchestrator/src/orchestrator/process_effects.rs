@@ -76,15 +76,22 @@ impl Orchestrator {
 
         // Re-review: job already has an assignee (e.g. reviewer from previous round).
         // Deliver a new instruction to the existing member instead of spawning a new one.
+        // Skip if the job is already InProgress — this prevents duplicate assignment when
+        // multiple AutoAssign effects fire for the same job in a single processing cycle.
         if let Some(ref existing_assignee) = job.assignee
             && let Some(member) = infra.find_member(existing_assignee)
         {
+            let in_progress = JobStatus::in_progress(job.job_type);
+            if job.status == in_progress {
+                tracing::debug!(
+                    job_id = %job_id,
+                    member_id = %existing_assignee,
+                    "skipping re-assign (job already in progress)"
+                );
+                return Ok(());
+            }
             let instruction = format_job_instruction(&job);
             self.db.enqueue_message(existing_assignee, &instruction)?;
-            let in_progress = match job.job_type {
-                JobType::Craft => JobStatus::Craft(CraftStatus::InProgress),
-                JobType::Review => JobStatus::Review(ReviewStatus::InProgress),
-            };
             self.db.update_job_status(job_id, in_progress)?;
             deliveries.push(PendingDelivery {
                 target_id: existing_assignee.clone(),

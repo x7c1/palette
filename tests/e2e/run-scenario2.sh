@@ -195,14 +195,23 @@ while true; do
     echo ""
     echo "=== Step 6: Verify final state ==="
 
-    SUP_COUNT=$(supervisor_count)
-    echo "Final supervisor count: $SUP_COUNT"
+    # Wait for supervisor cleanup (Docker stop/rm is blocking and takes several seconds
+    # per container; process_effects must finish all DestroySupervisor effects before
+    # save_state updates state.json)
+    for j in $(seq 1 12); do
+      SUP_COUNT=$(supervisor_count)
+      if [[ "$SUP_COUNT" -eq 0 ]]; then
+        break
+      fi
+      if [[ $j -eq 12 ]]; then
+        echo "FAIL: Expected 0 supervisors after workflow completion within 60s, got $SUP_COUNT"
+        dump_diagnostics
+        exit 1
+      fi
+      sleep 5
+    done
 
-    if [[ "$SUP_COUNT" -ne 0 ]]; then
-      echo "FAIL: Expected 0 supervisors after workflow completion, got $SUP_COUNT"
-      dump_diagnostics
-      exit 1
-    fi
+    echo "Final supervisor count: $SUP_COUNT"
     echo "PASS: all supervisors destroyed"
 
     if [[ "$phase_a_done" != "true" ]]; then
