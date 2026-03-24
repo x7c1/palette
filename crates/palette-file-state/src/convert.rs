@@ -43,7 +43,7 @@ pub fn from_state_file(file: StateFile) -> Result<PersistentState, Error> {
 fn to_agent_record(agent: &AgentState) -> AgentRecord {
     AgentRecord {
         id: agent.id.as_ref().to_string(),
-        role: agent.role.as_str().to_string(),
+        role: agent.role.to_string(),
         supervisor_id: agent.supervisor_id.as_ref().to_string(),
         container_id: agent.container_id.as_ref().to_string(),
         terminal_target: agent.terminal_target.as_ref().to_string(),

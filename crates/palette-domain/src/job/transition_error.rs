@@ -11,12 +11,7 @@ pub struct TransitionError {
 
 impl fmt::Display for TransitionError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "invalid status transition: {} -> {}",
-            self.from.as_str(),
-            self.to.as_str()
-        )
+        write!(f, "invalid status transition: {} -> {}", self.from, self.to)
     }
 }
 

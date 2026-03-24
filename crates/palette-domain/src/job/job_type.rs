@@ -1,4 +1,4 @@
-use std::str::FromStr;
+use std::fmt;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum JobType {
@@ -15,13 +15,8 @@ impl JobType {
     }
 }
 
-impl FromStr for JobType {
-    type Err = String;
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s {
-            "craft" => Ok(JobType::Craft),
-            "review" => Ok(JobType::Review),
-            _ => Err(format!("invalid job type: {s}")),
-        }
+impl fmt::Display for JobType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        fmt::Display::fmt(self.as_str(), f)
     }
 }

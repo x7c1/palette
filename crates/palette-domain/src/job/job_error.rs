@@ -23,12 +23,7 @@ impl fmt::Display for JobError {
         match self {
             JobError::NotFound { job_id } => write!(f, "job not found: {job_id}"),
             JobError::InvalidTransition { job_id, from, to } => {
-                write!(
-                    f,
-                    "invalid transition for job {job_id}: {} -> {}",
-                    from.as_str(),
-                    to.as_str()
-                )
+                write!(f, "invalid transition for job {job_id}: {from} -> {to}")
             }
             JobError::DuplicateId { job_id } => write!(f, "duplicate job id: {job_id}"),
         }

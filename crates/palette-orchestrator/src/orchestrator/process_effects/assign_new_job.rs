@@ -38,7 +38,7 @@ impl Orchestrator {
             .get_task_state(&job.task_id)?
             .ok_or_else(|| crate::Error::Internal(format!("task not found: {}", job.task_id)))?;
         let supervisor_id = self.find_supervisor_for_job(&job.task_id, infra)?;
-        let seq = self.db.increment_member_counter(&task_state.workflow_id)?;
+        let seq = self.db.increment_worker_counter(&task_state.workflow_id)?;
         let member_id = AgentId::next_member(seq);
         let member =
             self.spawn_member(&member_id, job.job_type, &supervisor_id, infra, workspace)?;
