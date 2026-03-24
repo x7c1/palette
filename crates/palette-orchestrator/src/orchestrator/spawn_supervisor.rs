@@ -14,14 +14,6 @@ impl Orchestrator {
         role: AgentRole,
         infra: &mut PersistentState,
     ) -> crate::Result<AgentId> {
-        let active_workers = self.db.count_active_members()? + infra.supervisors.len();
-        if active_workers >= self.docker_config.max_workers {
-            return Err(crate::Error::Internal(format!(
-                "max workers reached ({active_workers}/{}), cannot spawn supervisor for task {task_id}",
-                self.docker_config.max_workers,
-            )));
-        }
-
         let task_state = self
             .db
             .get_task_state(task_id)?

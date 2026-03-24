@@ -35,7 +35,7 @@ pub fn test_docker_config() -> DockerConfig {
         review_integrator_prompt: "prompts/review-integrator.md".to_string(),
         crafter_prompt: "prompts/crafter.md".to_string(),
         reviewer_prompt: "prompts/reviewer.md".to_string(),
-        max_workers: 3,
+        max_members: 3,
     }
 }
 
