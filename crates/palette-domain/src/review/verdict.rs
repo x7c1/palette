@@ -1,4 +1,4 @@
-use std::str::FromStr;
+use std::fmt;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Verdict {
@@ -15,13 +15,8 @@ impl Verdict {
     }
 }
 
-impl FromStr for Verdict {
-    type Err = String;
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s {
-            "approved" => Ok(Verdict::Approved),
-            "changes_requested" => Ok(Verdict::ChangesRequested),
-            _ => Err(format!("invalid verdict: {s}")),
-        }
+impl fmt::Display for Verdict {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        fmt::Display::fmt(self.as_str(), f)
     }
 }

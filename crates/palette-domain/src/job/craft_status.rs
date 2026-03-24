@@ -1,4 +1,4 @@
-use std::str::FromStr;
+use std::fmt;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CraftStatus {
@@ -21,16 +21,8 @@ impl CraftStatus {
     }
 }
 
-impl FromStr for CraftStatus {
-    type Err = String;
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s {
-            "todo" => Ok(CraftStatus::Todo),
-            "in_progress" => Ok(CraftStatus::InProgress),
-            "in_review" => Ok(CraftStatus::InReview),
-            "done" => Ok(CraftStatus::Done),
-            "escalated" => Ok(CraftStatus::Escalated),
-            _ => Err(format!("invalid craft status: {s}")),
-        }
+impl fmt::Display for CraftStatus {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        fmt::Display::fmt(self.as_str(), f)
     }
 }

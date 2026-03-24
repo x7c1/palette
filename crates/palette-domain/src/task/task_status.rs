@@ -1,4 +1,4 @@
-use std::str::FromStr;
+use std::fmt;
 
 /// Status of a Task within a Workflow.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -27,16 +27,8 @@ impl TaskStatus {
     }
 }
 
-impl FromStr for TaskStatus {
-    type Err = String;
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s {
-            "pending" => Ok(TaskStatus::Pending),
-            "ready" => Ok(TaskStatus::Ready),
-            "in_progress" => Ok(TaskStatus::InProgress),
-            "suspended" => Ok(TaskStatus::Suspended),
-            "completed" => Ok(TaskStatus::Completed),
-            _ => Err(format!("invalid task status: {s}")),
-        }
+impl fmt::Display for TaskStatus {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        fmt::Display::fmt(self.as_str(), f)
     }
 }

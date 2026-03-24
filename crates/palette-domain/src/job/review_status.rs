@@ -1,4 +1,4 @@
-use std::str::FromStr;
+use std::fmt;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ReviewStatus {
@@ -21,16 +21,8 @@ impl ReviewStatus {
     }
 }
 
-impl FromStr for ReviewStatus {
-    type Err = String;
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s {
-            "todo" => Ok(ReviewStatus::Todo),
-            "in_progress" => Ok(ReviewStatus::InProgress),
-            "changes_requested" => Ok(ReviewStatus::ChangesRequested),
-            "done" => Ok(ReviewStatus::Done),
-            "escalated" => Ok(ReviewStatus::Escalated),
-            _ => Err(format!("invalid review status: {s}")),
-        }
+impl fmt::Display for ReviewStatus {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        fmt::Display::fmt(self.as_str(), f)
     }
 }

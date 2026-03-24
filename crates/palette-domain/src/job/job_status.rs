@@ -1,3 +1,5 @@
+use std::fmt;
+
 use super::JobType;
 use super::craft_status::CraftStatus;
 use super::review_status::ReviewStatus;
@@ -39,5 +41,11 @@ impl JobStatus {
             self,
             JobStatus::Craft(CraftStatus::Done) | JobStatus::Review(ReviewStatus::Done)
         )
+    }
+}
+
+impl fmt::Display for JobStatus {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        fmt::Display::fmt(self.as_str(), f)
     }
 }

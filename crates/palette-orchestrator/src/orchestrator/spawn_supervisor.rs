@@ -18,7 +18,7 @@ impl Orchestrator {
             .db
             .get_task_state(task_id)?
             .ok_or_else(|| crate::Error::Internal(format!("task not found: {task_id}")))?;
-        let seq = self.db.increment_member_counter(&task_state.workflow_id)?;
+        let seq = self.db.increment_worker_counter(&task_state.workflow_id)?;
         let sup_id = AgentId::next_supervisor(seq, role);
 
         // Create a tmux window for this supervisor

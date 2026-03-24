@@ -39,7 +39,7 @@ mod get_review_comments;
 mod get_review_submissions;
 mod get_workflow;
 mod has_pending_messages;
-mod increment_member_counter;
+mod increment_worker_counter;
 mod list_jobs;
 mod submit_review;
 mod update_job_status;
