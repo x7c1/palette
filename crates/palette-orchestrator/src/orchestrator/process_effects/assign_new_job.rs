@@ -18,13 +18,13 @@ impl Orchestrator {
             Some(j) => j.clone(),
             None => return Ok(()),
         };
-        let active = self.db.count_active_members()?;
-        if active >= self.docker_config.max_members {
+        let active_workers = self.db.count_active_members()? + infra.supervisors.len();
+        if active_workers >= self.docker_config.max_workers {
             tracing::info!(
                 job_id = %job_id,
-                active = active,
-                max = self.docker_config.max_members,
-                "max members reached, job waits"
+                active = active_workers,
+                max = self.docker_config.max_workers,
+                "max workers reached, job waits"
             );
             return Ok(());
         }

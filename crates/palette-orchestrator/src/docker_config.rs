@@ -20,11 +20,11 @@ pub struct DockerConfig {
 
     #[serde(default = "default_reviewer_prompt")]
     pub reviewer_prompt: String,
-    #[serde(default = "default_max_members")]
-    pub max_members: usize,
+    #[serde(default = "default_max_workers")]
+    pub max_workers: usize,
 }
 
-fn default_max_members() -> usize {
+fn default_max_workers() -> usize {
     3
 }
 
