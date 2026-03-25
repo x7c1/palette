@@ -1,6 +1,6 @@
 mod helper;
 
-use helper::{aid, capture_pane, spawn_server, test_session_name_with_guard};
+use helper::{capture_pane, spawn_server, test_session_name_with_guard, wid};
 use palette_db::InsertWorkerRequest;
 use palette_domain::task::TaskId;
 use palette_domain::terminal::TerminalTarget;
@@ -21,11 +21,11 @@ fn register_worker(
     state
         .db
         .insert_worker(&InsertWorkerRequest {
-            id: aid(id),
+            id: wid(id),
             workflow_id: wf_id,
             role: WorkerRole::Member,
             status,
-            supervisor_id: aid(""),
+            supervisor_id: wid(""),
             container_id: ContainerId::new(""),
             terminal_target: terminal_target.clone(),
             session_id: None,

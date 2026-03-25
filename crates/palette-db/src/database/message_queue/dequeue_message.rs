@@ -35,40 +35,40 @@ mod tests {
         let db = test_db();
 
         // Empty queue
-        assert!(db.dequeue_message(&aid("member-a")).unwrap().is_none());
-        assert!(!db.has_pending_messages(&aid("member-a")).unwrap());
+        assert!(db.dequeue_message(&wid("member-a")).unwrap().is_none());
+        assert!(!db.has_pending_messages(&wid("member-a")).unwrap());
 
         // Enqueue
-        let msg1 = db.enqueue_message(&aid("member-a"), "hello").unwrap();
-        let msg2 = db.enqueue_message(&aid("member-a"), "world").unwrap();
+        let msg1 = db.enqueue_message(&wid("member-a"), "hello").unwrap();
+        let msg2 = db.enqueue_message(&wid("member-a"), "world").unwrap();
         assert!(msg1.id < msg2.id);
 
-        assert!(db.has_pending_messages(&aid("member-a")).unwrap());
-        assert!(!db.has_pending_messages(&aid("member-b")).unwrap());
+        assert!(db.has_pending_messages(&wid("member-a")).unwrap());
+        assert!(!db.has_pending_messages(&wid("member-b")).unwrap());
 
         // Dequeue in FIFO order
-        let dequeued = db.dequeue_message(&aid("member-a")).unwrap().unwrap();
+        let dequeued = db.dequeue_message(&wid("member-a")).unwrap().unwrap();
         assert_eq!(dequeued.message, "hello");
 
-        let dequeued = db.dequeue_message(&aid("member-a")).unwrap().unwrap();
+        let dequeued = db.dequeue_message(&wid("member-a")).unwrap().unwrap();
         assert_eq!(dequeued.message, "world");
 
         // Queue is empty
-        assert!(db.dequeue_message(&aid("member-a")).unwrap().is_none());
-        assert!(!db.has_pending_messages(&aid("member-a")).unwrap());
+        assert!(db.dequeue_message(&wid("member-a")).unwrap().is_none());
+        assert!(!db.has_pending_messages(&wid("member-a")).unwrap());
     }
 
     #[test]
     fn message_queue_per_target_isolation() {
         let db = test_db();
 
-        db.enqueue_message(&aid("member-a"), "msg-a").unwrap();
-        db.enqueue_message(&aid("member-b"), "msg-b").unwrap();
+        db.enqueue_message(&wid("member-a"), "msg-a").unwrap();
+        db.enqueue_message(&wid("member-b"), "msg-b").unwrap();
 
-        let dequeued = db.dequeue_message(&aid("member-a")).unwrap().unwrap();
+        let dequeued = db.dequeue_message(&wid("member-a")).unwrap().unwrap();
         assert_eq!(dequeued.message, "msg-a");
 
-        let dequeued = db.dequeue_message(&aid("member-b")).unwrap().unwrap();
+        let dequeued = db.dequeue_message(&wid("member-b")).unwrap().unwrap();
         assert_eq!(dequeued.message, "msg-b");
     }
 }

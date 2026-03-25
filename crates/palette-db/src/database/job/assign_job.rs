@@ -43,10 +43,10 @@ mod tests {
         create_craft(&db, "C-001", None);
 
         let job = db
-            .assign_job(&jid("C-001"), &aid("member-a"), JobType::Craft)
+            .assign_job(&jid("C-001"), &wid("member-a"), JobType::Craft)
             .unwrap();
         assert_eq!(job.status, JobStatus::Craft(CraftStatus::InProgress));
-        assert_eq!(job.assignee, Some(aid("member-a")));
+        assert_eq!(job.assignee, Some(wid("member-a")));
         assert!(job.assigned_at.is_some());
     }
 }

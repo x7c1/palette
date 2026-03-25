@@ -62,7 +62,7 @@ mod tests {
                 job_type: JobType::Craft,
                 title: "Implement feature".to_string(),
                 plan_path: "2026/feature-x/api-impl".to_string(),
-                assignee: Some(aid("member-a")),
+                assignee: Some(wid("member-a")),
                 priority: Some(Priority::High),
                 repository: Some(Repository {
                     name: "x7c1/palette".to_string(),

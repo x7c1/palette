@@ -1,6 +1,6 @@
 mod helper;
 
-use helper::{aid, capture_pane, jid, spawn_server, test_session_name_with_guard};
+use helper::{capture_pane, jid, spawn_server, test_session_name_with_guard, wid};
 use palette_db::{CreateTaskRequest, InsertWorkerRequest};
 use palette_domain::job::{CreateJobRequest, JobStatus, JobType, ReviewStatus};
 use palette_domain::task::TaskId;
@@ -34,11 +34,11 @@ fn insert_worker(
     state
         .db
         .insert_worker(&InsertWorkerRequest {
-            id: aid(id),
+            id: wid(id),
             workflow_id: workflow_id.clone(),
             role,
             status,
-            supervisor_id: aid(supervisor_id),
+            supervisor_id: wid(supervisor_id),
             container_id: ContainerId::new(""),
             terminal_target: terminal_target.clone(),
             session_id: None,
@@ -160,7 +160,7 @@ async fn scenario3_message_queuing_to_leader() {
         .unwrap();
     state
         .db
-        .assign_job(&jid("R-A"), &aid("member-a"), JobType::Review)
+        .assign_job(&jid("R-A"), &wid("member-a"), JobType::Review)
         .unwrap();
     state
         .db
@@ -168,7 +168,7 @@ async fn scenario3_message_queuing_to_leader() {
         .unwrap();
     state
         .db
-        .assign_job(&jid("R-B"), &aid("member-b"), JobType::Review)
+        .assign_job(&jid("R-B"), &wid("member-b"), JobType::Review)
         .unwrap();
 
     // --- Both review members stop while review integrator is Working ---
@@ -195,7 +195,7 @@ async fn scenario3_message_queuing_to_leader() {
     assert!(
         state
             .db
-            .has_pending_messages(&aid("review-integrator-1"))
+            .has_pending_messages(&wid("review-integrator-1"))
             .unwrap(),
         "review integrator should have pending messages"
     );
@@ -231,7 +231,7 @@ async fn scenario3_message_queuing_to_leader() {
     assert!(
         state
             .db
-            .has_pending_messages(&aid("review-integrator-1"))
+            .has_pending_messages(&wid("review-integrator-1"))
             .unwrap(),
         "RI should still have pending message for member-b"
     );
@@ -259,7 +259,7 @@ async fn scenario3_message_queuing_to_leader() {
     assert!(
         !state
             .db
-            .has_pending_messages(&aid("review-integrator-1"))
+            .has_pending_messages(&wid("review-integrator-1"))
             .unwrap(),
         "RI queue should be empty after all deliveries"
     );
@@ -641,7 +641,7 @@ task:
     // Approve review-1
     state
         .db
-        .assign_job(&review_1_job.id, &aid("reviewer-1"), JobType::Review)
+        .assign_job(&review_1_job.id, &wid("reviewer-1"), JobType::Review)
         .unwrap();
     let sub = state
         .db
@@ -664,7 +664,7 @@ task:
     // Approve review-2
     state
         .db
-        .assign_job(&review_2_job.id, &aid("reviewer-2"), JobType::Review)
+        .assign_job(&review_2_job.id, &wid("reviewer-2"), JobType::Review)
         .unwrap();
     let sub = state
         .db
@@ -692,7 +692,7 @@ task:
         .expect("review-integrate job should exist");
     state
         .db
-        .assign_job(&ri_job.id, &aid("ri-agent"), JobType::Review)
+        .assign_job(&ri_job.id, &wid("ri-agent"), JobType::Review)
         .unwrap();
     let sub = state
         .db

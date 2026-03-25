@@ -32,11 +32,11 @@ mod tests {
 
         assert_eq!(db.count_active_members().unwrap(), 0);
 
-        db.assign_job(&jid("C-001"), &aid("member-a"), JobType::Craft)
+        db.assign_job(&jid("C-001"), &wid("member-a"), JobType::Craft)
             .unwrap();
         assert_eq!(db.count_active_members().unwrap(), 1);
 
-        db.assign_job(&jid("R-001"), &aid("member-b"), JobType::Review)
+        db.assign_job(&jid("R-001"), &wid("member-b"), JobType::Review)
             .unwrap();
         assert_eq!(db.count_active_members().unwrap(), 2);
 

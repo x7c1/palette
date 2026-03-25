@@ -40,7 +40,7 @@ pub fn test_docker_config() -> DockerConfig {
     }
 }
 
-pub fn aid(s: &str) -> WorkerId {
+pub fn wid(s: &str) -> WorkerId {
     WorkerId::new(s)
 }
 

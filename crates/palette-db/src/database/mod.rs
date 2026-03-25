@@ -133,7 +133,7 @@ pub(crate) mod test_helpers {
         TaskId::new(s)
     }
 
-    pub fn aid(s: &str) -> WorkerId {
+    pub fn wid(s: &str) -> WorkerId {
         WorkerId::new(s)
     }
 
