@@ -3,7 +3,7 @@ use super::super::*;
 impl Database {
     pub fn list_jobs(&self, filter: &JobFilter) -> crate::Result<Vec<Job>> {
         let conn = lock!(self.conn);
-        let mut sql = "SELECT id, task_id, type_id, title, plan_path, assignee, status_id, priority_id, repository, pr_url, created_at, updated_at, notes, assigned_at FROM jobs WHERE 1=1".to_string();
+        let mut sql = "SELECT id, task_id, type_id, title, plan_path, assignee_id, status_id, priority_id, repository, pr_url, created_at, updated_at, notes, assigned_at FROM jobs WHERE 1=1".to_string();
         let mut param_values: Vec<Box<dyn rusqlite::types::ToSql>> = Vec::new();
 
         if let Some(ref t) = filter.job_type {
@@ -14,9 +14,9 @@ impl Database {
             param_values.push(Box::new(crate::lookup::job_status_id(*s)));
             sql.push_str(&format!(" AND status_id = ?{}", param_values.len()));
         }
-        if let Some(ref a) = filter.assignee {
+        if let Some(ref a) = filter.assignee_id {
             param_values.push(Box::new(a.as_ref().to_string()));
-            sql.push_str(&format!(" AND assignee = ?{}", param_values.len()));
+            sql.push_str(&format!(" AND assignee_id = ?{}", param_values.len()));
         }
         sql.push_str(" ORDER BY created_at");
 
@@ -49,7 +49,7 @@ mod tests {
             job_type: JobType::Craft,
             title: "Craft 1".to_string(),
             plan_path: "test/C-001".to_string(),
-            assignee: None,
+            assignee_id: None,
             priority: None,
             repository: None,
         })
@@ -62,7 +62,7 @@ mod tests {
             job_type: JobType::Review,
             title: "Review 1".to_string(),
             plan_path: "test/R-001".to_string(),
-            assignee: None,
+            assignee_id: None,
             priority: None,
             repository: None,
         })
@@ -72,7 +72,7 @@ mod tests {
             .list_jobs(&JobFilter {
                 job_type: None,
                 status: None,
-                assignee: None,
+                assignee_id: None,
             })
             .unwrap();
         assert_eq!(all.len(), 2);
@@ -81,7 +81,7 @@ mod tests {
             .list_jobs(&JobFilter {
                 job_type: Some(JobType::Craft),
                 status: None,
-                assignee: None,
+                assignee_id: None,
             })
             .unwrap();
         assert_eq!(crafts.len(), 1);

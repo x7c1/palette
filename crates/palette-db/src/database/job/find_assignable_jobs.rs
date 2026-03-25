@@ -1,7 +1,7 @@
 use super::super::*;
 
 impl Database {
-    /// Find jobs that are assignable: status = 'todo' with no assignee.
+    /// Find jobs that are assignable: status = 'todo' with no assignee_id.
     ///
     /// Dependencies are managed at the Task level by TaskRuleEngine,
     /// so jobs only reach 'todo' when their task dependencies are satisfied.
@@ -13,9 +13,9 @@ impl Database {
         let craft_todo = crate::lookup::craft_status_id(palette_domain::job::CraftStatus::Todo);
         let review_todo = crate::lookup::review_status_id(palette_domain::job::ReviewStatus::Todo);
         let mut stmt = conn.prepare(
-            "SELECT t.id, t.task_id, t.type_id, t.title, t.plan_path, t.assignee, t.status_id, t.priority_id, t.repository, t.pr_url, t.created_at, t.updated_at, t.notes, t.assigned_at
+            "SELECT t.id, t.task_id, t.type_id, t.title, t.plan_path, t.assignee_id, t.status_id, t.priority_id, t.repository, t.pr_url, t.created_at, t.updated_at, t.notes, t.assigned_at
              FROM jobs t
-             WHERE t.status_id IN (?1, ?2) AND t.assignee IS NULL
+             WHERE t.status_id IN (?1, ?2) AND t.assignee_id IS NULL
              ORDER BY
                CASE t.priority_id
                  WHEN 1 THEN 0
@@ -42,6 +42,7 @@ mod tests {
     #[test]
     fn find_assignable_craft_jobs() {
         let db = test_db();
+        setup_worker(&db, "m-a");
         create_craft(&db, "C-001", Some(Priority::High));
         create_craft(&db, "C-002", Some(Priority::Low));
 
@@ -62,6 +63,7 @@ mod tests {
     #[test]
     fn find_assignable_review_jobs() {
         let db = test_db();
+        setup_worker(&db, "m-r");
         create_review(&db, "R-001");
 
         // Review starts as Todo — assignable

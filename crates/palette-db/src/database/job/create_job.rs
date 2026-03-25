@@ -20,7 +20,7 @@ impl Database {
         let tx = conn.transaction()?;
 
         tx.execute(
-            "INSERT INTO jobs (id, task_id, type_id, title, plan_path, assignee, status_id, priority_id, repository, pr_url, created_at, updated_at, notes, assigned_at)
+            "INSERT INTO jobs (id, task_id, type_id, title, plan_path, assignee_id, status_id, priority_id, repository, pr_url, created_at, updated_at, notes, assigned_at)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, NULL, ?10, ?11, NULL, NULL)",
             params![
                 id.as_ref(),
@@ -28,7 +28,7 @@ impl Database {
                 crate::lookup::job_type_id(req.job_type),
                 req.title,
                 req.plan_path,
-                req.assignee.as_ref().map(|a| a.as_ref()),
+                req.assignee_id.as_ref().map(|a| a.as_ref()),
                 crate::lookup::job_status_id(initial_status),
                 req.priority.map(crate::lookup::priority_id),
                 repos_json,
@@ -54,6 +54,7 @@ mod tests {
     #[test]
     fn create_and_get_job() {
         let db = test_db();
+        setup_worker(&db, "member-a");
         let task_id = setup_task(&db, "task-C-001");
         let job = db
             .create_job(&CreateJobRequest {
@@ -62,7 +63,7 @@ mod tests {
                 job_type: JobType::Craft,
                 title: "Implement feature".to_string(),
                 plan_path: "2026/feature-x/api-impl".to_string(),
-                assignee: Some(wid("member-a")),
+                assignee_id: Some(wid("member-a")),
                 priority: Some(Priority::High),
                 repository: Some(Repository {
                     name: "x7c1/palette".to_string(),

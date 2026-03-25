@@ -38,6 +38,8 @@ async fn job_api_create_and_list() {
         })
         .unwrap();
 
+    helper::setup_worker(&state.db, "member-a");
+
     let client = reqwest::Client::new();
 
     // Create a craft job
@@ -49,7 +51,7 @@ async fn job_api_create_and_list() {
             job_type: JobType::Craft,
             title: "Implement feature".to_string(),
             plan_path: "test/W-001".to_string(),
-            assignee: Some("member-a".to_string()),
+            assignee_id: Some("member-a".to_string()),
             priority: Some(palette_server::api_types::Priority::High),
             repository: None,
         })
@@ -71,7 +73,7 @@ async fn job_api_create_and_list() {
             job_type: JobType::Review,
             title: "Review feature".to_string(),
             plan_path: "test/R-001".to_string(),
-            assignee: None,
+            assignee_id: None,
             priority: None,
             repository: None,
         })

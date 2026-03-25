@@ -27,6 +27,8 @@ mod tests {
     #[test]
     fn counts_craft_and_review_members() {
         let db = test_db();
+        setup_worker(&db, "member-a");
+        setup_worker(&db, "member-b");
         create_craft(&db, "C-001", None);
         create_review(&db, "R-001");
 

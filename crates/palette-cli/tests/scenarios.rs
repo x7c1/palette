@@ -135,7 +135,7 @@ async fn scenario3_message_queuing_to_leader() {
             job_type: JobType::Review,
             title: "Review A".to_string(),
             plan_path: "test/R-A".to_string(),
-            assignee: None,
+            assignee_id: None,
             priority: None,
             repository: None,
         })
@@ -148,7 +148,7 @@ async fn scenario3_message_queuing_to_leader() {
             job_type: JobType::Review,
             title: "Review B".to_string(),
             plan_path: "test/R-B".to_string(),
-            assignee: None,
+            assignee_id: None,
             priority: None,
             repository: None,
         })
@@ -537,6 +537,11 @@ task:
     let (base_url, state) = spawn_server(tmux, &session).await;
     let client = reqwest::Client::new();
     let blueprint_file = write_blueprint_file(yaml);
+
+    // Insert workers needed for assign_job FK constraints
+    helper::setup_worker(&state.db, "reviewer-1");
+    helper::setup_worker(&state.db, "reviewer-2");
+    helper::setup_worker(&state.db, "ri-agent");
 
     let wait = || tokio::time::sleep(tokio::time::Duration::from_millis(300));
 

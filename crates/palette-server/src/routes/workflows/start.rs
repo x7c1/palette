@@ -216,7 +216,7 @@ fn create_job(
             job_type,
             title: task.key.to_string(),
             plan_path: task.plan_path.clone().unwrap_or_default(),
-            assignee: None,
+            assignee_id: None,
             priority: task.priority,
             repository: task.repository.clone(),
         })

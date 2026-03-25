@@ -113,7 +113,7 @@ async fn workflow_start_creates_task_tree() {
         .list_jobs(&JobFilter {
             job_type: None,
             status: None,
-            assignee: None,
+            assignee_id: None,
         })
         .unwrap();
 
@@ -213,7 +213,7 @@ task:
         .list_jobs(&JobFilter {
             job_type: None,
             status: None,
-            assignee: None,
+            assignee_id: None,
         })
         .unwrap();
     assert_eq!(jobs.len(), 1);
@@ -279,7 +279,7 @@ task:
             job_type: JobType::Craft,
             title: "step-b".to_string(),
             plan_path: "test/step-b".to_string(),
-            assignee: None,
+            assignee_id: None,
             priority: None,
             repository: None,
         })
@@ -450,6 +450,10 @@ async fn full_task_tree_cascade_with_review() {
 
     let (base_url, state) = spawn_server(tmux, &session).await;
     let client = reqwest::Client::new();
+
+    // Insert workers needed for assign_job FK constraints
+    helper::setup_worker(&state.db, "reviewer-a");
+    helper::setup_worker(&state.db, "reviewer-b");
 
     let yaml = r#"
 task:
@@ -729,6 +733,10 @@ async fn craft_waits_for_all_reviews_before_done() {
     let (base_url, state) = spawn_server(tmux, &session).await;
     let client = reqwest::Client::new();
 
+    // Insert workers needed for assign_job FK constraints
+    helper::setup_worker(&state.db, "reviewer-1");
+    helper::setup_worker(&state.db, "reviewer-2");
+
     // Blueprint: craft with two review children
     let yaml = r#"
 task:
@@ -895,6 +903,9 @@ task:
     let tmux = TmuxManager::new(session_name.clone());
     tmux.create_session(&session_name).unwrap();
     let (addr, state) = spawn_server(tmux, &session_name).await;
+
+    // Insert worker needed for assign_job FK constraint
+    helper::setup_worker(&state.db, "reviewer-1");
 
     // Start workflow
     let client = reqwest::Client::new();

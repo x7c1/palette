@@ -5,15 +5,15 @@ impl Database {
     pub fn assign_job(
         &self,
         job_id: &JobId,
-        assignee: &WorkerId,
+        assignee_id: &WorkerId,
         job_type: JobType,
     ) -> crate::Result<Job> {
         let in_progress = JobStatus::in_progress(job_type);
         let conn = lock!(self.conn);
         let now = Utc::now().to_rfc3339();
         let updated = conn.execute(
-            "UPDATE jobs SET status_id = ?1, assignee = ?2, assigned_at = ?3, updated_at = ?4 WHERE id = ?5",
-            params![crate::lookup::job_status_id(in_progress), assignee.as_ref(), now, now, job_id.as_ref()],
+            "UPDATE jobs SET status_id = ?1, assignee_id = ?2, assigned_at = ?3, updated_at = ?4 WHERE id = ?5",
+            params![crate::lookup::job_status_id(in_progress), assignee_id.as_ref(), now, now, job_id.as_ref()],
         )?;
         if updated == 0 {
             return Err(JobError::NotFound {
@@ -40,13 +40,14 @@ mod tests {
     #[test]
     fn assign_job_sets_assignee_and_status() {
         let db = test_db();
+        setup_worker(&db, "member-a");
         create_craft(&db, "C-001", None);
 
         let job = db
             .assign_job(&jid("C-001"), &wid("member-a"), JobType::Craft)
             .unwrap();
         assert_eq!(job.status, JobStatus::Craft(CraftStatus::InProgress));
-        assert_eq!(job.assignee, Some(wid("member-a")));
+        assert_eq!(job.assignee_id, Some(wid("member-a")));
         assert!(job.assigned_at.is_some());
     }
 }

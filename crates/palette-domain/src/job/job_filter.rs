@@ -5,5 +5,5 @@ use crate::worker::WorkerId;
 pub struct JobFilter {
     pub job_type: Option<JobType>,
     pub status: Option<JobStatus>,
-    pub assignee: Option<WorkerId>,
+    pub assignee_id: Option<WorkerId>,
 }

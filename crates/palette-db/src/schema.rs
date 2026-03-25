@@ -61,7 +61,7 @@ CREATE TABLE IF NOT EXISTS jobs (
     type_id INTEGER NOT NULL,
     title TEXT NOT NULL,
     plan_path TEXT NOT NULL,
-    assignee TEXT,
+    assignee_id TEXT,
     status_id INTEGER NOT NULL,
     priority_id INTEGER,
     repository TEXT,
@@ -72,6 +72,7 @@ CREATE TABLE IF NOT EXISTS jobs (
     assigned_at TEXT,
     FOREIGN KEY (task_id) REFERENCES tasks(id),
     FOREIGN KEY (type_id) REFERENCES job_types(id),
+    FOREIGN KEY (assignee_id) REFERENCES workers(id) ON DELETE SET NULL,
     FOREIGN KEY (status_id) REFERENCES job_statuses(id),
     FOREIGN KEY (priority_id) REFERENCES priorities(id)
 );

@@ -104,7 +104,7 @@ impl Orchestrator {
                 task_id = %child.id,
                 "reactivated ChangesRequested review job for re-review"
             );
-            if let Some(ref assignee) = review_job.assignee {
+            if let Some(ref assignee) = review_job.assignee_id {
                 job_effects.push(RuleEffect::ReactivateMember {
                     job_id: review_job.id.clone(),
                     member_id: assignee.clone(),

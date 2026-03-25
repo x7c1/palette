@@ -38,11 +38,12 @@ async fn review_submit_and_get_submissions() {
             job_type: JobType::Review,
             title: "Review".to_string(),
             plan_path: "test/R-001".to_string(),
-            assignee: None,
+            assignee_id: None,
             priority: None,
             repository: None,
         })
         .unwrap();
+    helper::setup_worker(&state.db, "member-b");
     state
         .db
         .assign_job(&review_job.id, &WorkerId::new("member-b"), JobType::Review)
@@ -110,11 +111,12 @@ async fn review_approved_completes_review_job() {
             job_type: JobType::Review,
             title: "Review".to_string(),
             plan_path: "test/R-001".to_string(),
-            assignee: None,
+            assignee_id: None,
             priority: None,
             repository: None,
         })
         .unwrap();
+    helper::setup_worker(&state.db, "member-b");
     state
         .db
         .assign_job(&review_job.id, &WorkerId::new("member-b"), JobType::Review)

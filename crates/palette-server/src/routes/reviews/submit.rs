@@ -52,7 +52,7 @@ pub async fn handle_submit_review(
     }
 
     // Notify the review member's supervisor about review results
-    if let Some(ref assignee) = job.assignee
+    if let Some(ref assignee) = job.assignee_id
         && let Ok(Some(member)) = state.db.find_worker(assignee)
         && let Ok(Some(supervisor)) = state.db.find_worker(&member.supervisor_id)
     {

@@ -56,7 +56,7 @@ pub async fn handle_stop(
         let member_jobs = state
             .db
             .list_jobs(&JobFilter {
-                assignee: Some(member_id.clone()),
+                assignee_id: Some(member_id.clone()),
                 ..Default::default()
             })
             .unwrap_or_default();

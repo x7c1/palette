@@ -62,7 +62,7 @@ pub(crate) fn parse_datetime(s: &str) -> DateTime<Utc> {
 /// Query a single job by ID from a connection or transaction.
 fn query_job(conn: &Connection, id: &JobId) -> crate::Result<Option<Job>> {
     let mut stmt = conn.prepare(
-        "SELECT id, task_id, type_id, title, plan_path, assignee, status_id, priority_id, repository, pr_url, created_at, updated_at, notes, assigned_at
+        "SELECT id, task_id, type_id, title, plan_path, assignee_id, status_id, priority_id, repository, pr_url, created_at, updated_at, notes, assigned_at
          FROM jobs WHERE id = ?1",
     )?;
     let mut rows = stmt.query_map(params![id.as_ref()], row_to_job)?;
@@ -98,7 +98,7 @@ fn row_to_job(row: &rusqlite::Row) -> rusqlite::Result<Job> {
         job_type,
         title: row.get("title")?,
         plan_path: row.get("plan_path")?,
-        assignee: row.get::<_, Option<String>>("assignee")?.map(WorkerId::new),
+        assignee_id: row.get::<_, Option<String>>("assignee_id")?.map(WorkerId::new),
         status,
         priority: row
             .get::<_, Option<i64>>("priority_id")?
@@ -150,6 +150,28 @@ pub(crate) mod test_helpers {
         t_id
     }
 
+    /// Insert a worker record for FK-constrained tests.
+    pub fn setup_worker(db: &Database, worker_id: &str) {
+        use crate::InsertWorkerRequest;
+        use palette_domain::terminal::TerminalTarget;
+        use palette_domain::worker::*;
+
+        let wf_id = WorkflowId::new("wf-test");
+        let _ = db.create_workflow(&wf_id, "test/blueprint.yaml");
+        db.insert_worker(&InsertWorkerRequest {
+            id: WorkerId::new(worker_id),
+            workflow_id: wf_id,
+            role: WorkerRole::Member,
+            status: WorkerStatus::Booting,
+            supervisor_id: WorkerId::new(""),
+            container_id: ContainerId::new(format!("container-{worker_id}")),
+            terminal_target: TerminalTarget::new(format!("pane-{worker_id}")),
+            session_id: None,
+            task_id: TaskId::new(format!("task-{worker_id}")),
+        })
+        .unwrap();
+    }
+
     pub fn create_craft(db: &Database, id: &str, priority: Option<Priority>) {
         let task_id = setup_task(db, &format!("task-{id}"));
         db.create_job(&CreateJobRequest {
@@ -158,7 +180,7 @@ pub(crate) mod test_helpers {
             job_type: JobType::Craft,
             title: format!("Job {id}"),
             plan_path: format!("test/{id}"),
-            assignee: None,
+            assignee_id: None,
             priority,
             repository: None,
         })
@@ -173,7 +195,7 @@ pub(crate) mod test_helpers {
             job_type: JobType::Review,
             title: format!("Review {id}"),
             plan_path: format!("test/{id}"),
-            assignee: None,
+            assignee_id: None,
             priority: None,
             repository: None,
         })

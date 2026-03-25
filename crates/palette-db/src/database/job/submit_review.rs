@@ -74,7 +74,7 @@ mod tests {
             job_type: JobType::Craft,
             title: "Craft".to_string(),
             plan_path: "test/C-001".to_string(),
-            assignee: None,
+            assignee_id: None,
             priority: None,
             repository: None,
         })
@@ -87,7 +87,7 @@ mod tests {
             job_type: JobType::Review,
             title: "Review".to_string(),
             plan_path: "test/R-001".to_string(),
-            assignee: None,
+            assignee_id: None,
             priority: None,
             repository: None,
         })

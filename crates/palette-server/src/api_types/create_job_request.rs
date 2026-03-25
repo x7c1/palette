@@ -12,7 +12,7 @@ pub struct CreateJobRequest {
     pub job_type: JobType,
     pub title: String,
     pub plan_path: String,
-    pub assignee: Option<String>,
+    pub assignee_id: Option<String>,
     pub priority: Option<Priority>,
     pub repository: Option<Repository>,
 }
@@ -26,7 +26,7 @@ impl From<CreateJobRequest> for domain::job::CreateJobRequest {
             job_type: api.job_type.into(),
             title: api.title,
             plan_path: api.plan_path,
-            assignee: api.assignee.map(domain::worker::WorkerId::new),
+            assignee_id: api.assignee_id.map(domain::worker::WorkerId::new),
             priority: api.priority.map(domain::job::Priority::from),
             repository: api.repository.map(Into::into),
         }

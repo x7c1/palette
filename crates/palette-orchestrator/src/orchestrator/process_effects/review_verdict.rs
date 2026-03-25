@@ -100,7 +100,7 @@ impl Orchestrator {
 
         // Craft job completed → destroy crafter member + complete task
         let mut effects = Vec::new();
-        if let Some(ref assignee) = craft_job.assignee {
+        if let Some(ref assignee) = craft_job.assignee_id {
             effects.push(RuleEffect::DestroyMember {
                 member_id: assignee.clone(),
             });
@@ -153,7 +153,7 @@ impl Orchestrator {
         );
 
         // Enqueue review feedback to the crafter
-        if let Some(ref assignee) = craft_job.assignee {
+        if let Some(ref assignee) = craft_job.assignee_id {
             let submissions = self.db.get_review_submissions(review_job_id)?;
             let feedback = submissions
                 .last()
@@ -167,7 +167,7 @@ impl Orchestrator {
         }
 
         // Emit ReactivateMember so the crafter gets re-activated
-        if let Some(ref assignee) = craft_job.assignee {
+        if let Some(ref assignee) = craft_job.assignee_id {
             Ok(vec![RuleEffect::ReactivateMember {
                 job_id: craft_job.id,
                 member_id: assignee.clone(),
