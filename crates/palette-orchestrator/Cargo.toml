@@ -12,4 +12,5 @@ palette-service = { path = "../palette-service" }
 palette-tmux = { path = "../palette-tmux" }
 serde.workspace = true
 tokio.workspace = true
+tokio-util.workspace = true
 tracing.workspace = true

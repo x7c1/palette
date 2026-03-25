@@ -7,6 +7,7 @@ impl Orchestrator {
     /// 2. Remove all worker records from DB
     /// 3. Kill the tmux session
     pub fn shutdown(&self) {
+        self.cancel_token.cancel();
         tracing::info!("starting graceful shutdown");
 
         let workers = match self.db.list_all_workers() {

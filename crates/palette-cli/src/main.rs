@@ -57,6 +57,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         plan_dir: config.plan_dir.clone(),
         tmux: Arc::clone(&tmux),
         session_name: config.tmux.session_name.clone(),
+        cancel_token: tokio_util::sync::CancellationToken::new(),
     });
 
     // Clean up orphan containers from previous crash/forced exit

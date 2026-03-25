@@ -1,5 +1,5 @@
 use super::DockerManager;
-use palette_domain::worker::{ContainerId, WorkerRole};
+use palette_domain::worker::{ContainerId, WorkerRole, WorkerSessionId};
 
 impl DockerManager {
     /// Build the command string to launch Claude Code inside a container's tmux pane.
@@ -22,12 +22,31 @@ impl DockerManager {
             )
         }
     }
+
+    /// Build the command string to resume a Claude Code session inside a container.
+    /// Used for crash recovery when a session_id is available.
+    pub fn claude_resume_command(
+        container_id: &ContainerId,
+        session_id: &WorkerSessionId,
+        role: WorkerRole,
+    ) -> String {
+        let cid = container_id.as_ref();
+        let sid = session_id.as_ref();
+        let plugin_flag = " --plugin-dir /home/agent/claude-code-plugin";
+        if role.is_supervisor() {
+            format!(
+                "docker exec -it {cid} claude --resume {sid} --dangerously-skip-permissions{plugin_flag}"
+            )
+        } else {
+            format!("docker exec -it {cid} claude --resume {sid}{plugin_flag}")
+        }
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::super::DockerManager;
-    use palette_domain::worker::{ContainerId, WorkerRole};
+    use palette_domain::worker::{ContainerId, WorkerRole, WorkerSessionId};
 
     #[test]
     fn leader_bypasses_permissions() {
@@ -70,5 +89,25 @@ mod tests {
         assert!(
             cmd.contains("--append-system-prompt-file /home/agent/prompts/review-integrator.md")
         );
+    }
+
+    #[test]
+    fn resume_member_session() {
+        let cid = ContainerId::new("abc123");
+        let sid = WorkerSessionId::new("session-xyz");
+        let cmd = DockerManager::claude_resume_command(&cid, &sid, WorkerRole::Member);
+        assert!(cmd.contains("docker exec -it abc123 claude"));
+        assert!(cmd.contains("--resume session-xyz"));
+        assert!(!cmd.contains("--dangerously-skip-permissions"));
+        assert!(cmd.contains("--plugin-dir /home/agent/claude-code-plugin"));
+    }
+
+    #[test]
+    fn resume_leader_session() {
+        let cid = ContainerId::new("abc123");
+        let sid = WorkerSessionId::new("session-xyz");
+        let cmd = DockerManager::claude_resume_command(&cid, &sid, WorkerRole::Leader);
+        assert!(cmd.contains("--resume session-xyz"));
+        assert!(cmd.contains("--dangerously-skip-permissions"));
     }
 }
