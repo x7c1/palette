@@ -1,20 +1,18 @@
 use super::Orchestrator;
-use palette_domain::agent::AgentStatus;
-use palette_domain::server::PersistentState;
 use std::sync::Arc;
 
 impl Orchestrator {
-    /// Start readiness watchers for any agents currently in Booting state.
-    pub fn resume_booting_watchers(self: &Arc<Self>, infra: &PersistentState) {
-        for supervisor in &infra.supervisors {
-            if supervisor.status == AgentStatus::Booting {
-                self.spawn_readiness_watcher(supervisor.id.clone());
+    /// Start readiness watchers for any workers currently in Booting state.
+    pub fn resume_booting_watchers(self: &Arc<Self>) {
+        let booting = match self.db.list_booting_workers() {
+            Ok(workers) => workers,
+            Err(e) => {
+                tracing::error!(error = %e, "failed to list booting workers");
+                return;
             }
-        }
-        for member in &infra.members {
-            if member.status == AgentStatus::Booting {
-                self.spawn_readiness_watcher(member.id.clone());
-            }
+        };
+        for worker in booting {
+            self.spawn_readiness_watcher(worker.id);
         }
     }
 }

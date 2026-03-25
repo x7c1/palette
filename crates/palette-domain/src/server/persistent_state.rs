@@ -1,11 +1,11 @@
-use crate::agent::{AgentId, AgentState, ContainerId};
 use crate::task::TaskId;
+use crate::worker::{ContainerId, WorkerId, WorkerState};
 use chrono::{DateTime, Utc};
 
 pub struct PersistentState {
     pub session_name: String,
-    pub supervisors: Vec<AgentState>,
-    pub members: Vec<AgentState>,
+    pub supervisors: Vec<WorkerState>,
+    pub members: Vec<WorkerState>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
@@ -25,8 +25,8 @@ impl PersistentState {
     /// Restore state from a saved file.
     pub fn restore(
         session_name: String,
-        supervisors: Vec<AgentState>,
-        members: Vec<AgentState>,
+        supervisors: Vec<WorkerState>,
+        members: Vec<WorkerState>,
         created_at: DateTime<Utc>,
         updated_at: DateTime<Utc>,
     ) -> Self {
@@ -39,24 +39,24 @@ impl PersistentState {
         }
     }
 
-    pub fn find_member(&self, id: &AgentId) -> Option<&AgentState> {
+    pub fn find_member(&self, id: &WorkerId) -> Option<&WorkerState> {
         self.members.iter().find(|m| m.id == *id)
     }
 
-    pub fn find_member_mut(&mut self, id: &AgentId) -> Option<&mut AgentState> {
+    pub fn find_member_mut(&mut self, id: &WorkerId) -> Option<&mut WorkerState> {
         self.members.iter_mut().find(|m| m.id == *id)
     }
 
-    pub fn find_supervisor(&self, id: &AgentId) -> Option<&AgentState> {
+    pub fn find_supervisor(&self, id: &WorkerId) -> Option<&WorkerState> {
         self.supervisors.iter().find(|m| m.id == *id)
     }
 
-    pub fn find_supervisor_mut(&mut self, id: &AgentId) -> Option<&mut AgentState> {
+    pub fn find_supervisor_mut(&mut self, id: &WorkerId) -> Option<&mut WorkerState> {
         self.supervisors.iter_mut().find(|m| m.id == *id)
     }
 
-    /// Find any agent (supervisor or member) by container_id.
-    pub fn find_by_container(&self, container_id: &ContainerId) -> Option<&AgentState> {
+    /// Find any worker (supervisor or member) by container_id.
+    pub fn find_by_container(&self, container_id: &ContainerId) -> Option<&WorkerState> {
         self.supervisors
             .iter()
             .chain(self.members.iter())
@@ -64,7 +64,7 @@ impl PersistentState {
     }
 
     /// Remove a member by ID, returning the removed state.
-    pub fn remove_member(&mut self, id: &AgentId) -> Option<AgentState> {
+    pub fn remove_member(&mut self, id: &WorkerId) -> Option<WorkerState> {
         if let Some(pos) = self.members.iter().position(|m| m.id == *id) {
             Some(self.members.remove(pos))
         } else {
@@ -73,12 +73,12 @@ impl PersistentState {
     }
 
     /// Find the supervisor assigned to a specific composite task.
-    pub fn find_supervisor_for_task(&self, task_id: &TaskId) -> Option<&AgentState> {
+    pub fn find_supervisor_for_task(&self, task_id: &TaskId) -> Option<&WorkerState> {
         self.supervisors.iter().find(|s| s.task_id == *task_id)
     }
 
     /// Remove a supervisor by ID, returning the removed state.
-    pub fn remove_supervisor(&mut self, id: &AgentId) -> Option<AgentState> {
+    pub fn remove_supervisor(&mut self, id: &WorkerId) -> Option<WorkerState> {
         if let Some(pos) = self.supervisors.iter().position(|s| s.id == *id) {
             Some(self.supervisors.remove(pos))
         } else {
@@ -94,18 +94,19 @@ impl PersistentState {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::agent::{AgentRole, AgentStatus};
     use crate::terminal::TerminalTarget;
+    use crate::worker::{WorkerRole, WorkerStatus};
 
-    fn make_supervisor(id: &str, role: AgentRole) -> AgentState {
+    fn make_supervisor(id: &str, role: WorkerRole) -> WorkerState {
         use crate::task::TaskId;
-        AgentState {
-            id: AgentId::new(id),
+        WorkerState {
+            id: WorkerId::new(id),
+            workflow_id: crate::workflow::WorkflowId::new(""),
             role,
-            supervisor_id: AgentId::new(""),
+            supervisor_id: WorkerId::new(""),
             container_id: ContainerId::new(format!("container-{id}")),
             terminal_target: TerminalTarget::new(format!("pane-{id}")),
-            status: AgentStatus::Idle,
+            status: WorkerStatus::Idle,
             session_id: None,
             task_id: TaskId::new(format!("task-{id}")),
         }
@@ -116,24 +117,24 @@ mod tests {
         let mut state = PersistentState::new("test".to_string());
         state
             .supervisors
-            .push(make_supervisor("leader-1", AgentRole::Leader));
+            .push(make_supervisor("leader-1", WorkerRole::Leader));
         state
             .supervisors
-            .push(make_supervisor("ri-1", AgentRole::ReviewIntegrator));
+            .push(make_supervisor("ri-1", WorkerRole::ReviewIntegrator));
 
         assert_eq!(
             state
                 .find_supervisor_for_task(&TaskId::new("task-leader-1"))
                 .unwrap()
                 .id,
-            AgentId::new("leader-1")
+            WorkerId::new("leader-1")
         );
         assert_eq!(
             state
                 .find_supervisor_for_task(&TaskId::new("task-ri-1"))
                 .unwrap()
                 .id,
-            AgentId::new("ri-1")
+            WorkerId::new("ri-1")
         );
         assert!(
             state
@@ -147,19 +148,19 @@ mod tests {
         let mut state = PersistentState::new("test".to_string());
         state
             .supervisors
-            .push(make_supervisor("leader-1", AgentRole::Leader));
+            .push(make_supervisor("leader-1", WorkerRole::Leader));
         state
             .supervisors
-            .push(make_supervisor("ri-1", AgentRole::ReviewIntegrator));
+            .push(make_supervisor("ri-1", WorkerRole::ReviewIntegrator));
 
-        let removed = state.remove_supervisor(&AgentId::new("leader-1"));
+        let removed = state.remove_supervisor(&WorkerId::new("leader-1"));
         assert!(removed.is_some());
-        assert_eq!(removed.unwrap().id, AgentId::new("leader-1"));
+        assert_eq!(removed.unwrap().id, WorkerId::new("leader-1"));
         assert_eq!(state.supervisors.len(), 1);
 
         assert!(
             state
-                .remove_supervisor(&AgentId::new("nonexistent"))
+                .remove_supervisor(&WorkerId::new("nonexistent"))
                 .is_none()
         );
     }

@@ -7,12 +7,11 @@ palette-domain       (no dependencies — pure domain types)
 palette-tmux         (no dependencies — terminal operations)
 palette-db           → palette-domain
 palette-docker       → palette-domain
-palette-file-state   → palette-domain
 palette-fs           → palette-domain
 palette-service      → palette-db, palette-domain, palette-fs
-palette-orchestrator → palette-db, palette-docker, palette-domain, palette-file-state, palette-service, palette-tmux
+palette-orchestrator → palette-db, palette-docker, palette-domain, palette-service, palette-tmux
 palette-server       → palette-db, palette-docker, palette-domain, palette-fs, palette-service, palette-tmux
-palette-cli          → palette-db, palette-docker, palette-domain, palette-file-state, palette-orchestrator, palette-server, palette-tmux
+palette-cli          → palette-db, palette-docker, palette-domain, palette-orchestrator, palette-server, palette-tmux
 ```
 
 ```mermaid
@@ -20,7 +19,6 @@ graph TD
     cli[palette-cli] --> server[palette-server]
     cli --> orch[palette-orchestrator]
     cli --> docker[palette-docker]
-    cli --> file[palette-file-state]
     cli --> db[palette-db]
     cli --> domain[palette-domain]
     cli --> tmux[palette-tmux]
@@ -35,7 +33,6 @@ graph TD
     orch --> db
     orch --> docker
     orch --> domain
-    orch --> file
     orch --> service
     orch --> tmux
 
@@ -44,7 +41,6 @@ graph TD
     service --> fs
 
     fs --> domain
-    file --> domain
     db --> domain
     docker --> domain
 ```
@@ -56,10 +52,9 @@ Note: palette-server depends on palette-orchestrator only as a dev-dependency (f
 | Crate | Role |
 |---|---|
 | palette-domain | Pure domain types (Task, TaskTree, TaskState, Job, Workflow, etc.). No serde, no I/O, no external format dependencies. |
-| palette-db | Database access. Owns DB-specific types (e.g. TaskRow). Returns domain types (TaskState). |
+| palette-db | Database access. Owns DB-specific types (e.g. TaskRow). Returns domain types (TaskState). Also stores agent infrastructure state (previously in a JSON file). |
 | palette-fs | Filesystem access. Reads Blueprint YAML files and converts to domain types (TaskTree). Owns YAML deserialization types. |
 | palette-service | Service layer. Combines palette-db and palette-fs to implement domain traits (TaskStore). Assembles full Task objects from TaskTree (structure) + TaskState (execution state). |
-| palette-file-state | Persists runtime state (PersistentState) to JSON files. |
 | palette-docker | Docker container management. |
 | palette-tmux | Terminal (tmux) session management. |
 | palette-orchestrator | Orchestration logic. Processes rule engine effects, manages worker lifecycle. |

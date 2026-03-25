@@ -1,15 +1,14 @@
 use super::Orchestrator;
 use super::job_instruction::format_job_instruction;
-use palette_domain::agent::AgentId;
 use palette_domain::job::JobId;
-use palette_domain::server::{PendingDelivery, PersistentState};
+use palette_domain::server::PendingDelivery;
+use palette_domain::worker::WorkerId;
 
 impl Orchestrator {
     /// Assign a new job to a freshly spawned member.
     pub(super) fn assign_new_job(
         &self,
         job_id: &JobId,
-        infra: &mut PersistentState,
         deliveries: &mut Vec<PendingDelivery>,
     ) -> crate::Result<()> {
         // Verify the job is assignable (todo + no assignee)
@@ -37,13 +36,30 @@ impl Orchestrator {
             .db
             .get_task_state(&job.task_id)?
             .ok_or_else(|| crate::Error::Internal(format!("task not found: {}", job.task_id)))?;
-        let supervisor_id = self.find_supervisor_for_job(&job.task_id, infra)?;
+        let supervisor_id = self.find_supervisor_for_job(&job.task_id)?;
         let seq = self.db.increment_worker_counter(&task_state.workflow_id)?;
-        let member_id = AgentId::next_member(seq);
-        let member =
-            self.spawn_member(&member_id, job.job_type, &supervisor_id, infra, workspace)?;
+        let member_id = WorkerId::next_member(seq);
+        let member = self.spawn_member(
+            &member_id,
+            job.job_type,
+            &supervisor_id,
+            &job.task_id,
+            workspace,
+        )?;
         let terminal_target = member.terminal_target.clone();
-        infra.members.push(member);
+
+        // Register in DB
+        self.db.insert_worker(&palette_db::InsertWorkerRequest {
+            id: member.id.clone(),
+            workflow_id: member.workflow_id.clone(),
+            role: member.role,
+            status: member.status,
+            supervisor_id: member.supervisor_id.clone(),
+            container_id: member.container_id.clone(),
+            terminal_target: member.terminal_target.clone(),
+            session_id: member.session_id.clone(),
+            task_id: member.task_id.clone(),
+        })?;
 
         // Assign job
         self.db.assign_job(job_id, &member_id, job.job_type)?;
@@ -62,7 +78,6 @@ impl Orchestrator {
             terminal_target,
         });
 
-        infra.touch();
         Ok(())
     }
 }

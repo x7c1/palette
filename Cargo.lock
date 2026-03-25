@@ -867,7 +867,6 @@ dependencies = [
  "palette-db",
  "palette-docker",
  "palette-domain",
- "palette-file-state",
  "palette-orchestrator",
  "palette-server",
  "palette-tmux",
@@ -911,17 +910,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "palette-file-state"
-version = "0.1.0"
-dependencies = [
- "chrono",
- "palette-domain",
- "serde",
- "serde_json",
- "tempfile",
-]
-
-[[package]]
 name = "palette-fs"
 version = "0.1.0"
 dependencies = [
@@ -938,7 +926,6 @@ dependencies = [
  "palette-db",
  "palette-docker",
  "palette-domain",
- "palette-file-state",
  "palette-service",
  "palette-tmux",
  "serde",

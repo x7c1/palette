@@ -4,8 +4,8 @@ use axum::{
     extract::{Query, State},
     http::StatusCode,
 };
-use palette_domain::agent::{AgentId, AgentStatus};
 use palette_domain::server::ServerEvent;
+use palette_domain::worker::{WorkerId, WorkerStatus};
 use std::sync::Arc;
 
 use super::HookQuery;
@@ -23,7 +23,7 @@ pub async fn handle_notification(
     Json(payload): Json<serde_json::Value>,
 ) -> StatusCode {
     let member_id_str = query.member_id.as_deref().unwrap_or("unknown");
-    let member_id = AgentId::new(member_id_str);
+    let member_id = WorkerId::new(member_id_str);
     tracing::info!(member_id = member_id_str, payload = %payload, "received notification hook");
 
     let record = EventRecord {
@@ -43,36 +43,38 @@ pub async fn handle_notification(
 
     // Update member status to WaitingPermission and resolve context
     let member_context = {
-        let mut infra = state.infra.lock().await;
-        if let Some(member) = infra.find_member_mut(&member_id) {
-            member.status = AgentStatus::WaitingPermission;
-            let ctx = MemberContext {
-                supervisor_id: member.supervisor_id.clone(),
-                terminal_target: member.terminal_target.clone(),
-                container_id: member.container_id.clone(),
-            };
-            infra.touch();
-            Some(ctx)
-        } else {
-            None
+        let member = match state.db.find_worker(&member_id) {
+            Ok(Some(m)) => m,
+            _ => {
+                let _ = state.event_tx.send(ServerEvent::NotifyDeliveryLoop);
+                return StatusCode::OK;
+            }
+        };
+        if let Err(e) = state
+            .db
+            .update_worker_status(&member_id, WorkerStatus::WaitingPermission)
+        {
+            tracing::error!(error = %e, "failed to update worker status");
         }
-    };
-
-    let Some(ctx) = member_context else {
-        let _ = state.event_tx.send(ServerEvent::NotifyDeliveryLoop);
-        return StatusCode::OK;
+        MemberContext {
+            supervisor_id: member.supervisor_id.clone(),
+            terminal_target: member.terminal_target.clone(),
+            container_id: member.container_id.clone(),
+        }
     };
 
     // Extract the pending tool call from the member's JSONL transcript
     let pending_tool = match notification_payload.transcript_path {
-        Some(ref path) if !path.is_empty() => extract_pending_tool(&ctx.container_id, path),
+        Some(ref path) if !path.is_empty() => {
+            extract_pending_tool(&member_context.container_id, path)
+        }
         _ => None,
     };
 
     // Capture the member's pane content (last 10 non-empty lines, joined as single line)
     let pane_content = state
         .tmux
-        .capture_pane(&ctx.terminal_target)
+        .capture_pane(&member_context.terminal_target)
         .ok()
         .map(|content| {
             let lines: Vec<&str> = content.lines().filter(|l| !l.trim().is_empty()).collect();
@@ -89,7 +91,10 @@ pub async fn handle_notification(
         notification.push_str(&format!(" pane=[{pane}]"));
     }
 
-    if let Err(e) = state.db.enqueue_message(&ctx.supervisor_id, &notification) {
+    if let Err(e) = state
+        .db
+        .enqueue_message(&member_context.supervisor_id, &notification)
+    {
         tracing::error!(error = %e, "failed to enqueue notification for supervisor");
     }
 
@@ -99,9 +104,9 @@ pub async fn handle_notification(
 }
 
 struct MemberContext {
-    supervisor_id: AgentId,
+    supervisor_id: WorkerId,
     terminal_target: palette_domain::terminal::TerminalTarget,
-    container_id: palette_domain::agent::ContainerId,
+    container_id: palette_domain::worker::ContainerId,
 }
 
 struct PendingTool {
@@ -136,7 +141,7 @@ enum ContentBlock {
 
 /// Read the member's transcript and extract the last tool_use entry.
 fn extract_pending_tool(
-    container_id: &palette_domain::agent::ContainerId,
+    container_id: &palette_domain::worker::ContainerId,
     transcript_path: &str,
 ) -> Option<PendingTool> {
     let content = palette_docker::read_container_file(container_id, transcript_path, 5).ok()?;

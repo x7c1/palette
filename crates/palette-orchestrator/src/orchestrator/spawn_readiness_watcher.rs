@@ -1,5 +1,5 @@
 use super::Orchestrator;
-use palette_domain::agent::{AgentId, AgentStatus};
+use palette_domain::worker::{WorkerId, WorkerStatus};
 use std::ops::ControlFlow;
 use std::sync::Arc;
 
@@ -10,14 +10,14 @@ const READINESS_POLL_INTERVAL: std::time::Duration = std::time::Duration::from_s
 const READINESS_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(120);
 
 impl Orchestrator {
-    pub(super) fn spawn_readiness_watcher(self: &Arc<Self>, target_id: AgentId) {
+    pub(super) fn spawn_readiness_watcher(self: &Arc<Self>, target_id: WorkerId) {
         let this = Arc::clone(self);
         let max_polls = READINESS_TIMEOUT.as_secs() / READINESS_POLL_INTERVAL.as_secs();
 
         tokio::spawn(async move {
             for _ in 0..max_polls {
                 tokio::time::sleep(READINESS_POLL_INTERVAL).await;
-                if this.poll_readiness(&target_id).await.is_break() {
+                if this.poll_readiness(&target_id).is_break() {
                     return;
                 }
             }
@@ -28,18 +28,15 @@ impl Orchestrator {
         });
     }
 
-    /// Poll once for agent readiness.
-    /// Returns `Break` if the agent is ready (activated) or gone, `Continue` to keep polling.
-    async fn poll_readiness(self: &Arc<Self>, target_id: &AgentId) -> ControlFlow<()> {
+    /// Poll once for worker readiness.
+    /// Returns `Break` if the worker is ready (activated) or gone, `Continue` to keep polling.
+    fn poll_readiness(self: &Arc<Self>, target_id: &WorkerId) -> ControlFlow<()> {
         let terminal_target = {
-            let infra = self.infra.lock().await;
-            let agent = infra
-                .find_member(target_id)
-                .or_else(|| infra.find_supervisor(target_id));
-            match agent {
-                Some(m) => m.terminal_target.clone(),
-                None => return ControlFlow::Break(()),
-            }
+            let worker = match self.db.find_worker(target_id) {
+                Ok(Some(w)) => w,
+                _ => return ControlFlow::Break(()),
+            };
+            worker.terminal_target.clone()
         };
 
         let pane_content = match self.tmux.capture_pane(&terminal_target) {
@@ -62,26 +59,22 @@ impl Orchestrator {
             target_id = %target_id,
             "Claude Code is ready, delivering queued message"
         );
-        self.activate_agent(target_id).await;
+        self.activate_worker(target_id);
         ControlFlow::Break(())
     }
 
-    /// Transition a booting agent to Idle and deliver queued messages.
-    async fn activate_agent(self: &Arc<Self>, target_id: &AgentId) {
-        let mut infra = self.infra.lock().await;
-        let is_booting = infra
-            .find_member(target_id)
-            .or_else(|| infra.find_supervisor(target_id))
-            .is_some_and(|m| m.status == AgentStatus::Booting);
-        if is_booting {
-            if let Some(m) = infra.find_member_mut(target_id) {
-                m.status = AgentStatus::Idle;
-            } else if let Some(m) = infra.find_supervisor_mut(target_id) {
-                m.status = AgentStatus::Idle;
-            }
-            infra.touch();
+    /// Transition a booting worker to Idle and deliver queued messages.
+    fn activate_worker(self: &Arc<Self>, target_id: &WorkerId) {
+        let is_booting = self
+            .db
+            .find_worker(target_id)
+            .ok()
+            .flatten()
+            .is_some_and(|a| a.status == WorkerStatus::Booting);
+
+        if is_booting && let Err(e) = self.db.update_worker_status(target_id, WorkerStatus::Idle) {
+            tracing::error!(error = %e, target_id = %target_id, "failed to update worker status to idle");
         }
-        let _ = self.deliver_queued_messages(target_id, &mut infra);
-        self.save_state(&infra);
+        let _ = self.deliver_queued_messages(target_id);
     }
 }

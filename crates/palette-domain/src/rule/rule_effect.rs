@@ -1,7 +1,7 @@
-use crate::agent::{AgentId, AgentRole};
 use crate::job::JobId;
 use crate::review::Verdict;
 use crate::task::TaskId;
+use crate::worker::{WorkerId, WorkerRole};
 
 /// Side effects produced by the rule engine after a state transition.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -10,9 +10,9 @@ pub enum RuleEffect {
     /// A new job needs a member assigned (orchestrator should spawn member).
     AssignNewJob { job_id: JobId },
     /// A job's existing member should be reactivated (e.g. re-review cycle).
-    ReactivateMember { job_id: JobId, member_id: AgentId },
+    ReactivateMember { job_id: JobId, member_id: WorkerId },
     /// A member's job is done; orchestrator should destroy its container.
-    DestroyMember { member_id: AgentId },
+    DestroyMember { member_id: WorkerId },
 
     // --- Craft/Review workflow ---
     /// A craft job reached InReview; activate child review tasks.
@@ -27,7 +27,7 @@ pub enum RuleEffect {
 
     // --- Supervisor lifecycle ---
     /// A composite task needs a supervisor spawned before it becomes InProgress.
-    SpawnSupervisor { task_id: TaskId, role: AgentRole },
+    SpawnSupervisor { task_id: TaskId, role: WorkerRole },
     /// A composite task completed; destroy its supervisor.
-    DestroySupervisor { supervisor_id: AgentId },
+    DestroySupervisor { supervisor_id: WorkerId },
 }

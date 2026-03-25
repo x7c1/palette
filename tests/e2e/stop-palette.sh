@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Stop the Palette process only. Does NOT delete data files (DB, state.json, logs).
+# Stop the Palette process only. Does NOT delete data files (DB, logs).
 # To fully clean up, run scripts/reset.sh separately.
 set -euo pipefail
 

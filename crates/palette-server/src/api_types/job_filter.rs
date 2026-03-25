@@ -8,7 +8,7 @@ pub struct JobFilter {
     #[serde(rename = "type")]
     pub job_type: Option<JobType>,
     pub status: Option<JobStatus>,
-    pub assignee: Option<String>,
+    pub assignee_id: Option<String>,
 }
 
 impl From<JobFilter> for domain::job::JobFilter {
@@ -21,7 +21,7 @@ impl From<JobFilter> for domain::job::JobFilter {
         Self {
             job_type,
             status,
-            assignee: api.assignee.map(domain::agent::AgentId::new),
+            assignee_id: api.assignee_id.map(domain::worker::WorkerId::new),
         }
     }
 }

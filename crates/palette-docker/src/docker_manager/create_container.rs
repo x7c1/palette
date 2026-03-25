@@ -1,6 +1,6 @@
 use super::{DockerManager, run_docker};
 use crate::Error;
-use palette_domain::agent::{AgentRole, ContainerId};
+use palette_domain::worker::{ContainerId, WorkerRole};
 
 /// Workspace volume to mount in the container.
 pub struct WorkspaceVolume {
@@ -19,13 +19,13 @@ pub struct PlanDirMount {
 }
 
 impl DockerManager {
-    /// Create and start a container for an agent.
+    /// Create and start a container for a worker.
     /// Returns the container ID.
     pub fn create_container(
         &self,
         name: &str,
         image: &str,
-        role: AgentRole,
+        role: WorkerRole,
         session_name: &str,
         workspace: Option<WorkspaceVolume>,
         plan_dir: Option<PlanDirMount>,
@@ -85,12 +85,12 @@ impl DockerManager {
         }
 
         // Docker socket for members
-        if role == AgentRole::Member {
+        if role == WorkerRole::Member {
             args.push("-v".to_string());
             args.push("/var/run/docker.sock:/var/run/docker.sock".to_string());
         }
 
-        // Transcript volume: all agents write their transcripts here
+        // Transcript volume: all workers write their transcripts here
         let transcript_volume = format!("palette-transcripts-{session_name}");
         args.push("-v".to_string());
         args.push(format!("{transcript_volume}:/home/agent/.claude/projects"));

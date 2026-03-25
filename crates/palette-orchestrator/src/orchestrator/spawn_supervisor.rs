@@ -1,25 +1,23 @@
 use super::Orchestrator;
 use palette_docker::DockerManager;
-use palette_domain::agent::{AgentId, AgentRole, AgentState, AgentStatus, ContainerId};
-use palette_domain::server::PersistentState;
 use palette_domain::task::TaskId;
+use palette_domain::worker::{ContainerId, WorkerId, WorkerRole, WorkerStatus};
 
 impl Orchestrator {
     /// Spawn a dynamic supervisor for a composite task.
-    /// Creates a tmux window and Docker container, then registers in PersistentState.
+    /// Creates a tmux window and Docker container, then registers in DB.
     /// If Docker fails, the supervisor is still registered with an empty container_id.
     pub(super) fn handle_spawn_supervisor(
         &self,
         task_id: &TaskId,
-        role: AgentRole,
-        infra: &mut PersistentState,
-    ) -> crate::Result<AgentId> {
+        role: WorkerRole,
+    ) -> crate::Result<WorkerId> {
         let task_state = self
             .db
             .get_task_state(task_id)?
             .ok_or_else(|| crate::Error::Internal(format!("task not found: {task_id}")))?;
         let seq = self.db.increment_worker_counter(&task_state.workflow_id)?;
-        let sup_id = AgentId::next_supervisor(seq, role);
+        let sup_id = WorkerId::next_supervisor(seq, role);
 
         // Create a tmux window for this supervisor
         let sup_name = sup_id.as_ref();
@@ -27,15 +25,15 @@ impl Orchestrator {
 
         // Select Docker image and prompt based on role
         let (image, prompt_path) = match role {
-            AgentRole::Leader => (
+            WorkerRole::Leader => (
                 &self.docker_config.leader_image,
                 &self.docker_config.leader_prompt,
             ),
-            AgentRole::ReviewIntegrator => (
+            WorkerRole::ReviewIntegrator => (
                 &self.docker_config.review_integrator_image,
                 &self.docker_config.review_integrator_prompt,
             ),
-            AgentRole::Member => {
+            WorkerRole::Member => {
                 return Err(crate::Error::Internal(
                     "cannot spawn a supervisor with Member role".into(),
                 ));
@@ -47,7 +45,7 @@ impl Orchestrator {
             sup_name,
             image,
             prompt_path,
-            &infra.session_name,
+            &self.session_name,
             &terminal_target,
             role,
         ) {
@@ -63,17 +61,19 @@ impl Orchestrator {
             }
         };
 
-        infra.supervisors.push(AgentState {
+        // Register in DB
+        self.db.insert_worker(&palette_db::InsertWorkerRequest {
             id: sup_id.clone(),
+            workflow_id: task_state.workflow_id,
             role,
-            supervisor_id: AgentId::new(""),
+            status: WorkerStatus::Booting,
+            supervisor_id: WorkerId::new(""),
             container_id,
             terminal_target,
-            status: AgentStatus::Booting,
+            // Claude Code session does not exist yet; it will be created once the process boots.
             session_id: None,
             task_id: task_id.clone(),
-        });
-        infra.touch();
+        })?;
 
         tracing::info!(
             supervisor_id = %sup_id,
@@ -91,7 +91,7 @@ impl Orchestrator {
         prompt_path: &str,
         session_name: &str,
         terminal_target: &palette_domain::terminal::TerminalTarget,
-        role: AgentRole,
+        role: WorkerRole,
     ) -> crate::Result<ContainerId> {
         let container_id =
             self.docker

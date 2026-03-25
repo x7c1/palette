@@ -1,5 +1,5 @@
 use super::{DockerManager, run_docker};
-use palette_domain::agent::ContainerId;
+use palette_domain::worker::ContainerId;
 
 impl DockerManager {
     pub fn remove_container(&self, container_id: &ContainerId) -> crate::Result<()> {

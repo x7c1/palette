@@ -5,7 +5,6 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 
-STATE_FILE="$ROOT_DIR/data/state.json"
 DB_FILE="$ROOT_DIR/data/palette.db"
 SESSION_NAME="palette"
 
@@ -18,16 +17,14 @@ if [[ -n "$port_pid" ]]; then
   kill -0 "$port_pid" 2>/dev/null && kill -9 "$port_pid" 2>/dev/null || true
 fi
 
-# Stop and remove containers listed in state.json
-if [[ -f "$STATE_FILE" ]]; then
-  container_ids=$(jq -r '(.supervisors + .members)[] | .container_id' "$STATE_FILE" 2>/dev/null || true)
-  for cid in $container_ids; do
-    if [[ -n "$cid" ]] && docker inspect "$cid" &>/dev/null; then
-      echo "stopping container ${cid:0:12}..."
-      docker rm -f "$cid" &>/dev/null || true
-    fi
-  done
-fi
+# Stop and remove managed containers (identified by Docker label)
+container_ids=$(docker ps -aq --filter label=palette.managed=true 2>/dev/null || true)
+for cid in $container_ids; do
+  if [[ -n "$cid" ]]; then
+    echo "stopping container ${cid:0:12}..."
+    docker rm -f "$cid" &>/dev/null || true
+  fi
+done
 
 # Kill tmux session
 if tmux has-session -t "$SESSION_NAME" 2>/dev/null; then
@@ -43,7 +40,7 @@ if [[ -d "$PLANS_DIR" ]]; then
 fi
 
 # Remove data files (including SQLite WAL/SHM)
-for f in "$STATE_FILE" "$DB_FILE" "${DB_FILE}-wal" "${DB_FILE}-shm"; do
+for f in "$DB_FILE" "${DB_FILE}-wal" "${DB_FILE}-shm"; do
   if [[ -f "$f" ]]; then
     echo "removing $(basename "$f")..."
     rm "$f"

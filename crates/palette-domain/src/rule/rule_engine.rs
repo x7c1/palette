@@ -36,7 +36,7 @@ impl<S: JobStore> RuleEngine<S> {
             })?;
 
         let mut effects = Vec::new();
-        if let Some(ref assignee) = job.assignee {
+        if let Some(ref assignee) = job.assignee_id {
             effects.push(RuleEffect::DestroyMember {
                 member_id: assignee.clone(),
             });
@@ -75,7 +75,7 @@ impl<S: JobStore> RuleEngine<S> {
             Verdict::Approved => {
                 self.store
                     .update_job_status(review_job_id, JobStatus::Review(ReviewStatus::Done))?;
-                if let Some(ref assignee) = review_job.assignee {
+                if let Some(ref assignee) = review_job.assignee_id {
                     effects.push(RuleEffect::DestroyMember {
                         member_id: assignee.clone(),
                     });

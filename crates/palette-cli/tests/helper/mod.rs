@@ -1,10 +1,11 @@
+#![allow(dead_code)]
+
 use palette_db::Database;
 use palette_docker::DockerManager;
-use palette_domain::agent::AgentId;
 use palette_domain::job::JobId;
 use palette_domain::rule::RuleEngine;
-use palette_domain::server::PersistentState;
 use palette_domain::terminal::{TerminalSessionName, TerminalTarget};
+use palette_domain::worker::WorkerId;
 use palette_orchestrator::{DockerConfig, Orchestrator};
 use palette_server::api_types::{CreateJobRequest, JobStatus, JobType, UpdateJobRequest};
 use palette_server::{AppState, create_router};
@@ -39,12 +40,36 @@ pub fn test_docker_config() -> DockerConfig {
     }
 }
 
-pub fn aid(s: &str) -> AgentId {
-    AgentId::new(s)
+pub fn wid(s: &str) -> WorkerId {
+    WorkerId::new(s)
 }
 
 pub fn jid(s: &str) -> JobId {
     JobId::new(s)
+}
+
+/// Insert a worker record to satisfy FK constraints.
+pub fn setup_worker(db: &Database, worker_id: &str) {
+    use palette_db::InsertWorkerRequest;
+    use palette_domain::task::TaskId;
+    use palette_domain::terminal::TerminalTarget;
+    use palette_domain::worker::*;
+    use palette_domain::workflow::WorkflowId;
+
+    let wf_id = WorkflowId::new("wf-test");
+    let _ = db.create_workflow(&wf_id, "test/blueprint.yaml");
+    db.insert_worker(&InsertWorkerRequest {
+        id: WorkerId::new(worker_id),
+        workflow_id: wf_id,
+        role: WorkerRole::Member,
+        status: WorkerStatus::Booting,
+        supervisor_id: WorkerId::new(""),
+        container_id: ContainerId::new(format!("container-{worker_id}")),
+        terminal_target: TerminalTarget::new(format!("pane-{worker_id}")),
+        session_id: None,
+        task_id: TaskId::new(format!("task-{worker_id}")),
+    })
+    .unwrap();
 }
 
 pub fn create_craft(id: &str, title: &str, task_id: &str) -> CreateJobRequest {
@@ -54,7 +79,7 @@ pub fn create_craft(id: &str, title: &str, task_id: &str) -> CreateJobRequest {
         job_type: JobType::Craft,
         title: title.to_string(),
         plan_path: format!("test/{id}"),
-        assignee: None,
+        assignee_id: None,
         priority: None,
         repository: None,
     }
@@ -67,7 +92,7 @@ pub fn create_review(id: &str, title: &str, task_id: &str) -> CreateJobRequest {
         job_type: JobType::Review,
         title: title.to_string(),
         plan_path: format!("test/{id}"),
-        assignee: None,
+        assignee_id: None,
         priority: None,
         repository: None,
     }
@@ -88,9 +113,6 @@ pub async fn spawn_server(
     let db = Arc::new(Database::open_in_memory().unwrap());
     let tmux = Arc::new(tmux);
     let docker = DockerManager::new("http://127.0.0.1:0".to_string());
-    let infra = Arc::new(tokio::sync::Mutex::new(PersistentState::new(
-        session_name.to_string(),
-    )));
 
     let (event_tx, event_rx) = tokio::sync::mpsc::unbounded_channel();
 
@@ -98,7 +120,6 @@ pub async fn spawn_server(
         tmux: Arc::clone(&tmux),
         db: Arc::clone(&db),
         rules: RuleEngine::new(Arc::clone(&db), 5),
-        infra: Arc::clone(&infra),
         event_log: tokio::sync::Mutex::new(Vec::new()),
         event_tx,
     });
@@ -110,8 +131,7 @@ pub async fn spawn_server(
         docker_config: test_docker_config(),
         plan_dir: String::new(),
         tmux: Arc::clone(&tmux),
-        infra: Arc::clone(&infra),
-        state_path: String::new(),
+        session_name: session_name.to_string(),
     });
     orchestrator.start(event_rx);
 

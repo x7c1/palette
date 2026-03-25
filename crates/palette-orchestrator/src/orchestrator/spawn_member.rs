@@ -1,30 +1,30 @@
 use super::Orchestrator;
 use palette_docker::{DockerManager, PlanDirMount, WorkspaceVolume};
-use palette_domain::agent::{AgentId, AgentRole, AgentState, AgentStatus};
 use palette_domain::job::JobType;
-use palette_domain::server::PersistentState;
+use palette_domain::task::TaskId;
+use palette_domain::worker::{WorkerId, WorkerRole, WorkerState, WorkerStatus};
 
 impl Orchestrator {
+    /// Spawn a member container. Returns the WorkerState for DB registration.
     pub(super) fn spawn_member(
         &self,
-        member_id: &AgentId,
+        member_id: &WorkerId,
         job_type: JobType,
-        supervisor_id: &AgentId,
-        infra: &PersistentState,
+        supervisor_id: &WorkerId,
+        task_id: &TaskId,
         workspace: Option<WorkspaceVolume>,
-    ) -> crate::Result<AgentState> {
-        let session_name = &infra.session_name;
+    ) -> crate::Result<WorkerState> {
+        let session_name = &self.session_name;
         let supervisor_id = supervisor_id.clone();
 
-        // Create a new tmux pane by splitting from the assigned supervisor's pane
-        let supervisor_state = infra
-            .find_supervisor(&supervisor_id)
-            .or_else(|| infra.supervisors.first())
-            .ok_or_else(|| {
-                crate::Error::Internal(
-                    "no supervisor found; cannot spawn member without a supervisor pane".into(),
-                )
-            })?;
+        // Look up supervisor from DB to find its pane and workflow
+        let supervisor_state = self.db.find_worker(&supervisor_id)?.ok_or_else(|| {
+            crate::Error::Internal(
+                "no supervisor found; cannot spawn member without a supervisor pane".into(),
+            )
+        })?;
+        let workflow_id = supervisor_state.workflow_id.clone();
+
         let terminal_target = self.tmux.create_pane(&supervisor_state.terminal_target)?;
 
         let member_id_str = member_id.as_ref();
@@ -38,7 +38,7 @@ impl Orchestrator {
         let container_id = self.docker.create_container(
             member_id_str,
             &self.docker_config.member_image,
-            AgentRole::Member,
+            WorkerRole::Member,
             session_name,
             workspace,
             Some(plan_dir_mount),
@@ -67,20 +67,22 @@ impl Orchestrator {
         let cmd = DockerManager::claude_exec_command(
             &container_id,
             "/home/agent/prompt.md",
-            AgentRole::Member,
+            WorkerRole::Member,
         );
         self.tmux.send_keys(&terminal_target, &cmd)?;
         tracing::info!(member_id = %member_id, "spawned member");
 
-        Ok(AgentState {
+        Ok(WorkerState {
             id: member_id.clone(),
-            role: AgentRole::Member,
+            workflow_id,
+            role: WorkerRole::Member,
             supervisor_id,
             container_id,
             terminal_target,
-            status: AgentStatus::Booting,
+            status: WorkerStatus::Booting,
+            // Claude Code session does not exist yet; it will be created once the process boots.
             session_id: None,
-            task_id: palette_domain::task::TaskId::new(""),
+            task_id: task_id.clone(),
         })
     }
 }

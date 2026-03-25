@@ -9,13 +9,13 @@ mod review_verdict;
 use std::collections::VecDeque;
 
 use super::Orchestrator;
-use palette_domain::agent::AgentId;
 use palette_domain::rule::RuleEffect;
-use palette_domain::server::{PendingDelivery, PersistentState};
+use palette_domain::server::PendingDelivery;
+use palette_domain::worker::WorkerId;
 
 pub(super) struct ProcessEffectsResult {
     pub deliveries: Vec<PendingDelivery>,
-    pub spawned_supervisors: Vec<AgentId>,
+    pub spawned_supervisors: Vec<WorkerId>,
 }
 
 impl Orchestrator {
@@ -24,12 +24,9 @@ impl Orchestrator {
     ///
     /// Effects are processed in FIFO order so that SpawnSupervisor is handled
     /// before AssignNewJob for child tasks.
-    ///
-    /// The caller is responsible for saving state after this function returns.
     pub(super) fn process_effects(
         &self,
         effects: &[RuleEffect],
-        infra: &mut PersistentState,
     ) -> crate::Result<ProcessEffectsResult> {
         let mut deliveries = Vec::new();
         let mut spawned_supervisors = Vec::new();
@@ -38,15 +35,15 @@ impl Orchestrator {
         while let Some(effect) = pending.pop_front() {
             let chained = match &effect {
                 RuleEffect::AssignNewJob { job_id } => {
-                    self.assign_new_job(job_id, infra, &mut deliveries)?;
+                    self.assign_new_job(job_id, &mut deliveries)?;
                     vec![]
                 }
                 RuleEffect::ReactivateMember { job_id, member_id } => {
-                    self.reactivate_member(job_id, member_id, infra, &mut deliveries)?;
+                    self.reactivate_member(job_id, member_id, &mut deliveries)?;
                     vec![]
                 }
                 RuleEffect::DestroyMember { member_id } => {
-                    self.destroy_member(member_id, infra);
+                    self.destroy_member(member_id);
                     vec![]
                 }
                 RuleEffect::CraftReadyForReview { craft_job_id } => {
@@ -55,10 +52,10 @@ impl Orchestrator {
                 RuleEffect::ReviewVerdict {
                     review_job_id,
                     verdict,
-                } => self.handle_review_verdict(review_job_id, *verdict, infra)?,
-                RuleEffect::JobCompleted { job_id } => self.complete_job(job_id, infra)?,
+                } => self.handle_review_verdict(review_job_id, *verdict)?,
+                RuleEffect::JobCompleted { job_id } => self.complete_job(job_id)?,
                 RuleEffect::SpawnSupervisor { task_id, role } => {
-                    match self.handle_spawn_supervisor(task_id, *role, infra) {
+                    match self.handle_spawn_supervisor(task_id, *role) {
                         Ok(sup_id) => spawned_supervisors.push(sup_id),
                         Err(e) => {
                             tracing::error!(error = %e, task_id = %task_id, "failed to spawn supervisor");
@@ -67,7 +64,7 @@ impl Orchestrator {
                     vec![]
                 }
                 RuleEffect::DestroySupervisor { supervisor_id } => {
-                    self.destroy_supervisor(supervisor_id, infra);
+                    self.destroy_supervisor(supervisor_id);
                     vec![]
                 }
             };
@@ -80,12 +77,21 @@ impl Orchestrator {
         })
     }
 
-    fn destroy_supervisor(&self, supervisor_id: &AgentId, infra: &mut PersistentState) {
-        if let Some(sup) = infra.remove_supervisor(supervisor_id) {
-            tracing::info!(supervisor_id = %supervisor_id, task_id = %sup.task_id, "destroying supervisor");
-            let _ = self.docker.stop_container(&sup.container_id);
-            let _ = self.docker.remove_container(&sup.container_id);
-            infra.touch();
+    fn destroy_supervisor(&self, supervisor_id: &WorkerId) {
+        let worker = match self.db.remove_worker(supervisor_id) {
+            Ok(Some(w)) => w,
+            Ok(None) => return,
+            Err(e) => {
+                tracing::error!(supervisor_id = %supervisor_id, error = %e, "failed to remove supervisor from DB");
+                return;
+            }
+        };
+        tracing::info!(supervisor_id = %supervisor_id, task_id = %worker.task_id, "destroying supervisor");
+        if let Err(e) = self.docker.stop_container(&worker.container_id) {
+            tracing::warn!(supervisor_id = %supervisor_id, error = %e, "failed to stop supervisor container");
+        }
+        if let Err(e) = self.docker.remove_container(&worker.container_id) {
+            tracing::warn!(supervisor_id = %supervisor_id, error = %e, "failed to remove supervisor container");
         }
     }
 }

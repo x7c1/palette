@@ -4,9 +4,9 @@ use axum::{
     extract::{Query, State},
     http::StatusCode,
 };
-use palette_domain::agent::{AgentId, AgentStatus};
 use palette_domain::job::{CraftStatus, JobFilter, JobStatus};
 use palette_domain::server::ServerEvent;
+use palette_domain::worker::{WorkerId, WorkerStatus};
 use std::sync::Arc;
 
 use super::HookQuery;
@@ -18,7 +18,7 @@ pub async fn handle_stop(
     Json(payload): Json<serde_json::Value>,
 ) -> StatusCode {
     let member_id_str = query.member_id.as_deref().unwrap_or("unknown");
-    let member_id = AgentId::new(member_id_str);
+    let member_id = WorkerId::new(member_id_str);
     tracing::info!(member_id = member_id_str, payload = %payload, "received stop hook");
 
     let record = EventRecord {
@@ -31,20 +31,23 @@ pub async fn handle_stop(
     };
     state.event_log.lock().await.push(record);
 
-    // Update member status to Idle and resolve supervisor ID
+    // Update worker status to Idle and resolve supervisor ID
     let supervisor_id = {
-        let mut infra = state.infra.lock().await;
-        if let Some(member) = infra.find_member_mut(&member_id) {
-            member.status = AgentStatus::Idle;
-            let supervisor_id = member.supervisor_id.clone();
-            infra.touch();
-            Some(supervisor_id)
-        } else {
-            if let Some(supervisor) = infra.find_supervisor_mut(&member_id) {
-                supervisor.status = AgentStatus::Idle;
-                infra.touch();
+        match state.db.find_worker(&member_id) {
+            Ok(Some(worker)) => {
+                if let Err(e) = state
+                    .db
+                    .update_worker_status(&member_id, WorkerStatus::Idle)
+                {
+                    tracing::error!(error = %e, "failed to update worker status to idle");
+                }
+                if worker.role == palette_domain::worker::WorkerRole::Member {
+                    Some(worker.supervisor_id.clone())
+                } else {
+                    None
+                }
             }
-            None
+            _ => None,
         }
     };
 
@@ -53,7 +56,7 @@ pub async fn handle_stop(
         let member_jobs = state
             .db
             .list_jobs(&JobFilter {
-                assignee: Some(member_id.clone()),
+                assignee_id: Some(member_id.clone()),
                 ..Default::default()
             })
             .unwrap_or_default();
@@ -87,12 +90,14 @@ pub async fn handle_stop(
                 palette_domain::job::JobType::Review => {
                     // Only notify ReviewIntegrator supervisors (for multi-review aggregation).
                     // Single-review results are handled mechanically by the orchestrator.
-                    let infra = state.infra.lock().await;
-                    let is_review_integrator =
-                        infra.find_supervisor(supervisor_id).is_some_and(|s| {
-                            s.role == palette_domain::agent::AgentRole::ReviewIntegrator
+                    let is_review_integrator = state
+                        .db
+                        .find_worker(supervisor_id)
+                        .ok()
+                        .flatten()
+                        .is_some_and(|s| {
+                            s.role == palette_domain::worker::WorkerRole::ReviewIntegrator
                         });
-                    drop(infra);
                     if is_review_integrator {
                         let report_msg = format!(
                             "[review] member={} job={} type=review_complete message: {}",

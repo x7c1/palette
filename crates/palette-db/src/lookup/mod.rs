@@ -23,5 +23,11 @@ pub use task_status::{task_status_from_id, task_status_id};
 mod verdict;
 pub use verdict::{verdict_from_id, verdict_id};
 
+mod worker_role;
+pub use worker_role::{worker_role_from_id, worker_role_id};
+
+mod worker_status;
+pub use worker_status::{worker_status_from_id, worker_status_id};
+
 mod workflow_status;
 pub use workflow_status::{workflow_status_from_id, workflow_status_id};

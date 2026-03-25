@@ -2,7 +2,6 @@ use super::Orchestrator;
 use palette_domain::job::{CraftStatus, JobId, JobStatus, JobType};
 use palette_domain::review::Verdict;
 use palette_domain::rule::RuleEffect;
-use palette_domain::server::PersistentState;
 use palette_domain::task::TaskStore;
 use palette_service::TaskStoreImpl;
 
@@ -12,28 +11,23 @@ impl Orchestrator {
         &self,
         review_job_id: &JobId,
         verdict: Verdict,
-        infra: &PersistentState,
     ) -> crate::Result<Vec<RuleEffect>> {
         match verdict {
-            Verdict::Approved => self.handle_review_approved(review_job_id, infra),
+            Verdict::Approved => self.handle_review_approved(review_job_id),
             Verdict::ChangesRequested => self.handle_review_changes_requested(review_job_id),
         }
     }
 
     /// When a review is approved: check if all sibling reviews are done,
     /// complete the parent craft job if so, and try to complete the task.
-    fn handle_review_approved(
-        &self,
-        review_job_id: &JobId,
-        infra: &PersistentState,
-    ) -> crate::Result<Vec<RuleEffect>> {
+    fn handle_review_approved(&self, review_job_id: &JobId) -> crate::Result<Vec<RuleEffect>> {
         let mut effects = Vec::new();
 
         // Try to complete the parent craft job (all reviews done → craft Done)
         effects.extend(self.try_complete_parent_craft_job(review_job_id)?);
 
         // Try to complete the review task itself
-        effects.extend(self.try_complete_task_by_job(review_job_id, infra)?);
+        effects.extend(self.try_complete_task_by_job(review_job_id)?);
 
         Ok(effects)
     }
@@ -106,7 +100,7 @@ impl Orchestrator {
 
         // Craft job completed → destroy crafter member + complete task
         let mut effects = Vec::new();
-        if let Some(ref assignee) = craft_job.assignee {
+        if let Some(ref assignee) = craft_job.assignee_id {
             effects.push(RuleEffect::DestroyMember {
                 member_id: assignee.clone(),
             });
@@ -159,7 +153,7 @@ impl Orchestrator {
         );
 
         // Enqueue review feedback to the crafter
-        if let Some(ref assignee) = craft_job.assignee {
+        if let Some(ref assignee) = craft_job.assignee_id {
             let submissions = self.db.get_review_submissions(review_job_id)?;
             let feedback = submissions
                 .last()
@@ -173,7 +167,7 @@ impl Orchestrator {
         }
 
         // Emit ReactivateMember so the crafter gets re-activated
-        if let Some(ref assignee) = craft_job.assignee {
+        if let Some(ref assignee) = craft_job.assignee_id {
             Ok(vec![RuleEffect::ReactivateMember {
                 job_id: craft_job.id,
                 member_id: assignee.clone(),

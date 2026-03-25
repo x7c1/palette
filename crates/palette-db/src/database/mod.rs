@@ -1,10 +1,9 @@
 use crate::error::Error;
-mod repository_row;
 use crate::schema;
 use chrono::{DateTime, Utc};
-use palette_domain::agent::*;
 use palette_domain::job::*;
 use palette_domain::review::*;
+use palette_domain::worker::*;
 use rusqlite::{Connection, params};
 use std::path::Path;
 use std::sync::Mutex;
@@ -14,36 +13,23 @@ pub struct Database {
 }
 
 /// Acquire the Mutex lock, converting a poisoned lock into Error.
-macro_rules! lock {
-    ($mutex:expr) => {
-        $mutex.lock().map_err(|_| Error::LockPoisoned)?
-    };
+pub(crate) fn lock(
+    mutex: &Mutex<Connection>,
+) -> crate::Result<std::sync::MutexGuard<'_, Connection>> {
+    mutex.lock().map_err(|_| crate::Error::LockPoisoned)
 }
 
-mod create_task;
-pub use create_task::CreateTaskRequest;
+mod worker;
+pub use worker::InsertWorkerRequest;
 
-mod create_workflow;
-mod get_task;
-mod update_task_status;
+mod job;
 
-mod assign_job;
-mod count_active_members;
-mod create_job;
-mod dequeue_message;
-mod enqueue_message;
-mod find_assignable_jobs;
-mod get_job;
-mod get_job_by_task;
-mod get_review_comments;
-mod get_review_submissions;
-mod get_workflow;
-mod has_pending_messages;
-mod increment_worker_counter;
-mod list_jobs;
-mod submit_review;
-mod update_job_status;
-mod update_workflow_status;
+mod message_queue;
+
+mod task;
+pub use task::CreateTaskRequest;
+
+mod workflow;
 
 impl Database {
     pub fn open(path: &Path) -> crate::Result<Self> {
@@ -74,7 +60,7 @@ impl Database {
 }
 
 /// Parse an RFC3339 datetime string from the database.
-fn parse_datetime(s: &str) -> DateTime<Utc> {
+pub(crate) fn parse_datetime(s: &str) -> DateTime<Utc> {
     DateTime::parse_from_rfc3339(s)
         .map(|dt| dt.with_timezone(&Utc))
         .unwrap_or_else(|_| Utc::now())
@@ -83,14 +69,14 @@ fn parse_datetime(s: &str) -> DateTime<Utc> {
 /// Query a single job by ID from a connection or transaction.
 fn query_job(conn: &Connection, id: &JobId) -> crate::Result<Option<Job>> {
     let mut stmt = conn.prepare(
-        "SELECT id, task_id, type_id, title, plan_path, assignee, status_id, priority_id, repository, pr_url, created_at, updated_at, notes, assigned_at
+        "SELECT id, task_id, type_id, title, plan_path, assignee_id, status_id, priority_id, repository, pr_url, created_at, updated_at, notes, assigned_at
          FROM jobs WHERE id = ?1",
     )?;
     let mut rows = stmt.query_map(params![id.as_ref()], row_to_job)?;
     rows.next().transpose().map_err(Into::into)
 }
 
-pub(super) fn id_conversion_error(e: String) -> rusqlite::Error {
+pub(crate) fn id_conversion_error(e: String) -> rusqlite::Error {
     rusqlite::Error::FromSqlConversionFailure(
         0,
         rusqlite::types::Type::Integer,
@@ -104,7 +90,7 @@ fn row_to_job(row: &rusqlite::Row) -> rusqlite::Result<Job> {
 
     let repos_str: Option<String> = row.get("repository")?;
     let repository: Option<Repository> =
-        repos_str.and_then(|s| repository_row::repository_from_json(&s));
+        repos_str.and_then(|s| job::repository_row::repository_from_json(&s));
 
     let type_id: i64 = row.get("type_id")?;
     let job_type = lookup::job_type_from_id(type_id).map_err(id_conversion_error)?;
@@ -119,7 +105,9 @@ fn row_to_job(row: &rusqlite::Row) -> rusqlite::Result<Job> {
         job_type,
         title: row.get("title")?,
         plan_path: row.get("plan_path")?,
-        assignee: row.get::<_, Option<String>>("assignee")?.map(AgentId::new),
+        assignee_id: row
+            .get::<_, Option<String>>("assignee_id")?
+            .map(WorkerId::new),
         status,
         priority: row
             .get::<_, Option<i64>>("priority_id")?
@@ -154,8 +142,8 @@ pub(crate) mod test_helpers {
         TaskId::new(s)
     }
 
-    pub fn aid(s: &str) -> AgentId {
-        AgentId::new(s)
+    pub fn wid(s: &str) -> WorkerId {
+        WorkerId::new(s)
     }
 
     /// Create a workflow and a task for testing. Returns the TaskId.
@@ -171,6 +159,28 @@ pub(crate) mod test_helpers {
         t_id
     }
 
+    /// Insert a worker record for FK-constrained tests.
+    pub fn setup_worker(db: &Database, worker_id: &str) {
+        use crate::InsertWorkerRequest;
+        use palette_domain::terminal::TerminalTarget;
+        use palette_domain::worker::*;
+
+        let wf_id = WorkflowId::new("wf-test");
+        let _ = db.create_workflow(&wf_id, "test/blueprint.yaml");
+        db.insert_worker(&InsertWorkerRequest {
+            id: WorkerId::new(worker_id),
+            workflow_id: wf_id,
+            role: WorkerRole::Member,
+            status: WorkerStatus::Booting,
+            supervisor_id: WorkerId::new(""),
+            container_id: ContainerId::new(format!("container-{worker_id}")),
+            terminal_target: TerminalTarget::new(format!("pane-{worker_id}")),
+            session_id: None,
+            task_id: TaskId::new(format!("task-{worker_id}")),
+        })
+        .unwrap();
+    }
+
     pub fn create_craft(db: &Database, id: &str, priority: Option<Priority>) {
         let task_id = setup_task(db, &format!("task-{id}"));
         db.create_job(&CreateJobRequest {
@@ -179,7 +189,7 @@ pub(crate) mod test_helpers {
             job_type: JobType::Craft,
             title: format!("Job {id}"),
             plan_path: format!("test/{id}"),
-            assignee: None,
+            assignee_id: None,
             priority,
             repository: None,
         })
@@ -194,7 +204,7 @@ pub(crate) mod test_helpers {
             job_type: JobType::Review,
             title: format!("Review {id}"),
             plan_path: format!("test/{id}"),
-            assignee: None,
+            assignee_id: None,
             priority: None,
             repository: None,
         })

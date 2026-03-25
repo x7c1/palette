@@ -4,7 +4,6 @@ use config::Config;
 use palette_db::Database;
 use palette_docker::DockerManager;
 use palette_domain::rule::RuleEngine;
-use palette_domain::server::PersistentState;
 use palette_domain::terminal::TerminalSessionName;
 use palette_orchestrator::Orchestrator;
 use palette_server::AppState;
@@ -38,28 +37,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let docker = DockerManager::new(config.docker.palette_url.clone());
 
-    let state_path = PathBuf::from(&config.state_path);
-    let infra = match palette_file_state::load(&state_path)? {
-        Some(state) => {
-            tracing::info!("restored previous state");
-            state
-        }
-        None => {
-            tracing::info!(
-                "no previous state, starting fresh (supervisors spawn on workflow start)"
-            );
-            PersistentState::new(config.tmux.session_name.clone())
-        }
-    };
-    let infra = Arc::new(tokio::sync::Mutex::new(infra));
-
     let (event_tx, event_rx) = tokio::sync::mpsc::unbounded_channel();
 
     let state = Arc::new(AppState {
         tmux: Arc::clone(&tmux),
         db: Arc::clone(&db),
         rules: RuleEngine::new(Arc::clone(&db), config.rules.max_review_rounds),
-        infra: Arc::clone(&infra),
         event_log: tokio::sync::Mutex::new(Vec::new()),
         event_tx,
     });
@@ -74,15 +57,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         docker_config: config.docker,
         plan_dir: config.plan_dir.clone(),
         tmux: Arc::clone(&tmux),
-        infra: Arc::clone(&infra),
-        state_path: config.state_path.clone(),
+        session_name: config.tmux.session_name.clone(),
     });
 
-    // Resume readiness watchers for agents that were booting when we last shut down
-    {
-        let infra_guard = infra.lock().await;
-        orchestrator.resume_booting_watchers(&infra_guard);
-    }
+    // Resume readiness watchers for workers that were booting when we last shut down
+    orchestrator.resume_booting_watchers();
 
     orchestrator.start(event_rx);
 

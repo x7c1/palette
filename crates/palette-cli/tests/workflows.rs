@@ -113,7 +113,7 @@ async fn workflow_start_creates_task_tree() {
         .list_jobs(&JobFilter {
             job_type: None,
             status: None,
-            assignee: None,
+            assignee_id: None,
         })
         .unwrap();
 
@@ -213,7 +213,7 @@ task:
         .list_jobs(&JobFilter {
             job_type: None,
             status: None,
-            assignee: None,
+            assignee_id: None,
         })
         .unwrap();
     assert_eq!(jobs.len(), 1);
@@ -279,7 +279,7 @@ task:
             job_type: JobType::Craft,
             title: "step-b".to_string(),
             plan_path: "test/step-b".to_string(),
-            assignee: None,
+            assignee_id: None,
             priority: None,
             repository: None,
         })
@@ -451,6 +451,10 @@ async fn full_task_tree_cascade_with_review() {
     let (base_url, state) = spawn_server(tmux, &session).await;
     let client = reqwest::Client::new();
 
+    // Insert workers needed for assign_job FK constraints
+    helper::setup_worker(&state.db, "reviewer-a");
+    helper::setup_worker(&state.db, "reviewer-b");
+
     let yaml = r#"
 task:
   key: full
@@ -569,7 +573,7 @@ task:
         .db
         .assign_job(
             &review_a_id,
-            &palette_domain::agent::AgentId::new("reviewer-a"),
+            &palette_domain::worker::WorkerId::new("reviewer-a"),
             JobType::Review,
         )
         .unwrap();
@@ -671,7 +675,7 @@ task:
         .db
         .assign_job(
             &review_b_id,
-            &palette_domain::agent::AgentId::new("reviewer-b"),
+            &palette_domain::worker::WorkerId::new("reviewer-b"),
             JobType::Review,
         )
         .unwrap();
@@ -728,6 +732,10 @@ async fn craft_waits_for_all_reviews_before_done() {
 
     let (base_url, state) = spawn_server(tmux, &session).await;
     let client = reqwest::Client::new();
+
+    // Insert workers needed for assign_job FK constraints
+    helper::setup_worker(&state.db, "reviewer-1");
+    helper::setup_worker(&state.db, "reviewer-2");
 
     // Blueprint: craft with two review children
     let yaml = r#"
@@ -799,7 +807,7 @@ task:
         .db
         .assign_job(
             &review_1_id,
-            &palette_domain::agent::AgentId::new("reviewer-1"),
+            &palette_domain::worker::WorkerId::new("reviewer-1"),
             JobType::Review,
         )
         .unwrap();
@@ -835,7 +843,7 @@ task:
         .db
         .assign_job(
             &review_2_id,
-            &palette_domain::agent::AgentId::new("reviewer-2"),
+            &palette_domain::worker::WorkerId::new("reviewer-2"),
             JobType::Review,
         )
         .unwrap();
@@ -896,6 +904,9 @@ task:
     tmux.create_session(&session_name).unwrap();
     let (addr, state) = spawn_server(tmux, &session_name).await;
 
+    // Insert worker needed for assign_job FK constraint
+    helper::setup_worker(&state.db, "reviewer-1");
+
     // Start workflow
     let client = reqwest::Client::new();
     let resp_body: serde_json::Value = client
@@ -955,7 +966,7 @@ task:
         .db
         .assign_job(
             &review_id,
-            &palette_domain::agent::AgentId::new("reviewer-1"),
+            &palette_domain::worker::WorkerId::new("reviewer-1"),
             JobType::Review,
         )
         .unwrap();

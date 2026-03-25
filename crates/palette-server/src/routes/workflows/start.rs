@@ -117,7 +117,7 @@ fn initialize_root(
 
     let mut effects = vec![RuleEffect::SpawnSupervisor {
         task_id: root.id.clone(),
-        role: palette_domain::agent::AgentRole::Leader,
+        role: palette_domain::worker::WorkerRole::Leader,
     }];
 
     task_store
@@ -188,7 +188,7 @@ fn activate_ready_children(
             // Pure composite: spawn supervisor, then InProgress and recurse
             effects.push(RuleEffect::SpawnSupervisor {
                 task_id: task_id.clone(),
-                role: palette_domain::agent::AgentRole::Leader,
+                role: palette_domain::worker::WorkerRole::Leader,
             });
             task_store
                 .update_task_status(task_id, TaskStatus::InProgress)
@@ -216,7 +216,7 @@ fn create_job(
             job_type,
             title: task.key.to_string(),
             plan_path: task.plan_path.clone().unwrap_or_default(),
-            assignee: None,
+            assignee_id: None,
             priority: task.priority,
             repository: task.repository.clone(),
         })

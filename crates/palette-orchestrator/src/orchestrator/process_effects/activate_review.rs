@@ -1,8 +1,8 @@
 use super::Orchestrator;
-use palette_domain::agent::AgentRole;
 use palette_domain::job::{JobId, JobStatus, JobType, ReviewStatus};
 use palette_domain::rule::RuleEffect;
 use palette_domain::task::{TaskId, TaskStatus, TaskStore};
+use palette_domain::worker::WorkerRole;
 use palette_service::TaskStoreImpl;
 
 impl Orchestrator {
@@ -68,7 +68,7 @@ impl Orchestrator {
                     {
                         job_effects.push(RuleEffect::SpawnSupervisor {
                             task_id: task_id.clone(),
-                            role: AgentRole::ReviewIntegrator,
+                            role: WorkerRole::ReviewIntegrator,
                         });
                     }
 
@@ -104,7 +104,7 @@ impl Orchestrator {
                 task_id = %child.id,
                 "reactivated ChangesRequested review job for re-review"
             );
-            if let Some(ref assignee) = review_job.assignee {
+            if let Some(ref assignee) = review_job.assignee_id {
                 job_effects.push(RuleEffect::ReactivateMember {
                     job_id: review_job.id.clone(),
                     member_id: assignee.clone(),

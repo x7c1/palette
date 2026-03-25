@@ -13,7 +13,7 @@
 //!   inspection.
 
 use anyhow::{Context as _, Result};
-use palette_domain::agent::AgentRole;
+use palette_domain::worker::WorkerRole;
 use palette_orchestrator::DockerConfig;
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -124,7 +124,7 @@ fn launch() -> Result<()> {
     let leader_id = docker.create_container(
         "test-leader",
         &config.docker.leader_image,
-        AgentRole::Leader,
+        WorkerRole::Leader,
         SESSION_NAME,
         None,
         None,
@@ -135,7 +135,7 @@ fn launch() -> Result<()> {
     let member_id = docker.create_container(
         "test-member-a",
         &config.docker.member_image,
-        AgentRole::Member,
+        WorkerRole::Member,
         SESSION_NAME,
         None,
         None,
@@ -231,7 +231,7 @@ fn launch() -> Result<()> {
     let leader_cmd = palette_docker::DockerManager::claude_exec_command(
         &leader_id,
         "/home/agent/prompt.md",
-        AgentRole::Leader,
+        WorkerRole::Leader,
     );
     let leader_target = format!("{SESSION_NAME}:leader");
     let output = Command::new("tmux")
@@ -246,7 +246,7 @@ fn launch() -> Result<()> {
     let member_cmd = palette_docker::DockerManager::claude_exec_command(
         &member_id,
         "/home/agent/prompt.md",
-        AgentRole::Member,
+        WorkerRole::Member,
     );
     let member_target = format!("{SESSION_NAME}:member-a");
     let output = Command::new("tmux")
@@ -332,7 +332,7 @@ fn claude_responds() -> Result<()> {
     let container_id = docker.create_container(
         "test-claude",
         &config.docker.leader_image,
-        AgentRole::Leader,
+        WorkerRole::Leader,
         SESSION_NAME,
         None,
         None,
@@ -357,7 +357,7 @@ fn claude_responds() -> Result<()> {
     let cmd = palette_docker::DockerManager::claude_exec_command(
         &container_id,
         "/home/agent/prompt.md",
-        AgentRole::Leader,
+        WorkerRole::Leader,
     );
     let _ = Command::new("tmux")
         .args(["send-keys", "-t", &target, "-l", &cmd])

@@ -19,7 +19,6 @@ PALETTE_URL="http://127.0.0.1:7100"
 BLUEPRINT_PATH="$ROOT_DIR/tests/e2e/fixtures/dynamic-supervisor.yaml"
 LOG_FILE="data/palette.log"
 PID_FILE="data/palette.pid"
-STATE_FILE="data/state.json"
 POLL_INTERVAL=5
 STALL_THRESHOLD=24  # 24 * 5s = 120s with no change → stall
 
@@ -27,19 +26,15 @@ trap '"$SCRIPT_DIR/stop-palette.sh"' EXIT
 
 # --- Helpers ---
 supervisor_count() {
-  if [[ -f "$STATE_FILE" ]]; then
-    jq '.supervisors | length' "$STATE_FILE" 2>/dev/null || echo 0
-  else
-    echo 0
-  fi
+  curl -sf "$PALETTE_URL/workers" 2>/dev/null \
+    | jq '[.[] | select(.role == "leader" or .role == "review_integrator")] | length' 2>/dev/null \
+    || echo 0
 }
 
 supervisor_task_ids() {
-  if [[ -f "$STATE_FILE" ]]; then
-    jq -r '[.supervisors[]? | .task_id] | sort | join(", ")' "$STATE_FILE" 2>/dev/null || echo ""
-  else
-    echo ""
-  fi
+  curl -sf "$PALETTE_URL/workers" 2>/dev/null \
+    | jq -r '[.[] | select(.role == "leader" or .role == "review_integrator") | .task_id] | sort | join(", ")' 2>/dev/null \
+    || echo ""
 }
 
 dump_diagnostics() {
@@ -47,12 +42,8 @@ dump_diagnostics() {
   echo "--- Last job state ---"
   curl -sf "$PALETTE_URL/jobs" 2>/dev/null | jq -r '.[] | "  \(.id) \(.title) \(.status) \(.job_type)"' 2>/dev/null || echo "  (no jobs)"
   echo ""
-  echo "--- Supervisor state ---"
-  if [[ -f "$STATE_FILE" ]]; then
-    jq '.supervisors[]? | {id, role, task_id, status}' "$STATE_FILE" 2>/dev/null || echo "  (parse error)"
-  else
-    echo "  no state.json"
-  fi
+  echo "--- Worker state ---"
+  curl -sf "$PALETTE_URL/workers" 2>/dev/null | jq -r '.[] | "  \(.id) role=\(.role) status=\(.status) task=\(.task_id)"' 2>/dev/null || echo "  (no workers)"
   echo ""
   echo "--- Palette log (last 30 lines) ---"
   tail -30 "$LOG_FILE" 2>/dev/null || echo "  (no log)"
@@ -117,7 +108,7 @@ echo "PASS: task_count is 7"
 # --- Step 4: Check initial supervisor state ---
 echo ""
 echo "=== Step 4: Check initial supervisor state ==="
-# Poll for state.json to appear with 2 supervisors (effects are processed async)
+# Poll for 2 supervisors (effects are processed async)
 for i in $(seq 1 30); do
   SUP_COUNT=$(supervisor_count)
   if [[ "$SUP_COUNT" -eq 2 ]]; then
@@ -195,9 +186,7 @@ while true; do
     echo ""
     echo "=== Step 6: Verify final state ==="
 
-    # Wait for supervisor cleanup (Docker stop/rm is blocking and takes several seconds
-    # per container; process_effects must finish all DestroySupervisor effects before
-    # save_state updates state.json)
+    # Wait for supervisor cleanup (Docker stop/rm takes several seconds per container)
     for j in $(seq 1 12); do
       SUP_COUNT=$(supervisor_count)
       if [[ "$SUP_COUNT" -eq 0 ]]; then

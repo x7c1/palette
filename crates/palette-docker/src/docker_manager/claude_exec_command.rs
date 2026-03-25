@@ -1,5 +1,5 @@
 use super::DockerManager;
-use palette_domain::agent::{AgentRole, ContainerId};
+use palette_domain::worker::{ContainerId, WorkerRole};
 
 impl DockerManager {
     /// Build the command string to launch Claude Code inside a container's tmux pane.
@@ -8,7 +8,7 @@ impl DockerManager {
     pub fn claude_exec_command(
         container_id: &ContainerId,
         prompt_file: &str,
-        role: AgentRole,
+        role: WorkerRole,
     ) -> String {
         let cid = container_id.as_ref();
         let plugin_flag = " --plugin-dir /home/agent/claude-code-plugin";
@@ -27,7 +27,7 @@ impl DockerManager {
 #[cfg(test)]
 mod tests {
     use super::super::DockerManager;
-    use palette_domain::agent::{AgentRole, ContainerId};
+    use palette_domain::worker::{ContainerId, WorkerRole};
 
     #[test]
     fn leader_bypasses_permissions() {
@@ -35,7 +35,7 @@ mod tests {
         let cmd = DockerManager::claude_exec_command(
             &cid,
             "/home/agent/prompts/leader.md",
-            AgentRole::Leader,
+            WorkerRole::Leader,
         );
         assert!(cmd.contains("docker exec -it abc123 claude"));
         assert!(cmd.contains("--dangerously-skip-permissions"));
@@ -49,7 +49,7 @@ mod tests {
         let cmd = DockerManager::claude_exec_command(
             &cid,
             "/home/agent/prompts/member.md",
-            AgentRole::Member,
+            WorkerRole::Member,
         );
         assert!(cmd.contains("docker exec -it abc123 claude"));
         assert!(!cmd.contains("--dangerously-skip-permissions"));
@@ -63,7 +63,7 @@ mod tests {
         let cmd = DockerManager::claude_exec_command(
             &cid,
             "/home/agent/prompts/review-integrator.md",
-            AgentRole::ReviewIntegrator,
+            WorkerRole::ReviewIntegrator,
         );
         assert!(cmd.contains("docker exec -it abc123 claude"));
         assert!(cmd.contains("--dangerously-skip-permissions"));

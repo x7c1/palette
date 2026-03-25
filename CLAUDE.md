@@ -14,4 +14,4 @@ cargo clippy
 cargo test
 ```
 
-Fix any warnings or errors before pushing.
+`.cargo/config.toml` sets `-D warnings` globally, so all warnings are treated as errors in build, test, and clippy.

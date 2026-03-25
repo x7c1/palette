@@ -1,6 +1,6 @@
 use super::DockerManager;
 use crate::Error;
-use palette_domain::agent::ContainerId;
+use palette_domain::worker::ContainerId;
 use std::path::Path;
 use std::process::Command;
 

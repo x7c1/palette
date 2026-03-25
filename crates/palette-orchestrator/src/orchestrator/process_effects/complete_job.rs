@@ -1,19 +1,14 @@
 use super::Orchestrator;
-use palette_domain::agent::AgentRole;
 use palette_domain::job::{JobId, JobType};
 use palette_domain::rule::{RuleEffect, RuleEngine};
-use palette_domain::server::PersistentState;
 use palette_domain::task::{TaskId, TaskStatus, TaskStore};
+use palette_domain::worker::WorkerRole;
 use palette_service::TaskStoreImpl;
 
 impl Orchestrator {
     /// When a Job is Done, check if its task can be completed and cascade.
-    pub(super) fn complete_job(
-        &self,
-        job_id: &JobId,
-        infra: &PersistentState,
-    ) -> crate::Result<Vec<RuleEffect>> {
-        self.try_complete_task_by_job(job_id, infra)
+    pub(super) fn complete_job(&self, job_id: &JobId) -> crate::Result<Vec<RuleEffect>> {
+        self.try_complete_task_by_job(job_id)
     }
 
     /// Check if a job's task can be completed.
@@ -21,7 +16,6 @@ impl Orchestrator {
     pub(super) fn try_complete_task_by_job(
         &self,
         job_id: &JobId,
-        infra: &PersistentState,
     ) -> crate::Result<Vec<RuleEffect>> {
         let Some(job) = self.db.get_job(job_id)? else {
             return Ok(vec![]);
@@ -49,13 +43,13 @@ impl Orchestrator {
         let mut effects = Vec::new();
 
         // Destroy supervisor for this task if it had one
-        if let Some(sup) = infra.find_supervisor_for_task(task_id) {
+        if let Ok(Some(sup)) = self.db.find_supervisor_for_task(task_id) {
             effects.push(RuleEffect::DestroySupervisor {
                 supervisor_id: sup.id.clone(),
             });
         }
 
-        let cascade = self.cascade_task_effects(task_id, &task_store, infra)?;
+        let cascade = self.cascade_task_effects(task_id, &task_store)?;
         effects.extend(cascade);
 
         // Fill vacant member slots with waiting jobs
@@ -78,7 +72,6 @@ impl Orchestrator {
         &self,
         completed_task_id: &TaskId,
         task_store: &TaskStoreImpl<'_>,
-        infra: &PersistentState,
     ) -> crate::Result<Vec<RuleEffect>> {
         use palette_domain::rule::{TaskEffect, TaskRuleEngine};
 
@@ -125,7 +118,7 @@ impl Orchestrator {
                         tracing::info!(task_id = %task_id, status = ?new_status, "task status cascaded");
 
                         // Destroy dynamic supervisor if this composite task had one
-                        if let Some(sup) = infra.find_supervisor_for_task(task_id) {
+                        if let Ok(Some(sup)) = self.db.find_supervisor_for_task(task_id) {
                             job_effects.push(RuleEffect::DestroySupervisor {
                                 supervisor_id: sup.id.clone(),
                             });
@@ -207,7 +200,7 @@ impl Orchestrator {
             // Pure composite task (no job_type): spawn supervisor before InProgress
             job_effects.push(RuleEffect::SpawnSupervisor {
                 task_id: task_id.clone(),
-                role: AgentRole::Leader,
+                role: WorkerRole::Leader,
             });
             task_store.update_task_status(task_id, TaskStatus::InProgress)?;
 
@@ -230,7 +223,7 @@ impl Orchestrator {
             job_type,
             title: task.key.to_string(),
             plan_path: task.plan_path.clone().unwrap_or_default(),
-            assignee: None,
+            assignee_id: None,
             priority: task.priority,
             repository: task.repository.clone(),
         })?;
@@ -251,8 +244,7 @@ impl Orchestrator {
     pub(super) fn find_supervisor_for_job(
         &self,
         task_id: &TaskId,
-        infra: &PersistentState,
-    ) -> crate::Result<palette_domain::agent::AgentId> {
+    ) -> crate::Result<palette_domain::worker::WorkerId> {
         let task_state = self
             .db
             .get_task_state(task_id)?
@@ -262,7 +254,7 @@ impl Orchestrator {
 
         let mut current_id = task_id.clone();
         loop {
-            if let Some(sup) = infra.find_supervisor_for_task(&current_id) {
+            if let Ok(Some(sup)) = self.db.find_supervisor_for_task(&current_id) {
                 return Ok(sup.id.clone());
             }
             let task = task_store
