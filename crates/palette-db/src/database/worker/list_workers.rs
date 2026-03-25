@@ -1,5 +1,5 @@
 use super::super::{Database, lock};
-use super::row::row_to_worker_state;
+use super::row::{COLUMNS, row_to_worker_state};
 use crate::lookup;
 use palette_domain::worker::*;
 use palette_domain::workflow::WorkflowId;
@@ -11,10 +11,9 @@ impl Database {
         let conn = lock(&self.conn)?;
         let role_leader = lookup::worker_role_id(WorkerRole::Leader);
         let role_ri = lookup::worker_role_id(WorkerRole::ReviewIntegrator);
-        let mut stmt = conn.prepare(
-            "SELECT id, workflow_id, role_id, status_id, supervisor_id, container_id, terminal_target, session_id, task_id
-             FROM workers WHERE workflow_id = ?1 AND role_id IN (?2, ?3)",
-        )?;
+        let sql =
+            format!("SELECT {COLUMNS} FROM workers WHERE workflow_id = ?1 AND role_id IN (?2, ?3)");
+        let mut stmt = conn.prepare(&sql)?;
         let rows = stmt.query_map(
             params![workflow_id.as_ref(), role_leader, role_ri],
             row_to_worker_state,
@@ -26,10 +25,8 @@ impl Database {
     pub fn list_members(&self, workflow_id: &WorkflowId) -> crate::Result<Vec<WorkerState>> {
         let conn = lock(&self.conn)?;
         let role_member = lookup::worker_role_id(WorkerRole::Member);
-        let mut stmt = conn.prepare(
-            "SELECT id, workflow_id, role_id, status_id, supervisor_id, container_id, terminal_target, session_id, task_id
-             FROM workers WHERE workflow_id = ?1 AND role_id = ?2",
-        )?;
+        let sql = format!("SELECT {COLUMNS} FROM workers WHERE workflow_id = ?1 AND role_id = ?2");
+        let mut stmt = conn.prepare(&sql)?;
         let rows = stmt.query_map(
             params![workflow_id.as_ref(), role_member],
             row_to_worker_state,
@@ -40,10 +37,8 @@ impl Database {
     /// List all workers (all workflows).
     pub fn list_all_workers(&self) -> crate::Result<Vec<WorkerState>> {
         let conn = lock(&self.conn)?;
-        let mut stmt = conn.prepare(
-            "SELECT id, workflow_id, role_id, status_id, supervisor_id, container_id, terminal_target, session_id, task_id
-             FROM workers",
-        )?;
+        let sql = format!("SELECT {COLUMNS} FROM workers");
+        let mut stmt = conn.prepare(&sql)?;
         let rows = stmt.query_map([], row_to_worker_state)?;
         rows.collect::<Result<Vec<_>, _>>().map_err(Into::into)
     }
@@ -52,10 +47,8 @@ impl Database {
     pub fn list_booting_workers(&self) -> crate::Result<Vec<WorkerState>> {
         let conn = lock(&self.conn)?;
         let booting_id = lookup::worker_status_id(WorkerStatus::Booting);
-        let mut stmt = conn.prepare(
-            "SELECT id, workflow_id, role_id, status_id, supervisor_id, container_id, terminal_target, session_id, task_id
-             FROM workers WHERE status_id = ?1",
-        )?;
+        let sql = format!("SELECT {COLUMNS} FROM workers WHERE status_id = ?1");
+        let mut stmt = conn.prepare(&sql)?;
         let rows = stmt.query_map(params![booting_id], row_to_worker_state)?;
         rows.collect::<Result<Vec<_>, _>>().map_err(Into::into)
     }
@@ -65,10 +58,8 @@ impl Database {
         let conn = lock(&self.conn)?;
         let idle_id = lookup::worker_status_id(WorkerStatus::Idle);
         let waiting_id = lookup::worker_status_id(WorkerStatus::WaitingPermission);
-        let mut stmt = conn.prepare(
-            "SELECT id, workflow_id, role_id, status_id, supervisor_id, container_id, terminal_target, session_id, task_id
-             FROM workers WHERE status_id IN (?1, ?2)",
-        )?;
+        let sql = format!("SELECT {COLUMNS} FROM workers WHERE status_id IN (?1, ?2)");
+        let mut stmt = conn.prepare(&sql)?;
         let rows = stmt.query_map(params![idle_id, waiting_id], row_to_worker_state)?;
         rows.collect::<Result<Vec<_>, _>>().map_err(Into::into)
     }

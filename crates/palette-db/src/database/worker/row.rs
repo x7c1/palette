@@ -5,6 +5,9 @@ use palette_domain::terminal::TerminalTarget;
 use palette_domain::worker::*;
 use palette_domain::workflow::WorkflowId;
 
+/// Column list for SELECT queries that produce a WorkerState via `row_to_worker_state`.
+pub(super) const COLUMNS: &str = "id, workflow_id, role_id, status_id, supervisor_id, container_id, terminal_target, session_id, task_id";
+
 pub(super) fn row_to_worker_state(row: &rusqlite::Row) -> rusqlite::Result<WorkerState> {
     let role_id: i64 = row.get("role_id")?;
     let status_id: i64 = row.get("status_id")?;
