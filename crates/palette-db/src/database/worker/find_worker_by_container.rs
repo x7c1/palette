@@ -11,7 +11,7 @@ impl Database {
     ) -> crate::Result<Option<WorkerState>> {
         let conn = lock(&self.conn)?;
         let mut stmt = conn.prepare(
-            "SELECT id, role_id, status_id, supervisor_id, container_id, terminal_target, session_id, task_id
+            "SELECT id, workflow_id, role_id, status_id, supervisor_id, container_id, terminal_target, session_id, task_id
              FROM workers WHERE container_id = ?1",
         )?;
         let mut rows = stmt.query_map(params![container_id.as_ref()], row_to_worker_state)?;

@@ -2,38 +2,26 @@ use super::Orchestrator;
 use palette_docker::{DockerManager, PlanDirMount, WorkspaceVolume};
 use palette_domain::job::JobType;
 use palette_domain::worker::{WorkerId, WorkerRole, WorkerState, WorkerStatus};
-use palette_domain::workflow::WorkflowId;
 
 impl Orchestrator {
-    /// Spawn a member container. Returns the WorkerState and its workflow_id for DB registration.
+    /// Spawn a member container. Returns the WorkerState for DB registration.
     pub(super) fn spawn_member(
         &self,
         member_id: &WorkerId,
         job_type: JobType,
         supervisor_id: &WorkerId,
         workspace: Option<WorkspaceVolume>,
-    ) -> crate::Result<(WorkerState, WorkflowId)> {
+    ) -> crate::Result<WorkerState> {
         let session_name = &self.session_name;
         let supervisor_id = supervisor_id.clone();
 
-        // Look up supervisor from DB to find its pane
+        // Look up supervisor from DB to find its pane and workflow
         let supervisor_state = self.db.find_worker(&supervisor_id)?.ok_or_else(|| {
             crate::Error::Internal(
                 "no supervisor found; cannot spawn member without a supervisor pane".into(),
             )
         })?;
-
-        // Get workflow_id from the supervisor's task
-        let task_state = self
-            .db
-            .get_task_state(&supervisor_state.task_id)?
-            .ok_or_else(|| {
-                crate::Error::Internal(format!(
-                    "task not found for supervisor: {}",
-                    supervisor_state.task_id
-                ))
-            })?;
-        let workflow_id = task_state.workflow_id;
+        let workflow_id = supervisor_state.workflow_id.clone();
 
         let terminal_target = self.tmux.create_pane(&supervisor_state.terminal_target)?;
 
@@ -82,18 +70,16 @@ impl Orchestrator {
         self.tmux.send_keys(&terminal_target, &cmd)?;
         tracing::info!(member_id = %member_id, "spawned member");
 
-        Ok((
-            WorkerState {
-                id: member_id.clone(),
-                role: WorkerRole::Member,
-                supervisor_id,
-                container_id,
-                terminal_target,
-                status: WorkerStatus::Booting,
-                session_id: None,
-                task_id: palette_domain::task::TaskId::new(""),
-            },
+        Ok(WorkerState {
+            id: member_id.clone(),
             workflow_id,
-        ))
+            role: WorkerRole::Member,
+            supervisor_id,
+            container_id,
+            terminal_target,
+            status: WorkerStatus::Booting,
+            session_id: None,
+            task_id: palette_domain::task::TaskId::new(""),
+        })
     }
 }

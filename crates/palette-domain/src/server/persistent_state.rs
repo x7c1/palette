@@ -101,6 +101,7 @@ mod tests {
         use crate::task::TaskId;
         WorkerState {
             id: WorkerId::new(id),
+            workflow_id: crate::workflow::WorkflowId::new(""),
             role,
             supervisor_id: WorkerId::new(""),
             container_id: ContainerId::new(format!("container-{id}")),

@@ -39,14 +39,13 @@ impl Orchestrator {
         let supervisor_id = self.find_supervisor_for_job(&job.task_id)?;
         let seq = self.db.increment_worker_counter(&task_state.workflow_id)?;
         let member_id = WorkerId::next_member(seq);
-        let (member, workflow_id) =
-            self.spawn_member(&member_id, job.job_type, &supervisor_id, workspace)?;
+        let member = self.spawn_member(&member_id, job.job_type, &supervisor_id, workspace)?;
         let terminal_target = member.terminal_target.clone();
 
         // Register in DB
         self.db.insert_worker(&palette_db::InsertWorkerRequest {
             id: member.id.clone(),
-            workflow_id,
+            workflow_id: member.workflow_id.clone(),
             role: member.role,
             status: member.status,
             supervisor_id: member.supervisor_id.clone(),

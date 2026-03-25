@@ -12,7 +12,7 @@ impl Database {
         let role_leader = lookup::worker_role_id(WorkerRole::Leader);
         let role_ri = lookup::worker_role_id(WorkerRole::ReviewIntegrator);
         let mut stmt = conn.prepare(
-            "SELECT id, role_id, status_id, supervisor_id, container_id, terminal_target, session_id, task_id
+            "SELECT id, workflow_id, role_id, status_id, supervisor_id, container_id, terminal_target, session_id, task_id
              FROM workers WHERE task_id = ?1 AND role_id IN (?2, ?3)",
         )?;
         let mut rows = stmt.query_map(
