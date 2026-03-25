@@ -15,7 +15,7 @@ async fn job_api_create_and_list() {
     let tmux = TmuxManager::new(session.clone());
     tmux.create_session(&session).unwrap();
 
-    let (base_url, state) = spawn_server(tmux, &session).await;
+    let (base_url, state, _shutdown_tx) = spawn_server(tmux, &session).await;
 
     // Set up workflow and tasks for the jobs
     let wf_id = WorkflowId::new("wf-jobapi");
@@ -114,7 +114,7 @@ async fn job_api_update_with_rules() {
     let tmux = TmuxManager::new(session.clone());
     tmux.create_session(&session).unwrap();
 
-    let (base_url, state) = spawn_server(tmux, &session).await;
+    let (base_url, state, _shutdown_tx) = spawn_server(tmux, &session).await;
 
     // Set up workflow and tasks
     let wf_id = WorkflowId::new("wf-jobrules");

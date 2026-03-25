@@ -43,7 +43,7 @@ async fn send_keys_delivers_to_tmux_pane() {
     let target = tmux.create_target("worker").unwrap();
 
     // Register the target in DB
-    let (base_url, state) = spawn_server(tmux, &session).await;
+    let (base_url, state, _shutdown_tx) = spawn_server(tmux, &session).await;
     register_worker(&state, "worker", &target, WorkerStatus::Idle);
 
     let client = reqwest::Client::new();
@@ -80,7 +80,7 @@ async fn send_keys_with_direct_target() {
     tmux.create_session(&session).unwrap();
 
     let target = tmux.create_target("worker").unwrap();
-    let (base_url, _state) = spawn_server(tmux, &session).await;
+    let (base_url, _state, _shutdown_tx) = spawn_server(tmux, &session).await;
 
     let client = reqwest::Client::new();
 
@@ -113,7 +113,7 @@ async fn send_queues_when_member_is_working() {
     tmux.create_session(&session).unwrap();
 
     let target = tmux.create_target("worker").unwrap();
-    let (base_url, state) = spawn_server(tmux, &session).await;
+    let (base_url, state, _shutdown_tx) = spawn_server(tmux, &session).await;
     register_worker(&state, "worker", &target, WorkerStatus::Working);
 
     let client = reqwest::Client::new();

@@ -48,7 +48,7 @@ async fn workflow_start_creates_task_tree() {
     let tmux = TmuxManager::new(session.clone());
     tmux.create_session(&session).unwrap();
 
-    let (base_url, state) = spawn_server(tmux, &session).await;
+    let (base_url, state, _shutdown_tx) = spawn_server(tmux, &session).await;
     let client = reqwest::Client::new();
     let blueprint_file = write_blueprint_file(TASK_TREE_YAML);
 
@@ -133,7 +133,7 @@ async fn workflow_start_rejects_invalid_yaml() {
     let tmux = TmuxManager::new(session.clone());
     tmux.create_session(&session).unwrap();
 
-    let (base_url, _state) = spawn_server(tmux, &session).await;
+    let (base_url, _state, _shutdown_tx) = spawn_server(tmux, &session).await;
     let client = reqwest::Client::new();
     let blueprint_file = write_blueprint_file("not valid yaml: [[");
 
@@ -154,7 +154,7 @@ async fn workflow_start_rejects_missing_file() {
     let tmux = TmuxManager::new(session.clone());
     tmux.create_session(&session).unwrap();
 
-    let (base_url, _state) = spawn_server(tmux, &session).await;
+    let (base_url, _state, _shutdown_tx) = spawn_server(tmux, &session).await;
     let client = reqwest::Client::new();
 
     let resp = client
@@ -175,7 +175,7 @@ async fn job_completion_cascades_through_task_tree() {
     let tmux = TmuxManager::new(session.clone());
     tmux.create_session(&session).unwrap();
 
-    let (base_url, state) = spawn_server(tmux, &session).await;
+    let (base_url, state, _shutdown_tx) = spawn_server(tmux, &session).await;
     let client = reqwest::Client::new();
 
     let yaml = r#"
@@ -330,7 +330,7 @@ async fn craft_in_review_cascades_to_review_task() {
     let tmux = TmuxManager::new(session.clone());
     tmux.create_session(&session).unwrap();
 
-    let (base_url, state) = spawn_server(tmux, &session).await;
+    let (base_url, state, _shutdown_tx) = spawn_server(tmux, &session).await;
     let client = reqwest::Client::new();
 
     // Blueprint: craft with review child; step-b depends on craft
@@ -448,7 +448,7 @@ async fn full_task_tree_cascade_with_review() {
     let tmux = TmuxManager::new(session.clone());
     tmux.create_session(&session).unwrap();
 
-    let (base_url, state) = spawn_server(tmux, &session).await;
+    let (base_url, state, _shutdown_tx) = spawn_server(tmux, &session).await;
     let client = reqwest::Client::new();
 
     // Insert workers needed for assign_job FK constraints
@@ -730,7 +730,7 @@ async fn craft_waits_for_all_reviews_before_done() {
     let tmux = TmuxManager::new(session.clone());
     tmux.create_session(&session).unwrap();
 
-    let (base_url, state) = spawn_server(tmux, &session).await;
+    let (base_url, state, _shutdown_tx) = spawn_server(tmux, &session).await;
     let client = reqwest::Client::new();
 
     // Insert workers needed for assign_job FK constraints
@@ -902,7 +902,7 @@ task:
     let (session_name, _guard) = test_session_name_with_guard("cr-flow");
     let tmux = TmuxManager::new(session_name.clone());
     tmux.create_session(&session_name).unwrap();
-    let (addr, state) = spawn_server(tmux, &session_name).await;
+    let (addr, state, _shutdown_tx) = spawn_server(tmux, &session_name).await;
 
     // Insert worker needed for assign_job FK constraint
     helper::setup_worker(&state.db, "reviewer-1");

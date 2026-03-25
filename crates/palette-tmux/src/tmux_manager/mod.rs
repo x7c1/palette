@@ -4,6 +4,7 @@ mod create_session;
 mod create_target;
 mod is_session_alive;
 mod is_terminal_alive;
+mod kill_session;
 mod send_keys;
 mod send_keys_no_enter;
 mod send_raw_key;
