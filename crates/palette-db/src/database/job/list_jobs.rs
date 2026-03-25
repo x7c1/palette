@@ -1,4 +1,4 @@
-use super::*;
+use super::super::*;
 
 impl Database {
     pub fn list_jobs(&self, filter: &JobFilter) -> crate::Result<Vec<Job>> {
@@ -35,7 +35,7 @@ impl Database {
 
 #[cfg(test)]
 mod tests {
-    use super::super::test_helpers::*;
+    use super::super::super::test_helpers::*;
 
     use palette_domain::job::*;
 

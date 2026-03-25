@@ -1,4 +1,4 @@
-use super::*;
+use super::super::*;
 
 impl Database {
     pub fn get_review_submissions(
@@ -12,8 +12,8 @@ impl Database {
         )?;
         let rows = stmt.query_map(params![review_job_id.as_ref()], |row| {
             let verdict_id: i64 = row.get(3)?;
-            let verdict =
-                crate::lookup::verdict_from_id(verdict_id).map_err(super::id_conversion_error)?;
+            let verdict = crate::lookup::verdict_from_id(verdict_id)
+                .map_err(super::super::id_conversion_error)?;
             Ok(ReviewSubmission {
                 id: row.get(0)?,
                 review_job_id: JobId::new(row.get::<_, String>(1)?),

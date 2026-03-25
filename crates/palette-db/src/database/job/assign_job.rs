@@ -1,4 +1,4 @@
-use super::*;
+use super::super::*;
 
 impl Database {
     /// Assign a job to a member and set status to in_progress.
@@ -33,7 +33,7 @@ impl Database {
 
 #[cfg(test)]
 mod tests {
-    use super::super::test_helpers::*;
+    use super::super::super::test_helpers::*;
 
     use palette_domain::job::*;
 

@@ -1,4 +1,4 @@
-use super::{Database, row_to_job};
+use super::super::{Database, row_to_job};
 use palette_domain::job::Job;
 use palette_domain::task::TaskId;
 use rusqlite::params;

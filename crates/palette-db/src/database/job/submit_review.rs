@@ -1,4 +1,4 @@
-use super::*;
+use super::super::*;
 
 impl Database {
     pub fn submit_review(
@@ -59,7 +59,7 @@ impl Database {
 
 #[cfg(test)]
 mod tests {
-    use super::super::test_helpers::*;
+    use super::super::super::test_helpers::*;
 
     use palette_domain::job::*;
     use palette_domain::review::*;

@@ -13,9 +13,7 @@ pub(crate) mod models;
 mod database;
 pub use database::CreateTaskRequest;
 pub use database::Database;
-
-mod agent_store;
-pub use agent_store::InsertAgentRequest;
+pub use database::InsertAgentRequest;
 
 mod job_store;
 pub(crate) mod lookup;

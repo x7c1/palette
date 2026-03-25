@@ -1,4 +1,4 @@
-use super::{Database, id_conversion_error};
+use super::super::{Database, id_conversion_error};
 use crate::models::TaskRow;
 use palette_domain::task::{TaskId, TaskState, TaskStatus};
 use palette_domain::workflow::WorkflowId;

@@ -1,4 +1,4 @@
-use super::*;
+use super::super::*;
 
 impl Database {
     pub fn get_review_comments(&self, submission_id: i64) -> crate::Result<Vec<ReviewComment>> {

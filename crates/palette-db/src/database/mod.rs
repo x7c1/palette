@@ -1,5 +1,4 @@
 use crate::error::Error;
-mod repository_row;
 use crate::schema;
 use chrono::{DateTime, Utc};
 use palette_domain::agent::*;
@@ -13,30 +12,17 @@ pub struct Database {
     pub(crate) conn: Mutex<Connection>,
 }
 
-mod create_task;
-pub use create_task::CreateTaskRequest;
+mod agent;
+pub use agent::InsertAgentRequest;
 
-mod create_workflow;
-mod get_task;
-mod update_task_status;
+mod job;
 
-mod assign_job;
-mod count_active_members;
-mod create_job;
-mod dequeue_message;
-mod enqueue_message;
-mod find_assignable_jobs;
-mod get_job;
-mod get_job_by_task;
-mod get_review_comments;
-mod get_review_submissions;
-mod get_workflow;
-mod has_pending_messages;
-mod increment_worker_counter;
-mod list_jobs;
-mod submit_review;
-mod update_job_status;
-mod update_workflow_status;
+mod message_queue;
+
+mod task;
+pub use task::CreateTaskRequest;
+
+mod workflow;
 
 impl Database {
     pub fn open(path: &Path) -> crate::Result<Self> {
@@ -97,7 +83,7 @@ fn row_to_job(row: &rusqlite::Row) -> rusqlite::Result<Job> {
 
     let repos_str: Option<String> = row.get("repository")?;
     let repository: Option<Repository> =
-        repos_str.and_then(|s| repository_row::repository_from_json(&s));
+        repos_str.and_then(|s| job::repository_row::repository_from_json(&s));
 
     let type_id: i64 = row.get("type_id")?;
     let job_type = lookup::job_type_from_id(type_id).map_err(id_conversion_error)?;

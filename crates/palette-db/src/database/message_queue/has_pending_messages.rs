@@ -1,4 +1,4 @@
-use super::*;
+use super::super::*;
 
 impl Database {
     /// Check if a target has pending messages.

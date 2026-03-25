@@ -1,4 +1,4 @@
-use super::*;
+use super::super::*;
 
 impl Database {
     pub fn create_job(&self, req: &CreateJobRequest) -> crate::Result<Job> {
@@ -13,7 +13,7 @@ impl Database {
         let repos_json = req
             .repository
             .as_ref()
-            .map(repository_row::repository_to_json);
+            .map(super::repository_row::repository_to_json);
 
         let initial_status = JobStatus::todo(req.job_type);
 
@@ -47,7 +47,7 @@ impl Database {
 
 #[cfg(test)]
 mod tests {
-    use super::super::test_helpers::*;
+    use super::super::super::test_helpers::*;
 
     use palette_domain::job::*;
 

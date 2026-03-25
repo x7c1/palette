@@ -1,4 +1,4 @@
-use super::Database;
+use super::super::Database;
 use palette_domain::workflow::{WorkflowId, WorkflowStatus};
 use rusqlite::params;
 

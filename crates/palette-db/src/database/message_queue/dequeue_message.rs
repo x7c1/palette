@@ -1,4 +1,4 @@
-use super::*;
+use super::super::*;
 use crate::models::QueuedMessage;
 
 impl Database {
@@ -28,7 +28,7 @@ impl Database {
 
 #[cfg(test)]
 mod tests {
-    use super::super::test_helpers::*;
+    use super::super::super::test_helpers::*;
 
     #[test]
     fn message_queue_enqueue_dequeue() {

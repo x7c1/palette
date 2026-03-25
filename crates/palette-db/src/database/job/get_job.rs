@@ -1,4 +1,4 @@
-use super::*;
+use super::super::*;
 
 impl Database {
     pub fn get_job(&self, id: &JobId) -> crate::Result<Option<Job>> {

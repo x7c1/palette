@@ -1,4 +1,4 @@
-use super::*;
+use super::super::*;
 
 impl Database {
     pub fn update_job_status(&self, id: &JobId, status: JobStatus) -> crate::Result<Job> {
@@ -19,7 +19,7 @@ impl Database {
 
 #[cfg(test)]
 mod tests {
-    use super::super::test_helpers::*;
+    use super::super::super::test_helpers::*;
 
     use palette_domain::job::*;
 
