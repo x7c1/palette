@@ -9,8 +9,8 @@ use std::time::{Duration, Instant};
 /// Interval between monitoring polls.
 const MONITOR_POLL_INTERVAL: Duration = Duration::from_secs(5);
 
-/// Number of poll cycles between liveness checks (30s / 5s = 6).
-const LIVENESS_CHECK_EVERY: u64 = 6;
+/// Number of poll cycles between liveness checks (15s / 5s = 3).
+const LIVENESS_CHECK_EVERY: u64 = 3;
 
 /// Time without pane content change before a worker is considered stalled.
 const STALL_TIMEOUT: Duration = Duration::from_secs(30);
