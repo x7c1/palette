@@ -1,6 +1,7 @@
 use super::Orchestrator;
 use palette_docker::{DockerManager, PlanDirMount, WorkspaceVolume};
 use palette_domain::job::JobType;
+use palette_domain::task::TaskId;
 use palette_domain::worker::{WorkerId, WorkerRole, WorkerState, WorkerStatus};
 
 impl Orchestrator {
@@ -10,6 +11,7 @@ impl Orchestrator {
         member_id: &WorkerId,
         job_type: JobType,
         supervisor_id: &WorkerId,
+        task_id: &TaskId,
         workspace: Option<WorkspaceVolume>,
     ) -> crate::Result<WorkerState> {
         let session_name = &self.session_name;
@@ -79,7 +81,7 @@ impl Orchestrator {
             terminal_target,
             status: WorkerStatus::Booting,
             session_id: None,
-            task_id: palette_domain::task::TaskId::new(""),
+            task_id: task_id.clone(),
         })
     }
 }
