@@ -72,9 +72,7 @@ impl Orchestrator {
             .flatten()
             .is_some_and(|a| a.status == AgentStatus::Booting);
 
-        if is_booting
-            && let Err(e) = self.db.update_agent_status(target_id, AgentStatus::Idle)
-        {
+        if is_booting && let Err(e) = self.db.update_agent_status(target_id, AgentStatus::Idle) {
             tracing::error!(error = %e, target_id = %target_id, "failed to update agent status to idle");
         }
         let _ = self.deliver_queued_messages(target_id);
