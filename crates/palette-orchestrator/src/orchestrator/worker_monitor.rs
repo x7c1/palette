@@ -94,9 +94,7 @@ impl Orchestrator {
                 // Already handling crash recovery
                 WorkerStatus::Crashed => continue,
                 WorkerStatus::Working | WorkerStatus::Idle | WorkerStatus::WaitingPermission => {
-                    if check_liveness
-                        && !is_container_running(worker.container_id.as_ref())
-                    {
+                    if check_liveness && !is_container_running(worker.container_id.as_ref()) {
                         self.handle_crash(worker, crash_retries);
                         continue;
                     }
