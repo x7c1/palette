@@ -80,6 +80,7 @@ impl Orchestrator {
             container_id,
             terminal_target,
             status: WorkerStatus::Booting,
+            // Claude Code session does not exist yet; it will be created once the process boots.
             session_id: None,
             task_id: task_id.clone(),
         })

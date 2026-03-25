@@ -70,6 +70,7 @@ impl Orchestrator {
             supervisor_id: WorkerId::new(""),
             container_id,
             terminal_target,
+            // Claude Code session does not exist yet; it will be created once the process boots.
             session_id: None,
             task_id: task_id.clone(),
         })?;
