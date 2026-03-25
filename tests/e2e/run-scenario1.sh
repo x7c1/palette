@@ -26,6 +26,13 @@ STALL_THRESHOLD=12  # 12 * 5s = 60s with no change → stall
 
 trap '"$SCRIPT_DIR/stop-palette.sh"' EXIT
 
+# --- Helpers ---
+worker_summary() {
+  curl -sf "$PALETTE_URL/workers" 2>/dev/null \
+    | jq -r '[.[] | "\(.id):\(.status)"] | join(" ")' 2>/dev/null \
+    || echo ""
+}
+
 # --- Step 1: Reset and build ---
 echo "=== Step 1: Reset and build ==="
 scripts/reset.sh 2>&1
@@ -121,26 +128,15 @@ while true; do
   # Collect current state
   JOBS=$(curl -sf "$PALETTE_URL/jobs" 2>/dev/null || echo "[]")
   CONTAINERS=$(docker ps --filter label=palette.managed=true --format "{{.ID}} {{.Names}} {{.Status}}" 2>/dev/null || echo "")
-  STATE_JSON=""
-  if [[ -f "data/state.json" ]]; then
-    STATE_JSON=$(jq -c '{supervisors: [.supervisors[]? | {id, role, status}], members: [.members[]? | {id, status}]}' data/state.json 2>/dev/null || echo "")
-  fi
+  WORKERS=$(worker_summary)
 
   # Build snapshot for change detection
-  snapshot="${JOBS}|${CONTAINERS}|${STATE_JSON}"
-
-  # Summarize agent state
-  agent_summary=""
-  if [[ -n "$STATE_JSON" ]]; then
-    agent_summary=$(echo "$STATE_JSON" | jq -r '
-      ([ .supervisors[]? | "\(.id):\(.status)" ] + [ .members[]? | "\(.id):\(.status)" ])
-      | join(" ")' 2>/dev/null || echo "")
-  fi
+  snapshot="${JOBS}|${CONTAINERS}|${WORKERS}"
 
   # Print status line
   elapsed=$((iteration * POLL_INTERVAL))
   job_summary=$(echo "$JOBS" | jq -r '[.[] | .status] | group_by(.) | map("\(.[0]):\(length)") | join(" ")' 2>/dev/null || echo "no jobs")
-  echo "[${elapsed}s] jobs: ${job_summary} | containers: $(echo "$CONTAINERS" | wc -l | tr -d ' ') | agents: ${agent_summary:-none} | stall: ${stall_count}/${STALL_THRESHOLD}"
+  echo "[${elapsed}s] jobs: ${job_summary} | containers: $(echo "$CONTAINERS" | wc -l | tr -d ' ') | workers: ${WORKERS:-none} | stall: ${stall_count}/${STALL_THRESHOLD}"
 
   # Check for stall
   if [[ "$snapshot" == "$prev_snapshot" ]]; then
@@ -157,15 +153,11 @@ while true; do
     echo "--- Last job state ---"
     echo "$JOBS" | jq -r '.[] | "  \(.id) \(.title) \(.status) \(.job_type)"' 2>/dev/null
     echo ""
-    echo "--- Agent state ---"
-    if [[ -f "data/state.json" ]]; then
-      jq '.' data/state.json 2>/dev/null
-    else
-      echo "  no state.json"
-    fi
+    echo "--- Worker state ---"
+    curl -sf "$PALETTE_URL/workers" 2>/dev/null | jq -r '.[] | "  \(.id) role=\(.role) status=\(.status) task=\(.task_id)"' 2>/dev/null || echo "  (no workers)"
     echo ""
     echo "--- Tmux pane logs ---"
-    SESSION_NAME=$(jq -r '.session_name // "palette"' data/state.json 2>/dev/null || echo "palette")
+    SESSION_NAME="palette"
     if tmux has-session -t "$SESSION_NAME" 2>/dev/null; then
       for pane in $(tmux list-panes -t "$SESSION_NAME" -s -F '#{pane_id}:#{pane_title}' 2>/dev/null); do
         pane_id="${pane%%:*}"

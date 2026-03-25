@@ -2,6 +2,7 @@ mod hooks;
 mod jobs;
 mod reviews;
 mod send;
+mod workers;
 mod workflows;
 
 use crate::{AppState, EventRecord};
@@ -27,6 +28,9 @@ pub fn create_router(state: Arc<AppState>) -> Router {
         .route("/jobs/create", post(jobs::handle_create_job))
         .route("/jobs/update", post(jobs::handle_update_job))
         .route("/jobs", get(jobs::handle_list_jobs))
+        // Review API
+        // Worker API
+        .route("/workers", get(workers::handle_list_workers))
         // Review API
         .route("/reviews/{id}/submit", post(reviews::handle_submit_review))
         .route(
