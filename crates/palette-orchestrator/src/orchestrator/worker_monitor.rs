@@ -261,28 +261,12 @@ impl Orchestrator {
         if !snapshot.stall_alerted && now.duration_since(snapshot.last_changed) >= STALL_TIMEOUT {
             snapshot.stall_alerted = true;
 
-            if worker.role == WorkerRole::Member {
-                tracing::warn!(
-                    worker_id = %worker.id,
-                    "stall detected: member pane unchanged for {:?}",
-                    STALL_TIMEOUT,
-                );
-                let alert = format!(
-                    "[alert] member={} type=stall duration={}s",
-                    worker.id,
-                    STALL_TIMEOUT.as_secs(),
-                );
-                if let Err(e) = self.db.enqueue_message(&worker.supervisor_id, &alert) {
-                    tracing::error!(error = %e, "failed to enqueue stall alert");
-                }
-            } else {
-                tracing::warn!(
-                    worker_id = %worker.id,
-                    role = %worker.role,
-                    "stall detected: supervisor pane unchanged for {:?}, operator intervention may be needed",
-                    STALL_TIMEOUT,
-                );
-            }
+            tracing::warn!(
+                worker_id = %worker.id,
+                role = %worker.role,
+                "stall detected: pane unchanged for {:?}",
+                STALL_TIMEOUT,
+            );
         }
     }
 
@@ -323,13 +307,6 @@ impl Orchestrator {
                     member_count = members.len(),
                     "all members idle/stopped but pending messages exist"
                 );
-                let alert = format!(
-                    "[alert] supervisor={supervisor_id} type=all_members_idle member_count={}",
-                    members.len(),
-                );
-                if let Err(e) = self.db.enqueue_message(supervisor_id, &alert) {
-                    tracing::error!(error = %e, "failed to enqueue all-idle alert");
-                }
             }
         }
     }
