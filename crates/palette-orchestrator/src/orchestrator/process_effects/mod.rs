@@ -78,10 +78,20 @@ impl Orchestrator {
     }
 
     fn destroy_supervisor(&self, supervisor_id: &WorkerId) {
-        if let Ok(Some(sup)) = self.db.remove_worker(supervisor_id) {
-            tracing::info!(supervisor_id = %supervisor_id, task_id = %sup.task_id, "destroying supervisor");
-            let _ = self.docker.stop_container(&sup.container_id);
-            let _ = self.docker.remove_container(&sup.container_id);
+        let worker = match self.db.remove_worker(supervisor_id) {
+            Ok(Some(w)) => w,
+            Ok(None) => return,
+            Err(e) => {
+                tracing::error!(supervisor_id = %supervisor_id, error = %e, "failed to remove supervisor from DB");
+                return;
+            }
+        };
+        tracing::info!(supervisor_id = %supervisor_id, task_id = %worker.task_id, "destroying supervisor");
+        if let Err(e) = self.docker.stop_container(&worker.container_id) {
+            tracing::warn!(supervisor_id = %supervisor_id, error = %e, "failed to stop supervisor container");
+        }
+        if let Err(e) = self.docker.remove_container(&worker.container_id) {
+            tracing::warn!(supervisor_id = %supervisor_id, error = %e, "failed to remove supervisor container");
         }
     }
 }
