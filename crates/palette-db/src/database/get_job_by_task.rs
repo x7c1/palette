@@ -1,5 +1,4 @@
 use super::{Database, row_to_job};
-use crate::error::Error;
 use palette_domain::job::Job;
 use palette_domain::task::TaskId;
 use rusqlite::params;

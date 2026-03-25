@@ -1,5 +1,4 @@
 use super::Database;
-use crate::error::Error;
 use palette_domain::workflow::WorkflowId;
 use rusqlite::params;
 

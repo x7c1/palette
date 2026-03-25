@@ -10,8 +10,8 @@ Before committing, always run the following commands:
 
 ```bash
 cargo fmt
-cargo clippy
+cargo clippy -- -D warnings
 cargo test
 ```
 
-Fix any warnings or errors before pushing.
+CI runs with `-D warnings`, so all warnings must be fixed before pushing.

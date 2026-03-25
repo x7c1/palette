@@ -1,5 +1,4 @@
 use super::{Database, parse_datetime};
-use crate::error::Error;
 use palette_domain::workflow::{Workflow, WorkflowId};
 use rusqlite::params;
 
