@@ -511,7 +511,6 @@ async fn dynamic_review_integrator_lifecycle() {
     use palette_domain::review::{SubmitReviewRequest, Verdict};
     use palette_domain::rule::RuleEffect;
     use palette_domain::server::ServerEvent;
-    use palette_domain::task::TaskStatus;
     use palette_domain::workflow::WorkflowStatus;
 
     let yaml = r#"

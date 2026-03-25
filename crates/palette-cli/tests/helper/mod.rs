@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use palette_db::Database;
 use palette_docker::DockerManager;
 use palette_domain::agent::AgentId;

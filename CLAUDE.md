@@ -10,8 +10,8 @@ Before committing, always run the following commands:
 
 ```bash
 cargo fmt
-cargo clippy -- -D warnings
+cargo clippy
 cargo test
 ```
 
-CI runs with `-D warnings`, so all warnings must be fixed before pushing.
+`.cargo/config.toml` sets `-D warnings` globally, so all warnings are treated as errors in build, test, and clippy.
