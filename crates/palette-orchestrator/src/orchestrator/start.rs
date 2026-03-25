@@ -13,7 +13,7 @@ impl Orchestrator {
         self: Arc<Self>,
         mut rx: mpsc::UnboundedReceiver<ServerEvent>,
         mut shutdown_rx: tokio::sync::oneshot::Receiver<()>,
-    ) {
+    ) -> tokio::task::JoinHandle<()> {
         tokio::spawn(async move {
             let should_shutdown = loop {
                 tokio::select! {
@@ -32,6 +32,6 @@ impl Orchestrator {
             if should_shutdown {
                 self.shutdown();
             }
-        });
+        })
     }
 }

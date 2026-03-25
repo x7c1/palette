@@ -137,7 +137,7 @@ pub async fn spawn_server(
         session_name: session_name.to_string(),
     });
     let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel();
-    orchestrator.start(event_rx, shutdown_rx);
+    let _ = orchestrator.start(event_rx, shutdown_rx);
 
     let app = create_router(state.clone());
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();

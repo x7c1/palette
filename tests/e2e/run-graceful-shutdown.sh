@@ -40,7 +40,7 @@ cargo build 2>&1
 echo ""
 echo "=== Step 2: Start Palette ==="
 : > "$LOG_FILE"
-RUST_LOG=info cargo run >> "$LOG_FILE" 2>&1 &
+RUST_LOG=info ./target/debug/palette >> "$LOG_FILE" 2>&1 &
 echo $! > "$PID_FILE"
 PALETTE_PID=$(cat "$PID_FILE")
 echo "PID: $PALETTE_PID"
@@ -99,14 +99,14 @@ echo "=== Step 4: Send SIGTERM ==="
 kill "$PALETTE_PID" 2>/dev/null
 echo "SIGTERM sent to PID $PALETTE_PID"
 
-# Wait for process to exit (max 30 seconds)
-for i in $(seq 1 30); do
+# Wait for process to exit (max 60 seconds — docker stop takes up to 10s per container)
+for i in $(seq 1 60); do
   if ! kill -0 "$PALETTE_PID" 2>/dev/null; then
     echo "Process exited after ${i}s"
     break
   fi
-  if [[ $i -eq 30 ]]; then
-    echo "FAIL: Process did not exit within 30 seconds"
+  if [[ $i -eq 60 ]]; then
+    echo "FAIL: Process did not exit within 60 seconds"
     kill -9 "$PALETTE_PID" 2>/dev/null || true
     exit 1
   fi
@@ -139,14 +139,20 @@ else
 fi
 
 # Check: no worker records in DB
+# Server has stopped, so we cannot query the API. Instead verify the DB file
+# directly. If sqlite3 CLI is available, use it; otherwise skip with a warning.
 if [[ -f "$DB_FILE" ]]; then
-  WORKER_ROWS=$(sqlite3 "$DB_FILE" "SELECT COUNT(*) FROM workers;" 2>/dev/null || echo "error")
-  if [[ "$WORKER_ROWS" == "0" ]]; then
-    echo "PASS: No worker records in DB"
+  if command -v sqlite3 &>/dev/null; then
+    WORKER_ROWS=$(sqlite3 "$DB_FILE" "SELECT COUNT(*) FROM workers;" 2>/dev/null || echo "error")
+    if [[ "$WORKER_ROWS" == "0" ]]; then
+      echo "PASS: No worker records in DB"
+    else
+      echo "FAIL: $WORKER_ROWS worker records still in DB"
+      sqlite3 "$DB_FILE" "SELECT id, status_id, container_id FROM workers;" 2>/dev/null
+      PASS=false
+    fi
   else
-    echo "FAIL: $WORKER_ROWS worker records still in DB"
-    sqlite3 "$DB_FILE" "SELECT id, status_id, container_id FROM workers;" 2>/dev/null
-    PASS=false
+    echo "SKIP: sqlite3 CLI not available, cannot verify DB worker records"
   fi
 else
   echo "PASS: DB file does not exist (already cleaned)"

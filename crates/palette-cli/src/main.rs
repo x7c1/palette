@@ -67,7 +67,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Start orchestrator event loop with shutdown signal
     let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel();
-    orchestrator.start(event_rx, shutdown_rx);
+    let orchestrator_handle = orchestrator.start(event_rx, shutdown_rx);
 
     // Start HTTP server with graceful shutdown
     let app = palette_server::create_router(state);
@@ -79,11 +79,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .with_graceful_shutdown(shutdown_signal())
         .await?;
 
-    // Server has stopped; tell the orchestrator to shut down
+    // Server has stopped; tell the orchestrator to shut down and wait for completion
     let _ = shutdown_tx.send(());
-
-    // Give the orchestrator time to clean up containers
-    tokio::time::sleep(std::time::Duration::from_secs(15)).await;
+    let _ = orchestrator_handle.await;
 
     Ok(())
 }

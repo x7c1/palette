@@ -38,7 +38,7 @@ cargo build 2>&1
 echo ""
 echo "=== Step 2: Start Palette ==="
 : > "$LOG_FILE"
-RUST_LOG=info cargo run >> "$LOG_FILE" 2>&1 &
+RUST_LOG=info ./target/debug/palette >> "$LOG_FILE" 2>&1 &
 echo $! > "$PID_FILE"
 PALETTE_PID=$(cat "$PID_FILE")
 echo "PID: $PALETTE_PID"
@@ -117,7 +117,7 @@ rm -f data/palette.db data/palette.db-wal data/palette.db-shm
 echo ""
 echo "=== Step 6: Restart Palette (orphan cleanup should run) ==="
 : > "$LOG_FILE"
-RUST_LOG=info cargo run >> "$LOG_FILE" 2>&1 &
+RUST_LOG=info ./target/debug/palette >> "$LOG_FILE" 2>&1 &
 echo $! > "$PID_FILE"
 PALETTE_PID2=$(cat "$PID_FILE")
 echo "New PID: $PALETTE_PID2"
