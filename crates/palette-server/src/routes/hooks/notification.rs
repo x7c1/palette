@@ -43,36 +43,38 @@ pub async fn handle_notification(
 
     // Update member status to WaitingPermission and resolve context
     let member_context = {
-        let mut infra = state.infra.lock().await;
-        if let Some(member) = infra.find_member_mut(&member_id) {
-            member.status = AgentStatus::WaitingPermission;
-            let ctx = MemberContext {
-                supervisor_id: member.supervisor_id.clone(),
-                terminal_target: member.terminal_target.clone(),
-                container_id: member.container_id.clone(),
-            };
-            infra.touch();
-            Some(ctx)
-        } else {
-            None
+        let member = match state.db.find_agent(&member_id) {
+            Ok(Some(m)) => m,
+            _ => {
+                let _ = state.event_tx.send(ServerEvent::NotifyDeliveryLoop);
+                return StatusCode::OK;
+            }
+        };
+        if let Err(e) = state
+            .db
+            .update_agent_status(&member_id, AgentStatus::WaitingPermission)
+        {
+            tracing::error!(error = %e, "failed to update agent status");
         }
-    };
-
-    let Some(ctx) = member_context else {
-        let _ = state.event_tx.send(ServerEvent::NotifyDeliveryLoop);
-        return StatusCode::OK;
+        MemberContext {
+            supervisor_id: member.supervisor_id.clone(),
+            terminal_target: member.terminal_target.clone(),
+            container_id: member.container_id.clone(),
+        }
     };
 
     // Extract the pending tool call from the member's JSONL transcript
     let pending_tool = match notification_payload.transcript_path {
-        Some(ref path) if !path.is_empty() => extract_pending_tool(&ctx.container_id, path),
+        Some(ref path) if !path.is_empty() => {
+            extract_pending_tool(&member_context.container_id, path)
+        }
         _ => None,
     };
 
     // Capture the member's pane content (last 10 non-empty lines, joined as single line)
     let pane_content = state
         .tmux
-        .capture_pane(&ctx.terminal_target)
+        .capture_pane(&member_context.terminal_target)
         .ok()
         .map(|content| {
             let lines: Vec<&str> = content.lines().filter(|l| !l.trim().is_empty()).collect();
@@ -89,7 +91,10 @@ pub async fn handle_notification(
         notification.push_str(&format!(" pane=[{pane}]"));
     }
 
-    if let Err(e) = state.db.enqueue_message(&ctx.supervisor_id, &notification) {
+    if let Err(e) = state
+        .db
+        .enqueue_message(&member_context.supervisor_id, &notification)
+    {
         tracing::error!(error = %e, "failed to enqueue notification for supervisor");
     }
 

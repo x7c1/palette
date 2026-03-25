@@ -40,19 +40,19 @@ pub async fn handle_send(
     let member_id = AgentId::new(member_id_str.as_str());
 
     // Check if target can receive input — idle or waiting for permission
-    let (can_receive, is_waiting_permission) = {
-        let infra = state.infra.lock().await;
-        infra
-            .find_member(&member_id)
-            .or_else(|| infra.find_supervisor(&member_id))
-            .map(|m| {
-                let can =
-                    m.status == AgentStatus::Idle || m.status == AgentStatus::WaitingPermission;
-                let waiting = m.status == AgentStatus::WaitingPermission;
-                (can, waiting)
-            })
-            .unwrap_or((false, false))
-    };
+    let agent = state
+        .db
+        .find_agent(&member_id)
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    let (can_receive, is_waiting_permission) = agent
+        .as_ref()
+        .map(|a| {
+            let can = a.status == AgentStatus::Idle || a.status == AgentStatus::WaitingPermission;
+            let waiting = a.status == AgentStatus::WaitingPermission;
+            (can, waiting)
+        })
+        .unwrap_or((false, false));
 
     // Also check if there are already pending messages (maintain ordering).
     // However, permission approvals bypass the queue — they are tmux key presses
@@ -65,33 +65,24 @@ pub async fn handle_send(
 
     let queued = if can_receive && (!has_pending || is_waiting_permission) {
         // Send directly
-        let terminal_target = {
-            let infra = state.infra.lock().await;
-            infra
-                .find_member(&member_id)
-                .or_else(|| infra.find_supervisor(&member_id))
-                .map(|m| m.terminal_target.clone())
-                .ok_or_else(|| {
-                    (
-                        StatusCode::NOT_FOUND,
-                        format!("member not found: {member_id}"),
-                    )
-                })?
-        };
+        let terminal_target = agent
+            .as_ref()
+            .map(|a| a.terminal_target.clone())
+            .ok_or_else(|| {
+                (
+                    StatusCode::NOT_FOUND,
+                    format!("member not found: {member_id}"),
+                )
+            })?;
 
         tracing::info!(target = %terminal_target, message = %req.message, no_enter = req.no_enter, "sending keys via tmux");
         send_tmux_keys(&state.tmux, &terminal_target, &req.message, req.no_enter)
             .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
         // Update status to Working
-        let mut infra = state.infra.lock().await;
-        if let Some(member) = infra.find_member_mut(&member_id) {
-            member.status = AgentStatus::Working;
-            infra.touch();
-        } else if let Some(supervisor) = infra.find_supervisor_mut(&member_id) {
-            supervisor.status = AgentStatus::Working;
-            infra.touch();
-        }
+        let _ = state
+            .db
+            .update_agent_status(&member_id, AgentStatus::Working);
 
         false
     } else {

@@ -13,8 +13,6 @@ pub struct Config {
     pub port: u16,
     #[serde(default = "default_db_path")]
     pub db_path: String,
-    #[serde(default = "default_state_path")]
-    pub state_path: String,
     #[serde(default = "default_plan_dir")]
     pub plan_dir: String,
     pub tmux: TmuxConfig,
@@ -25,10 +23,6 @@ pub struct Config {
 
 fn default_db_path() -> String {
     "data/palette.db".to_string()
-}
-
-fn default_state_path() -> String {
-    "data/state.json".to_string()
 }
 
 fn default_plan_dir() -> String {
@@ -63,7 +57,6 @@ palette_url = "http://127.0.0.1:7100"
         assert_eq!(config.port, 7100);
         assert_eq!(config.tmux.session_name, "palette");
         assert_eq!(config.db_path, "data/palette.db");
-        assert_eq!(config.state_path, "data/state.json");
         assert_eq!(config.rules.max_review_rounds, 5);
         assert_eq!(config.docker.palette_url, "http://127.0.0.1:7100");
         assert_eq!(config.docker.leader_image, "palette-leader:latest");

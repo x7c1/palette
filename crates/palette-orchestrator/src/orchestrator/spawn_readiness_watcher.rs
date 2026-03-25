@@ -17,7 +17,7 @@ impl Orchestrator {
         tokio::spawn(async move {
             for _ in 0..max_polls {
                 tokio::time::sleep(READINESS_POLL_INTERVAL).await;
-                if this.poll_readiness(&target_id).await.is_break() {
+                if this.poll_readiness(&target_id).is_break() {
                     return;
                 }
             }
@@ -30,16 +30,13 @@ impl Orchestrator {
 
     /// Poll once for agent readiness.
     /// Returns `Break` if the agent is ready (activated) or gone, `Continue` to keep polling.
-    async fn poll_readiness(self: &Arc<Self>, target_id: &AgentId) -> ControlFlow<()> {
+    fn poll_readiness(self: &Arc<Self>, target_id: &AgentId) -> ControlFlow<()> {
         let terminal_target = {
-            let infra = self.infra.lock().await;
-            let agent = infra
-                .find_member(target_id)
-                .or_else(|| infra.find_supervisor(target_id));
-            match agent {
-                Some(m) => m.terminal_target.clone(),
-                None => return ControlFlow::Break(()),
-            }
+            let agent = match self.db.find_agent(target_id) {
+                Ok(Some(a)) => a,
+                _ => return ControlFlow::Break(()),
+            };
+            agent.terminal_target.clone()
         };
 
         let pane_content = match self.tmux.capture_pane(&terminal_target) {
@@ -62,26 +59,24 @@ impl Orchestrator {
             target_id = %target_id,
             "Claude Code is ready, delivering queued message"
         );
-        self.activate_agent(target_id).await;
+        self.activate_agent(target_id);
         ControlFlow::Break(())
     }
 
     /// Transition a booting agent to Idle and deliver queued messages.
-    async fn activate_agent(self: &Arc<Self>, target_id: &AgentId) {
-        let mut infra = self.infra.lock().await;
-        let is_booting = infra
-            .find_member(target_id)
-            .or_else(|| infra.find_supervisor(target_id))
-            .is_some_and(|m| m.status == AgentStatus::Booting);
-        if is_booting {
-            if let Some(m) = infra.find_member_mut(target_id) {
-                m.status = AgentStatus::Idle;
-            } else if let Some(m) = infra.find_supervisor_mut(target_id) {
-                m.status = AgentStatus::Idle;
-            }
-            infra.touch();
+    fn activate_agent(self: &Arc<Self>, target_id: &AgentId) {
+        let is_booting = self
+            .db
+            .find_agent(target_id)
+            .ok()
+            .flatten()
+            .is_some_and(|a| a.status == AgentStatus::Booting);
+
+        if is_booting
+            && let Err(e) = self.db.update_agent_status(target_id, AgentStatus::Idle)
+        {
+            tracing::error!(error = %e, target_id = %target_id, "failed to update agent status to idle");
         }
-        let _ = self.deliver_queued_messages(target_id, &mut infra);
-        self.save_state(&infra);
+        let _ = self.deliver_queued_messages(target_id);
     }
 }

@@ -5,7 +5,6 @@ members = [
     "crates/palette-db",
     "crates/palette-docker",
     "crates/palette-domain",
-    "crates/palette-file-state",
     "crates/palette-fs",
     "crates/palette-orchestrator",
     "crates/palette-server",

@@ -52,24 +52,22 @@ pub async fn handle_submit_review(
     }
 
     // Notify the review member's supervisor about review results
-    if let Some(ref assignee) = job.assignee {
-        let infra = state.infra.lock().await;
-        if let Some(member) = infra.find_member(assignee)
-            && let Some(supervisor) = infra.find_supervisor(&member.supervisor_id)
-        {
-            let verdict_str = match submission.verdict {
-                palette_domain::review::Verdict::Approved => "approved",
-                palette_domain::review::Verdict::ChangesRequested => "changes_requested",
-            };
-            let notification = format!("[event] review={review_job_id} type={verdict_str}");
-            let _ = state.db.enqueue_message(&supervisor.id, &notification);
-            tracing::info!(
-                review_job_id = %review_job_id,
-                verdict = verdict_str,
-                supervisor_id = %supervisor.id,
-                "notified supervisor of review result"
-            );
-        }
+    if let Some(ref assignee) = job.assignee
+        && let Ok(Some(member)) = state.db.find_agent(assignee)
+        && let Ok(Some(supervisor)) = state.db.find_agent(&member.supervisor_id)
+    {
+        let verdict_str = match submission.verdict {
+            palette_domain::review::Verdict::Approved => "approved",
+            palette_domain::review::Verdict::ChangesRequested => "changes_requested",
+        };
+        let notification = format!("[event] review={review_job_id} type={verdict_str}");
+        let _ = state.db.enqueue_message(&supervisor.id, &notification);
+        tracing::info!(
+            review_job_id = %review_job_id,
+            verdict = verdict_str,
+            supervisor_id = %supervisor.id,
+            "notified supervisor of review result"
+        );
     }
 
     // Fire-and-forget: orchestrator processes effects and delivers messages

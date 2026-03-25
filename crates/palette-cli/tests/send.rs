@@ -1,11 +1,38 @@
 mod helper;
 
 use helper::{aid, capture_pane, spawn_server, test_session_name_with_guard};
-use palette_domain::agent::{AgentRole, AgentState, AgentStatus, ContainerId};
+use palette_db::InsertAgentRequest;
+use palette_domain::agent::{AgentRole, AgentStatus, ContainerId};
 use palette_domain::task::TaskId;
+use palette_domain::terminal::TerminalTarget;
+use palette_domain::workflow::WorkflowId;
 use palette_server::api_types::SendRequest;
 use palette_tmux::TmuxManager;
 use serde_json::json;
+
+fn register_agent(
+    state: &palette_server::AppState,
+    id: &str,
+    terminal_target: &TerminalTarget,
+    status: AgentStatus,
+) {
+    let wf_id = WorkflowId::new("wf-test");
+    let _ = state.db.create_workflow(&wf_id, "test/blueprint.yaml");
+    state
+        .db
+        .insert_agent(&InsertAgentRequest {
+            id: aid(id),
+            workflow_id: wf_id,
+            role: AgentRole::Member,
+            status,
+            supervisor_id: aid(""),
+            container_id: ContainerId::new(""),
+            terminal_target: terminal_target.clone(),
+            session_id: None,
+            task_id: TaskId::new(format!("task-{id}")),
+        })
+        .unwrap();
+}
 
 #[tokio::test]
 async fn send_keys_delivers_to_tmux_pane() {
@@ -15,21 +42,9 @@ async fn send_keys_delivers_to_tmux_pane() {
 
     let target = tmux.create_target("worker").unwrap();
 
-    // Register the target in infra state
+    // Register the target in DB
     let (base_url, state) = spawn_server(tmux, &session).await;
-    {
-        let mut infra = state.infra.lock().await;
-        infra.members.push(AgentState {
-            id: aid("worker"),
-            role: AgentRole::Member,
-            supervisor_id: aid(""),
-            container_id: ContainerId::new(""),
-            terminal_target: target.clone(),
-            status: AgentStatus::Idle,
-            session_id: None,
-            task_id: TaskId::new("task-worker"),
-        });
-    }
+    register_agent(&state, "worker", &target, AgentStatus::Idle);
 
     let client = reqwest::Client::new();
 
@@ -99,19 +114,7 @@ async fn send_queues_when_member_is_working() {
 
     let target = tmux.create_target("worker").unwrap();
     let (base_url, state) = spawn_server(tmux, &session).await;
-    {
-        let mut infra = state.infra.lock().await;
-        infra.members.push(AgentState {
-            id: aid("worker"),
-            role: AgentRole::Member,
-            supervisor_id: aid(""),
-            container_id: ContainerId::new(""),
-            terminal_target: target.clone(),
-            status: AgentStatus::Working,
-            session_id: None,
-            task_id: TaskId::new("task-worker"),
-        });
-    }
+    register_agent(&state, "worker", &target, AgentStatus::Working);
 
     let client = reqwest::Client::new();
 

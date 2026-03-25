@@ -2,7 +2,7 @@ use super::Orchestrator;
 use super::job_instruction::format_job_instruction;
 use palette_domain::agent::AgentId;
 use palette_domain::job::{JobId, JobStatus};
-use palette_domain::server::{PendingDelivery, PersistentState};
+use palette_domain::server::PendingDelivery;
 
 impl Orchestrator {
     /// Reactivate an existing member for re-review (same container, new instruction).
@@ -10,13 +10,12 @@ impl Orchestrator {
         &self,
         job_id: &JobId,
         member_id: &AgentId,
-        infra: &mut PersistentState,
         deliveries: &mut Vec<PendingDelivery>,
     ) -> crate::Result<()> {
         let Some(job) = self.db.get_job(job_id)? else {
             return Ok(());
         };
-        let Some(member) = infra.find_member(member_id) else {
+        let Some(member) = self.db.find_agent(member_id)? else {
             return Ok(());
         };
 

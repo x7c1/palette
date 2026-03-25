@@ -1,18 +1,16 @@
 use super::Orchestrator;
 use palette_docker::DockerManager;
-use palette_domain::agent::{AgentId, AgentRole, AgentState, AgentStatus, ContainerId};
-use palette_domain::server::PersistentState;
+use palette_domain::agent::{AgentId, AgentRole, AgentStatus, ContainerId};
 use palette_domain::task::TaskId;
 
 impl Orchestrator {
     /// Spawn a dynamic supervisor for a composite task.
-    /// Creates a tmux window and Docker container, then registers in PersistentState.
+    /// Creates a tmux window and Docker container, then registers in DB.
     /// If Docker fails, the supervisor is still registered with an empty container_id.
     pub(super) fn handle_spawn_supervisor(
         &self,
         task_id: &TaskId,
         role: AgentRole,
-        infra: &mut PersistentState,
     ) -> crate::Result<AgentId> {
         let task_state = self
             .db
@@ -47,7 +45,7 @@ impl Orchestrator {
             sup_name,
             image,
             prompt_path,
-            &infra.session_name,
+            &self.session_name,
             &terminal_target,
             role,
         ) {
@@ -63,17 +61,18 @@ impl Orchestrator {
             }
         };
 
-        infra.supervisors.push(AgentState {
+        // Register in DB
+        self.db.insert_agent(&palette_db::InsertAgentRequest {
             id: sup_id.clone(),
+            workflow_id: task_state.workflow_id,
             role,
+            status: AgentStatus::Booting,
             supervisor_id: AgentId::new(""),
             container_id,
             terminal_target,
-            status: AgentStatus::Booting,
             session_id: None,
             task_id: task_id.clone(),
-        });
-        infra.touch();
+        })?;
 
         tracing::info!(
             supervisor_id = %sup_id,

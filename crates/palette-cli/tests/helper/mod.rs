@@ -3,7 +3,6 @@ use palette_docker::DockerManager;
 use palette_domain::agent::AgentId;
 use palette_domain::job::JobId;
 use palette_domain::rule::RuleEngine;
-use palette_domain::server::PersistentState;
 use palette_domain::terminal::{TerminalSessionName, TerminalTarget};
 use palette_orchestrator::{DockerConfig, Orchestrator};
 use palette_server::api_types::{CreateJobRequest, JobStatus, JobType, UpdateJobRequest};
@@ -88,9 +87,6 @@ pub async fn spawn_server(
     let db = Arc::new(Database::open_in_memory().unwrap());
     let tmux = Arc::new(tmux);
     let docker = DockerManager::new("http://127.0.0.1:0".to_string());
-    let infra = Arc::new(tokio::sync::Mutex::new(PersistentState::new(
-        session_name.to_string(),
-    )));
 
     let (event_tx, event_rx) = tokio::sync::mpsc::unbounded_channel();
 
@@ -98,7 +94,6 @@ pub async fn spawn_server(
         tmux: Arc::clone(&tmux),
         db: Arc::clone(&db),
         rules: RuleEngine::new(Arc::clone(&db), 5),
-        infra: Arc::clone(&infra),
         event_log: tokio::sync::Mutex::new(Vec::new()),
         event_tx,
     });
@@ -110,8 +105,7 @@ pub async fn spawn_server(
         docker_config: test_docker_config(),
         plan_dir: String::new(),
         tmux: Arc::clone(&tmux),
-        infra: Arc::clone(&infra),
-        state_path: String::new(),
+        session_name: session_name.to_string(),
     });
     orchestrator.start(event_rx);
 

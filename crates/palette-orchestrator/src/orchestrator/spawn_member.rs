@@ -2,29 +2,39 @@ use super::Orchestrator;
 use palette_docker::{DockerManager, PlanDirMount, WorkspaceVolume};
 use palette_domain::agent::{AgentId, AgentRole, AgentState, AgentStatus};
 use palette_domain::job::JobType;
-use palette_domain::server::PersistentState;
+use palette_domain::workflow::WorkflowId;
 
 impl Orchestrator {
+    /// Spawn a member container. Returns the AgentState and its workflow_id for DB registration.
     pub(super) fn spawn_member(
         &self,
         member_id: &AgentId,
         job_type: JobType,
         supervisor_id: &AgentId,
-        infra: &PersistentState,
         workspace: Option<WorkspaceVolume>,
-    ) -> crate::Result<AgentState> {
-        let session_name = &infra.session_name;
+    ) -> crate::Result<(AgentState, WorkflowId)> {
+        let session_name = &self.session_name;
         let supervisor_id = supervisor_id.clone();
 
-        // Create a new tmux pane by splitting from the assigned supervisor's pane
-        let supervisor_state = infra
-            .find_supervisor(&supervisor_id)
-            .or_else(|| infra.supervisors.first())
+        // Look up supervisor from DB to find its pane
+        let supervisor_state = self.db.find_agent(&supervisor_id)?.ok_or_else(|| {
+            crate::Error::Internal(
+                "no supervisor found; cannot spawn member without a supervisor pane".into(),
+            )
+        })?;
+
+        // Get workflow_id from the supervisor's task
+        let task_state = self
+            .db
+            .get_task_state(&supervisor_state.task_id)?
             .ok_or_else(|| {
-                crate::Error::Internal(
-                    "no supervisor found; cannot spawn member without a supervisor pane".into(),
-                )
+                crate::Error::Internal(format!(
+                    "task not found for supervisor: {}",
+                    supervisor_state.task_id
+                ))
             })?;
+        let workflow_id = task_state.workflow_id;
+
         let terminal_target = self.tmux.create_pane(&supervisor_state.terminal_target)?;
 
         let member_id_str = member_id.as_ref();
@@ -72,15 +82,18 @@ impl Orchestrator {
         self.tmux.send_keys(&terminal_target, &cmd)?;
         tracing::info!(member_id = %member_id, "spawned member");
 
-        Ok(AgentState {
-            id: member_id.clone(),
-            role: AgentRole::Member,
-            supervisor_id,
-            container_id,
-            terminal_target,
-            status: AgentStatus::Booting,
-            session_id: None,
-            task_id: palette_domain::task::TaskId::new(""),
-        })
+        Ok((
+            AgentState {
+                id: member_id.clone(),
+                role: AgentRole::Member,
+                supervisor_id,
+                container_id,
+                terminal_target,
+                status: AgentStatus::Booting,
+                session_id: None,
+                task_id: palette_domain::task::TaskId::new(""),
+            },
+            workflow_id,
+        ))
     }
 }

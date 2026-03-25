@@ -10,14 +10,7 @@ use std::path::Path;
 use std::sync::Mutex;
 
 pub struct Database {
-    conn: Mutex<Connection>,
-}
-
-/// Acquire the Mutex lock, converting a poisoned lock into Error.
-macro_rules! lock {
-    ($mutex:expr) => {
-        $mutex.lock().map_err(|_| Error::LockPoisoned)?
-    };
+    pub(crate) conn: Mutex<Connection>,
 }
 
 mod create_task;
@@ -74,7 +67,7 @@ impl Database {
 }
 
 /// Parse an RFC3339 datetime string from the database.
-fn parse_datetime(s: &str) -> DateTime<Utc> {
+pub(crate) fn parse_datetime(s: &str) -> DateTime<Utc> {
     DateTime::parse_from_rfc3339(s)
         .map(|dt| dt.with_timezone(&Utc))
         .unwrap_or_else(|_| Utc::now())
@@ -90,7 +83,7 @@ fn query_job(conn: &Connection, id: &JobId) -> crate::Result<Option<Job>> {
     rows.next().transpose().map_err(Into::into)
 }
 
-pub(super) fn id_conversion_error(e: String) -> rusqlite::Error {
+pub(crate) fn id_conversion_error(e: String) -> rusqlite::Error {
     rusqlite::Error::FromSqlConversionFailure(
         0,
         rusqlite::types::Type::Integer,

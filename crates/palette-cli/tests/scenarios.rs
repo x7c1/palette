@@ -1,10 +1,11 @@
 mod helper;
 
 use helper::{aid, capture_pane, jid, spawn_server, test_session_name_with_guard};
-use palette_db::CreateTaskRequest;
-use palette_domain::agent::{AgentRole, AgentState, AgentStatus, ContainerId};
+use palette_db::{CreateTaskRequest, InsertAgentRequest};
+use palette_domain::agent::{AgentRole, AgentStatus, ContainerId};
 use palette_domain::job::{CreateJobRequest, JobStatus, JobType, ReviewStatus};
 use palette_domain::task::TaskId;
+use palette_domain::terminal::TerminalTarget;
 use palette_domain::workflow::WorkflowId;
 use palette_tmux::TmuxManager;
 use serde_json::json;
@@ -20,6 +21,32 @@ fn tid(wf_id: &str, key_path: &str) -> TaskId {
     TaskId::new(format!("{wf_id}:{key_path}"))
 }
 
+fn insert_agent(
+    state: &palette_server::AppState,
+    id: &str,
+    role: AgentRole,
+    supervisor_id: &str,
+    terminal_target: &TerminalTarget,
+    status: AgentStatus,
+    task_id: &str,
+    workflow_id: &WorkflowId,
+) {
+    state
+        .db
+        .insert_agent(&InsertAgentRequest {
+            id: aid(id),
+            workflow_id: workflow_id.clone(),
+            role,
+            status,
+            supervisor_id: aid(supervisor_id),
+            container_id: ContainerId::new(""),
+            terminal_target: terminal_target.clone(),
+            session_id: None,
+            task_id: TaskId::new(task_id),
+        })
+        .unwrap();
+}
+
 /// Scenario 3: Multiple review members stop while review integrator is working.
 /// Event notifications are queued and delivered one at a time on each leader stop.
 #[tokio::test]
@@ -29,45 +56,10 @@ async fn scenario3_message_queuing_to_leader() {
     tmux.create_session(&session).unwrap();
 
     let ri_pane = tmux.create_target("review-integrator").unwrap();
-    let _member_a_pane = tmux.create_target("member-a").unwrap();
-    let _member_b_pane = tmux.create_target("member-b").unwrap();
+    let member_a_pane = tmux.create_target("member-a").unwrap();
+    let member_b_pane = tmux.create_target("member-b").unwrap();
 
     let (base_url, state) = spawn_server(tmux, &session).await;
-    {
-        let mut infra = state.infra.lock().await;
-        infra.supervisors.push(AgentState {
-            id: aid("review-integrator-1"),
-            role: AgentRole::ReviewIntegrator,
-            supervisor_id: aid(""),
-            container_id: ContainerId::new(""),
-            terminal_target: ri_pane.clone(),
-            status: AgentStatus::Working,
-            session_id: None,
-            task_id: TaskId::new("task-ri"),
-        });
-        infra.members.push(AgentState {
-            id: aid("member-a"),
-            role: AgentRole::Member,
-            supervisor_id: aid("review-integrator-1"),
-            container_id: ContainerId::new(""),
-            terminal_target: _member_a_pane.clone(),
-            status: AgentStatus::Working,
-            session_id: None,
-            task_id: TaskId::new("task-R-A"),
-        });
-        infra.members.push(AgentState {
-            id: aid("member-b"),
-            role: AgentRole::Member,
-            supervisor_id: aid("review-integrator-1"),
-            container_id: ContainerId::new(""),
-            terminal_target: _member_b_pane.clone(),
-            status: AgentStatus::Working,
-            session_id: None,
-            task_id: TaskId::new("task-R-B"),
-        });
-    }
-
-    let client = reqwest::Client::new();
 
     // Set up workflow and tasks for review jobs
     let wf_id = WorkflowId::new("wf-scenario3");
@@ -77,6 +69,14 @@ async fn scenario3_message_queuing_to_leader() {
         .unwrap();
     let task_a = TaskId::new("task-R-A");
     let task_b = TaskId::new("task-R-B");
+    let task_ri = TaskId::new("task-ri");
+    state
+        .db
+        .create_task(&CreateTaskRequest {
+            id: task_ri.clone(),
+            workflow_id: wf_id.clone(),
+        })
+        .unwrap();
     state
         .db
         .create_task(&CreateTaskRequest {
@@ -88,9 +88,43 @@ async fn scenario3_message_queuing_to_leader() {
         .db
         .create_task(&CreateTaskRequest {
             id: task_b.clone(),
-            workflow_id: wf_id,
+            workflow_id: wf_id.clone(),
         })
         .unwrap();
+
+    // Register agents in DB
+    insert_agent(
+        &state,
+        "review-integrator-1",
+        AgentRole::ReviewIntegrator,
+        "",
+        &ri_pane,
+        AgentStatus::Working,
+        "task-ri",
+        &wf_id,
+    );
+    insert_agent(
+        &state,
+        "member-a",
+        AgentRole::Member,
+        "review-integrator-1",
+        &member_a_pane,
+        AgentStatus::Working,
+        "task-R-A",
+        &wf_id,
+    );
+    insert_agent(
+        &state,
+        "member-b",
+        AgentRole::Member,
+        "review-integrator-1",
+        &member_b_pane,
+        AgentStatus::Working,
+        "task-R-B",
+        &wf_id,
+    );
+
+    let client = reqwest::Client::new();
 
     // Create review jobs and assign them
     state
@@ -317,26 +351,29 @@ task:
 
     // Verify supervisors: root + phase-a = 2
     {
-        let infra = state.infra.lock().await;
+        let supervisors = state.db.list_supervisors(&workflow_id).unwrap();
         assert_eq!(
-            infra.supervisors.len(),
+            supervisors.len(),
             2,
             "should have root + phase-a supervisors, got: {:?}",
-            infra
-                .supervisors
+            supervisors
                 .iter()
                 .map(|s| (&s.id, &s.task_id))
                 .collect::<Vec<_>>()
         );
         assert!(
-            infra
+            state
+                .db
                 .find_supervisor_for_task(&tid(wf_id, "sup-test"))
+                .unwrap()
                 .is_some(),
             "root supervisor should exist"
         );
         assert!(
-            infra
+            state
+                .db
                 .find_supervisor_for_task(&tid(wf_id, "sup-test/phase-a"))
+                .unwrap()
                 .is_some(),
             "phase-a supervisor should exist"
         );
@@ -390,26 +427,29 @@ task:
 
     // Verify supervisors: root + phase-b = 2 (phase-a destroyed, phase-b spawned)
     {
-        let infra = state.infra.lock().await;
+        let supervisors = state.db.list_supervisors(&workflow_id).unwrap();
         assert_eq!(
-            infra.supervisors.len(),
+            supervisors.len(),
             2,
             "should have root + phase-b supervisors, got: {:?}",
-            infra
-                .supervisors
+            supervisors
                 .iter()
                 .map(|s| (&s.id, &s.task_id))
                 .collect::<Vec<_>>()
         );
         assert!(
-            infra
+            state
+                .db
                 .find_supervisor_for_task(&tid(wf_id, "sup-test/phase-a"))
+                .unwrap()
                 .is_none(),
             "phase-a supervisor should be destroyed"
         );
         assert!(
-            infra
+            state
+                .db
                 .find_supervisor_for_task(&tid(wf_id, "sup-test/phase-b"))
+                .unwrap()
                 .is_some(),
             "phase-b supervisor should exist"
         );
@@ -445,13 +485,12 @@ task:
 
     // All supervisors should be destroyed
     {
-        let infra = state.infra.lock().await;
+        let supervisors = state.db.list_supervisors(&workflow_id).unwrap();
         assert_eq!(
-            infra.supervisors.len(),
+            supervisors.len(),
             0,
             "all supervisors should be destroyed, got: {:?}",
-            infra
-                .supervisors
+            supervisors
                 .iter()
                 .map(|s| (&s.id, &s.task_id))
                 .collect::<Vec<_>>()
@@ -520,13 +559,12 @@ task:
 
     // Phase 1: Only root supervisor (craft composite doesn't get one)
     {
-        let infra = state.infra.lock().await;
+        let supervisors = state.db.list_supervisors(&workflow_id).unwrap();
         assert_eq!(
-            infra.supervisors.len(),
+            supervisors.len(),
             1,
             "should have root supervisor only, got: {:?}",
-            infra
-                .supervisors
+            supervisors
                 .iter()
                 .map(|s| (&s.id, &s.task_id, &s.role))
                 .collect::<Vec<_>>()
@@ -556,19 +594,20 @@ task:
 
     // Verify: ReviewIntegrator spawned + review jobs created
     {
-        let infra = state.infra.lock().await;
+        let supervisors = state.db.list_supervisors(&workflow_id).unwrap();
         assert_eq!(
-            infra.supervisors.len(),
+            supervisors.len(),
             2,
             "should have root Leader + ReviewIntegrator, got: {:?}",
-            infra
-                .supervisors
+            supervisors
                 .iter()
                 .map(|s| (&s.id, &s.task_id, &s.role))
                 .collect::<Vec<_>>()
         );
-        let ri_sup = infra
+        let ri_sup = state
+            .db
             .find_supervisor_for_task(&tid(wf_id, "ri-test/craft/review-integrate"))
+            .unwrap()
             .expect("ReviewIntegrator supervisor should exist");
         assert_eq!(ri_sup.role, AgentRole::ReviewIntegrator);
     }
@@ -673,13 +712,12 @@ task:
 
     // All supervisors should be destroyed
     {
-        let infra = state.infra.lock().await;
+        let supervisors = state.db.list_supervisors(&workflow_id).unwrap();
         assert_eq!(
-            infra.supervisors.len(),
+            supervisors.len(),
             0,
             "all supervisors should be destroyed after workflow completion, got: {:?}",
-            infra
-                .supervisors
+            supervisors
                 .iter()
                 .map(|s| (&s.id, &s.task_id))
                 .collect::<Vec<_>>()

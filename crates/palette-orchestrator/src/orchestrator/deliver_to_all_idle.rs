@@ -1,24 +1,22 @@
 use super::Orchestrator;
-use palette_domain::agent::{AgentId, AgentStatus};
 use std::sync::Arc;
 
 impl Orchestrator {
-    pub(super) async fn deliver_to_all_idle(self: &Arc<Self>) {
+    pub(super) fn deliver_to_all_idle(self: &Arc<Self>) {
         loop {
-            let mut infra = self.infra.lock().await;
-            let idle_targets: Vec<AgentId> = infra
-                .supervisors
-                .iter()
-                .chain(infra.members.iter())
-                .filter(|m| {
-                    m.status == AgentStatus::Idle || m.status == AgentStatus::WaitingPermission
-                })
-                .map(|m| m.id.clone())
-                .collect();
+            let idle_targets = match self.db.list_idle_or_waiting_agents() {
+                Ok(agents) => agents,
+                Err(e) => {
+                    tracing::error!(error = %e, "delivery loop: failed to list idle agents");
+                    break;
+                }
+            };
+
+            let target_ids: Vec<_> = idle_targets.iter().map(|a| a.id.clone()).collect();
 
             let mut any_delivered = false;
-            for target_id in &idle_targets {
-                match self.deliver_queued_messages(target_id, &mut infra) {
+            for target_id in &target_ids {
+                match self.deliver_queued_messages(target_id) {
                     Ok(true) => any_delivered = true,
                     Ok(false) => {}
                     Err(e) => {

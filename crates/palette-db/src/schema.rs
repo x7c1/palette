@@ -103,6 +103,33 @@ CREATE TABLE IF NOT EXISTS message_queue (
     created_at TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS agent_roles (
+    id INTEGER PRIMARY KEY,
+    name TEXT NOT NULL UNIQUE
+);
+
+CREATE TABLE IF NOT EXISTS agent_statuses (
+    id INTEGER PRIMARY KEY,
+    name TEXT NOT NULL UNIQUE
+);
+
+CREATE TABLE IF NOT EXISTS agents (
+    id TEXT PRIMARY KEY,
+    workflow_id TEXT NOT NULL,
+    role_id INTEGER NOT NULL,
+    status_id INTEGER NOT NULL,
+    supervisor_id TEXT NOT NULL DEFAULT '',
+    container_id TEXT NOT NULL DEFAULT '',
+    terminal_target TEXT NOT NULL DEFAULT '',
+    session_id TEXT,
+    task_id TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    FOREIGN KEY (workflow_id) REFERENCES workflows(id),
+    FOREIGN KEY (role_id) REFERENCES agent_roles(id),
+    FOREIGN KEY (status_id) REFERENCES agent_statuses(id)
+);
+
 -- Indexes
 
 CREATE INDEX IF NOT EXISTS idx_jobs_type_status ON jobs(type_id, status_id);
@@ -110,6 +137,8 @@ CREATE INDEX IF NOT EXISTS idx_review_submissions_job ON review_submissions(revi
 CREATE INDEX IF NOT EXISTS idx_review_comments_submission ON review_comments(submission_id);
 CREATE INDEX IF NOT EXISTS idx_message_queue_target ON message_queue(target_id, id);
 CREATE INDEX IF NOT EXISTS idx_tasks_workflow ON tasks(workflow_id);
+CREATE INDEX IF NOT EXISTS idx_agents_workflow ON agents(workflow_id);
+CREATE INDEX IF NOT EXISTS idx_agents_task ON agents(task_id);
 "#;
 
 pub(crate) const SEED: &str = r#"
@@ -151,6 +180,18 @@ INSERT OR IGNORE INTO verdict_types (id, name) VALUES (2, 'changes_requested');
 INSERT OR IGNORE INTO priorities (id, name) VALUES (1, 'high');
 INSERT OR IGNORE INTO priorities (id, name) VALUES (2, 'medium');
 INSERT OR IGNORE INTO priorities (id, name) VALUES (3, 'low');
+
+-- Agent roles
+INSERT OR IGNORE INTO agent_roles (id, name) VALUES (1, 'leader');
+INSERT OR IGNORE INTO agent_roles (id, name) VALUES (2, 'review_integrator');
+INSERT OR IGNORE INTO agent_roles (id, name) VALUES (3, 'member');
+
+-- Agent statuses
+INSERT OR IGNORE INTO agent_statuses (id, name) VALUES (1, 'booting');
+INSERT OR IGNORE INTO agent_statuses (id, name) VALUES (2, 'working');
+INSERT OR IGNORE INTO agent_statuses (id, name) VALUES (3, 'idle');
+INSERT OR IGNORE INTO agent_statuses (id, name) VALUES (4, 'waiting_permission');
+INSERT OR IGNORE INTO agent_statuses (id, name) VALUES (5, 'crashed');
 "#;
 
 pub(crate) fn initialize(conn: &Connection) -> rusqlite::Result<()> {
@@ -189,6 +230,9 @@ mod tests {
         assert!(tables.contains(&"message_queue".to_string()));
         assert!(tables.contains(&"workflows".to_string()));
         assert!(tables.contains(&"tasks".to_string()));
+        assert!(tables.contains(&"agent_roles".to_string()));
+        assert!(tables.contains(&"agent_statuses".to_string()));
+        assert!(tables.contains(&"agents".to_string()));
     }
 
     #[test]

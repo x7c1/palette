@@ -31,20 +31,20 @@ pub async fn handle_stop(
     };
     state.event_log.lock().await.push(record);
 
-    // Update member status to Idle and resolve supervisor ID
+    // Update agent status to Idle and resolve supervisor ID
     let supervisor_id = {
-        let mut infra = state.infra.lock().await;
-        if let Some(member) = infra.find_member_mut(&member_id) {
-            member.status = AgentStatus::Idle;
-            let supervisor_id = member.supervisor_id.clone();
-            infra.touch();
-            Some(supervisor_id)
-        } else {
-            if let Some(supervisor) = infra.find_supervisor_mut(&member_id) {
-                supervisor.status = AgentStatus::Idle;
-                infra.touch();
+        match state.db.find_agent(&member_id) {
+            Ok(Some(agent)) => {
+                if let Err(e) = state.db.update_agent_status(&member_id, AgentStatus::Idle) {
+                    tracing::error!(error = %e, "failed to update agent status to idle");
+                }
+                if agent.role == palette_domain::agent::AgentRole::Member {
+                    Some(agent.supervisor_id.clone())
+                } else {
+                    None
+                }
             }
-            None
+            _ => None,
         }
     };
 
@@ -87,12 +87,14 @@ pub async fn handle_stop(
                 palette_domain::job::JobType::Review => {
                     // Only notify ReviewIntegrator supervisors (for multi-review aggregation).
                     // Single-review results are handled mechanically by the orchestrator.
-                    let infra = state.infra.lock().await;
-                    let is_review_integrator =
-                        infra.find_supervisor(supervisor_id).is_some_and(|s| {
+                    let is_review_integrator = state
+                        .db
+                        .find_agent(supervisor_id)
+                        .ok()
+                        .flatten()
+                        .is_some_and(|s| {
                             s.role == palette_domain::agent::AgentRole::ReviewIntegrator
                         });
-                    drop(infra);
                     if is_review_integrator {
                         let report_msg = format!(
                             "[review] member={} job={} type=review_complete message: {}",

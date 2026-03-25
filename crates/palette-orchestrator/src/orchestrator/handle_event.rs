@@ -8,16 +8,14 @@ impl Orchestrator {
         match event {
             ServerEvent::ProcessEffects { effects } => self.handle_process_effects(effects).await,
             ServerEvent::DeliverMessages { target_id } => {
-                let mut infra = self.infra.lock().await;
-                let _ = self.deliver_queued_messages(&target_id, &mut infra);
+                let _ = self.deliver_queued_messages(&target_id);
             }
-            ServerEvent::NotifyDeliveryLoop => self.deliver_to_all_idle().await,
+            ServerEvent::NotifyDeliveryLoop => self.deliver_to_all_idle(),
         }
     }
 
     async fn handle_process_effects(self: &Arc<Self>, effects: Vec<RuleEffect>) {
-        let mut infra = self.infra.lock().await;
-        let result = match self.process_effects(&effects, &mut infra) {
+        let result = match self.process_effects(&effects) {
             Ok(result) => result,
             Err(e) => {
                 tracing::error!(error = %e, "failed to process effects");
@@ -26,10 +24,8 @@ impl Orchestrator {
         };
 
         for d in &result.deliveries {
-            let _ = self.deliver_queued_messages(&d.target_id, &mut infra);
+            let _ = self.deliver_queued_messages(&d.target_id);
         }
-        self.save_state(&infra);
-        drop(infra);
 
         for d in result.deliveries {
             self.spawn_readiness_watcher(d.target_id);
