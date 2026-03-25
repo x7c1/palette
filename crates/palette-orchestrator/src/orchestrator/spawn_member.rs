@@ -1,23 +1,23 @@
 use super::Orchestrator;
 use palette_docker::{DockerManager, PlanDirMount, WorkspaceVolume};
-use palette_domain::agent::{AgentId, AgentRole, AgentState, AgentStatus};
 use palette_domain::job::JobType;
+use palette_domain::worker::{WorkerId, WorkerRole, WorkerState, WorkerStatus};
 use palette_domain::workflow::WorkflowId;
 
 impl Orchestrator {
-    /// Spawn a member container. Returns the AgentState and its workflow_id for DB registration.
+    /// Spawn a member container. Returns the WorkerState and its workflow_id for DB registration.
     pub(super) fn spawn_member(
         &self,
-        member_id: &AgentId,
+        member_id: &WorkerId,
         job_type: JobType,
-        supervisor_id: &AgentId,
+        supervisor_id: &WorkerId,
         workspace: Option<WorkspaceVolume>,
-    ) -> crate::Result<(AgentState, WorkflowId)> {
+    ) -> crate::Result<(WorkerState, WorkflowId)> {
         let session_name = &self.session_name;
         let supervisor_id = supervisor_id.clone();
 
         // Look up supervisor from DB to find its pane
-        let supervisor_state = self.db.find_agent(&supervisor_id)?.ok_or_else(|| {
+        let supervisor_state = self.db.find_worker(&supervisor_id)?.ok_or_else(|| {
             crate::Error::Internal(
                 "no supervisor found; cannot spawn member without a supervisor pane".into(),
             )
@@ -48,7 +48,7 @@ impl Orchestrator {
         let container_id = self.docker.create_container(
             member_id_str,
             &self.docker_config.member_image,
-            AgentRole::Member,
+            WorkerRole::Member,
             session_name,
             workspace,
             Some(plan_dir_mount),
@@ -77,19 +77,19 @@ impl Orchestrator {
         let cmd = DockerManager::claude_exec_command(
             &container_id,
             "/home/agent/prompt.md",
-            AgentRole::Member,
+            WorkerRole::Member,
         );
         self.tmux.send_keys(&terminal_target, &cmd)?;
         tracing::info!(member_id = %member_id, "spawned member");
 
         Ok((
-            AgentState {
+            WorkerState {
                 id: member_id.clone(),
-                role: AgentRole::Member,
+                role: WorkerRole::Member,
                 supervisor_id,
                 container_id,
                 terminal_target,
-                status: AgentStatus::Booting,
+                status: WorkerStatus::Booting,
                 session_id: None,
                 task_id: palette_domain::task::TaskId::new(""),
             },

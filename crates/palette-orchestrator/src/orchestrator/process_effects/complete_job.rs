@@ -1,8 +1,8 @@
 use super::Orchestrator;
-use palette_domain::agent::AgentRole;
 use palette_domain::job::{JobId, JobType};
 use palette_domain::rule::{RuleEffect, RuleEngine};
 use palette_domain::task::{TaskId, TaskStatus, TaskStore};
+use palette_domain::worker::WorkerRole;
 use palette_service::TaskStoreImpl;
 
 impl Orchestrator {
@@ -200,7 +200,7 @@ impl Orchestrator {
             // Pure composite task (no job_type): spawn supervisor before InProgress
             job_effects.push(RuleEffect::SpawnSupervisor {
                 task_id: task_id.clone(),
-                role: AgentRole::Leader,
+                role: WorkerRole::Leader,
             });
             task_store.update_task_status(task_id, TaskStatus::InProgress)?;
 
@@ -244,7 +244,7 @@ impl Orchestrator {
     pub(super) fn find_supervisor_for_job(
         &self,
         task_id: &TaskId,
-    ) -> crate::Result<palette_domain::agent::AgentId> {
+    ) -> crate::Result<palette_domain::worker::WorkerId> {
         let task_state = self
             .db
             .get_task_state(task_id)?

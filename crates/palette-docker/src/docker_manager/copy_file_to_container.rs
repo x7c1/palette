@@ -1,6 +1,6 @@
 use super::{DockerManager, run_docker};
 use crate::Error;
-use palette_domain::agent::ContainerId;
+use palette_domain::worker::ContainerId;
 
 impl DockerManager {
     /// Copy a local file into a running container.

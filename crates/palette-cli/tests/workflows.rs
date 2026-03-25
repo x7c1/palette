@@ -569,7 +569,7 @@ task:
         .db
         .assign_job(
             &review_a_id,
-            &palette_domain::agent::AgentId::new("reviewer-a"),
+            &palette_domain::worker::WorkerId::new("reviewer-a"),
             JobType::Review,
         )
         .unwrap();
@@ -671,7 +671,7 @@ task:
         .db
         .assign_job(
             &review_b_id,
-            &palette_domain::agent::AgentId::new("reviewer-b"),
+            &palette_domain::worker::WorkerId::new("reviewer-b"),
             JobType::Review,
         )
         .unwrap();
@@ -799,7 +799,7 @@ task:
         .db
         .assign_job(
             &review_1_id,
-            &palette_domain::agent::AgentId::new("reviewer-1"),
+            &palette_domain::worker::WorkerId::new("reviewer-1"),
             JobType::Review,
         )
         .unwrap();
@@ -835,7 +835,7 @@ task:
         .db
         .assign_job(
             &review_2_id,
-            &palette_domain::agent::AgentId::new("reviewer-2"),
+            &palette_domain::worker::WorkerId::new("reviewer-2"),
             JobType::Review,
         )
         .unwrap();
@@ -955,7 +955,7 @@ task:
         .db
         .assign_job(
             &review_id,
-            &palette_domain::agent::AgentId::new("reviewer-1"),
+            &palette_domain::worker::WorkerId::new("reviewer-1"),
             JobType::Review,
         )
         .unwrap();

@@ -1,4 +1,4 @@
-use palette_domain::agent::ContainerId;
+use palette_domain::worker::ContainerId;
 
 /// Read the last N lines of a file inside a running container.
 pub fn read_container_file(

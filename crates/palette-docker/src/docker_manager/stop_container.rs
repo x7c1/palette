@@ -1,5 +1,5 @@
 use super::{DockerManager, run_docker};
-use palette_domain::agent::ContainerId;
+use palette_domain::worker::ContainerId;
 
 /// Timeout in seconds when stopping a container.
 const CONTAINER_STOP_TIMEOUT_SECS: &str = "10";

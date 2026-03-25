@@ -4,9 +4,9 @@ use axum::{
     extract::{Query, State},
     http::StatusCode,
 };
-use palette_domain::agent::{AgentId, AgentStatus};
 use palette_domain::job::{CraftStatus, JobFilter, JobStatus};
 use palette_domain::server::ServerEvent;
+use palette_domain::worker::{WorkerId, WorkerStatus};
 use std::sync::Arc;
 
 use super::HookQuery;
@@ -18,7 +18,7 @@ pub async fn handle_stop(
     Json(payload): Json<serde_json::Value>,
 ) -> StatusCode {
     let member_id_str = query.member_id.as_deref().unwrap_or("unknown");
-    let member_id = AgentId::new(member_id_str);
+    let member_id = WorkerId::new(member_id_str);
     tracing::info!(member_id = member_id_str, payload = %payload, "received stop hook");
 
     let record = EventRecord {
@@ -31,15 +31,18 @@ pub async fn handle_stop(
     };
     state.event_log.lock().await.push(record);
 
-    // Update agent status to Idle and resolve supervisor ID
+    // Update worker status to Idle and resolve supervisor ID
     let supervisor_id = {
-        match state.db.find_agent(&member_id) {
-            Ok(Some(agent)) => {
-                if let Err(e) = state.db.update_agent_status(&member_id, AgentStatus::Idle) {
-                    tracing::error!(error = %e, "failed to update agent status to idle");
+        match state.db.find_worker(&member_id) {
+            Ok(Some(worker)) => {
+                if let Err(e) = state
+                    .db
+                    .update_worker_status(&member_id, WorkerStatus::Idle)
+                {
+                    tracing::error!(error = %e, "failed to update worker status to idle");
                 }
-                if agent.role == palette_domain::agent::AgentRole::Member {
-                    Some(agent.supervisor_id.clone())
+                if worker.role == palette_domain::worker::WorkerRole::Member {
+                    Some(worker.supervisor_id.clone())
                 } else {
                     None
                 }
@@ -89,11 +92,11 @@ pub async fn handle_stop(
                     // Single-review results are handled mechanically by the orchestrator.
                     let is_review_integrator = state
                         .db
-                        .find_agent(supervisor_id)
+                        .find_worker(supervisor_id)
                         .ok()
                         .flatten()
                         .is_some_and(|s| {
-                            s.role == palette_domain::agent::AgentRole::ReviewIntegrator
+                            s.role == palette_domain::worker::WorkerRole::ReviewIntegrator
                         });
                     if is_review_integrator {
                         let report_msg = format!(

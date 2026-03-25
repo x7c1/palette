@@ -5,7 +5,7 @@ impl Database {
     /// Enqueue a message for a target (member or leader).
     pub fn enqueue_message(
         &self,
-        target_id: &AgentId,
+        target_id: &WorkerId,
         message: &str,
     ) -> crate::Result<QueuedMessage> {
         let conn = lock!(self.conn);

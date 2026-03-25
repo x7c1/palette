@@ -1,6 +1,6 @@
 use super::{DockerManager, run_docker};
 use crate::Error;
-use palette_domain::agent::ContainerId;
+use palette_domain::worker::ContainerId;
 
 impl DockerManager {
     /// Write the settings.json file inside a running container.

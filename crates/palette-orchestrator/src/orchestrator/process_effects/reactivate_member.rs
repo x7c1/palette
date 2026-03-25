@@ -1,21 +1,21 @@
 use super::Orchestrator;
 use super::job_instruction::format_job_instruction;
-use palette_domain::agent::AgentId;
 use palette_domain::job::{JobId, JobStatus};
 use palette_domain::server::PendingDelivery;
+use palette_domain::worker::WorkerId;
 
 impl Orchestrator {
     /// Reactivate an existing member for re-review (same container, new instruction).
     pub(super) fn reactivate_member(
         &self,
         job_id: &JobId,
-        member_id: &AgentId,
+        member_id: &WorkerId,
         deliveries: &mut Vec<PendingDelivery>,
     ) -> crate::Result<()> {
         let Some(job) = self.db.get_job(job_id)? else {
             return Ok(());
         };
-        let Some(member) = self.db.find_agent(member_id)? else {
+        let Some(member) = self.db.find_worker(member_id)? else {
             return Ok(());
         };
 

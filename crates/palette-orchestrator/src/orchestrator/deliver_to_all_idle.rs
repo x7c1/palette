@@ -4,10 +4,10 @@ use std::sync::Arc;
 impl Orchestrator {
     pub(super) fn deliver_to_all_idle(self: &Arc<Self>) {
         loop {
-            let idle_targets = match self.db.list_idle_or_waiting_agents() {
-                Ok(agents) => agents,
+            let idle_targets = match self.db.list_idle_or_waiting_workers() {
+                Ok(workers) => workers,
                 Err(e) => {
-                    tracing::error!(error = %e, "delivery loop: failed to list idle agents");
+                    tracing::error!(error = %e, "delivery loop: failed to list idle workers");
                     break;
                 }
             };

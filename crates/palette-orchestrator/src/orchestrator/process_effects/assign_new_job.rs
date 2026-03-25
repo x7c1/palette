@@ -1,8 +1,8 @@
 use super::Orchestrator;
 use super::job_instruction::format_job_instruction;
-use palette_domain::agent::AgentId;
 use palette_domain::job::JobId;
 use palette_domain::server::PendingDelivery;
+use palette_domain::worker::WorkerId;
 
 impl Orchestrator {
     /// Assign a new job to a freshly spawned member.
@@ -38,13 +38,13 @@ impl Orchestrator {
             .ok_or_else(|| crate::Error::Internal(format!("task not found: {}", job.task_id)))?;
         let supervisor_id = self.find_supervisor_for_job(&job.task_id)?;
         let seq = self.db.increment_worker_counter(&task_state.workflow_id)?;
-        let member_id = AgentId::next_member(seq);
+        let member_id = WorkerId::next_member(seq);
         let (member, workflow_id) =
             self.spawn_member(&member_id, job.job_type, &supervisor_id, workspace)?;
         let terminal_target = member.terminal_target.clone();
 
         // Register in DB
-        self.db.insert_agent(&palette_db::InsertAgentRequest {
+        self.db.insert_worker(&palette_db::InsertWorkerRequest {
             id: member.id.clone(),
             workflow_id,
             role: member.role,

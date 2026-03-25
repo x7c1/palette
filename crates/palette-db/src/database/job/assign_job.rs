@@ -5,7 +5,7 @@ impl Database {
     pub fn assign_job(
         &self,
         job_id: &JobId,
-        assignee: &AgentId,
+        assignee: &WorkerId,
         job_type: JobType,
     ) -> crate::Result<Job> {
         let in_progress = JobStatus::in_progress(job_type);

@@ -60,7 +60,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         session_name: config.tmux.session_name.clone(),
     });
 
-    // Resume readiness watchers for agents that were booting when we last shut down
+    // Resume readiness watchers for workers that were booting when we last shut down
     orchestrator.resume_booting_watchers();
 
     orchestrator.start(event_rx);

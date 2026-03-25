@@ -1,6 +1,6 @@
 use super::{DockerManager, run_docker};
 use crate::Error;
-use palette_domain::agent::ContainerId;
+use palette_domain::worker::ContainerId;
 
 impl DockerManager {
     pub fn start_container(&self, container_id: &ContainerId) -> crate::Result<()> {

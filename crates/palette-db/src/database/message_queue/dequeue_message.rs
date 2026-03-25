@@ -3,7 +3,7 @@ use crate::models::QueuedMessage;
 
 impl Database {
     /// Dequeue the next message for a target (FIFO). Returns None if empty.
-    pub fn dequeue_message(&self, target_id: &AgentId) -> crate::Result<Option<QueuedMessage>> {
+    pub fn dequeue_message(&self, target_id: &WorkerId) -> crate::Result<Option<QueuedMessage>> {
         let conn = lock!(self.conn);
         let msg = conn
             .prepare(
@@ -12,7 +12,7 @@ impl Database {
             .query_row(params![target_id.as_ref()], |row| {
                 Ok(QueuedMessage {
                     id: row.get(0)?,
-                    target_id: AgentId::new(row.get::<_, String>(1)?),
+                    target_id: WorkerId::new(row.get::<_, String>(1)?),
                     message: row.get(2)?,
                     created_at: parse_datetime(&row.get::<_, String>(3)?),
                 })

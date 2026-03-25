@@ -2,10 +2,10 @@
 
 use palette_db::Database;
 use palette_docker::DockerManager;
-use palette_domain::agent::AgentId;
 use palette_domain::job::JobId;
 use palette_domain::rule::RuleEngine;
 use palette_domain::terminal::{TerminalSessionName, TerminalTarget};
+use palette_domain::worker::WorkerId;
 use palette_orchestrator::{DockerConfig, Orchestrator};
 use palette_server::api_types::{CreateJobRequest, JobStatus, JobType, UpdateJobRequest};
 use palette_server::{AppState, create_router};
@@ -40,8 +40,8 @@ pub fn test_docker_config() -> DockerConfig {
     }
 }
 
-pub fn aid(s: &str) -> AgentId {
-    AgentId::new(s)
+pub fn aid(s: &str) -> WorkerId {
+    WorkerId::new(s)
 }
 
 pub fn jid(s: &str) -> JobId {

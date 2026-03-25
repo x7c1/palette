@@ -1,8 +1,8 @@
 use crate::api_types::{SendRequest, SendResponse};
 use crate::{AppState, EventRecord};
 use axum::{Json, extract::State, http::StatusCode};
-use palette_domain::agent::{AgentId, AgentStatus};
 use palette_domain::terminal::TerminalTarget;
+use palette_domain::worker::{WorkerId, WorkerStatus};
 use std::sync::Arc;
 
 use super::now;
@@ -37,19 +37,19 @@ pub async fn handle_send(
     }
 
     let member_id_str = req.member_id.as_ref().unwrap();
-    let member_id = AgentId::new(member_id_str.as_str());
+    let member_id = WorkerId::new(member_id_str.as_str());
 
     // Check if target can receive input — idle or waiting for permission
-    let agent = state
+    let worker = state
         .db
-        .find_agent(&member_id)
+        .find_worker(&member_id)
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
-    let (can_receive, is_waiting_permission) = agent
+    let (can_receive, is_waiting_permission) = worker
         .as_ref()
         .map(|a| {
-            let can = a.status == AgentStatus::Idle || a.status == AgentStatus::WaitingPermission;
-            let waiting = a.status == AgentStatus::WaitingPermission;
+            let can = a.status == WorkerStatus::Idle || a.status == WorkerStatus::WaitingPermission;
+            let waiting = a.status == WorkerStatus::WaitingPermission;
             (can, waiting)
         })
         .unwrap_or((false, false));
@@ -65,7 +65,7 @@ pub async fn handle_send(
 
     let queued = if can_receive && (!has_pending || is_waiting_permission) {
         // Send directly
-        let terminal_target = agent
+        let terminal_target = worker
             .as_ref()
             .map(|a| a.terminal_target.clone())
             .ok_or_else(|| {
@@ -82,7 +82,7 @@ pub async fn handle_send(
         // Update status to Working
         let _ = state
             .db
-            .update_agent_status(&member_id, AgentStatus::Working);
+            .update_worker_status(&member_id, WorkerStatus::Working);
 
         false
     } else {

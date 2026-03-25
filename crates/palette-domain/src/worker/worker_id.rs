@@ -1,10 +1,10 @@
 use std::fmt;
 
-/// Agent identifier for both leaders and members (e.g., "leader-1", "member-0-a3f2").
+/// Worker identifier for both leaders and members (e.g., "leader-1", "member-0-a3f2").
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct AgentId(String);
+pub struct WorkerId(String);
 
-impl AgentId {
+impl WorkerId {
     pub fn new(id: impl Into<String>) -> Self {
         Self(id.into())
     }
@@ -20,24 +20,24 @@ impl AgentId {
 
     /// Generate a unique supervisor ID with a sequence number and random suffix.
     /// The prefix is determined by the role (e.g., "leader-0-a3f2", "review-integrator-1-b7e1").
-    pub fn next_supervisor(sequence: usize, role: super::AgentRole) -> Self {
+    pub fn next_supervisor(sequence: usize, role: super::WorkerRole) -> Self {
         let prefix = match role {
-            super::AgentRole::Leader => "leader",
-            super::AgentRole::ReviewIntegrator => "review-integrator",
-            super::AgentRole::Member => "member",
+            super::WorkerRole::Leader => "leader",
+            super::WorkerRole::ReviewIntegrator => "review-integrator",
+            super::WorkerRole::Member => "member",
         };
         let random = random_hex(8);
         Self(format!("{prefix}-{sequence}-{random}"))
     }
 }
 
-impl fmt::Display for AgentId {
+impl fmt::Display for WorkerId {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         fmt::Display::fmt(&self.0, f)
     }
 }
 
-impl AsRef<str> for AgentId {
+impl AsRef<str> for WorkerId {
     fn as_ref(&self) -> &str {
         &self.0
     }

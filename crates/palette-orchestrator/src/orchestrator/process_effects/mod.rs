@@ -9,13 +9,13 @@ mod review_verdict;
 use std::collections::VecDeque;
 
 use super::Orchestrator;
-use palette_domain::agent::AgentId;
 use palette_domain::rule::RuleEffect;
 use palette_domain::server::PendingDelivery;
+use palette_domain::worker::WorkerId;
 
 pub(super) struct ProcessEffectsResult {
     pub deliveries: Vec<PendingDelivery>,
-    pub spawned_supervisors: Vec<AgentId>,
+    pub spawned_supervisors: Vec<WorkerId>,
 }
 
 impl Orchestrator {
@@ -77,8 +77,8 @@ impl Orchestrator {
         })
     }
 
-    fn destroy_supervisor(&self, supervisor_id: &AgentId) {
-        if let Ok(Some(sup)) = self.db.remove_agent(supervisor_id) {
+    fn destroy_supervisor(&self, supervisor_id: &WorkerId) {
+        if let Ok(Some(sup)) = self.db.remove_worker(supervisor_id) {
             tracing::info!(supervisor_id = %supervisor_id, task_id = %sup.task_id, "destroying supervisor");
             let _ = self.docker.stop_container(&sup.container_id);
             let _ = self.docker.remove_container(&sup.container_id);

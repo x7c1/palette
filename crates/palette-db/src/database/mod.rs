@@ -1,9 +1,9 @@
 use crate::error::Error;
 use crate::schema;
 use chrono::{DateTime, Utc};
-use palette_domain::agent::*;
 use palette_domain::job::*;
 use palette_domain::review::*;
+use palette_domain::worker::*;
 use rusqlite::{Connection, params};
 use std::path::Path;
 use std::sync::Mutex;
@@ -12,8 +12,8 @@ pub struct Database {
     pub(crate) conn: Mutex<Connection>,
 }
 
-mod agent;
-pub use agent::InsertAgentRequest;
+mod worker;
+pub use worker::InsertWorkerRequest;
 
 mod job;
 
@@ -98,7 +98,7 @@ fn row_to_job(row: &rusqlite::Row) -> rusqlite::Result<Job> {
         job_type,
         title: row.get("title")?,
         plan_path: row.get("plan_path")?,
-        assignee: row.get::<_, Option<String>>("assignee")?.map(AgentId::new),
+        assignee: row.get::<_, Option<String>>("assignee")?.map(WorkerId::new),
         status,
         priority: row
             .get::<_, Option<i64>>("priority_id")?
@@ -133,8 +133,8 @@ pub(crate) mod test_helpers {
         TaskId::new(s)
     }
 
-    pub fn aid(s: &str) -> AgentId {
-        AgentId::new(s)
+    pub fn aid(s: &str) -> WorkerId {
+        WorkerId::new(s)
     }
 
     /// Create a workflow and a task for testing. Returns the TaskId.

@@ -1,8 +1,8 @@
 use chrono::{DateTime, Utc};
 
 use super::{JobId, JobStatus, JobType, Priority, Repository};
-use crate::agent::AgentId;
 use crate::task::TaskId;
+use crate::worker::WorkerId;
 
 #[derive(Debug, Clone)]
 pub struct Job {
@@ -11,7 +11,7 @@ pub struct Job {
     pub job_type: JobType,
     pub title: String,
     pub plan_path: String,
-    pub assignee: Option<AgentId>,
+    pub assignee: Option<WorkerId>,
     pub status: JobStatus,
     pub priority: Option<Priority>,
     pub repository: Option<Repository>,

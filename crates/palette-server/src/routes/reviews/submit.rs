@@ -53,8 +53,8 @@ pub async fn handle_submit_review(
 
     // Notify the review member's supervisor about review results
     if let Some(ref assignee) = job.assignee
-        && let Ok(Some(member)) = state.db.find_agent(assignee)
-        && let Ok(Some(supervisor)) = state.db.find_agent(&member.supervisor_id)
+        && let Ok(Some(member)) = state.db.find_worker(assignee)
+        && let Ok(Some(supervisor)) = state.db.find_worker(&member.supervisor_id)
     {
         let verdict_str = match submission.verdict {
             palette_domain::review::Verdict::Approved => "approved",

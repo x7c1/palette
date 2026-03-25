@@ -1,29 +1,29 @@
 mod helper;
 
 use helper::{aid, capture_pane, spawn_server, test_session_name_with_guard};
-use palette_db::InsertAgentRequest;
-use palette_domain::agent::{AgentRole, AgentStatus, ContainerId};
+use palette_db::InsertWorkerRequest;
 use palette_domain::task::TaskId;
 use palette_domain::terminal::TerminalTarget;
+use palette_domain::worker::{ContainerId, WorkerRole, WorkerStatus};
 use palette_domain::workflow::WorkflowId;
 use palette_server::api_types::SendRequest;
 use palette_tmux::TmuxManager;
 use serde_json::json;
 
-fn register_agent(
+fn register_worker(
     state: &palette_server::AppState,
     id: &str,
     terminal_target: &TerminalTarget,
-    status: AgentStatus,
+    status: WorkerStatus,
 ) {
     let wf_id = WorkflowId::new("wf-test");
     let _ = state.db.create_workflow(&wf_id, "test/blueprint.yaml");
     state
         .db
-        .insert_agent(&InsertAgentRequest {
+        .insert_worker(&InsertWorkerRequest {
             id: aid(id),
             workflow_id: wf_id,
-            role: AgentRole::Member,
+            role: WorkerRole::Member,
             status,
             supervisor_id: aid(""),
             container_id: ContainerId::new(""),
@@ -44,7 +44,7 @@ async fn send_keys_delivers_to_tmux_pane() {
 
     // Register the target in DB
     let (base_url, state) = spawn_server(tmux, &session).await;
-    register_agent(&state, "worker", &target, AgentStatus::Idle);
+    register_worker(&state, "worker", &target, WorkerStatus::Idle);
 
     let client = reqwest::Client::new();
 
@@ -114,7 +114,7 @@ async fn send_queues_when_member_is_working() {
 
     let target = tmux.create_target("worker").unwrap();
     let (base_url, state) = spawn_server(tmux, &session).await;
-    register_agent(&state, "worker", &target, AgentStatus::Working);
+    register_worker(&state, "worker", &target, WorkerStatus::Working);
 
     let client = reqwest::Client::new();
 

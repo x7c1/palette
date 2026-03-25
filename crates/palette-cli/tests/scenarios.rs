@@ -1,11 +1,11 @@
 mod helper;
 
 use helper::{aid, capture_pane, jid, spawn_server, test_session_name_with_guard};
-use palette_db::{CreateTaskRequest, InsertAgentRequest};
-use palette_domain::agent::{AgentRole, AgentStatus, ContainerId};
+use palette_db::{CreateTaskRequest, InsertWorkerRequest};
 use palette_domain::job::{CreateJobRequest, JobStatus, JobType, ReviewStatus};
 use palette_domain::task::TaskId;
 use palette_domain::terminal::TerminalTarget;
+use palette_domain::worker::{ContainerId, WorkerRole, WorkerStatus};
 use palette_domain::workflow::WorkflowId;
 use palette_tmux::TmuxManager;
 use serde_json::json;
@@ -21,19 +21,19 @@ fn tid(wf_id: &str, key_path: &str) -> TaskId {
     TaskId::new(format!("{wf_id}:{key_path}"))
 }
 
-fn insert_agent(
+fn insert_worker(
     state: &palette_server::AppState,
     id: &str,
-    role: AgentRole,
+    role: WorkerRole,
     supervisor_id: &str,
     terminal_target: &TerminalTarget,
-    status: AgentStatus,
+    status: WorkerStatus,
     task_id: &str,
     workflow_id: &WorkflowId,
 ) {
     state
         .db
-        .insert_agent(&InsertAgentRequest {
+        .insert_worker(&InsertWorkerRequest {
             id: aid(id),
             workflow_id: workflow_id.clone(),
             role,
@@ -92,34 +92,34 @@ async fn scenario3_message_queuing_to_leader() {
         })
         .unwrap();
 
-    // Register agents in DB
-    insert_agent(
+    // Register workers in DB
+    insert_worker(
         &state,
         "review-integrator-1",
-        AgentRole::ReviewIntegrator,
+        WorkerRole::ReviewIntegrator,
         "",
         &ri_pane,
-        AgentStatus::Working,
+        WorkerStatus::Working,
         "task-ri",
         &wf_id,
     );
-    insert_agent(
+    insert_worker(
         &state,
         "member-a",
-        AgentRole::Member,
+        WorkerRole::Member,
         "review-integrator-1",
         &member_a_pane,
-        AgentStatus::Working,
+        WorkerStatus::Working,
         "task-R-A",
         &wf_id,
     );
-    insert_agent(
+    insert_worker(
         &state,
         "member-b",
-        AgentRole::Member,
+        WorkerRole::Member,
         "review-integrator-1",
         &member_b_pane,
-        AgentStatus::Working,
+        WorkerStatus::Working,
         "task-R-B",
         &wf_id,
     );
@@ -608,7 +608,7 @@ task:
             .find_supervisor_for_task(&tid(wf_id, "ri-test/craft/review-integrate"))
             .unwrap()
             .expect("ReviewIntegrator supervisor should exist");
-        assert_eq!(ri_sup.role, AgentRole::ReviewIntegrator);
+        assert_eq!(ri_sup.role, WorkerRole::ReviewIntegrator);
     }
 
     // review-1 and review-2 jobs should exist

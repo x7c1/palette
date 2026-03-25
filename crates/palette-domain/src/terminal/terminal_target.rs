@@ -1,6 +1,6 @@
 use std::fmt;
 
-/// Terminal target where an agent runs (e.g., a tmux pane or window).
+/// Terminal target where a worker runs (e.g., a tmux pane or window).
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct TerminalTarget(String);
 

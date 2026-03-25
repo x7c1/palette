@@ -26,8 +26,8 @@ async fn review_submit_and_get_submissions() {
 
     let (base_url, state) = spawn_server(tmux, &session).await;
 
-    use palette_domain::agent::AgentId;
     use palette_domain::job::{CreateJobRequest, JobId, JobStatus, JobType, ReviewStatus};
+    use palette_domain::worker::WorkerId;
 
     let task_id = setup_review_task(&state, "task-R-001");
     let review_job = state
@@ -45,7 +45,7 @@ async fn review_submit_and_get_submissions() {
         .unwrap();
     state
         .db
-        .assign_job(&review_job.id, &AgentId::new("member-b"), JobType::Review)
+        .assign_job(&review_job.id, &WorkerId::new("member-b"), JobType::Review)
         .unwrap();
 
     let client = reqwest::Client::new();
@@ -98,8 +98,8 @@ async fn review_approved_completes_review_job() {
 
     let (base_url, state) = spawn_server(tmux, &session).await;
 
-    use palette_domain::agent::AgentId;
     use palette_domain::job::{CreateJobRequest, JobId, JobStatus, JobType, ReviewStatus};
+    use palette_domain::worker::WorkerId;
 
     let task_id = setup_review_task(&state, "task-R-001");
     let review_job = state
@@ -117,7 +117,7 @@ async fn review_approved_completes_review_job() {
         .unwrap();
     state
         .db
-        .assign_job(&review_job.id, &AgentId::new("member-b"), JobType::Review)
+        .assign_job(&review_job.id, &WorkerId::new("member-b"), JobType::Review)
         .unwrap();
 
     let client = reqwest::Client::new();

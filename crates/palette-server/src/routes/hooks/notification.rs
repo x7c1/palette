@@ -4,8 +4,8 @@ use axum::{
     extract::{Query, State},
     http::StatusCode,
 };
-use palette_domain::agent::{AgentId, AgentStatus};
 use palette_domain::server::ServerEvent;
+use palette_domain::worker::{WorkerId, WorkerStatus};
 use std::sync::Arc;
 
 use super::HookQuery;
@@ -23,7 +23,7 @@ pub async fn handle_notification(
     Json(payload): Json<serde_json::Value>,
 ) -> StatusCode {
     let member_id_str = query.member_id.as_deref().unwrap_or("unknown");
-    let member_id = AgentId::new(member_id_str);
+    let member_id = WorkerId::new(member_id_str);
     tracing::info!(member_id = member_id_str, payload = %payload, "received notification hook");
 
     let record = EventRecord {
@@ -43,7 +43,7 @@ pub async fn handle_notification(
 
     // Update member status to WaitingPermission and resolve context
     let member_context = {
-        let member = match state.db.find_agent(&member_id) {
+        let member = match state.db.find_worker(&member_id) {
             Ok(Some(m)) => m,
             _ => {
                 let _ = state.event_tx.send(ServerEvent::NotifyDeliveryLoop);
@@ -52,9 +52,9 @@ pub async fn handle_notification(
         };
         if let Err(e) = state
             .db
-            .update_agent_status(&member_id, AgentStatus::WaitingPermission)
+            .update_worker_status(&member_id, WorkerStatus::WaitingPermission)
         {
-            tracing::error!(error = %e, "failed to update agent status");
+            tracing::error!(error = %e, "failed to update worker status");
         }
         MemberContext {
             supervisor_id: member.supervisor_id.clone(),
@@ -104,9 +104,9 @@ pub async fn handle_notification(
 }
 
 struct MemberContext {
-    supervisor_id: AgentId,
+    supervisor_id: WorkerId,
     terminal_target: palette_domain::terminal::TerminalTarget,
-    container_id: palette_domain::agent::ContainerId,
+    container_id: palette_domain::worker::ContainerId,
 }
 
 struct PendingTool {
@@ -141,7 +141,7 @@ enum ContentBlock {
 
 /// Read the member's transcript and extract the last tool_use entry.
 fn extract_pending_tool(
-    container_id: &palette_domain::agent::ContainerId,
+    container_id: &palette_domain::worker::ContainerId,
     transcript_path: &str,
 ) -> Option<PendingTool> {
     let content = palette_docker::read_container_file(container_id, transcript_path, 5).ok()?;
