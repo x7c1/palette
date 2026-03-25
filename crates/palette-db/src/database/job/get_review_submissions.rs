@@ -5,7 +5,7 @@ impl Database {
         &self,
         review_job_id: &JobId,
     ) -> crate::Result<Vec<ReviewSubmission>> {
-        let conn = lock!(self.conn);
+        let conn = lock(&self.conn)?;
         let mut stmt = conn.prepare(
             "SELECT id, review_job_id, round, verdict_id, summary, created_at
              FROM review_submissions WHERE review_job_id = ?1 ORDER BY round",

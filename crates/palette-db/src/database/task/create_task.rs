@@ -1,4 +1,4 @@
-use super::super::Database;
+use super::super::{Database, lock};
 use palette_domain::task::{TaskId, TaskStatus};
 use palette_domain::workflow::WorkflowId;
 use rusqlite::params;
@@ -10,7 +10,7 @@ pub struct CreateTaskRequest {
 
 impl Database {
     pub fn create_task(&self, req: &CreateTaskRequest) -> crate::Result<()> {
-        let conn = lock!(self.conn);
+        let conn = lock(&self.conn)?;
         conn.execute(
             "INSERT INTO tasks (id, workflow_id, status_id) VALUES (?1, ?2, ?3)",
             params![

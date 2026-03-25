@@ -1,4 +1,4 @@
-use super::super::Database;
+use super::super::{Database, lock};
 use super::row::row_to_worker_state;
 use crate::lookup;
 use palette_domain::worker::*;
@@ -8,7 +8,7 @@ use rusqlite::params;
 impl Database {
     /// List all supervisors for a workflow.
     pub fn list_supervisors(&self, workflow_id: &WorkflowId) -> crate::Result<Vec<WorkerState>> {
-        let conn = lock!(self.conn);
+        let conn = lock(&self.conn)?;
         let role_leader = lookup::worker_role_id(WorkerRole::Leader);
         let role_ri = lookup::worker_role_id(WorkerRole::ReviewIntegrator);
         let mut stmt = conn.prepare(
@@ -24,7 +24,7 @@ impl Database {
 
     /// List all members for a workflow.
     pub fn list_members(&self, workflow_id: &WorkflowId) -> crate::Result<Vec<WorkerState>> {
-        let conn = lock!(self.conn);
+        let conn = lock(&self.conn)?;
         let role_member = lookup::worker_role_id(WorkerRole::Member);
         let mut stmt = conn.prepare(
             "SELECT id, role_id, status_id, supervisor_id, container_id, terminal_target, session_id, task_id
@@ -39,7 +39,7 @@ impl Database {
 
     /// List all workers (all workflows).
     pub fn list_all_workers(&self) -> crate::Result<Vec<WorkerState>> {
-        let conn = lock!(self.conn);
+        let conn = lock(&self.conn)?;
         let mut stmt = conn.prepare(
             "SELECT id, role_id, status_id, supervisor_id, container_id, terminal_target, session_id, task_id
              FROM workers",
@@ -50,7 +50,7 @@ impl Database {
 
     /// List all workers in Booting status (all workflows).
     pub fn list_booting_workers(&self) -> crate::Result<Vec<WorkerState>> {
-        let conn = lock!(self.conn);
+        let conn = lock(&self.conn)?;
         let booting_id = lookup::worker_status_id(WorkerStatus::Booting);
         let mut stmt = conn.prepare(
             "SELECT id, role_id, status_id, supervisor_id, container_id, terminal_target, session_id, task_id
@@ -62,7 +62,7 @@ impl Database {
 
     /// List all workers that are idle or waiting for permission (all workflows).
     pub fn list_idle_or_waiting_workers(&self) -> crate::Result<Vec<WorkerState>> {
-        let conn = lock!(self.conn);
+        let conn = lock(&self.conn)?;
         let idle_id = lookup::worker_status_id(WorkerStatus::Idle);
         let waiting_id = lookup::worker_status_id(WorkerStatus::WaitingPermission);
         let mut stmt = conn.prepare(

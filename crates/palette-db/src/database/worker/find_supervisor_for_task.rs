@@ -1,4 +1,4 @@
-use super::super::Database;
+use super::super::{Database, lock};
 use super::row::row_to_worker_state;
 use crate::lookup;
 use palette_domain::task::TaskId;
@@ -8,7 +8,7 @@ use rusqlite::params;
 impl Database {
     /// Find the supervisor assigned to a specific task.
     pub fn find_supervisor_for_task(&self, task_id: &TaskId) -> crate::Result<Option<WorkerState>> {
-        let conn = lock!(self.conn);
+        let conn = lock(&self.conn)?;
         let role_leader = lookup::worker_role_id(WorkerRole::Leader);
         let role_ri = lookup::worker_role_id(WorkerRole::ReviewIntegrator);
         let mut stmt = conn.prepare(

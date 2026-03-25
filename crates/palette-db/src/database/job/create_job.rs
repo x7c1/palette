@@ -2,7 +2,7 @@ use super::super::*;
 
 impl Database {
     pub fn create_job(&self, req: &CreateJobRequest) -> crate::Result<Job> {
-        let mut conn = lock!(self.conn);
+        let mut conn = lock(&self.conn)?;
         let now = Utc::now();
         let now_str = now.to_rfc3339();
         let id = req

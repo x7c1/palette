@@ -1,4 +1,4 @@
-use super::super::Database;
+use super::super::{Database, lock};
 use crate::lookup;
 use palette_domain::worker::*;
 use rusqlite::params;
@@ -6,7 +6,7 @@ use rusqlite::params;
 impl Database {
     /// Update a worker's status.
     pub fn update_worker_status(&self, id: &WorkerId, status: WorkerStatus) -> crate::Result<()> {
-        let conn = lock!(self.conn);
+        let conn = lock(&self.conn)?;
         let now = chrono::Utc::now().to_rfc3339();
         conn.execute(
             "UPDATE workers SET status_id = ?1, updated_at = ?2 WHERE id = ?3",

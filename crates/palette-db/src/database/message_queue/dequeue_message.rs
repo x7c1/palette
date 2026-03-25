@@ -4,7 +4,7 @@ use crate::models::QueuedMessage;
 impl Database {
     /// Dequeue the next message for a target (FIFO). Returns None if empty.
     pub fn dequeue_message(&self, target_id: &WorkerId) -> crate::Result<Option<QueuedMessage>> {
-        let conn = lock!(self.conn);
+        let conn = lock(&self.conn)?;
         let msg = conn
             .prepare(
                 "SELECT id, target_id, message, created_at FROM message_queue WHERE target_id = ?1 ORDER BY id LIMIT 1",

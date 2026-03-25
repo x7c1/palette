@@ -1,10 +1,10 @@
-use super::super::Database;
+use super::super::{Database, lock};
 use palette_domain::workflow::{WorkflowId, WorkflowStatus};
 use rusqlite::params;
 
 impl Database {
     pub fn create_workflow(&self, id: &WorkflowId, blueprint_path: &str) -> crate::Result<()> {
-        let conn = lock!(self.conn);
+        let conn = lock(&self.conn)?;
         let now = chrono::Utc::now();
         conn.execute(
             "INSERT INTO workflows (id, blueprint_path, status_id, started_at) VALUES (?1, ?2, ?3, ?4)",

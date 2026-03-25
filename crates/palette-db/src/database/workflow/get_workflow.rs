@@ -1,10 +1,10 @@
-use super::super::{Database, parse_datetime};
+use super::super::{Database, lock, parse_datetime};
 use palette_domain::workflow::{Workflow, WorkflowId};
 use rusqlite::params;
 
 impl Database {
     pub fn get_workflow(&self, id: &WorkflowId) -> crate::Result<Option<Workflow>> {
-        let conn = lock!(self.conn);
+        let conn = lock(&self.conn)?;
         let mut stmt = conn.prepare(
             "SELECT id, blueprint_path, status_id, started_at FROM workflows WHERE id = ?1",
         )?;

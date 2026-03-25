@@ -1,4 +1,4 @@
-use super::super::{Database, id_conversion_error};
+use super::super::{Database, id_conversion_error, lock};
 use crate::models::TaskRow;
 use palette_domain::task::{TaskId, TaskState, TaskStatus};
 use palette_domain::workflow::WorkflowId;
@@ -17,7 +17,7 @@ fn row_to_task_row(row: &rusqlite::Row) -> rusqlite::Result<TaskRow> {
 
 impl Database {
     pub fn get_task_state(&self, id: &TaskId) -> crate::Result<Option<TaskState>> {
-        let conn = lock!(self.conn);
+        let conn = lock(&self.conn)?;
         let mut stmt =
             conn.prepare("SELECT id, workflow_id, status_id FROM tasks WHERE id = ?1")?;
         let mut rows = stmt.query_map(params![id.as_ref()], row_to_task_row)?;
@@ -34,7 +34,7 @@ impl Database {
         &self,
         workflow_id: &WorkflowId,
     ) -> crate::Result<HashMap<TaskId, TaskStatus>> {
-        let conn = lock!(self.conn);
+        let conn = lock(&self.conn)?;
         let mut stmt =
             conn.prepare("SELECT id, workflow_id, status_id FROM tasks WHERE workflow_id = ?1")?;
         let rows = stmt.query_map(params![workflow_id.as_ref()], row_to_task_row)?;

@@ -9,7 +9,14 @@ use std::path::Path;
 use std::sync::Mutex;
 
 pub struct Database {
-    pub(crate) conn: Mutex<Connection>,
+    conn: Mutex<Connection>,
+}
+
+/// Acquire the Mutex lock, converting a poisoned lock into Error.
+pub(crate) fn lock(
+    mutex: &Mutex<Connection>,
+) -> crate::Result<std::sync::MutexGuard<'_, Connection>> {
+    mutex.lock().map_err(|_| crate::Error::LockPoisoned)
 }
 
 mod worker;
@@ -98,7 +105,9 @@ fn row_to_job(row: &rusqlite::Row) -> rusqlite::Result<Job> {
         job_type,
         title: row.get("title")?,
         plan_path: row.get("plan_path")?,
-        assignee_id: row.get::<_, Option<String>>("assignee_id")?.map(WorkerId::new),
+        assignee_id: row
+            .get::<_, Option<String>>("assignee_id")?
+            .map(WorkerId::new),
         status,
         priority: row
             .get::<_, Option<i64>>("priority_id")?

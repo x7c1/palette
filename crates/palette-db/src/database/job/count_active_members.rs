@@ -4,7 +4,7 @@ impl Database {
     /// Count the number of jobs currently in_progress (active members).
     /// Includes both craft and review jobs since both consume a container.
     pub fn count_active_members(&self) -> crate::Result<usize> {
-        let conn = lock!(self.conn);
+        let conn = lock(&self.conn)?;
         // Craft InProgress = 2, Review InProgress = 7
         let craft_ip = crate::lookup::craft_status_id(palette_domain::job::CraftStatus::InProgress);
         let review_ip =

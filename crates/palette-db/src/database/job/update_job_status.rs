@@ -2,7 +2,7 @@ use super::super::*;
 
 impl Database {
     pub fn update_job_status(&self, id: &JobId, status: JobStatus) -> crate::Result<Job> {
-        let conn = lock!(self.conn);
+        let conn = lock(&self.conn)?;
         let now = Utc::now().to_rfc3339();
         let updated = conn.execute(
             "UPDATE jobs SET status_id = ?1, updated_at = ?2 WHERE id = ?3",

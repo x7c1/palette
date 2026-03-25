@@ -8,7 +8,7 @@ impl Database {
         target_id: &WorkerId,
         message: &str,
     ) -> crate::Result<QueuedMessage> {
-        let conn = lock!(self.conn);
+        let conn = lock(&self.conn)?;
         let now = Utc::now();
         let now_str = now.to_rfc3339();
         conn.execute(

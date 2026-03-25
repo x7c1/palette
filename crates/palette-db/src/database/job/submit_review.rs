@@ -6,7 +6,7 @@ impl Database {
         review_job_id: &JobId,
         req: &SubmitReviewRequest,
     ) -> crate::Result<ReviewSubmission> {
-        let mut conn = lock!(self.conn);
+        let mut conn = lock(&self.conn)?;
         let now = Utc::now();
         let now_str = now.to_rfc3339();
 

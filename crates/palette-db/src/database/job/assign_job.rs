@@ -9,7 +9,7 @@ impl Database {
         job_type: JobType,
     ) -> crate::Result<Job> {
         let in_progress = JobStatus::in_progress(job_type);
-        let conn = lock!(self.conn);
+        let conn = lock(&self.conn)?;
         let now = Utc::now().to_rfc3339();
         let updated = conn.execute(
             "UPDATE jobs SET status_id = ?1, assignee_id = ?2, assigned_at = ?3, updated_at = ?4 WHERE id = ?5",

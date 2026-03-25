@@ -1,4 +1,4 @@
-use super::super::Database;
+use super::super::{Database, lock};
 use super::row::row_to_worker_state;
 use palette_domain::worker::*;
 use rusqlite::params;
@@ -9,7 +9,7 @@ impl Database {
         &self,
         container_id: &ContainerId,
     ) -> crate::Result<Option<WorkerState>> {
-        let conn = lock!(self.conn);
+        let conn = lock(&self.conn)?;
         let mut stmt = conn.prepare(
             "SELECT id, role_id, status_id, supervisor_id, container_id, terminal_target, session_id, task_id
              FROM workers WHERE container_id = ?1",

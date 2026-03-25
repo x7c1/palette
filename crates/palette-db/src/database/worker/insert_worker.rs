@@ -1,4 +1,4 @@
-use super::super::Database;
+use super::super::{Database, lock};
 use crate::lookup;
 use palette_domain::task::TaskId;
 use palette_domain::terminal::TerminalTarget;
@@ -22,7 +22,7 @@ pub struct InsertWorkerRequest {
 impl Database {
     /// Insert a new worker record.
     pub fn insert_worker(&self, req: &InsertWorkerRequest) -> crate::Result<()> {
-        let conn = lock!(self.conn);
+        let conn = lock(&self.conn)?;
         let now = chrono::Utc::now().to_rfc3339();
         conn.execute(
             "INSERT INTO workers (id, workflow_id, role_id, status_id, supervisor_id, container_id, terminal_target, session_id, task_id, created_at, updated_at)

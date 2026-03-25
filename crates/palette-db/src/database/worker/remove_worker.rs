@@ -1,4 +1,4 @@
-use super::super::Database;
+use super::super::{Database, lock};
 use palette_domain::worker::*;
 use rusqlite::params;
 
@@ -7,7 +7,7 @@ impl Database {
     pub fn remove_worker(&self, id: &WorkerId) -> crate::Result<Option<WorkerState>> {
         let worker = self.find_worker(id)?;
         if worker.is_some() {
-            let conn = lock!(self.conn);
+            let conn = lock(&self.conn)?;
             conn.execute("DELETE FROM workers WHERE id = ?1", params![id.as_ref()])?;
         }
         Ok(worker)

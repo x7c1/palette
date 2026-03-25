@@ -8,7 +8,7 @@ impl Database {
     ///
     /// Returns jobs ordered by priority (high > medium > low > null).
     pub fn find_assignable_jobs(&self) -> crate::Result<Vec<Job>> {
-        let conn = lock!(self.conn);
+        let conn = lock(&self.conn)?;
         // Craft Todo = 1, Review Todo = 6
         let craft_todo = crate::lookup::craft_status_id(palette_domain::job::CraftStatus::Todo);
         let review_todo = crate::lookup::review_status_id(palette_domain::job::ReviewStatus::Todo);

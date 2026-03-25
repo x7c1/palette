@@ -2,7 +2,7 @@ use super::super::*;
 
 impl Database {
     pub fn get_review_comments(&self, submission_id: i64) -> crate::Result<Vec<ReviewComment>> {
-        let conn = lock!(self.conn);
+        let conn = lock(&self.conn)?;
         let mut stmt = conn.prepare(
             "SELECT id, submission_id, file, line, body FROM review_comments WHERE submission_id = ?1",
         )?;
