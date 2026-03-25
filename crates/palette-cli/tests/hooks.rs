@@ -11,7 +11,7 @@ async fn hooks_stop_records_event() {
     tmux.create_session(&session).unwrap();
 
     let _target = tmux.create_target("worker").unwrap();
-    let (base_url, _state) = spawn_server(tmux, &session).await;
+    let (base_url, _state, _shutdown_tx) = spawn_server(tmux, &session).await;
 
     let client = reqwest::Client::new();
 
@@ -47,7 +47,7 @@ async fn hooks_notification_records_event() {
     tmux.create_session(&session).unwrap();
 
     let _target = tmux.create_target("worker").unwrap();
-    let (base_url, _state) = spawn_server(tmux, &session).await;
+    let (base_url, _state, _shutdown_tx) = spawn_server(tmux, &session).await;
 
     let client = reqwest::Client::new();
 

@@ -105,11 +105,14 @@ pub fn update_status(id: &str, status: JobStatus) -> UpdateJobRequest {
     }
 }
 
-/// Spawn the server on an OS-assigned port and return (addr, state)
+/// Spawn the server on an OS-assigned port and return (addr, state, shutdown_tx).
+///
+/// The caller must keep `_shutdown_tx` alive for the duration of the test;
+/// dropping it signals the orchestrator event loop to exit.
 pub async fn spawn_server(
     tmux: TmuxManager,
     session_name: &TerminalSessionName,
-) -> (String, Arc<AppState>) {
+) -> (String, Arc<AppState>, tokio::sync::oneshot::Sender<()>) {
     let db = Arc::new(Database::open_in_memory().unwrap());
     let tmux = Arc::new(tmux);
     let docker = DockerManager::new("http://127.0.0.1:0".to_string());
@@ -133,7 +136,8 @@ pub async fn spawn_server(
         tmux: Arc::clone(&tmux),
         session_name: session_name.to_string(),
     });
-    orchestrator.start(event_rx);
+    let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel();
+    orchestrator.start(event_rx, shutdown_rx);
 
     let app = create_router(state.clone());
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
@@ -141,7 +145,7 @@ pub async fn spawn_server(
     tokio::spawn(async move {
         axum::serve(listener, app).await.unwrap();
     });
-    (format!("http://{addr}"), state)
+    (format!("http://{addr}"), state, shutdown_tx)
 }
 
 /// RAII guard that kills the tmux session on drop (including panic).

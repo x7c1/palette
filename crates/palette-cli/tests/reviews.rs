@@ -24,7 +24,7 @@ async fn review_submit_and_get_submissions() {
     let tmux = TmuxManager::new(session.clone());
     tmux.create_session(&session).unwrap();
 
-    let (base_url, state) = spawn_server(tmux, &session).await;
+    let (base_url, state, _shutdown_tx) = spawn_server(tmux, &session).await;
 
     use palette_domain::job::{CreateJobRequest, JobId, JobStatus, JobType, ReviewStatus};
     use palette_domain::worker::WorkerId;
@@ -97,7 +97,7 @@ async fn review_approved_completes_review_job() {
     let tmux = TmuxManager::new(session.clone());
     tmux.create_session(&session).unwrap();
 
-    let (base_url, state) = spawn_server(tmux, &session).await;
+    let (base_url, state, _shutdown_tx) = spawn_server(tmux, &session).await;
 
     use palette_domain::job::{CreateJobRequest, JobId, JobStatus, JobType, ReviewStatus};
     use palette_domain::worker::WorkerId;

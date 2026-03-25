@@ -47,7 +47,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         event_tx,
     });
 
-    // Start orchestrator event loop
     // Ensure plan_dir exists on the host
     std::fs::create_dir_all(&config.plan_dir)?;
 
@@ -60,17 +59,46 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         session_name: config.tmux.session_name.clone(),
     });
 
+    // Clean up orphan containers from previous crash/forced exit
+    orchestrator.clean_orphan_containers();
+
     // Resume readiness watchers for workers that were booting when we last shut down
     orchestrator.resume_booting_watchers();
 
-    orchestrator.start(event_rx);
+    // Start orchestrator event loop with shutdown signal
+    let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel();
+    orchestrator.start(event_rx, shutdown_rx);
 
+    // Start HTTP server with graceful shutdown
     let app = palette_server::create_router(state);
     let addr = SocketAddr::from(([0, 0, 0, 0], config.port));
     tracing::info!(%addr, "starting server");
 
     let listener = tokio::net::TcpListener::bind(addr).await?;
-    axum::serve(listener, app).await?;
+    axum::serve(listener, app)
+        .with_graceful_shutdown(shutdown_signal())
+        .await?;
+
+    // Server has stopped; tell the orchestrator to shut down
+    let _ = shutdown_tx.send(());
+
+    // Give the orchestrator time to clean up containers
+    tokio::time::sleep(std::time::Duration::from_secs(15)).await;
 
     Ok(())
+}
+
+async fn shutdown_signal() {
+    let ctrl_c = tokio::signal::ctrl_c();
+    let mut sigterm =
+        tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate()).unwrap();
+
+    tokio::select! {
+        _ = ctrl_c => {
+            tracing::info!("received SIGINT, initiating graceful shutdown");
+        }
+        _ = sigterm.recv() => {
+            tracing::info!("received SIGTERM, initiating graceful shutdown");
+        }
+    }
 }

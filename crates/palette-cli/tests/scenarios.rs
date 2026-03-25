@@ -59,7 +59,7 @@ async fn scenario3_message_queuing_to_leader() {
     let member_a_pane = tmux.create_target("member-a").unwrap();
     let member_b_pane = tmux.create_target("member-b").unwrap();
 
-    let (base_url, state) = spawn_server(tmux, &session).await;
+    let (base_url, state, _shutdown_tx) = spawn_server(tmux, &session).await;
 
     // Set up workflow and tasks for review jobs
     let wf_id = WorkflowId::new("wf-scenario3");
@@ -298,7 +298,7 @@ task:
     let tmux = TmuxManager::new(session.clone());
     tmux.create_session(&session).unwrap();
 
-    let (base_url, state) = spawn_server(tmux, &session).await;
+    let (base_url, state, _shutdown_tx) = spawn_server(tmux, &session).await;
     let client = reqwest::Client::new();
     let blueprint_file = write_blueprint_file(yaml);
 
@@ -534,7 +534,7 @@ task:
     let tmux = TmuxManager::new(session.clone());
     tmux.create_session(&session).unwrap();
 
-    let (base_url, state) = spawn_server(tmux, &session).await;
+    let (base_url, state, _shutdown_tx) = spawn_server(tmux, &session).await;
     let client = reqwest::Client::new();
     let blueprint_file = write_blueprint_file(yaml);
 
