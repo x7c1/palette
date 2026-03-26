@@ -115,14 +115,13 @@ pub async fn spawn_server(
     session_name: &TerminalSessionName,
 ) -> (String, Arc<AppState>, tokio::sync::oneshot::Sender<()>) {
     let db = Database::open_in_memory().unwrap();
-    let tmux = Arc::new(tmux);
     let docker = DockerManager::new("http://127.0.0.1:0".to_string());
 
     let interactor = Arc::new(Interactor {
-        container: Arc::new(docker),
-        terminal: Arc::clone(&tmux) as Arc<dyn palette_usecase::TerminalSession>,
+        container: Box::new(docker),
+        terminal: Box::new(tmux),
         data_store: Box::new(db),
-        blueprint: Arc::new(FsBlueprintReader),
+        blueprint: Box::new(FsBlueprintReader),
     });
 
     let (event_tx, event_rx) = tokio::sync::mpsc::unbounded_channel();

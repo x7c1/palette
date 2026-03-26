@@ -1,7 +1,6 @@
 use crate::task_store::TaskStoreImpl;
 use crate::{BlueprintReader, ContainerRuntime, DataStore, TerminalSession};
 use palette_domain::workflow::WorkflowId;
-use std::sync::Arc;
 
 /// Mediates all external resource access for the application.
 ///
@@ -9,10 +8,10 @@ use std::sync::Arc;
 /// and blueprint reader. The orchestrator and server access external
 /// resources exclusively through this struct.
 pub struct Interactor {
-    pub container: Arc<dyn ContainerRuntime>,
-    pub terminal: Arc<dyn TerminalSession>,
+    pub container: Box<dyn ContainerRuntime>,
+    pub terminal: Box<dyn TerminalSession>,
     pub data_store: Box<dyn DataStore>,
-    pub blueprint: Arc<dyn BlueprintReader>,
+    pub blueprint: Box<dyn BlueprintReader>,
 }
 
 impl Interactor {

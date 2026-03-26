@@ -30,7 +30,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     tracing::info!(?config, "loaded config");
 
     let session_name = TerminalSessionName::new(&config.tmux.session_name);
-    let tmux = Arc::new(TmuxManager::new(session_name.clone()));
+    let tmux = TmuxManager::new(session_name.clone());
     tmux.create_session(&session_name)?;
 
     let db = Database::open(Path::new(&config.db_path))?;
@@ -40,10 +40,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Assemble the Interactor with concrete implementations
     let interactor = Arc::new(Interactor {
-        container: Arc::new(docker),
-        terminal: Arc::clone(&tmux) as Arc<dyn palette_usecase::TerminalSession>,
+        container: Box::new(docker),
+        terminal: Box::new(tmux),
         data_store: Box::new(db),
-        blueprint: Arc::new(FsBlueprintReader),
+        blueprint: Box::new(FsBlueprintReader),
     });
 
     let (event_tx, event_rx) = tokio::sync::mpsc::unbounded_channel();
