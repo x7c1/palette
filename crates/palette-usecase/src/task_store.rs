@@ -3,24 +3,23 @@ use palette_domain::task::{Task, TaskId, TaskStatus, TaskStore, TaskTree, TaskTr
 use palette_domain::workflow::WorkflowId;
 use std::cell::RefCell;
 use std::collections::HashMap;
-use std::sync::Arc;
 
 /// TaskStore implementation that combines a TaskTree (structure from Blueprint)
 /// with task statuses (execution state from DataStore) to produce full Task objects.
 ///
 /// Reads are served from in-memory data (TaskTree + cached statuses).
 /// Writes go to both the in-memory cache and the data store.
-pub struct TaskStoreImpl {
-    data_store: Arc<dyn DataStore>,
+pub struct TaskStoreImpl<'a> {
+    data_store: &'a dyn DataStore,
     tree: TaskTree,
     workflow_id: WorkflowId,
     statuses: RefCell<HashMap<TaskId, TaskStatus>>,
 }
 
-impl TaskStoreImpl {
+impl<'a> TaskStoreImpl<'a> {
     /// Build a TaskStoreImpl from a TaskTree and a map of task statuses.
     pub fn new(
-        data_store: Arc<dyn DataStore>,
+        data_store: &'a dyn DataStore,
         tree: TaskTree,
         workflow_id: WorkflowId,
         statuses: HashMap<TaskId, TaskStatus>,
@@ -35,7 +34,7 @@ impl TaskStoreImpl {
 
     /// Build a TaskStoreImpl by reading the Blueprint file and task statuses from the data store.
     pub fn from_interactor(
-        data_store: Arc<dyn DataStore>,
+        data_store: &'a dyn DataStore,
         blueprint: &dyn BlueprintReader,
         workflow_id: &WorkflowId,
     ) -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
@@ -88,7 +87,7 @@ impl TaskStoreImpl {
     }
 }
 
-impl TaskStore for TaskStoreImpl {
+impl TaskStore for TaskStoreImpl<'_> {
     type Error = Box<dyn std::error::Error + Send + Sync>;
 
     fn get_task(&self, id: &TaskId) -> Result<Option<Task>, Self::Error> {

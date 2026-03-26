@@ -4,15 +4,15 @@ use crate::job::{
 };
 use crate::review::{ReviewSubmission, Verdict};
 
-pub struct RuleEngine<S> {
-    store: S,
+pub struct RuleEngine<'a, S: ?Sized> {
+    store: &'a S,
     #[allow(dead_code)]
     // TODO: re-enable when escalation trigger conditions are designed
     max_review_rounds: u32,
 }
 
-impl<S: JobStore> RuleEngine<S> {
-    pub fn new(store: S, max_review_rounds: u32) -> Self {
+impl<'a, S: JobStore + ?Sized> RuleEngine<'a, S> {
+    pub fn new(store: &'a S, max_review_rounds: u32) -> Self {
         Self {
             store,
             max_review_rounds,

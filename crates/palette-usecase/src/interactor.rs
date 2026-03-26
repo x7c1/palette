@@ -11,7 +11,7 @@ use std::sync::Arc;
 pub struct Interactor {
     pub container: Arc<dyn ContainerRuntime>,
     pub terminal: Arc<dyn TerminalSession>,
-    pub data_store: Arc<dyn DataStore>,
+    pub data_store: Box<dyn DataStore>,
     pub blueprint: Arc<dyn BlueprintReader>,
 }
 
@@ -24,9 +24,9 @@ impl Interactor {
     pub fn create_task_store(
         &self,
         workflow_id: &WorkflowId,
-    ) -> Result<TaskStoreImpl, Box<dyn std::error::Error + Send + Sync>> {
+    ) -> Result<TaskStoreImpl<'_>, Box<dyn std::error::Error + Send + Sync>> {
         TaskStoreImpl::from_interactor(
-            Arc::clone(&self.data_store),
+            self.data_store.as_ref(),
             self.blueprint.as_ref(),
             workflow_id,
         )

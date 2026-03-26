@@ -641,7 +641,7 @@ task:
         .unwrap();
 
     let engine = palette_domain::rule::RuleEngine::new(
-        std::sync::Arc::clone(&state.interactor.data_store),
+        state.interactor.data_store.as_ref(),
         state.max_review_rounds,
     );
     let effects = engine.on_review_submitted(&review_a_id, &sub).unwrap();
@@ -913,7 +913,7 @@ task:
         .unwrap();
 
     let engine = palette_domain::rule::RuleEngine::new(
-        std::sync::Arc::clone(&state.interactor.data_store),
+        state.interactor.data_store.as_ref(),
         state.max_review_rounds,
     );
     let effects = engine.on_review_submitted(&review_1_id, &sub).unwrap();
@@ -1092,7 +1092,7 @@ task:
         .unwrap();
 
     let effects = palette_domain::rule::RuleEngine::new(
-        std::sync::Arc::clone(&state.interactor.data_store),
+        state.interactor.data_store.as_ref(),
         state.max_review_rounds,
     )
     .on_review_submitted(&review_id, &sub)
@@ -1166,7 +1166,7 @@ task:
         .unwrap();
 
     let effects = palette_domain::rule::RuleEngine::new(
-        std::sync::Arc::clone(&state.interactor.data_store),
+        state.interactor.data_store.as_ref(),
         state.max_review_rounds,
     )
     .on_review_submitted(&review_id, &sub2)

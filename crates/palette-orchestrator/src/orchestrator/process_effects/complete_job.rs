@@ -4,7 +4,6 @@ use palette_domain::rule::{RuleEffect, RuleEngine};
 use palette_domain::task::{TaskId, TaskStatus, TaskStore};
 use palette_domain::worker::WorkerRole;
 use palette_usecase::task_store::TaskStoreImpl;
-use std::sync::Arc;
 
 impl Orchestrator {
     /// When a Job is Done, check if its task can be completed and cascade.
@@ -237,7 +236,7 @@ impl Orchestrator {
                     repository: task.repository.clone(),
                 })?;
 
-        let rules = RuleEngine::new(Arc::clone(&self.interactor.data_store), 0);
+        let rules = RuleEngine::new(self.interactor.data_store.as_ref(), 0);
         let effects = rules.on_job_created(&job.id)?;
 
         tracing::info!(

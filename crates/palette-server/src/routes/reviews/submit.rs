@@ -46,7 +46,7 @@ pub async fn handle_submit_review(
 
     // Apply rule engine
     let effects = RuleEngine::new(
-        Arc::clone(&state.interactor.data_store),
+        state.interactor.data_store.as_ref(),
         state.max_review_rounds,
     )
     .on_review_submitted(&review_job_id, &submission)

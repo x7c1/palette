@@ -33,7 +33,7 @@ pub async fn handle_update_job(
     // Produce effects based on the new status
     let effects = match new_status {
         JobStatus::Craft(CraftStatus::Done) => RuleEngine::new(
-            Arc::clone(&state.interactor.data_store),
+            state.interactor.data_store.as_ref(),
             state.max_review_rounds,
         )
         .on_craft_done(&job_id)

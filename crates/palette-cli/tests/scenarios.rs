@@ -735,7 +735,7 @@ task:
         )
         .unwrap();
     let effects = palette_domain::rule::RuleEngine::new(
-        std::sync::Arc::clone(&state.interactor.data_store),
+        state.interactor.data_store.as_ref(),
         state.max_review_rounds,
     )
     .on_review_submitted(&review_1_job.id, &sub)
@@ -762,7 +762,7 @@ task:
         )
         .unwrap();
     let effects = palette_domain::rule::RuleEngine::new(
-        std::sync::Arc::clone(&state.interactor.data_store),
+        state.interactor.data_store.as_ref(),
         state.max_review_rounds,
     )
     .on_review_submitted(&review_2_job.id, &sub)
@@ -794,7 +794,7 @@ task:
         )
         .unwrap();
     let effects = palette_domain::rule::RuleEngine::new(
-        std::sync::Arc::clone(&state.interactor.data_store),
+        state.interactor.data_store.as_ref(),
         state.max_review_rounds,
     )
     .on_review_submitted(&ri_job.id, &sub)

@@ -33,7 +33,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let tmux = Arc::new(TmuxManager::new(session_name.clone()));
     tmux.create_session(&session_name)?;
 
-    let db = Arc::new(Database::open(Path::new(&config.db_path))?);
+    let db = Database::open(Path::new(&config.db_path))?;
     tracing::info!(db_path = %config.db_path, "database initialized");
 
     let docker = DockerManager::new(config.docker.palette_url.clone());
@@ -42,7 +42,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let interactor = Arc::new(Interactor {
         container: Arc::new(docker),
         terminal: Arc::clone(&tmux) as Arc<dyn palette_usecase::TerminalSession>,
-        data_store: Arc::clone(&db) as Arc<dyn palette_usecase::DataStore>,
+        data_store: Box::new(db),
         blueprint: Arc::new(FsBlueprintReader),
     });
 

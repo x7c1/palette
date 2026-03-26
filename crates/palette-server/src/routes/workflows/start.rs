@@ -109,7 +109,7 @@ fn initialize_root(
         .map(|id| (id.clone(), TaskStatus::Pending))
         .collect();
     let task_store = TaskStoreImpl::new(
-        Arc::clone(&state.interactor.data_store),
+        state.interactor.data_store.as_ref(),
         tree.clone(),
         workflow_id.clone(),
         statuses,
@@ -230,7 +230,7 @@ fn create_job(
         })
         .map_err(internal_err)?;
 
-    let effects = RuleEngine::new(Arc::clone(&state.interactor.data_store), 0)
+    let effects = RuleEngine::new(state.interactor.data_store.as_ref(), 0)
         .on_job_created(&job.id)
         .map_err(internal_err)?;
 
