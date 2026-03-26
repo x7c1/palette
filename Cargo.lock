@@ -875,6 +875,7 @@ dependencies = [
  "serde_json",
  "tempfile",
  "tokio",
+ "tokio-util",
  "toml",
  "tracing",
  "tracing-subscriber",
@@ -930,6 +931,7 @@ dependencies = [
  "palette-tmux",
  "serde",
  "tokio",
+ "tokio-util",
  "tracing",
 ]
 

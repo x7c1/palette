@@ -5,6 +5,7 @@ mod insert_worker;
 mod list_workers;
 mod remove_worker;
 mod row;
+mod update_worker_session_id;
 mod update_worker_status;
 
 pub use insert_worker::InsertWorkerRequest;

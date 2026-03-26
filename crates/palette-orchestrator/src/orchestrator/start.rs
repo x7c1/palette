@@ -14,6 +14,9 @@ impl Orchestrator {
         mut rx: mpsc::UnboundedReceiver<ServerEvent>,
         mut shutdown_rx: tokio::sync::oneshot::Receiver<()>,
     ) -> tokio::task::JoinHandle<()> {
+        // Start the background worker monitor
+        self.spawn_worker_monitor();
+
         tokio::spawn(async move {
             let should_shutdown = loop {
                 tokio::select! {

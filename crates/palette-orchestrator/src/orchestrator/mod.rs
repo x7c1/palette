@@ -9,10 +9,12 @@ mod spawn_member;
 mod spawn_readiness_watcher;
 mod spawn_supervisor;
 mod start;
+mod worker_monitor;
 
 use palette_db::Database;
 use palette_docker::DockerManager;
 use std::sync::Arc;
+use tokio_util::sync::CancellationToken;
 
 use crate::DockerConfig;
 
@@ -23,4 +25,5 @@ pub struct Orchestrator {
     pub plan_dir: String,
     pub tmux: Arc<palette_tmux::TmuxManager>,
     pub session_name: String,
+    pub cancel_token: CancellationToken,
 }
