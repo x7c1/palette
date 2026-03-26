@@ -11,3 +11,5 @@ pub use database::InsertWorkerRequest;
 mod job_store;
 pub(crate) mod lookup;
 mod schema;
+
+mod adapter;

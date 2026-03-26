@@ -867,9 +867,11 @@ dependencies = [
  "palette-db",
  "palette-docker",
  "palette-domain",
+ "palette-fs",
  "palette-orchestrator",
  "palette-server",
  "palette-tmux",
+ "palette-usecase",
  "reqwest",
  "serde",
  "serde_json",
@@ -887,6 +889,7 @@ version = "0.1.0"
 dependencies = [
  "chrono",
  "palette-domain",
+ "palette-usecase",
  "rusqlite",
  "serde",
  "serde_json",
@@ -898,6 +901,7 @@ name = "palette-docker"
 version = "0.1.0"
 dependencies = [
  "palette-domain",
+ "palette-usecase",
  "tempfile",
  "tracing",
 ]
@@ -915,6 +919,7 @@ name = "palette-fs"
 version = "0.1.0"
 dependencies = [
  "palette-domain",
+ "palette-usecase",
  "serde",
  "serde_yaml",
  "tempfile",
@@ -924,11 +929,8 @@ dependencies = [
 name = "palette-orchestrator"
 version = "0.1.0"
 dependencies = [
- "palette-db",
- "palette-docker",
  "palette-domain",
- "palette-service",
- "palette-tmux",
+ "palette-usecase",
  "serde",
  "tokio",
  "tokio-util",
@@ -941,12 +943,8 @@ version = "0.1.0"
 dependencies = [
  "axum",
  "chrono",
- "palette-db",
- "palette-docker",
  "palette-domain",
- "palette-fs",
- "palette-service",
- "palette-tmux",
+ "palette-usecase",
  "serde",
  "serde_json",
  "serde_yaml",
@@ -955,21 +953,19 @@ dependencies = [
 ]
 
 [[package]]
-name = "palette-service"
-version = "0.1.0"
-dependencies = [
- "palette-db",
- "palette-domain",
- "palette-fs",
- "serde_yaml",
-]
-
-[[package]]
 name = "palette-tmux"
 version = "0.1.0"
 dependencies = [
  "palette-domain",
+ "palette-usecase",
  "tracing",
+]
+
+[[package]]
+name = "palette-usecase"
+version = "0.1.0"
+dependencies = [
+ "palette-domain",
 ]
 
 [[package]]

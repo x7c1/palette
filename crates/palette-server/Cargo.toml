@@ -7,12 +7,8 @@ license.workspace = true
 [dependencies]
 axum.workspace = true
 chrono.workspace = true
-palette-db = { path = "../palette-db" }
-palette-docker = { path = "../palette-docker" }
 palette-domain = { path = "../palette-domain" }
-palette-fs = { path = "../palette-fs" }
-palette-service = { path = "../palette-service" }
-palette-tmux = { path = "../palette-tmux" }
+palette-usecase = { path = "../palette-usecase" }
 serde.workspace = true
 serde_json.workspace = true
 serde_yaml.workspace = true

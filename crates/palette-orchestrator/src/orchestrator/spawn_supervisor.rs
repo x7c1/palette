@@ -1,7 +1,7 @@
 use super::Orchestrator;
-use palette_docker::DockerManager;
 use palette_domain::task::TaskId;
 use palette_domain::worker::{ContainerId, WorkerId, WorkerRole, WorkerStatus};
+use palette_usecase::data_store::InsertWorkerRequest;
 
 impl Orchestrator {
     /// Spawn a dynamic supervisor for a composite task.
@@ -13,15 +13,19 @@ impl Orchestrator {
         role: WorkerRole,
     ) -> crate::Result<WorkerId> {
         let task_state = self
-            .db
+            .interactor
+            .data_store
             .get_task_state(task_id)?
             .ok_or_else(|| crate::Error::Internal(format!("task not found: {task_id}")))?;
-        let seq = self.db.increment_worker_counter(&task_state.workflow_id)?;
+        let seq = self
+            .interactor
+            .data_store
+            .increment_worker_counter(&task_state.workflow_id)?;
         let sup_id = WorkerId::next_supervisor(seq, role);
 
         // Create a tmux window for this supervisor
         let sup_name = sup_id.as_ref();
-        let terminal_target = self.tmux.create_target(sup_name)?;
+        let terminal_target = self.interactor.terminal.create_target(sup_name)?;
 
         // Select Docker image and prompt based on role
         let (image, prompt_path) = match role {
@@ -62,18 +66,20 @@ impl Orchestrator {
         };
 
         // Register in DB
-        self.db.insert_worker(&palette_db::InsertWorkerRequest {
-            id: sup_id.clone(),
-            workflow_id: task_state.workflow_id,
-            role,
-            status: WorkerStatus::Booting,
-            supervisor_id: WorkerId::new(""),
-            container_id,
-            terminal_target,
-            // Claude Code session does not exist yet; it will be created once the process boots.
-            session_id: None,
-            task_id: task_id.clone(),
-        })?;
+        self.interactor
+            .data_store
+            .insert_worker(&InsertWorkerRequest {
+                id: sup_id.clone(),
+                workflow_id: task_state.workflow_id,
+                role,
+                status: WorkerStatus::Booting,
+                supervisor_id: WorkerId::new(""),
+                container_id,
+                terminal_target,
+                // Claude Code session does not exist yet; it will be created once the process boots.
+                session_id: None,
+                task_id: task_id.clone(),
+            })?;
 
         tracing::info!(
             supervisor_id = %sup_id,
@@ -93,28 +99,37 @@ impl Orchestrator {
         terminal_target: &palette_domain::terminal::TerminalTarget,
         role: WorkerRole,
     ) -> crate::Result<ContainerId> {
-        let container_id =
-            self.docker
-                .create_container(name, image, role, session_name, None, None)?;
-        self.docker.start_container(&container_id)?;
-        self.docker.write_settings(
+        let container_id = self.interactor.container.create_container(
+            name,
+            image,
+            role,
+            session_name,
+            None,
+            None,
+        )?;
+        self.interactor.container.start_container(&container_id)?;
+        self.interactor.container.write_settings(
             &container_id,
             std::path::Path::new(&self.docker_config.settings_template),
             name,
         )?;
-        DockerManager::copy_file_to_container(
+        self.interactor.container.copy_file_to_container(
             &container_id,
             std::path::Path::new(prompt_path),
             "/home/agent/prompt.md",
         )?;
-        DockerManager::copy_dir_to_container(
+        self.interactor.container.copy_dir_to_container(
             &container_id,
             std::path::Path::new("claude-code-plugin"),
             "/home/agent/claude-code-plugin",
         )?;
 
-        let cmd = DockerManager::claude_exec_command(&container_id, "/home/agent/prompt.md", role);
-        self.tmux.send_keys(terminal_target, &cmd)?;
+        let cmd = self.interactor.container.claude_exec_command(
+            &container_id,
+            "/home/agent/prompt.md",
+            role,
+        );
+        self.interactor.terminal.send_keys(terminal_target, &cmd)?;
 
         Ok(container_id)
     }

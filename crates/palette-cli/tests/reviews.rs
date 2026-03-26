@@ -1,17 +1,20 @@
 mod helper;
 
 use helper::{spawn_server, test_session_name_with_guard};
-use palette_db::CreateTaskRequest;
 use palette_domain::task::TaskId;
 use palette_domain::workflow::WorkflowId;
 use palette_server::api_types::{ReviewCommentInput, SubmitReviewRequest, Verdict};
 use palette_tmux::TmuxManager;
+use palette_usecase::data_store::CreateTaskRequest;
 
 fn setup_review_task(state: &palette_server::AppState, task_name: &str) -> TaskId {
     let wf_id = WorkflowId::new(format!("wf-{task_name}"));
     let task_id = TaskId::new(task_name);
-    let _ = state.db.create_workflow(&wf_id, "test/blueprint.yaml");
-    let _ = state.db.create_task(&CreateTaskRequest {
+    let _ = state
+        .interactor
+        .data_store
+        .create_workflow(&wf_id, "test/blueprint.yaml");
+    let _ = state.interactor.data_store.create_task(&CreateTaskRequest {
         id: task_id.clone(),
         workflow_id: wf_id,
     });
@@ -31,7 +34,8 @@ async fn review_submit_and_get_submissions() {
 
     let task_id = setup_review_task(&state, "task-R-001");
     let review_job = state
-        .db
+        .interactor
+        .data_store
         .create_job(&CreateJobRequest {
             task_id,
             id: Some(JobId::new("R-001")),
@@ -43,9 +47,10 @@ async fn review_submit_and_get_submissions() {
             repository: None,
         })
         .unwrap();
-    helper::setup_worker(&state.db, "member-b");
+    helper::setup_worker(&*state.interactor.data_store, "member-b");
     state
-        .db
+        .interactor
+        .data_store
         .assign_job(&review_job.id, &WorkerId::new("member-b"), JobType::Review)
         .unwrap();
 
@@ -73,7 +78,12 @@ async fn review_submit_and_get_submissions() {
     assert_eq!(sub["verdict"], "changes_requested");
 
     // Review job should be blocked
-    let review = state.db.get_job(&JobId::new("R-001")).unwrap().unwrap();
+    let review = state
+        .interactor
+        .data_store
+        .get_job(&JobId::new("R-001"))
+        .unwrap()
+        .unwrap();
     assert_eq!(
         review.status,
         JobStatus::Review(ReviewStatus::ChangesRequested)
@@ -104,7 +114,8 @@ async fn review_approved_completes_review_job() {
 
     let task_id = setup_review_task(&state, "task-R-001");
     let review_job = state
-        .db
+        .interactor
+        .data_store
         .create_job(&CreateJobRequest {
             task_id,
             id: Some(JobId::new("R-001")),
@@ -116,9 +127,10 @@ async fn review_approved_completes_review_job() {
             repository: None,
         })
         .unwrap();
-    helper::setup_worker(&state.db, "member-b");
+    helper::setup_worker(&*state.interactor.data_store, "member-b");
     state
-        .db
+        .interactor
+        .data_store
         .assign_job(&review_job.id, &WorkerId::new("member-b"), JobType::Review)
         .unwrap();
 
@@ -138,6 +150,11 @@ async fn review_approved_completes_review_job() {
     assert_eq!(resp.status(), 201);
 
     // Review job should be done
-    let review = state.db.get_job(&JobId::new("R-001")).unwrap().unwrap();
+    let review = state
+        .interactor
+        .data_store
+        .get_job(&JobId::new("R-001"))
+        .unwrap()
+        .unwrap();
     assert_eq!(review.status, JobStatus::Review(ReviewStatus::Done));
 }

@@ -8,3 +8,5 @@ pub use docker_manager::is_container_running;
 
 mod read_container_file;
 pub use read_container_file::read_container_file;
+
+mod adapter;

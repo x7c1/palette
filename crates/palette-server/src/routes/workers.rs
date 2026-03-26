@@ -18,7 +18,8 @@ pub async fn handle_list_workers(
     State(state): State<Arc<AppState>>,
 ) -> Result<Json<Vec<WorkerResponse>>, (StatusCode, String)> {
     let workers = state
-        .db
+        .interactor
+        .data_store
         .list_all_workers()
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 

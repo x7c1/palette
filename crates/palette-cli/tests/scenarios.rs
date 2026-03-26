@@ -1,13 +1,13 @@
 mod helper;
 
 use helper::{capture_pane, jid, spawn_server, test_session_name_with_guard, wid};
-use palette_db::{CreateTaskRequest, InsertWorkerRequest};
 use palette_domain::job::{CreateJobRequest, JobStatus, JobType, ReviewStatus};
 use palette_domain::task::TaskId;
 use palette_domain::terminal::TerminalTarget;
 use palette_domain::worker::{ContainerId, WorkerRole, WorkerStatus};
 use palette_domain::workflow::WorkflowId;
 use palette_tmux::TmuxManager;
+use palette_usecase::data_store::{CreateTaskRequest, InsertWorkerRequest};
 use serde_json::json;
 use std::io::Write;
 
@@ -32,7 +32,8 @@ fn insert_worker(
     workflow_id: &WorkflowId,
 ) {
     state
-        .db
+        .interactor
+        .data_store
         .insert_worker(&InsertWorkerRequest {
             id: wid(id),
             workflow_id: workflow_id.clone(),
@@ -64,28 +65,32 @@ async fn scenario3_message_queuing_to_leader() {
     // Set up workflow and tasks for review jobs
     let wf_id = WorkflowId::new("wf-scenario3");
     state
-        .db
+        .interactor
+        .data_store
         .create_workflow(&wf_id, "test/blueprint.yaml")
         .unwrap();
     let task_a = TaskId::new("task-R-A");
     let task_b = TaskId::new("task-R-B");
     let task_ri = TaskId::new("task-ri");
     state
-        .db
+        .interactor
+        .data_store
         .create_task(&CreateTaskRequest {
             id: task_ri.clone(),
             workflow_id: wf_id.clone(),
         })
         .unwrap();
     state
-        .db
+        .interactor
+        .data_store
         .create_task(&CreateTaskRequest {
             id: task_a.clone(),
             workflow_id: wf_id.clone(),
         })
         .unwrap();
     state
-        .db
+        .interactor
+        .data_store
         .create_task(&CreateTaskRequest {
             id: task_b.clone(),
             workflow_id: wf_id.clone(),
@@ -128,7 +133,8 @@ async fn scenario3_message_queuing_to_leader() {
 
     // Create review jobs and assign them
     state
-        .db
+        .interactor
+        .data_store
         .create_job(&CreateJobRequest {
             task_id: task_a,
             id: Some(jid("R-A")),
@@ -141,7 +147,8 @@ async fn scenario3_message_queuing_to_leader() {
         })
         .unwrap();
     state
-        .db
+        .interactor
+        .data_store
         .create_job(&CreateJobRequest {
             task_id: task_b,
             id: Some(jid("R-B")),
@@ -155,19 +162,23 @@ async fn scenario3_message_queuing_to_leader() {
         .unwrap();
 
     state
-        .db
+        .interactor
+        .data_store
         .update_job_status(&jid("R-A"), JobStatus::Review(ReviewStatus::Todo))
         .unwrap();
     state
-        .db
+        .interactor
+        .data_store
         .assign_job(&jid("R-A"), &wid("member-a"), JobType::Review)
         .unwrap();
     state
-        .db
+        .interactor
+        .data_store
         .update_job_status(&jid("R-B"), JobStatus::Review(ReviewStatus::Todo))
         .unwrap();
     state
-        .db
+        .interactor
+        .data_store
         .assign_job(&jid("R-B"), &wid("member-b"), JobType::Review)
         .unwrap();
 
@@ -194,7 +205,8 @@ async fn scenario3_message_queuing_to_leader() {
     // Review integrator is Working, so both notifications should be queued
     assert!(
         state
-            .db
+            .interactor
+            .data_store
             .has_pending_messages(&wid("review-integrator-1"))
             .unwrap(),
         "review integrator should have pending messages"
@@ -230,7 +242,8 @@ async fn scenario3_message_queuing_to_leader() {
     // RI should still have pending messages (member-b event)
     assert!(
         state
-            .db
+            .interactor
+            .data_store
             .has_pending_messages(&wid("review-integrator-1"))
             .unwrap(),
         "RI should still have pending message for member-b"
@@ -258,7 +271,8 @@ async fn scenario3_message_queuing_to_leader() {
     // Queue should now be empty
     assert!(
         !state
-            .db
+            .interactor
+            .data_store
             .has_pending_messages(&wid("review-integrator-1"))
             .unwrap(),
         "RI queue should be empty after all deliveries"
@@ -323,7 +337,8 @@ task:
     // Verify task states
     assert_eq!(
         state
-            .db
+            .interactor
+            .data_store
             .get_task_state(&tid(wf_id, "sup-test"))
             .unwrap()
             .unwrap()
@@ -332,7 +347,8 @@ task:
     );
     assert_eq!(
         state
-            .db
+            .interactor
+            .data_store
             .get_task_state(&tid(wf_id, "sup-test/phase-a"))
             .unwrap()
             .unwrap()
@@ -341,7 +357,8 @@ task:
     );
     assert_eq!(
         state
-            .db
+            .interactor
+            .data_store
             .get_task_state(&tid(wf_id, "sup-test/phase-b"))
             .unwrap()
             .unwrap()
@@ -351,7 +368,11 @@ task:
 
     // Verify supervisors: root + phase-a = 2
     {
-        let supervisors = state.db.list_supervisors(&workflow_id).unwrap();
+        let supervisors = state
+            .interactor
+            .data_store
+            .list_supervisors(&workflow_id)
+            .unwrap();
         assert_eq!(
             supervisors.len(),
             2,
@@ -363,7 +384,8 @@ task:
         );
         assert!(
             state
-                .db
+                .interactor
+                .data_store
                 .find_supervisor_for_task(&tid(wf_id, "sup-test"))
                 .unwrap()
                 .is_some(),
@@ -371,7 +393,8 @@ task:
         );
         assert!(
             state
-                .db
+                .interactor
+                .data_store
                 .find_supervisor_for_task(&tid(wf_id, "sup-test/phase-a"))
                 .unwrap()
                 .is_some(),
@@ -380,20 +403,27 @@ task:
     }
 
     // --- Phase 2: Complete phase-a/craft ---
-    let jobs = state.db.list_jobs(&JobFilter::default()).unwrap();
+    let jobs = state
+        .interactor
+        .data_store
+        .list_jobs(&JobFilter::default())
+        .unwrap();
     assert_eq!(jobs.len(), 1, "only phase-a/craft job should exist");
     let craft_a_id = jobs[0].id.clone();
 
     state
-        .db
+        .interactor
+        .data_store
         .update_job_status(&craft_a_id, JStatus::Craft(CraftStatus::InProgress))
         .unwrap();
     state
-        .db
+        .interactor
+        .data_store
         .update_job_status(&craft_a_id, JStatus::Craft(CraftStatus::InReview))
         .unwrap();
     state
-        .db
+        .interactor
+        .data_store
         .update_job_status(&craft_a_id, JStatus::Craft(CraftStatus::Done))
         .unwrap();
 
@@ -407,7 +437,8 @@ task:
     // phase-a should be Completed
     assert_eq!(
         state
-            .db
+            .interactor
+            .data_store
             .get_task_state(&tid(wf_id, "sup-test/phase-a"))
             .unwrap()
             .unwrap()
@@ -417,7 +448,8 @@ task:
     // phase-b should be InProgress (dependency satisfied, pure composite activated)
     assert_eq!(
         state
-            .db
+            .interactor
+            .data_store
             .get_task_state(&tid(wf_id, "sup-test/phase-b"))
             .unwrap()
             .unwrap()
@@ -427,7 +459,11 @@ task:
 
     // Verify supervisors: root + phase-b = 2 (phase-a destroyed, phase-b spawned)
     {
-        let supervisors = state.db.list_supervisors(&workflow_id).unwrap();
+        let supervisors = state
+            .interactor
+            .data_store
+            .list_supervisors(&workflow_id)
+            .unwrap();
         assert_eq!(
             supervisors.len(),
             2,
@@ -439,7 +475,8 @@ task:
         );
         assert!(
             state
-                .db
+                .interactor
+                .data_store
                 .find_supervisor_for_task(&tid(wf_id, "sup-test/phase-a"))
                 .unwrap()
                 .is_none(),
@@ -447,7 +484,8 @@ task:
         );
         assert!(
             state
-                .db
+                .interactor
+                .data_store
                 .find_supervisor_for_task(&tid(wf_id, "sup-test/phase-b"))
                 .unwrap()
                 .is_some(),
@@ -456,7 +494,11 @@ task:
     }
 
     // --- Phase 3: Complete phase-b/craft ---
-    let all_jobs = state.db.list_jobs(&JobFilter::default()).unwrap();
+    let all_jobs = state
+        .interactor
+        .data_store
+        .list_jobs(&JobFilter::default())
+        .unwrap();
     let craft_b = all_jobs
         .iter()
         .find(|j| j.task_id.as_ref() == tid(wf_id, "sup-test/phase-b/craft").to_string())
@@ -464,15 +506,18 @@ task:
     let craft_b_id = craft_b.id.clone();
 
     state
-        .db
+        .interactor
+        .data_store
         .update_job_status(&craft_b_id, JStatus::Craft(CraftStatus::InProgress))
         .unwrap();
     state
-        .db
+        .interactor
+        .data_store
         .update_job_status(&craft_b_id, JStatus::Craft(CraftStatus::InReview))
         .unwrap();
     state
-        .db
+        .interactor
+        .data_store
         .update_job_status(&craft_b_id, JStatus::Craft(CraftStatus::Done))
         .unwrap();
 
@@ -485,7 +530,11 @@ task:
 
     // All supervisors should be destroyed
     {
-        let supervisors = state.db.list_supervisors(&workflow_id).unwrap();
+        let supervisors = state
+            .interactor
+            .data_store
+            .list_supervisors(&workflow_id)
+            .unwrap();
         assert_eq!(
             supervisors.len(),
             0,
@@ -498,7 +547,12 @@ task:
     }
 
     // Workflow should be completed
-    let wf = state.db.get_workflow(&workflow_id).unwrap().unwrap();
+    let wf = state
+        .interactor
+        .data_store
+        .get_workflow(&workflow_id)
+        .unwrap()
+        .unwrap();
     assert_eq!(wf.status, WorkflowStatus::Completed);
 }
 
@@ -539,9 +593,9 @@ task:
     let blueprint_file = write_blueprint_file(yaml);
 
     // Insert workers needed for assign_job FK constraints
-    helper::setup_worker(&state.db, "reviewer-1");
-    helper::setup_worker(&state.db, "reviewer-2");
-    helper::setup_worker(&state.db, "ri-agent");
+    helper::setup_worker(&*state.interactor.data_store, "reviewer-1");
+    helper::setup_worker(&*state.interactor.data_store, "reviewer-2");
+    helper::setup_worker(&*state.interactor.data_store, "ri-agent");
 
     let wait = || tokio::time::sleep(tokio::time::Duration::from_millis(300));
 
@@ -563,7 +617,11 @@ task:
 
     // Phase 1: Only root supervisor (craft composite doesn't get one)
     {
-        let supervisors = state.db.list_supervisors(&workflow_id).unwrap();
+        let supervisors = state
+            .interactor
+            .data_store
+            .list_supervisors(&workflow_id)
+            .unwrap();
         assert_eq!(
             supervisors.len(),
             1,
@@ -576,16 +634,22 @@ task:
     }
 
     // Phase 2: Craft → InReview → should spawn ReviewIntegrator
-    let jobs = state.db.list_jobs(&JobFilter::default()).unwrap();
+    let jobs = state
+        .interactor
+        .data_store
+        .list_jobs(&JobFilter::default())
+        .unwrap();
     assert_eq!(jobs.len(), 1);
     let craft_id = jobs[0].id.clone();
 
     state
-        .db
+        .interactor
+        .data_store
         .update_job_status(&craft_id, JStatus::Craft(CraftStatus::InProgress))
         .unwrap();
     state
-        .db
+        .interactor
+        .data_store
         .update_job_status(&craft_id, JStatus::Craft(CraftStatus::InReview))
         .unwrap();
 
@@ -598,7 +662,11 @@ task:
 
     // Verify: ReviewIntegrator spawned + review jobs created
     {
-        let supervisors = state.db.list_supervisors(&workflow_id).unwrap();
+        let supervisors = state
+            .interactor
+            .data_store
+            .list_supervisors(&workflow_id)
+            .unwrap();
         assert_eq!(
             supervisors.len(),
             2,
@@ -609,7 +677,8 @@ task:
                 .collect::<Vec<_>>()
         );
         let ri_sup = state
-            .db
+            .interactor
+            .data_store
             .find_supervisor_for_task(&tid(wf_id, "ri-test/craft/review-integrate"))
             .unwrap()
             .expect("ReviewIntegrator supervisor should exist");
@@ -617,7 +686,11 @@ task:
     }
 
     // review-1 and review-2 jobs should exist
-    let all_jobs = state.db.list_jobs(&JobFilter::default()).unwrap();
+    let all_jobs = state
+        .interactor
+        .data_store
+        .list_jobs(&JobFilter::default())
+        .unwrap();
     let review_jobs: Vec<_> = all_jobs
         .iter()
         .filter(|j| j.job_type == JobType::Review)
@@ -645,11 +718,13 @@ task:
 
     // Approve review-1
     state
-        .db
+        .interactor
+        .data_store
         .assign_job(&review_1_job.id, &wid("reviewer-1"), JobType::Review)
         .unwrap();
     let sub = state
-        .db
+        .interactor
+        .data_store
         .submit_review(
             &review_1_job.id,
             &SubmitReviewRequest {
@@ -659,20 +734,24 @@ task:
             },
         )
         .unwrap();
-    let effects = state
-        .rules
-        .on_review_submitted(&review_1_job.id, &sub)
-        .unwrap();
+    let effects = palette_domain::rule::RuleEngine::new(
+        std::sync::Arc::clone(&state.interactor.data_store),
+        state.max_review_rounds,
+    )
+    .on_review_submitted(&review_1_job.id, &sub)
+    .unwrap();
     let _ = state.event_tx.send(ServerEvent::ProcessEffects { effects });
     wait().await;
 
     // Approve review-2
     state
-        .db
+        .interactor
+        .data_store
         .assign_job(&review_2_job.id, &wid("reviewer-2"), JobType::Review)
         .unwrap();
     let sub = state
-        .db
+        .interactor
+        .data_store
         .submit_review(
             &review_2_job.id,
             &SubmitReviewRequest {
@@ -682,10 +761,12 @@ task:
             },
         )
         .unwrap();
-    let effects = state
-        .rules
-        .on_review_submitted(&review_2_job.id, &sub)
-        .unwrap();
+    let effects = palette_domain::rule::RuleEngine::new(
+        std::sync::Arc::clone(&state.interactor.data_store),
+        state.max_review_rounds,
+    )
+    .on_review_submitted(&review_2_job.id, &sub)
+    .unwrap();
     let _ = state.event_tx.send(ServerEvent::ProcessEffects { effects });
     wait().await;
 
@@ -696,11 +777,13 @@ task:
         .find(|j| j.task_id.as_ref() == tid(wf_id, "ri-test/craft/review-integrate").to_string())
         .expect("review-integrate job should exist");
     state
-        .db
+        .interactor
+        .data_store
         .assign_job(&ri_job.id, &wid("ri-agent"), JobType::Review)
         .unwrap();
     let sub = state
-        .db
+        .interactor
+        .data_store
         .submit_review(
             &ri_job.id,
             &SubmitReviewRequest {
@@ -710,13 +793,22 @@ task:
             },
         )
         .unwrap();
-    let effects = state.rules.on_review_submitted(&ri_job.id, &sub).unwrap();
+    let effects = palette_domain::rule::RuleEngine::new(
+        std::sync::Arc::clone(&state.interactor.data_store),
+        state.max_review_rounds,
+    )
+    .on_review_submitted(&ri_job.id, &sub)
+    .unwrap();
     let _ = state.event_tx.send(ServerEvent::ProcessEffects { effects });
     wait().await;
 
     // All supervisors should be destroyed
     {
-        let supervisors = state.db.list_supervisors(&workflow_id).unwrap();
+        let supervisors = state
+            .interactor
+            .data_store
+            .list_supervisors(&workflow_id)
+            .unwrap();
         assert_eq!(
             supervisors.len(),
             0,
@@ -729,6 +821,11 @@ task:
     }
 
     // Workflow should be completed
-    let wf = state.db.get_workflow(&workflow_id).unwrap().unwrap();
+    let wf = state
+        .interactor
+        .data_store
+        .get_workflow(&workflow_id)
+        .unwrap()
+        .unwrap();
     assert_eq!(wf.status, WorkflowStatus::Completed);
 }

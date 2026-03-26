@@ -2,36 +2,20 @@ pub type Result<T> = std::result::Result<T, Error>;
 
 #[derive(Debug)]
 pub enum Error {
-    Db(palette_db::Error),
-    Tmux(palette_tmux::Error),
-    Docker(palette_docker::Error),
+    External(Box<dyn std::error::Error + Send + Sync>),
     Internal(String),
 }
 
-impl From<palette_db::Error> for Error {
-    fn from(e: palette_db::Error) -> Self {
-        Self::Db(e)
-    }
-}
-
-impl From<palette_tmux::Error> for Error {
-    fn from(e: palette_tmux::Error) -> Self {
-        Self::Tmux(e)
-    }
-}
-
-impl From<palette_docker::Error> for Error {
-    fn from(e: palette_docker::Error) -> Self {
-        Self::Docker(e)
+impl From<Box<dyn std::error::Error + Send + Sync>> for Error {
+    fn from(e: Box<dyn std::error::Error + Send + Sync>) -> Self {
+        Self::External(e)
     }
 }
 
 impl std::error::Error for Error {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self {
-            Self::Db(e) => Some(e),
-            Self::Tmux(e) => Some(e),
-            Self::Docker(e) => Some(e),
+            Self::External(e) => Some(e.as_ref()),
             Self::Internal(_) => None,
         }
     }
@@ -40,9 +24,7 @@ impl std::error::Error for Error {
 impl std::fmt::Display for Error {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::Db(e) => write!(f, "DB error: {e}"),
-            Self::Tmux(e) => write!(f, "tmux error: {e}"),
-            Self::Docker(e) => write!(f, "Docker error: {e}"),
+            Self::External(e) => write!(f, "{e}"),
             Self::Internal(msg) => f.write_str(msg),
         }
     }

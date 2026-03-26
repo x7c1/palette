@@ -10,7 +10,8 @@ pub async fn handle_create_job(
 ) -> Result<(StatusCode, Json<JobResponse>), (StatusCode, String)> {
     let req: domain::job::CreateJobRequest = api_req.into();
     let job = state
-        .db
+        .interactor
+        .data_store
         .create_job(&req)
         .map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))?;
     tracing::info!(job_id = %job.id, "created job");

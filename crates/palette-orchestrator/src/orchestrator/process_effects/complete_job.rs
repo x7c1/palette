@@ -3,7 +3,8 @@ use palette_domain::job::{JobId, JobType};
 use palette_domain::rule::{RuleEffect, RuleEngine};
 use palette_domain::task::{TaskId, TaskStatus, TaskStore};
 use palette_domain::worker::WorkerRole;
-use palette_service::TaskStoreImpl;
+use palette_usecase::task_store::TaskStoreImpl;
+use std::sync::Arc;
 
 impl Orchestrator {
     /// When a Job is Done, check if its task can be completed and cascade.
@@ -17,15 +18,17 @@ impl Orchestrator {
         &self,
         job_id: &JobId,
     ) -> crate::Result<Vec<RuleEffect>> {
-        let Some(job) = self.db.get_job(job_id)? else {
+        let Some(job) = self.interactor.data_store.get_job(job_id)? else {
             return Ok(vec![]);
         };
         let task_id = &job.task_id;
-        let Some(task_state) = self.db.get_task_state(task_id)? else {
+        let Some(task_state) = self.interactor.data_store.get_task_state(task_id)? else {
             return Ok(vec![]);
         };
 
-        let task_store = TaskStoreImpl::from_db(&self.db, &task_state.workflow_id)
+        let task_store = self
+            .interactor
+            .create_task_store(&task_state.workflow_id)
             .map_err(|e| crate::Error::Internal(e.to_string()))?;
 
         // Check if all children are Completed (if any)
@@ -43,7 +46,7 @@ impl Orchestrator {
         let mut effects = Vec::new();
 
         // Destroy supervisor for this task if it had one
-        if let Ok(Some(sup)) = self.db.find_supervisor_for_task(task_id) {
+        if let Ok(Some(sup)) = self.interactor.data_store.find_supervisor_for_task(task_id) {
             effects.push(RuleEffect::DestroySupervisor {
                 supervisor_id: sup.id.clone(),
             });
@@ -60,7 +63,7 @@ impl Orchestrator {
 
     /// Find assignable jobs waiting for a member slot and emit AssignNewJob effects.
     fn fill_vacant_slots(&self) -> crate::Result<Vec<RuleEffect>> {
-        let assignable = self.db.find_assignable_jobs()?;
+        let assignable = self.interactor.data_store.find_assignable_jobs()?;
         Ok(assignable
             .into_iter()
             .map(|j| RuleEffect::AssignNewJob { job_id: j.id })
@@ -71,7 +74,7 @@ impl Orchestrator {
     fn cascade_task_effects(
         &self,
         completed_task_id: &TaskId,
-        task_store: &TaskStoreImpl<'_>,
+        task_store: &TaskStoreImpl,
     ) -> crate::Result<Vec<RuleEffect>> {
         use palette_domain::rule::{TaskEffect, TaskRuleEngine};
 
@@ -102,7 +105,8 @@ impl Orchestrator {
                     TaskStatus::Completed => {
                         // Before marking parent as Completed, check its own Job (if any)
                         let own_job_done = self
-                            .db
+                            .interactor
+                            .data_store
                             .get_job_by_task_id(task_id)?
                             .is_none_or(|j| j.status.is_done());
 
@@ -118,7 +122,9 @@ impl Orchestrator {
                         tracing::info!(task_id = %task_id, status = ?new_status, "task status cascaded");
 
                         // Destroy dynamic supervisor if this composite task had one
-                        if let Ok(Some(sup)) = self.db.find_supervisor_for_task(task_id) {
+                        if let Ok(Some(sup)) =
+                            self.interactor.data_store.find_supervisor_for_task(task_id)
+                        {
                             job_effects.push(RuleEffect::DestroySupervisor {
                                 supervisor_id: sup.id.clone(),
                             });
@@ -129,7 +135,7 @@ impl Orchestrator {
                             && task.parent_id.is_none()
                         {
                             use palette_domain::workflow::WorkflowStatus;
-                            self.db.update_workflow_status(
+                            self.interactor.data_store.update_workflow_status(
                                 &task.workflow_id,
                                 WorkflowStatus::Completed,
                             )?;
@@ -155,8 +161,8 @@ impl Orchestrator {
     pub(super) fn activate_ready_task(
         &self,
         task_id: &TaskId,
-        task_store: &TaskStoreImpl<'_>,
-        task_engine: &palette_domain::rule::TaskRuleEngine<&TaskStoreImpl<'_>>,
+        task_store: &TaskStoreImpl,
+        task_engine: &palette_domain::rule::TaskRuleEngine<&TaskStoreImpl>,
     ) -> crate::Result<(Vec<palette_domain::rule::TaskEffect>, Vec<RuleEffect>)> {
         let children = task_store.get_child_tasks(task_id)?;
 
@@ -217,18 +223,21 @@ impl Orchestrator {
         task: &palette_domain::task::Task,
     ) -> crate::Result<Vec<RuleEffect>> {
         let job_type = task.job_type.expect("task must have job_type");
-        let job = self.db.create_job(&palette_domain::job::CreateJobRequest {
-            id: Some(JobId::generate(job_type)),
-            task_id: task.id.clone(),
-            job_type,
-            title: task.key.to_string(),
-            plan_path: task.plan_path.clone().unwrap_or_default(),
-            assignee_id: None,
-            priority: task.priority,
-            repository: task.repository.clone(),
-        })?;
+        let job =
+            self.interactor
+                .data_store
+                .create_job(&palette_domain::job::CreateJobRequest {
+                    id: Some(JobId::generate(job_type)),
+                    task_id: task.id.clone(),
+                    job_type,
+                    title: task.key.to_string(),
+                    plan_path: task.plan_path.clone().unwrap_or_default(),
+                    assignee_id: None,
+                    priority: task.priority,
+                    repository: task.repository.clone(),
+                })?;
 
-        let rules = RuleEngine::new(&*self.db, 0);
+        let rules = RuleEngine::new(Arc::clone(&self.interactor.data_store), 0);
         let effects = rules.on_job_created(&job.id)?;
 
         tracing::info!(
@@ -246,15 +255,22 @@ impl Orchestrator {
         task_id: &TaskId,
     ) -> crate::Result<palette_domain::worker::WorkerId> {
         let task_state = self
-            .db
+            .interactor
+            .data_store
             .get_task_state(task_id)?
             .ok_or_else(|| crate::Error::Internal(format!("task not found: {task_id}")))?;
-        let task_store = TaskStoreImpl::from_db(&self.db, &task_state.workflow_id)
+        let task_store = self
+            .interactor
+            .create_task_store(&task_state.workflow_id)
             .map_err(|e| crate::Error::Internal(e.to_string()))?;
 
         let mut current_id = task_id.clone();
         loop {
-            if let Ok(Some(sup)) = self.db.find_supervisor_for_task(&current_id) {
+            if let Ok(Some(sup)) = self
+                .interactor
+                .data_store
+                .find_supervisor_for_task(&current_id)
+            {
                 return Ok(sup.id.clone());
             }
             let task = task_store

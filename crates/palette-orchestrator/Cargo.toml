@@ -5,11 +5,8 @@ edition.workspace = true
 license.workspace = true
 
 [dependencies]
-palette-db = { path = "../palette-db" }
-palette-docker = { path = "../palette-docker" }
 palette-domain = { path = "../palette-domain" }
-palette-service = { path = "../palette-service" }
-palette-tmux = { path = "../palette-tmux" }
+palette-usecase = { path = "../palette-usecase" }
 serde.workspace = true
 tokio.workspace = true
 tokio-util.workspace = true

@@ -6,6 +6,7 @@ license.workspace = true
 
 [dependencies]
 palette-domain = { path = "../palette-domain" }
+palette-usecase = { path = "../palette-usecase" }
 tracing.workspace = true
 
 [dev-dependencies]

@@ -43,7 +43,7 @@ pub async fn handle_notification(
 
     // Update member status to WaitingPermission and resolve context
     let member_context = {
-        let member = match state.db.find_worker(&member_id) {
+        let member = match state.interactor.data_store.find_worker(&member_id) {
             Ok(Some(m)) => m,
             _ => {
                 let _ = state.event_tx.send(ServerEvent::NotifyDeliveryLoop);
@@ -51,7 +51,8 @@ pub async fn handle_notification(
             }
         };
         if let Err(e) = state
-            .db
+            .interactor
+            .data_store
             .update_worker_status(&member_id, WorkerStatus::WaitingPermission)
         {
             tracing::error!(error = %e, "failed to update worker status");
@@ -65,15 +66,18 @@ pub async fn handle_notification(
 
     // Extract the pending tool call from the member's JSONL transcript
     let pending_tool = match notification_payload.transcript_path {
-        Some(ref path) if !path.is_empty() => {
-            extract_pending_tool(&member_context.container_id, path)
-        }
+        Some(ref path) if !path.is_empty() => extract_pending_tool(
+            state.interactor.container.as_ref(),
+            &member_context.container_id,
+            path,
+        ),
         _ => None,
     };
 
     // Capture the member's pane content (last 10 non-empty lines, joined as single line)
     let pane_content = state
-        .tmux
+        .interactor
+        .terminal
         .capture_pane(&member_context.terminal_target)
         .ok()
         .map(|content| {
@@ -92,7 +96,8 @@ pub async fn handle_notification(
     }
 
     if let Err(e) = state
-        .db
+        .interactor
+        .data_store
         .enqueue_message(&member_context.supervisor_id, &notification)
     {
         tracing::error!(error = %e, "failed to enqueue notification for supervisor");
@@ -141,10 +146,13 @@ enum ContentBlock {
 
 /// Read the member's transcript and extract the last tool_use entry.
 fn extract_pending_tool(
+    container: &dyn palette_usecase::ContainerRuntime,
     container_id: &palette_domain::worker::ContainerId,
     transcript_path: &str,
 ) -> Option<PendingTool> {
-    let content = palette_docker::read_container_file(container_id, transcript_path, 5).ok()?;
+    let content = container
+        .read_container_file(container_id, transcript_path, 5)
+        .ok()?;
 
     for line in content.lines().rev() {
         let entry: TranscriptEntry = serde_json::from_str(line).ok()?;

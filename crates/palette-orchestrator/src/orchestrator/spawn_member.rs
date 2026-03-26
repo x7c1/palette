@@ -1,8 +1,8 @@
 use super::Orchestrator;
-use palette_docker::{DockerManager, PlanDirMount, WorkspaceVolume};
 use palette_domain::job::JobType;
 use palette_domain::task::TaskId;
 use palette_domain::worker::{WorkerId, WorkerRole, WorkerState, WorkerStatus};
+use palette_usecase::container_runtime::{PlanDirMount, WorkspaceVolume};
 
 impl Orchestrator {
     /// Spawn a member container. Returns the WorkerState for DB registration.
@@ -18,14 +18,21 @@ impl Orchestrator {
         let supervisor_id = supervisor_id.clone();
 
         // Look up supervisor from DB to find its pane and workflow
-        let supervisor_state = self.db.find_worker(&supervisor_id)?.ok_or_else(|| {
-            crate::Error::Internal(
-                "no supervisor found; cannot spawn member without a supervisor pane".into(),
-            )
-        })?;
+        let supervisor_state = self
+            .interactor
+            .data_store
+            .find_worker(&supervisor_id)?
+            .ok_or_else(|| {
+                crate::Error::Internal(
+                    "no supervisor found; cannot spawn member without a supervisor pane".into(),
+                )
+            })?;
         let workflow_id = supervisor_state.workflow_id.clone();
 
-        let terminal_target = self.tmux.create_pane(&supervisor_state.terminal_target)?;
+        let terminal_target = self
+            .interactor
+            .terminal
+            .create_pane(&supervisor_state.terminal_target)?;
 
         let member_id_str = member_id.as_ref();
         let plan_dir_abs = std::fs::canonicalize(&self.plan_dir)
@@ -35,7 +42,7 @@ impl Orchestrator {
             read_only: job_type == JobType::Review,
         };
 
-        let container_id = self.docker.create_container(
+        let container_id = self.interactor.container.create_container(
             member_id_str,
             &self.docker_config.member_image,
             WorkerRole::Member,
@@ -43,8 +50,8 @@ impl Orchestrator {
             workspace,
             Some(plan_dir_mount),
         )?;
-        self.docker.start_container(&container_id)?;
-        self.docker.write_settings(
+        self.interactor.container.start_container(&container_id)?;
+        self.interactor.container.write_settings(
             &container_id,
             std::path::Path::new(&self.docker_config.settings_template),
             member_id_str,
@@ -53,23 +60,23 @@ impl Orchestrator {
             JobType::Craft => &self.docker_config.crafter_prompt,
             JobType::Review => &self.docker_config.reviewer_prompt,
         };
-        DockerManager::copy_file_to_container(
+        self.interactor.container.copy_file_to_container(
             &container_id,
             std::path::Path::new(prompt_path),
             "/home/agent/prompt.md",
         )?;
-        DockerManager::copy_dir_to_container(
+        self.interactor.container.copy_dir_to_container(
             &container_id,
             std::path::Path::new("claude-code-plugin"),
             "/home/agent/claude-code-plugin",
         )?;
 
-        let cmd = DockerManager::claude_exec_command(
+        let cmd = self.interactor.container.claude_exec_command(
             &container_id,
             "/home/agent/prompt.md",
             WorkerRole::Member,
         );
-        self.tmux.send_keys(&terminal_target, &cmd)?;
+        self.interactor.terminal.send_keys(&terminal_target, &cmd)?;
         tracing::info!(member_id = %member_id, "spawned member");
 
         Ok(WorkerState {

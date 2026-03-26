@@ -3,11 +3,11 @@ mod helper;
 use helper::{
     create_craft, create_review, spawn_server, test_session_name_with_guard, update_status,
 };
-use palette_db::CreateTaskRequest;
 use palette_domain::task::TaskId;
 use palette_domain::workflow::WorkflowId;
 use palette_server::api_types::{CreateJobRequest, JobStatus, JobType};
 use palette_tmux::TmuxManager;
+use palette_usecase::data_store::CreateTaskRequest;
 
 #[tokio::test]
 async fn job_api_create_and_list() {
@@ -20,25 +20,28 @@ async fn job_api_create_and_list() {
     // Set up workflow and tasks for the jobs
     let wf_id = WorkflowId::new("wf-jobapi");
     state
-        .db
+        .interactor
+        .data_store
         .create_workflow(&wf_id, "test/blueprint.yaml")
         .unwrap();
     state
-        .db
+        .interactor
+        .data_store
         .create_task(&CreateTaskRequest {
             id: TaskId::new("task-W-001"),
             workflow_id: wf_id.clone(),
         })
         .unwrap();
     state
-        .db
+        .interactor
+        .data_store
         .create_task(&CreateTaskRequest {
             id: TaskId::new("task-R-001"),
             workflow_id: wf_id,
         })
         .unwrap();
 
-    helper::setup_worker(&state.db, "member-a");
+    helper::setup_worker(&*state.interactor.data_store, "member-a");
 
     let client = reqwest::Client::new();
 
@@ -119,18 +122,21 @@ async fn job_api_update_with_rules() {
     // Set up workflow and tasks
     let wf_id = WorkflowId::new("wf-jobrules");
     state
-        .db
+        .interactor
+        .data_store
         .create_workflow(&wf_id, "test/blueprint.yaml")
         .unwrap();
     state
-        .db
+        .interactor
+        .data_store
         .create_task(&CreateTaskRequest {
             id: TaskId::new("task-W-001"),
             workflow_id: wf_id.clone(),
         })
         .unwrap();
     state
-        .db
+        .interactor
+        .data_store
         .create_task(&CreateTaskRequest {
             id: TaskId::new("task-R-001"),
             workflow_id: wf_id,

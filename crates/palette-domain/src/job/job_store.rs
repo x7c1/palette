@@ -15,7 +15,7 @@ pub trait JobStore {
     ) -> Result<Vec<ReviewSubmission>, Self::Error>;
 }
 
-impl<T: JobStore> JobStore for &T {
+impl<T: JobStore + ?Sized> JobStore for &T {
     type Error = T::Error;
 
     fn get_job(&self, id: &JobId) -> Result<Option<Job>, Self::Error> {
@@ -35,7 +35,7 @@ impl<T: JobStore> JobStore for &T {
     }
 }
 
-impl<T: JobStore> JobStore for std::sync::Arc<T> {
+impl<T: JobStore + ?Sized> JobStore for std::sync::Arc<T> {
     type Error = T::Error;
 
     fn get_job(&self, id: &JobId) -> Result<Option<Job>, Self::Error> {

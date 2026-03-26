@@ -3,7 +3,6 @@ use palette_domain::job::{CraftStatus, JobId, JobStatus, JobType};
 use palette_domain::review::Verdict;
 use palette_domain::rule::RuleEffect;
 use palette_domain::task::TaskStore;
-use palette_service::TaskStoreImpl;
 
 impl Orchestrator {
     /// Handle a review verdict (Approved or ChangesRequested).
@@ -47,15 +46,17 @@ impl Orchestrator {
         &self,
         review_job_id: &JobId,
     ) -> crate::Result<Vec<RuleEffect>> {
-        let Some(review_job) = self.db.get_job(review_job_id)? else {
+        let Some(review_job) = self.interactor.data_store.get_job(review_job_id)? else {
             return Ok(vec![]);
         };
         let review_task_id = &review_job.task_id;
-        let Some(task_state) = self.db.get_task_state(review_task_id)? else {
+        let Some(task_state) = self.interactor.data_store.get_task_state(review_task_id)? else {
             return Ok(vec![]);
         };
 
-        let task_store = TaskStoreImpl::from_db(&self.db, &task_state.workflow_id)
+        let task_store = self
+            .interactor
+            .create_task_store(&task_state.workflow_id)
             .map_err(|e| crate::Error::Internal(e.to_string()))?;
 
         let Some(review_task) = task_store.get_task(review_task_id)? else {
@@ -66,7 +67,7 @@ impl Orchestrator {
             return Ok(vec![]);
         };
 
-        let Some(craft_job) = self.db.get_job_by_task_id(parent_id)? else {
+        let Some(craft_job) = self.interactor.data_store.get_job_by_task_id(parent_id)? else {
             return Ok(vec![]);
         };
         if craft_job.status != JobStatus::Craft(CraftStatus::InReview) {
@@ -79,7 +80,8 @@ impl Orchestrator {
             if child.job_type != Some(JobType::Review) {
                 return true;
             }
-            self.db
+            self.interactor
+                .data_store
                 .get_job_by_task_id(&child.id)
                 .ok()
                 .flatten()
@@ -91,7 +93,8 @@ impl Orchestrator {
         }
 
         // All review children are done — transition craft job to Done
-        self.db
+        self.interactor
+            .data_store
             .update_job_status(&craft_job.id, JobStatus::Craft(CraftStatus::Done))?;
         tracing::info!(
             craft_job_id = %craft_job.id,
@@ -117,15 +120,17 @@ impl Orchestrator {
         &self,
         review_job_id: &JobId,
     ) -> crate::Result<Vec<RuleEffect>> {
-        let Some(review_job) = self.db.get_job(review_job_id)? else {
+        let Some(review_job) = self.interactor.data_store.get_job(review_job_id)? else {
             return Ok(vec![]);
         };
         let review_task_id = &review_job.task_id;
-        let Some(task_state) = self.db.get_task_state(review_task_id)? else {
+        let Some(task_state) = self.interactor.data_store.get_task_state(review_task_id)? else {
             return Ok(vec![]);
         };
 
-        let task_store = TaskStoreImpl::from_db(&self.db, &task_state.workflow_id)
+        let task_store = self
+            .interactor
+            .create_task_store(&task_state.workflow_id)
             .map_err(|e| crate::Error::Internal(e.to_string()))?;
 
         let Some(review_task) = task_store.get_task(review_task_id)? else {
@@ -136,7 +141,7 @@ impl Orchestrator {
             return Ok(vec![]);
         };
 
-        let Some(craft_job) = self.db.get_job_by_task_id(parent_id)? else {
+        let Some(craft_job) = self.interactor.data_store.get_job_by_task_id(parent_id)? else {
             return Ok(vec![]);
         };
         if craft_job.status != JobStatus::Craft(CraftStatus::InReview) {
@@ -144,7 +149,8 @@ impl Orchestrator {
         }
 
         // Move craft job back to InProgress
-        self.db
+        self.interactor
+            .data_store
             .update_job_status(&craft_job.id, JobStatus::Craft(CraftStatus::InProgress))?;
         tracing::info!(
             craft_job_id = %craft_job.id,
@@ -154,7 +160,10 @@ impl Orchestrator {
 
         // Enqueue review feedback to the crafter
         if let Some(ref assignee) = craft_job.assignee_id {
-            let submissions = self.db.get_review_submissions(review_job_id)?;
+            let submissions = self
+                .interactor
+                .data_store
+                .get_review_submissions(review_job_id)?;
             let feedback = submissions
                 .last()
                 .and_then(|s| s.summary.clone())
@@ -163,7 +172,7 @@ impl Orchestrator {
                 "## Review Feedback (changes requested)\n\nReview job {} has requested changes:\n\n{}\n\nPlease address the feedback and complete the task.",
                 review_job_id, feedback
             );
-            self.db.enqueue_message(assignee, &msg)?;
+            self.interactor.data_store.enqueue_message(assignee, &msg)?;
         }
 
         // Emit ReactivateMember so the crafter gets re-activated

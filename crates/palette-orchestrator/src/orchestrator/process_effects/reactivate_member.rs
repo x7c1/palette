@@ -12,17 +12,21 @@ impl Orchestrator {
         member_id: &WorkerId,
         deliveries: &mut Vec<PendingDelivery>,
     ) -> crate::Result<()> {
-        let Some(job) = self.db.get_job(job_id)? else {
+        let Some(job) = self.interactor.data_store.get_job(job_id)? else {
             return Ok(());
         };
-        let Some(member) = self.db.find_worker(member_id)? else {
+        let Some(member) = self.interactor.data_store.find_worker(member_id)? else {
             return Ok(());
         };
 
         let instruction = format_job_instruction(&job);
-        self.db.enqueue_message(member_id, &instruction)?;
+        self.interactor
+            .data_store
+            .enqueue_message(member_id, &instruction)?;
         let in_progress = JobStatus::in_progress(job.job_type);
-        self.db.update_job_status(job_id, in_progress)?;
+        self.interactor
+            .data_store
+            .update_job_status(job_id, in_progress)?;
         deliveries.push(PendingDelivery {
             target_id: member_id.clone(),
             terminal_target: member.terminal_target.clone(),
