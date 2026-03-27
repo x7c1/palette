@@ -419,7 +419,7 @@ mod tests {
                 review_integrator_prompt: String::new(),
                 crafter_prompt: String::new(),
                 reviewer_prompt: String::new(),
-                max_members: 3,
+                max_workers: 3,
             },
             plan_dir: String::new(),
             session_name: String::new(),

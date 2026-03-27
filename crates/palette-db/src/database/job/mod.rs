@@ -1,5 +1,4 @@
 mod assign_job;
-mod count_active_members;
 mod create_job;
 mod find_assignable_jobs;
 mod get_job;

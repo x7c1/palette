@@ -127,7 +127,7 @@ pub trait DataStore: Send + Sync {
 
     fn find_assignable_jobs(&self) -> Result<Vec<Job>, Box<dyn std::error::Error + Send + Sync>>;
 
-    fn count_active_members(&self) -> Result<usize, Box<dyn std::error::Error + Send + Sync>>;
+    fn count_active_workers(&self) -> Result<usize, Box<dyn std::error::Error + Send + Sync>>;
 
     fn submit_review(
         &self,
