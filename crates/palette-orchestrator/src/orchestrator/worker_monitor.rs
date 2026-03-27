@@ -324,7 +324,10 @@ impl Orchestrator {
     fn check_worker_limit_deadlock(&self, workers: &[WorkerState]) {
         let active = match self.interactor.data_store.count_active_workers() {
             Ok(n) => n,
-            Err(_) => return,
+            Err(e) => {
+                tracing::error!(error = %e, "monitor: failed to count active workers");
+                return;
+            }
         };
         if active < self.docker_config.max_workers {
             return;
@@ -332,7 +335,10 @@ impl Orchestrator {
 
         let assignable = match self.interactor.data_store.find_assignable_jobs() {
             Ok(jobs) => jobs,
-            Err(_) => return,
+            Err(e) => {
+                tracing::error!(error = %e, "monitor: failed to find assignable jobs");
+                return;
+            }
         };
         if assignable.is_empty() {
             return;
