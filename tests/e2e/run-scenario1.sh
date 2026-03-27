@@ -96,22 +96,22 @@ echo "=== Step 4: Check initial Job state ==="
 JOBS=$(curl -sf "$PALETTE_URL/jobs")
 echo "$JOBS" | jq -r '.[] | "\(.id)\t\(.job_type)\t\(.status)\t\(.title)"'
 
-# step-a/craft should have a ready job
-STEP_A_CRAFT_STATUS=$(echo "$JOBS" | jq -r '.[] | select(.title == "craft") | .status' | head -1)
+# step-a should have a job (title is the task key, not the job_type)
+STEP_A_STATUS=$(echo "$JOBS" | jq -r '.[] | select(.title == "step-a") | .status' | head -1)
 # step-b should not have jobs yet
-STEP_B_JOB_COUNT=$(echo "$JOBS" | jq '[.[] | select(.title == "craft")] | length')
+STEP_A_JOB_COUNT=$(echo "$JOBS" | jq '[.[] | select(.title == "step-a")] | length')
 
-if [[ "$STEP_A_CRAFT_STATUS" != "todo" ]]; then
-  echo "FAIL: Expected step-a/craft job status=todo, got '$STEP_A_CRAFT_STATUS'"
+if [[ "$STEP_A_STATUS" != "todo" ]]; then
+  echo "FAIL: Expected step-a job status=todo, got '$STEP_A_STATUS'"
   exit 1
 fi
-echo "PASS: step-a/craft Job is todo"
+echo "PASS: step-a Job is todo"
 
-if [[ "$STEP_B_JOB_COUNT" -ne 1 ]]; then
-  echo "FAIL: Expected only 1 craft job (step-a), got $STEP_B_JOB_COUNT"
+if [[ "$STEP_A_JOB_COUNT" -ne 1 ]]; then
+  echo "FAIL: Expected only 1 step-a job, got $STEP_A_JOB_COUNT"
   exit 1
 fi
-echo "PASS: only step-a/craft Job exists (step-b is pending)"
+echo "PASS: only step-a Job exists (step-b is pending)"
 
 # --- Step 5: Monitor until completion or stall ---
 echo ""
@@ -137,6 +137,21 @@ while true; do
   elapsed=$((iteration * POLL_INTERVAL))
   job_summary=$(echo "$JOBS" | jq -r '[.[] | .status] | group_by(.) | map("\(.[0]):\(length)") | join(" ")' 2>/dev/null || echo "no jobs")
   echo "[${elapsed}s] jobs: ${job_summary} | containers: $(echo "$CONTAINERS" | wc -l | tr -d ' ') | workers: ${WORKERS:-none} | stall: ${stall_count}/${STALL_THRESHOLD}"
+
+  # Check for crashed workers (early failure detection)
+  CRASHED_WORKERS=$(curl -sf "$PALETTE_URL/workers" 2>/dev/null \
+    | jq -r '[.[] | select(.status == "crashed")] | length' 2>/dev/null || echo "0")
+  if [[ "$CRASHED_WORKERS" -gt 0 ]]; then
+    echo ""
+    echo "FAIL: Worker crashed during test execution"
+    echo ""
+    echo "--- Worker state ---"
+    curl -sf "$PALETTE_URL/workers" 2>/dev/null | jq -r '.[] | "  \(.id) role=\(.role) status=\(.status) task=\(.task_id)"' 2>/dev/null || echo "  (no workers)"
+    echo ""
+    echo "--- Palette log (last 30 lines) ---"
+    tail -30 "$LOG_FILE"
+    exit 1
+  fi
 
   # Check for stall
   if [[ "$snapshot" == "$prev_snapshot" ]]; then

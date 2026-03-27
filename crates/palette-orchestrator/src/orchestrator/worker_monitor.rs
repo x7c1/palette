@@ -121,6 +121,9 @@ impl Orchestrator {
 
         // All-member-idle detection (per supervisor)
         self.check_all_members_idle(&workers);
+
+        // Worker-limit deadlock detection
+        self.check_worker_limit_deadlock(&workers);
     }
 
     /// Handle a crashed worker: update status, attempt recovery.
@@ -316,6 +319,42 @@ impl Orchestrator {
         }
     }
 
+    /// Detect when assignable jobs exist but cannot be dispatched because
+    /// the worker limit is reached and no existing worker is making progress.
+    fn check_worker_limit_deadlock(&self, workers: &[WorkerState]) {
+        let active = match self.interactor.data_store.count_active_workers() {
+            Ok(n) => n,
+            Err(_) => return,
+        };
+        if active < self.docker_config.max_workers {
+            return;
+        }
+
+        let assignable = match self.interactor.data_store.find_assignable_jobs() {
+            Ok(jobs) => jobs,
+            Err(_) => return,
+        };
+        if assignable.is_empty() {
+            return;
+        }
+
+        // All worker slots are full and jobs are waiting.
+        // Check if any worker is actively making progress.
+        let any_working = workers
+            .iter()
+            .any(|w| matches!(w.status, WorkerStatus::Working | WorkerStatus::Booting));
+
+        if !any_working {
+            tracing::warn!(
+                active_workers = active,
+                max_workers = self.docker_config.max_workers,
+                assignable_jobs = assignable.len(),
+                "worker limit deadlock: assignable jobs exist but all worker slots are \
+                 occupied and no worker is actively making progress"
+            );
+        }
+    }
+
     /// Detect when all members under a supervisor are idle but work remains.
     fn check_all_members_idle(&self, workers: &[WorkerState]) {
         // Group members by supervisor
@@ -395,6 +434,7 @@ fn rand_u64() -> u64 {
 mod tests {
     use super::*;
     use crate::testing::*;
+    use palette_domain::job::Job;
     use palette_usecase::Interactor;
 
     fn make_orchestrator(
@@ -609,6 +649,92 @@ mod tests {
         let mut retries = HashMap::new();
 
         // With one working member, all-idle should NOT trigger
+        orch.check_all_workers(false, &mut snapshots, &mut retries);
+    }
+
+    // -- Worker-limit deadlock detection tests --
+
+    fn make_todo_job(id: &str) -> Job {
+        crate::testing::make_job(id)
+    }
+
+    #[test]
+    fn deadlock_detected_when_all_slots_full_and_jobs_waiting() {
+        // 3 workers (= max_workers), all idle, with an assignable job
+        let leader1 = make_worker("leader-1", WorkerRole::Leader, WorkerStatus::Idle);
+        let leader2 = make_worker("leader-2", WorkerRole::Leader, WorkerStatus::Idle);
+        let member1 = make_worker("m-1", WorkerRole::Member, WorkerStatus::Idle);
+        let data_store = MockDataStore::with_workers(vec![leader1, leader2, member1]);
+        data_store
+            .assignable_jobs
+            .lock()
+            .unwrap()
+            .push(make_todo_job("R-1"));
+
+        let container = MockContainerRuntime::with_running(&[
+            "container-leader-1",
+            "container-leader-2",
+            "container-m-1",
+        ]);
+        let terminal = MockTerminalSession::new();
+
+        let orch = make_orchestrator(data_store, container, terminal);
+        let mut snapshots = HashMap::new();
+        let mut retries = HashMap::new();
+
+        // This should log a deadlock warning (we verify it doesn't panic)
+        orch.check_all_workers(false, &mut snapshots, &mut retries);
+    }
+
+    #[test]
+    fn deadlock_not_triggered_when_worker_is_making_progress() {
+        // 3 workers (= max_workers), one is Working → no deadlock
+        let leader1 = make_worker("leader-1", WorkerRole::Leader, WorkerStatus::Idle);
+        let leader2 = make_worker("leader-2", WorkerRole::Leader, WorkerStatus::Idle);
+        let member1 = make_worker("m-1", WorkerRole::Member, WorkerStatus::Working);
+        let data_store = MockDataStore::with_workers(vec![leader1, leader2, member1]);
+        data_store
+            .assignable_jobs
+            .lock()
+            .unwrap()
+            .push(make_todo_job("R-1"));
+
+        let container = MockContainerRuntime::with_running(&[
+            "container-leader-1",
+            "container-leader-2",
+            "container-m-1",
+        ]);
+        let terminal = MockTerminalSession::new();
+
+        let orch = make_orchestrator(data_store, container, terminal);
+        let mut snapshots = HashMap::new();
+        let mut retries = HashMap::new();
+
+        // Working member means progress is being made → no deadlock
+        orch.check_all_workers(false, &mut snapshots, &mut retries);
+    }
+
+    #[test]
+    fn deadlock_not_triggered_when_slots_available() {
+        // 2 workers but max_workers=3 → slot available
+        let leader1 = make_worker("leader-1", WorkerRole::Leader, WorkerStatus::Idle);
+        let member1 = make_worker("m-1", WorkerRole::Member, WorkerStatus::Idle);
+        let data_store = MockDataStore::with_workers(vec![leader1, member1]);
+        data_store
+            .assignable_jobs
+            .lock()
+            .unwrap()
+            .push(make_todo_job("R-1"));
+
+        let container =
+            MockContainerRuntime::with_running(&["container-leader-1", "container-m-1"]);
+        let terminal = MockTerminalSession::new();
+
+        let orch = make_orchestrator(data_store, container, terminal);
+        let mut snapshots = HashMap::new();
+        let mut retries = HashMap::new();
+
+        // Slots available → no deadlock
         orch.check_all_workers(false, &mut snapshots, &mut retries);
     }
 
