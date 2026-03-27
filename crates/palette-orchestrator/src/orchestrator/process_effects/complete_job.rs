@@ -201,15 +201,16 @@ impl Orchestrator {
                 if task.job_type == Some(JobType::Craft) {
                     return Ok((vec![], job_effects));
                 }
-                // Review composite: fall through to resolve children
+                // Review composite: supervisor is spawned by activate_child_review_tasks,
+                // so skip the Leader spawn below and go directly to child resolution.
+            } else {
+                // Pure composite task (no job_type): spawn Leader supervisor
+                job_effects.push(RuleEffect::SpawnSupervisor {
+                    task_id: task_id.clone(),
+                    role: WorkerRole::Leader,
+                });
+                task_store.update_task_status(task_id, TaskStatus::InProgress)?;
             }
-
-            // Pure composite task (no job_type): spawn supervisor before InProgress
-            job_effects.push(RuleEffect::SpawnSupervisor {
-                task_id: task_id.clone(),
-                role: WorkerRole::Leader,
-            });
-            task_store.update_task_status(task_id, TaskStatus::InProgress)?;
 
             // Resolve which children can become Ready
             let child_ids: Vec<TaskId> = children.iter().map(|c| c.id.clone()).collect();
