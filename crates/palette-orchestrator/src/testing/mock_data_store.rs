@@ -14,6 +14,7 @@ pub struct MockDataStore {
     pub workers: Mutex<Vec<WorkerState>>,
     pub messages: Mutex<HashMap<WorkerId, Vec<String>>>,
     pub status_updates: Mutex<Vec<(WorkerId, WorkerStatus)>>,
+    pub assignable_jobs: Mutex<Vec<Job>>,
 }
 
 impl MockDataStore {
@@ -22,6 +23,7 @@ impl MockDataStore {
             workers: Mutex::new(Vec::new()),
             messages: Mutex::new(HashMap::new()),
             status_updates: Mutex::new(Vec::new()),
+            assignable_jobs: Mutex::new(Vec::new()),
         }
     }
 
@@ -124,10 +126,10 @@ impl DataStore for MockDataStore {
         unimplemented!()
     }
     fn find_assignable_jobs(&self) -> Result<Vec<Job>, BoxErr> {
-        unimplemented!()
+        Ok(self.assignable_jobs.lock().unwrap().clone())
     }
     fn count_active_workers(&self) -> Result<usize, BoxErr> {
-        unimplemented!()
+        Ok(self.workers.lock().unwrap().len())
     }
     fn submit_review(
         &self,

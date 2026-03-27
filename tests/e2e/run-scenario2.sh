@@ -166,6 +166,16 @@ while true; do
     fi
   fi
 
+  # Check for crashed workers (early failure detection)
+  CRASHED_WORKERS=$(curl -sf "$PALETTE_URL/workers" 2>/dev/null \
+    | jq -r '[.[] | select(.status == "crashed")] | length' 2>/dev/null || echo "0")
+  if [[ "$CRASHED_WORKERS" -gt 0 ]]; then
+    echo ""
+    echo "FAIL: Worker crashed during test execution"
+    dump_diagnostics
+    exit 1
+  fi
+
   # Check for stall
   if [[ "$snapshot" == "$prev_snapshot" ]]; then
     stall_count=$((stall_count + 1))
