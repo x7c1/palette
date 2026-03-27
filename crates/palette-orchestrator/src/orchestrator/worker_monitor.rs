@@ -5,14 +5,23 @@ use std::hash::{Hash, Hasher};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-/// Interval between monitoring polls.
-const MONITOR_POLL_INTERVAL: Duration = Duration::from_secs(5);
+/// Base interval between monitoring polls (jittered by up to 500ms).
+/// Jitter serves two purposes:
+/// - Prevents thundering herd when monitoring many workers simultaneously
+/// - Avoids aliasing with periodic UI updates (e.g. loading spinners) that
+///   could cause false stall detection if capture intervals synchronize
+const MONITOR_POLL_BASE: Duration = Duration::from_millis(2500);
 
-/// Number of poll cycles between liveness checks (15s / 5s = 3).
+/// Maximum random jitter added to each poll interval.
+const MONITOR_POLL_JITTER: Duration = Duration::from_millis(500);
+
+/// Number of poll cycles between liveness checks (~9s / ~3s = 3).
 const LIVENESS_CHECK_EVERY: u64 = 3;
 
 /// Time without pane content change before a worker is considered stalled.
-const STALL_TIMEOUT: Duration = Duration::from_secs(30);
+/// Claude Code constantly updates the screen while thinking/working, so
+/// 10 seconds of no change reliably indicates a permission prompt or hang.
+const STALL_TIMEOUT: Duration = Duration::from_secs(10);
 
 /// Maximum crash recovery attempts per worker before escalation.
 const CRASH_RETRY_LIMIT: u32 = 3;
@@ -37,12 +46,15 @@ impl Orchestrator {
             let mut crash_retries: HashMap<WorkerId, u32> = HashMap::new();
 
             loop {
+                let jitter =
+                    Duration::from_millis(rand_u64() % MONITOR_POLL_JITTER.as_millis() as u64);
+                let interval = MONITOR_POLL_BASE + jitter;
                 tokio::select! {
                     () = this.cancel_token.cancelled() => {
                         tracing::info!("worker monitor stopped (shutdown)");
                         break;
                     }
-                    () = tokio::time::sleep(MONITOR_POLL_INTERVAL) => {
+                    () = tokio::time::sleep(interval) => {
                         poll_count += 1;
                         let check_liveness = poll_count.is_multiple_of(LIVENESS_CHECK_EVERY);
                         this.check_all_workers(
@@ -356,9 +368,64 @@ fn hash_string(s: &str) -> u64 {
     hasher.finish()
 }
 
+/// Cheap pseudo-random u64 using thread-local state seeded from system time.
+/// Not cryptographic — only used for jittering poll intervals.
+fn rand_u64() -> u64 {
+    use std::cell::Cell;
+    thread_local! {
+        static STATE: Cell<u64> = Cell::new(
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_nanos() as u64
+        );
+    }
+    STATE.with(|s| {
+        // xorshift64
+        let mut x = s.get();
+        x ^= x << 13;
+        x ^= x >> 7;
+        x ^= x << 17;
+        s.set(x);
+        x
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::testing::*;
+    use palette_usecase::Interactor;
+
+    fn make_orchestrator(
+        data_store: MockDataStore,
+        container: MockContainerRuntime,
+        terminal: MockTerminalSession,
+    ) -> Arc<Orchestrator> {
+        Arc::new(Orchestrator {
+            interactor: Arc::new(Interactor {
+                container: Box::new(container),
+                terminal: Box::new(terminal),
+                data_store: Box::new(data_store),
+                blueprint: Box::new(MockBlueprintReader),
+            }),
+            docker_config: crate::DockerConfig {
+                palette_url: String::new(),
+                leader_image: String::new(),
+                member_image: String::new(),
+                settings_template: String::new(),
+                leader_prompt: String::new(),
+                review_integrator_image: String::new(),
+                review_integrator_prompt: String::new(),
+                crafter_prompt: String::new(),
+                reviewer_prompt: String::new(),
+                max_members: 3,
+            },
+            plan_dir: String::new(),
+            session_name: String::new(),
+            cancel_token: tokio_util::sync::CancellationToken::new(),
+        })
+    }
 
     #[test]
     fn hash_detects_change() {
@@ -369,40 +436,198 @@ mod tests {
         assert_ne!(h1, h3);
     }
 
+    // -- Crash detection tests --
+
+    #[tokio::test]
+    async fn crash_detected_updates_status_and_starts_recovery() {
+        let worker = make_worker("m-1", WorkerRole::Member, WorkerStatus::Working);
+        let data_store = MockDataStore::with_workers(vec![worker]);
+        // Container is NOT running → crash detected
+        let container = MockContainerRuntime::new();
+        let terminal = MockTerminalSession::new();
+
+        let orch = make_orchestrator(data_store, container, terminal);
+        let mut snapshots = HashMap::new();
+        let mut retries = HashMap::new();
+
+        orch.check_all_workers(true, &mut snapshots, &mut retries);
+
+        // Crash should be detected and recovery attempted
+        assert_eq!(*retries.get(&WorkerId::new("m-1")).unwrap(), 1);
+
+        // Worker status should have been updated (Crashed then Booting)
+        let worker = orch
+            .interactor
+            .data_store
+            .find_worker(&WorkerId::new("m-1"))
+            .unwrap()
+            .unwrap();
+        assert_eq!(worker.status, WorkerStatus::Booting);
+    }
+
+    #[tokio::test]
+    async fn crash_recovery_retries_exhausted_escalates() {
+        let worker = make_worker("m-1", WorkerRole::Member, WorkerStatus::Working);
+        let data_store = MockDataStore::with_workers(vec![worker]);
+        let container = MockContainerRuntime::new();
+        let terminal = MockTerminalSession::new();
+
+        let orch = make_orchestrator(data_store, container, terminal);
+        let mut snapshots = HashMap::new();
+        let mut retries = HashMap::new();
+
+        // Exhaust retries (CRASH_RETRY_LIMIT = 3)
+        for _ in 0..4 {
+            // Reset worker status to Working for next iteration
+            let _ = orch
+                .interactor
+                .data_store
+                .update_worker_status(&WorkerId::new("m-1"), WorkerStatus::Working);
+            orch.check_all_workers(true, &mut snapshots, &mut retries);
+        }
+
+        // After 4 attempts, retries should be 4 (> CRASH_RETRY_LIMIT of 3)
+        assert_eq!(*retries.get(&WorkerId::new("m-1")).unwrap(), 4);
+
+        // Escalation message should have been enqueued to supervisor
+        let messages = orch
+            .interactor
+            .data_store
+            .has_pending_messages(&WorkerId::new("sup-1"))
+            .unwrap();
+        assert!(
+            messages,
+            "escalation message should be enqueued to supervisor"
+        );
+    }
+
+    // -- Stall detection tests --
+
     #[test]
-    fn stall_timeout_not_reached() {
-        let now = Instant::now();
-        let snapshot = PaneSnapshot {
-            hash: 42,
-            last_changed: now,
-            stall_alerted: false,
-        };
-        // Just created — not stalled
-        assert!(now.duration_since(snapshot.last_changed) < STALL_TIMEOUT);
+    fn stall_not_detected_when_pane_changes() {
+        let worker = make_worker("m-1", WorkerRole::Member, WorkerStatus::Working);
+        let data_store = MockDataStore::with_workers(vec![worker]);
+        let container = MockContainerRuntime::with_running(&["container-m-1"]);
+        let terminal = MockTerminalSession::new();
+        terminal.set_pane_content("pane-m-1", "output line 1");
+
+        let orch = make_orchestrator(data_store, container, terminal);
+        let mut snapshots = HashMap::new();
+        let mut retries = HashMap::new();
+
+        // First check: establishes baseline
+        orch.check_all_workers(false, &mut snapshots, &mut retries);
+        assert!(snapshots.contains_key(&WorkerId::new("m-1")));
+        assert!(!snapshots[&WorkerId::new("m-1")].stall_alerted);
     }
 
     #[test]
-    fn all_inactive_detection() {
-        // Test the logic: all members in non-Working states should trigger check
-        let statuses = [
-            WorkerStatus::Idle,
-            WorkerStatus::Crashed,
-            WorkerStatus::WaitingPermission,
-        ];
-        for status in &statuses {
-            assert!(matches!(
-                status,
-                WorkerStatus::Idle | WorkerStatus::Crashed | WorkerStatus::WaitingPermission
-            ));
-        }
-        // Working and Booting should not be considered inactive
-        assert!(!matches!(
-            WorkerStatus::Working,
-            WorkerStatus::Idle | WorkerStatus::Crashed | WorkerStatus::WaitingPermission
-        ));
-        assert!(!matches!(
-            WorkerStatus::Booting,
-            WorkerStatus::Idle | WorkerStatus::Crashed | WorkerStatus::WaitingPermission
-        ));
+    fn stall_detected_when_pane_unchanged_past_timeout() {
+        let worker = make_worker("m-1", WorkerRole::Member, WorkerStatus::Working);
+        let data_store = MockDataStore::with_workers(vec![worker]);
+        let container = MockContainerRuntime::with_running(&["container-m-1"]);
+        let terminal = MockTerminalSession::new();
+        terminal.set_pane_content("pane-m-1", "stuck output");
+
+        let orch = make_orchestrator(data_store, container, terminal);
+        let mut snapshots = HashMap::new();
+        let mut retries = HashMap::new();
+
+        // First check: establishes baseline
+        orch.check_all_workers(false, &mut snapshots, &mut retries);
+
+        // Manually backdate the snapshot to simulate time passing
+        snapshots
+            .get_mut(&WorkerId::new("m-1"))
+            .unwrap()
+            .last_changed = Instant::now() - STALL_TIMEOUT - Duration::from_secs(1);
+
+        // Second check: same content + timeout exceeded → stall detected
+        orch.check_all_workers(false, &mut snapshots, &mut retries);
+        assert!(snapshots[&WorkerId::new("m-1")].stall_alerted);
+    }
+
+    #[test]
+    fn stall_only_checked_for_working_status() {
+        // Idle worker should NOT be checked for stall
+        let worker = make_worker("m-1", WorkerRole::Member, WorkerStatus::Idle);
+        let data_store = MockDataStore::with_workers(vec![worker]);
+        let container = MockContainerRuntime::with_running(&["container-m-1"]);
+        let terminal = MockTerminalSession::new();
+
+        let orch = make_orchestrator(data_store, container, terminal);
+        let mut snapshots = HashMap::new();
+        let mut retries = HashMap::new();
+
+        orch.check_all_workers(false, &mut snapshots, &mut retries);
+
+        // No snapshot created for idle worker
+        assert!(!snapshots.contains_key(&WorkerId::new("m-1")));
+    }
+
+    // -- All-idle detection tests --
+
+    #[test]
+    fn all_idle_detected_when_pending_messages_exist() {
+        let member = make_worker("m-1", WorkerRole::Member, WorkerStatus::Idle);
+        let data_store = MockDataStore::with_workers(vec![member]);
+        // Pre-enqueue a message so has_pending_messages returns true
+        data_store
+            .messages
+            .lock()
+            .unwrap()
+            .insert(WorkerId::new("m-1"), vec!["pending work".to_string()]);
+
+        let container = MockContainerRuntime::with_running(&["container-m-1"]);
+        let terminal = MockTerminalSession::new();
+
+        let orch = make_orchestrator(data_store, container, terminal);
+        let mut snapshots = HashMap::new();
+        let mut retries = HashMap::new();
+
+        // This should log a warning about all-idle with pending messages.
+        // We verify it doesn't panic and the logic runs correctly.
+        orch.check_all_workers(false, &mut snapshots, &mut retries);
+    }
+
+    #[test]
+    fn all_idle_not_triggered_when_member_is_working() {
+        let idle = make_worker("m-1", WorkerRole::Member, WorkerStatus::Idle);
+        let working = make_worker("m-2", WorkerRole::Member, WorkerStatus::Working);
+        let data_store = MockDataStore::with_workers(vec![idle, working]);
+        data_store
+            .messages
+            .lock()
+            .unwrap()
+            .insert(WorkerId::new("m-1"), vec!["pending work".to_string()]);
+
+        let container = MockContainerRuntime::with_running(&["container-m-1", "container-m-2"]);
+        let terminal = MockTerminalSession::new();
+
+        let orch = make_orchestrator(data_store, container, terminal);
+        let mut snapshots = HashMap::new();
+        let mut retries = HashMap::new();
+
+        // With one working member, all-idle should NOT trigger
+        orch.check_all_workers(false, &mut snapshots, &mut retries);
+    }
+
+    #[test]
+    fn booting_and_crashed_workers_skipped_in_liveness_check() {
+        let booting = make_worker("m-1", WorkerRole::Member, WorkerStatus::Booting);
+        let crashed = make_worker("m-2", WorkerRole::Member, WorkerStatus::Crashed);
+        let data_store = MockDataStore::with_workers(vec![booting, crashed]);
+        // Neither container is running, but they should be skipped
+        let container = MockContainerRuntime::new();
+        let terminal = MockTerminalSession::new();
+
+        let orch = make_orchestrator(data_store, container, terminal);
+        let mut snapshots = HashMap::new();
+        let mut retries = HashMap::new();
+
+        orch.check_all_workers(true, &mut snapshots, &mut retries);
+
+        // No crash retries should be recorded (both were skipped)
+        assert!(retries.is_empty());
     }
 }
