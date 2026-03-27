@@ -1,13 +1,13 @@
-use crate::task_store::TaskStoreImpl;
+use crate::task_store::TaskStore;
 use palette_domain::rule::TaskEffect;
 use palette_domain::task::{Task, TaskId, TaskStatus};
 
 pub struct TaskRuleEngine<'a> {
-    store: &'a TaskStoreImpl<'a>,
+    store: &'a TaskStore<'a>,
 }
 
 impl<'a> TaskRuleEngine<'a> {
-    pub fn new(store: &'a TaskStoreImpl<'a>) -> Self {
+    pub fn new(store: &'a TaskStore<'a>) -> Self {
         Self { store }
     }
 

@@ -10,7 +10,7 @@ use palette_domain::server::ServerEvent;
 use palette_domain::task::{TaskId, TaskStatus, TaskTree};
 use palette_domain::workflow::WorkflowId;
 use palette_usecase::data_store::CreateTaskRequest;
-use palette_usecase::task_store::TaskStoreImpl;
+use palette_usecase::task_store::TaskStore;
 use palette_usecase::{RuleEngine, TaskRuleEngine};
 use serde::{Deserialize, Serialize};
 use std::path::Path;
@@ -109,7 +109,7 @@ fn initialize_root(
         .task_ids()
         .map(|id| (id.clone(), TaskStatus::Pending))
         .collect();
-    let task_store = TaskStoreImpl::new(
+    let task_store = TaskStore::new(
         state.interactor.data_store.as_ref(),
         tree.clone(),
         workflow_id.clone(),
@@ -142,7 +142,7 @@ fn initialize_root(
 /// Resolve which tasks become Ready, activate them, and recurse into composites.
 fn activate_ready_children(
     state: &AppState,
-    task_store: &TaskStoreImpl,
+    task_store: &TaskStore,
     task_engine: &TaskRuleEngine<'_>,
     child_ids: &[TaskId],
 ) -> HandlerResult<Vec<RuleEffect>> {

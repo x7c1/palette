@@ -9,15 +9,15 @@ use std::collections::HashMap;
 ///
 /// Reads are served from in-memory data (TaskTree + cached statuses).
 /// Writes go to both the in-memory cache and the data store.
-pub struct TaskStoreImpl<'a> {
+pub struct TaskStore<'a> {
     data_store: &'a dyn DataStore,
     tree: TaskTree,
     workflow_id: WorkflowId,
     statuses: RefCell<HashMap<TaskId, TaskStatus>>,
 }
 
-impl<'a> TaskStoreImpl<'a> {
-    /// Build a TaskStoreImpl from a TaskTree and a map of task statuses.
+impl<'a> TaskStore<'a> {
+    /// Build a TaskStore from a TaskTree and a map of task statuses.
     pub fn new(
         data_store: &'a dyn DataStore,
         tree: TaskTree,
@@ -32,7 +32,7 @@ impl<'a> TaskStoreImpl<'a> {
         }
     }
 
-    /// Build a TaskStoreImpl by reading the Blueprint file and task statuses from the data store.
+    /// Build a TaskStore by reading the Blueprint file and task statuses from the data store.
     pub fn from_interactor(
         data_store: &'a dyn DataStore,
         blueprint: &dyn BlueprintReader,
@@ -87,7 +87,7 @@ impl<'a> TaskStoreImpl<'a> {
     }
 }
 
-impl TaskStoreImpl<'_> {
+impl TaskStore<'_> {
     pub fn get_task(
         &self,
         id: &TaskId,

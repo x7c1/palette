@@ -1,4 +1,4 @@
-use crate::task_store::TaskStoreImpl;
+use crate::task_store::TaskStore;
 use crate::{BlueprintReader, ContainerRuntime, DataStore, TerminalSession};
 use palette_domain::workflow::WorkflowId;
 
@@ -23,8 +23,8 @@ impl Interactor {
     pub fn create_task_store(
         &self,
         workflow_id: &WorkflowId,
-    ) -> Result<TaskStoreImpl<'_>, Box<dyn std::error::Error + Send + Sync>> {
-        TaskStoreImpl::from_interactor(
+    ) -> Result<TaskStore<'_>, Box<dyn std::error::Error + Send + Sync>> {
+        TaskStore::from_interactor(
             self.data_store.as_ref(),
             self.blueprint.as_ref(),
             workflow_id,

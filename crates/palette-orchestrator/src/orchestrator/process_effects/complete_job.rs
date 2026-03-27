@@ -4,7 +4,7 @@ use palette_domain::rule::RuleEffect;
 use palette_domain::task::{TaskId, TaskStatus};
 use palette_domain::worker::WorkerRole;
 use palette_usecase::RuleEngine;
-use palette_usecase::task_store::TaskStoreImpl;
+use palette_usecase::task_store::TaskStore;
 
 impl Orchestrator {
     /// When a Job is Done, check if its task can be completed and cascade.
@@ -74,7 +74,7 @@ impl Orchestrator {
     fn cascade_task_effects(
         &self,
         completed_task_id: &TaskId,
-        task_store: &TaskStoreImpl,
+        task_store: &TaskStore,
     ) -> crate::Result<Vec<RuleEffect>> {
         use palette_domain::rule::TaskEffect;
         use palette_usecase::TaskRuleEngine;
@@ -162,7 +162,7 @@ impl Orchestrator {
     pub(super) fn activate_ready_task(
         &self,
         task_id: &TaskId,
-        task_store: &TaskStoreImpl,
+        task_store: &TaskStore,
         task_engine: &palette_usecase::TaskRuleEngine<'_>,
     ) -> crate::Result<(Vec<palette_domain::rule::TaskEffect>, Vec<RuleEffect>)> {
         let children = task_store.get_child_tasks(task_id)?;
