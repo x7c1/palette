@@ -1,3 +1,4 @@
+mod count_active_workers;
 mod find_supervisor_for_task;
 mod find_worker;
 mod find_worker_by_container;

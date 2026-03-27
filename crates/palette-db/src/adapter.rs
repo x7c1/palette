@@ -153,8 +153,8 @@ impl DataStore for Database {
         Ok(Database::find_assignable_jobs(self)?)
     }
 
-    fn count_active_members(&self) -> Result<usize, Box<dyn std::error::Error + Send + Sync>> {
-        Ok(Database::count_active_members(self)?)
+    fn count_active_workers(&self) -> Result<usize, Box<dyn std::error::Error + Send + Sync>> {
+        Ok(Database::count_active_workers(self)?)
     }
 
     fn submit_review(

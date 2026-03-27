@@ -126,7 +126,7 @@ impl DataStore for MockDataStore {
     fn find_assignable_jobs(&self) -> Result<Vec<Job>, BoxErr> {
         unimplemented!()
     }
-    fn count_active_members(&self) -> Result<usize, BoxErr> {
+    fn count_active_workers(&self) -> Result<usize, BoxErr> {
         unimplemented!()
     }
     fn submit_review(
