@@ -5,10 +5,17 @@ use std::hash::{Hash, Hasher};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-/// Interval between monitoring polls.
-const MONITOR_POLL_INTERVAL: Duration = Duration::from_secs(5);
+/// Base interval between monitoring polls (jittered by up to 500ms).
+/// Jitter serves two purposes:
+/// - Prevents thundering herd when monitoring many workers simultaneously
+/// - Avoids aliasing with periodic UI updates (e.g. loading spinners) that
+///   could cause false stall detection if capture intervals synchronize
+const MONITOR_POLL_BASE: Duration = Duration::from_millis(2500);
 
-/// Number of poll cycles between liveness checks (15s / 5s = 3).
+/// Maximum random jitter added to each poll interval.
+const MONITOR_POLL_JITTER: Duration = Duration::from_millis(500);
+
+/// Number of poll cycles between liveness checks (~9s / ~3s = 3).
 const LIVENESS_CHECK_EVERY: u64 = 3;
 
 /// Time without pane content change before a worker is considered stalled.
@@ -37,12 +44,15 @@ impl Orchestrator {
             let mut crash_retries: HashMap<WorkerId, u32> = HashMap::new();
 
             loop {
+                let jitter =
+                    Duration::from_millis(rand_u64() % MONITOR_POLL_JITTER.as_millis() as u64);
+                let interval = MONITOR_POLL_BASE + jitter;
                 tokio::select! {
                     () = this.cancel_token.cancelled() => {
                         tracing::info!("worker monitor stopped (shutdown)");
                         break;
                     }
-                    () = tokio::time::sleep(MONITOR_POLL_INTERVAL) => {
+                    () = tokio::time::sleep(interval) => {
                         poll_count += 1;
                         let check_liveness = poll_count.is_multiple_of(LIVENESS_CHECK_EVERY);
                         this.check_all_workers(
@@ -354,6 +364,29 @@ fn hash_string(s: &str) -> u64 {
     let mut hasher = std::hash::DefaultHasher::new();
     s.hash(&mut hasher);
     hasher.finish()
+}
+
+/// Cheap pseudo-random u64 using thread-local state seeded from system time.
+/// Not cryptographic — only used for jittering poll intervals.
+fn rand_u64() -> u64 {
+    use std::cell::Cell;
+    thread_local! {
+        static STATE: Cell<u64> = Cell::new(
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_nanos() as u64
+        );
+    }
+    STATE.with(|s| {
+        // xorshift64
+        let mut x = s.get();
+        x ^= x << 13;
+        x ^= x >> 7;
+        x ^= x << 17;
+        s.set(x);
+        x
+    })
 }
 
 #[cfg(test)]
