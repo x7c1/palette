@@ -32,14 +32,14 @@ impl Orchestrator {
     /// Returns `Break` if the worker is ready (activated) or gone, `Continue` to keep polling.
     fn poll_readiness(self: &Arc<Self>, target_id: &WorkerId) -> ControlFlow<()> {
         let terminal_target = {
-            let worker = match self.db.find_worker(target_id) {
+            let worker = match self.interactor.data_store.find_worker(target_id) {
                 Ok(Some(w)) => w,
                 _ => return ControlFlow::Break(()),
             };
             worker.terminal_target.clone()
         };
 
-        let pane_content = match self.tmux.capture_pane(&terminal_target) {
+        let pane_content = match self.interactor.terminal.capture_pane(&terminal_target) {
             Ok(content) => content,
             Err(e) => {
                 tracing::warn!(
@@ -66,13 +66,19 @@ impl Orchestrator {
     /// Transition a booting worker to Idle and deliver queued messages.
     fn activate_worker(self: &Arc<Self>, target_id: &WorkerId) {
         let is_booting = self
-            .db
+            .interactor
+            .data_store
             .find_worker(target_id)
             .ok()
             .flatten()
             .is_some_and(|a| a.status == WorkerStatus::Booting);
 
-        if is_booting && let Err(e) = self.db.update_worker_status(target_id, WorkerStatus::Idle) {
+        if is_booting
+            && let Err(e) = self
+                .interactor
+                .data_store
+                .update_worker_status(target_id, WorkerStatus::Idle)
+        {
             tracing::error!(error = %e, target_id = %target_id, "failed to update worker status to idle");
         }
         let _ = self.deliver_queued_messages(target_id);

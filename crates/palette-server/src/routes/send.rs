@@ -26,8 +26,13 @@ pub async fn handle_send(
             state.event_log.lock().await.push(record);
 
             let terminal_target = TerminalTarget::new(target);
-            send_tmux_keys(&state.tmux, &terminal_target, &req.message, req.no_enter)
-                .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+            send_tmux_keys(
+                state.interactor.terminal.as_ref(),
+                &terminal_target,
+                &req.message,
+                req.no_enter,
+            )
+            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
             return Ok(Json(SendResponse { queued: false }));
         }
         return Err((
@@ -41,7 +46,8 @@ pub async fn handle_send(
 
     // Check if target can receive input — idle or waiting for permission
     let worker = state
-        .db
+        .interactor
+        .data_store
         .find_worker(&member_id)
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
@@ -59,7 +65,8 @@ pub async fn handle_send(
     // orthogonal to queued instruction messages. Without this bypass, a pending
     // instruction blocks the approval key, creating a deadlock.
     let has_pending = state
-        .db
+        .interactor
+        .data_store
         .has_pending_messages(&member_id)
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
@@ -76,19 +83,26 @@ pub async fn handle_send(
             })?;
 
         tracing::info!(target = %terminal_target, message = %req.message, no_enter = req.no_enter, "sending keys via tmux");
-        send_tmux_keys(&state.tmux, &terminal_target, &req.message, req.no_enter)
-            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+        send_tmux_keys(
+            state.interactor.terminal.as_ref(),
+            &terminal_target,
+            &req.message,
+            req.no_enter,
+        )
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
         // Update status to Working
         let _ = state
-            .db
+            .interactor
+            .data_store
             .update_worker_status(&member_id, WorkerStatus::Working);
 
         false
     } else {
         // Queue the message
         state
-            .db
+            .interactor
+            .data_store
             .enqueue_message(&member_id, &req.message)
             .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
         tracing::info!(member_id = member_id_str.as_str(), "message queued");
@@ -110,14 +124,14 @@ pub async fn handle_send(
 }
 
 fn send_tmux_keys(
-    tmux: &palette_tmux::TmuxManager,
+    terminal: &dyn palette_usecase::TerminalSession,
     target: &TerminalTarget,
     message: &str,
     no_enter: bool,
-) -> palette_tmux::Result<()> {
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     if no_enter {
-        tmux.send_keys_no_enter(target, message)
+        terminal.send_keys_no_enter(target, message)
     } else {
-        tmux.send_keys(target, message)
+        terminal.send_keys(target, message)
     }
 }

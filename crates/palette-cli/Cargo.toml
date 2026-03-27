@@ -13,9 +13,11 @@ axum.workspace = true
 palette-db = { path = "../palette-db" }
 palette-docker = { path = "../palette-docker" }
 palette-domain = { path = "../palette-domain" }
+palette-fs = { path = "../palette-fs" }
 palette-orchestrator = { path = "../palette-orchestrator" }
 palette-server = { path = "../palette-server" }
 palette-tmux = { path = "../palette-tmux" }
+palette-usecase = { path = "../palette-usecase" }
 serde.workspace = true
 serde_json.workspace = true
 tokio.workspace = true

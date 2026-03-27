@@ -1,19 +1,23 @@
-use super::TaskEffect;
-use crate::task::{Task, TaskId, TaskStatus, TaskStore};
+use crate::task_store::TaskStore;
+use palette_domain::rule::TaskEffect;
+use palette_domain::task::{Task, TaskId, TaskStatus};
 
-pub struct TaskRuleEngine<S> {
-    store: S,
+pub struct TaskRuleEngine<'a> {
+    store: &'a TaskStore<'a>,
 }
 
-impl<S: TaskStore> TaskRuleEngine<S> {
-    pub fn new(store: S) -> Self {
+impl<'a> TaskRuleEngine<'a> {
+    pub fn new(store: &'a TaskStore<'a>) -> Self {
         Self { store }
     }
 
     /// Determine which tasks in a workflow should transition to Ready.
     /// A task becomes Ready when all of its dependencies are Done
     /// and its parent is active (Ready or InProgress).
-    pub fn resolve_ready_tasks(&self, task_ids: &[TaskId]) -> Result<Vec<TaskEffect>, S::Error> {
+    pub fn resolve_ready_tasks(
+        &self,
+        task_ids: &[TaskId],
+    ) -> Result<Vec<TaskEffect>, Box<dyn std::error::Error + Send + Sync>> {
         task_ids
             .iter()
             .filter_map(|id| self.check_ready(id).transpose())
@@ -22,7 +26,10 @@ impl<S: TaskStore> TaskRuleEngine<S> {
 
     /// When a task completes, check if sibling tasks can now become Ready
     /// and whether the parent task can also complete.
-    pub fn on_task_completed(&self, task_id: &TaskId) -> Result<Vec<TaskEffect>, S::Error> {
+    pub fn on_task_completed(
+        &self,
+        task_id: &TaskId,
+    ) -> Result<Vec<TaskEffect>, Box<dyn std::error::Error + Send + Sync>> {
         let Some(task) = self.store.get_task(task_id)? else {
             return Ok(vec![]);
         };
@@ -53,7 +60,10 @@ impl<S: TaskStore> TaskRuleEngine<S> {
 
     /// Check if a single task should transition to Ready.
     /// Returns Some(effect) if the task should become Ready, None otherwise.
-    fn check_ready(&self, task_id: &TaskId) -> Result<Option<TaskEffect>, S::Error> {
+    fn check_ready(
+        &self,
+        task_id: &TaskId,
+    ) -> Result<Option<TaskEffect>, Box<dyn std::error::Error + Send + Sync>> {
         let Some(task) = self.store.get_task(task_id)? else {
             return Ok(None);
         };
@@ -72,7 +82,10 @@ impl<S: TaskStore> TaskRuleEngine<S> {
         }))
     }
 
-    fn parent_is_active(&self, task: &Task) -> Result<bool, S::Error> {
+    fn parent_is_active(
+        &self,
+        task: &Task,
+    ) -> Result<bool, Box<dyn std::error::Error + Send + Sync>> {
         let Some(ref parent_id) = task.parent_id else {
             return Ok(true);
         };
@@ -82,7 +95,7 @@ impl<S: TaskStore> TaskRuleEngine<S> {
             .is_some_and(|p| p.status == TaskStatus::Ready || p.status == TaskStatus::InProgress))
     }
 
-    fn all_deps_done(&self, task: &Task) -> Result<bool, S::Error> {
+    fn all_deps_done(&self, task: &Task) -> Result<bool, Box<dyn std::error::Error + Send + Sync>> {
         for dep_id in &task.depends_on {
             let done = self
                 .store

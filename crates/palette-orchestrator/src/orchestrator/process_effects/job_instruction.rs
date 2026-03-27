@@ -1,7 +1,5 @@
-use palette_docker::WorkspaceVolume;
 use palette_domain::job::{Job, JobType};
-use palette_domain::task::TaskStore;
-use palette_service::TaskStoreImpl;
+use palette_usecase::container_runtime::WorkspaceVolume;
 
 use super::Orchestrator;
 
@@ -36,10 +34,12 @@ impl Orchestrator {
             JobType::Review => {
                 // Review is a child of craft, so find the parent task's craft job
                 let task_id = &job.task_id;
-                let Some(task_state) = self.db.get_task_state(task_id)? else {
+                let Some(task_state) = self.interactor.data_store.get_task_state(task_id)? else {
                     return Ok(None);
                 };
-                let task_store = TaskStoreImpl::from_db(&self.db, &task_state.workflow_id)
+                let task_store = self
+                    .interactor
+                    .create_task_store(&task_state.workflow_id)
                     .map_err(|e| crate::Error::Internal(e.to_string()))?;
                 let Some(task) = task_store.get_task(task_id)? else {
                     return Ok(None);
@@ -47,7 +47,8 @@ impl Orchestrator {
                 let Some(ref parent_id) = task.parent_id else {
                     return Ok(None);
                 };
-                let Some(craft_job) = self.db.get_job_by_task_id(parent_id)? else {
+                let Some(craft_job) = self.interactor.data_store.get_job_by_task_id(parent_id)?
+                else {
                     return Ok(None);
                 };
                 Ok(Some(WorkspaceVolume {

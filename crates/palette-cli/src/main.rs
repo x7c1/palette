@@ -3,11 +3,12 @@ mod config;
 use config::Config;
 use palette_db::Database;
 use palette_docker::DockerManager;
-use palette_domain::rule::RuleEngine;
 use palette_domain::terminal::TerminalSessionName;
+use palette_fs::FsBlueprintReader;
 use palette_orchestrator::Orchestrator;
 use palette_server::AppState;
 use palette_tmux::TmuxManager;
+use palette_usecase::Interactor;
 use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -29,20 +30,27 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     tracing::info!(?config, "loaded config");
 
     let session_name = TerminalSessionName::new(&config.tmux.session_name);
-    let tmux = Arc::new(TmuxManager::new(session_name.clone()));
+    let tmux = TmuxManager::new(session_name.clone());
     tmux.create_session(&session_name)?;
 
-    let db = Arc::new(Database::open(Path::new(&config.db_path))?);
+    let db = Database::open(Path::new(&config.db_path))?;
     tracing::info!(db_path = %config.db_path, "database initialized");
 
     let docker = DockerManager::new(config.docker.palette_url.clone());
 
+    // Assemble the Interactor with concrete implementations
+    let interactor = Arc::new(Interactor {
+        container: Box::new(docker),
+        terminal: Box::new(tmux),
+        data_store: Box::new(db),
+        blueprint: Box::new(FsBlueprintReader),
+    });
+
     let (event_tx, event_rx) = tokio::sync::mpsc::unbounded_channel();
 
     let state = Arc::new(AppState {
-        tmux: Arc::clone(&tmux),
-        db: Arc::clone(&db),
-        rules: RuleEngine::new(Arc::clone(&db), config.rules.max_review_rounds),
+        interactor: Arc::clone(&interactor),
+        max_review_rounds: config.rules.max_review_rounds,
         event_log: tokio::sync::Mutex::new(Vec::new()),
         event_tx,
     });
@@ -51,11 +59,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     std::fs::create_dir_all(&config.plan_dir)?;
 
     let orchestrator = Arc::new(Orchestrator {
-        db: Arc::clone(&db),
-        docker,
+        interactor: Arc::clone(&interactor),
         docker_config: config.docker,
         plan_dir: config.plan_dir.clone(),
-        tmux: Arc::clone(&tmux),
         session_name: config.tmux.session_name.clone(),
         cancel_token: tokio_util::sync::CancellationToken::new(),
     });

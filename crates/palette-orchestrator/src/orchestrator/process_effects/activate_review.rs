@@ -1,9 +1,8 @@
 use super::Orchestrator;
 use palette_domain::job::{JobId, JobStatus, JobType, ReviewStatus};
 use palette_domain::rule::RuleEffect;
-use palette_domain::task::{TaskId, TaskStatus, TaskStore};
+use palette_domain::task::{TaskId, TaskStatus};
 use palette_domain::worker::WorkerRole;
-use palette_service::TaskStoreImpl;
 
 impl Orchestrator {
     /// When a Craft Job reaches InReview, activate its child review tasks.
@@ -12,15 +11,17 @@ impl Orchestrator {
         &self,
         craft_job_id: &JobId,
     ) -> crate::Result<Vec<RuleEffect>> {
-        let Some(job) = self.db.get_job(craft_job_id)? else {
+        let Some(job) = self.interactor.data_store.get_job(craft_job_id)? else {
             return Ok(vec![]);
         };
         let task_id = &job.task_id;
-        let Some(task_state) = self.db.get_task_state(task_id)? else {
+        let Some(task_state) = self.interactor.data_store.get_task_state(task_id)? else {
             return Ok(vec![]);
         };
 
-        let task_store = TaskStoreImpl::from_db(&self.db, &task_state.workflow_id)
+        let task_store = self
+            .interactor
+            .create_task_store(&task_state.workflow_id)
             .map_err(|e| crate::Error::Internal(e.to_string()))?;
 
         let children = task_store.get_child_tasks(task_id)?;
@@ -38,7 +39,7 @@ impl Orchestrator {
         let mut job_effects = Vec::new();
 
         // First pass: activate Pending children (initial review cycle)
-        use palette_domain::rule::TaskRuleEngine;
+        use palette_usecase::TaskRuleEngine;
         let task_engine = TaskRuleEngine::new(&task_store);
         let child_ids: Vec<TaskId> = children.iter().map(|c| c.id.clone()).collect();
         let task_effects = task_engine.resolve_ready_tasks(&child_ids)?;
@@ -83,7 +84,7 @@ impl Orchestrator {
 
         // Second pass: reactivate ChangesRequested review jobs (re-review cycle).
         for child in &children {
-            let Some(review_job) = self.db.get_job_by_task_id(&child.id)? else {
+            let Some(review_job) = self.interactor.data_store.get_job_by_task_id(&child.id)? else {
                 continue;
             };
             if !matches!(
@@ -97,7 +98,8 @@ impl Orchestrator {
                 );
                 continue;
             }
-            self.db
+            self.interactor
+                .data_store
                 .update_job_status(&review_job.id, JobStatus::Review(ReviewStatus::InProgress))?;
             tracing::info!(
                 job_id = %review_job.id,

@@ -1,5 +1,4 @@
 use super::Orchestrator;
-use palette_docker::{DockerManager, is_container_running};
 use palette_domain::worker::{WorkerId, WorkerRole, WorkerState, WorkerStatus};
 use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
@@ -73,7 +72,7 @@ impl Orchestrator {
         pane_snapshots: &mut HashMap<WorkerId, PaneSnapshot>,
         crash_retries: &mut HashMap<WorkerId, u32>,
     ) {
-        let workers = match self.db.list_all_workers() {
+        let workers = match self.interactor.data_store.list_all_workers() {
             Ok(w) => w,
             Err(e) => {
                 tracing::error!(error = %e, "monitor: failed to list workers");
@@ -94,7 +93,12 @@ impl Orchestrator {
                 // Already handling crash recovery
                 WorkerStatus::Crashed => continue,
                 WorkerStatus::Working | WorkerStatus::Idle | WorkerStatus::WaitingPermission => {
-                    if check_liveness && !is_container_running(worker.container_id.as_ref()) {
+                    if check_liveness
+                        && !self
+                            .interactor
+                            .container
+                            .is_container_running(worker.container_id.as_ref())
+                    {
                         self.handle_crash(worker, crash_retries);
                         continue;
                     }
@@ -120,7 +124,8 @@ impl Orchestrator {
         );
 
         if let Err(e) = self
-            .db
+            .interactor
+            .data_store
             .update_worker_status(&worker.id, WorkerStatus::Crashed)
         {
             tracing::error!(error = %e, worker_id = %worker.id, "failed to update status to Crashed");
@@ -142,7 +147,11 @@ impl Orchestrator {
         );
 
         // Restart the stopped container
-        if let Err(e) = self.docker.start_container(&worker.container_id) {
+        if let Err(e) = self
+            .interactor
+            .container
+            .start_container(&worker.container_id)
+        {
             tracing::error!(
                 error = %e,
                 worker_id = %worker.id,
@@ -153,7 +162,11 @@ impl Orchestrator {
 
         // Send resume or fresh start command
         let cmd = if let Some(ref session_id) = worker.session_id {
-            DockerManager::claude_resume_command(&worker.container_id, session_id, worker.role)
+            self.interactor.container.claude_resume_command(
+                &worker.container_id,
+                session_id,
+                worker.role,
+            )
         } else {
             // No session_id: start fresh with prompt file
             let prompt_file = if worker.role.is_supervisor() {
@@ -162,10 +175,18 @@ impl Orchestrator {
             } else {
                 "/home/agent/prompt.md"
             };
-            DockerManager::claude_exec_command(&worker.container_id, prompt_file, worker.role)
+            self.interactor.container.claude_exec_command(
+                &worker.container_id,
+                prompt_file,
+                worker.role,
+            )
         };
 
-        if let Err(e) = self.tmux.send_keys(&worker.terminal_target, &cmd) {
+        if let Err(e) = self
+            .interactor
+            .terminal
+            .send_keys(&worker.terminal_target, &cmd)
+        {
             tracing::error!(
                 error = %e,
                 worker_id = %worker.id,
@@ -176,7 +197,8 @@ impl Orchestrator {
 
         // Update status to Booting and let readiness watcher handle the rest
         if let Err(e) = self
-            .db
+            .interactor
+            .data_store
             .update_worker_status(&worker.id, WorkerStatus::Booting)
         {
             tracing::error!(error = %e, worker_id = %worker.id, "failed to update status to Booting");
@@ -191,7 +213,11 @@ impl Orchestrator {
                 "[alert] member={} type=crash_recovery attempt={}",
                 worker.id, *retries,
             );
-            if let Err(e) = self.db.enqueue_message(&worker.supervisor_id, &alert) {
+            if let Err(e) = self
+                .interactor
+                .data_store
+                .enqueue_message(&worker.supervisor_id, &alert)
+            {
                 tracing::error!(error = %e, "failed to enqueue crash alert for supervisor");
             }
         }
@@ -206,7 +232,11 @@ impl Orchestrator {
                 "[alert] member={} type=crash_unrecoverable retries_exhausted=true",
                 worker.id,
             );
-            if let Err(e) = self.db.enqueue_message(&worker.supervisor_id, &alert) {
+            if let Err(e) = self
+                .interactor
+                .data_store
+                .enqueue_message(&worker.supervisor_id, &alert)
+            {
                 tracing::error!(error = %e, "failed to enqueue crash escalation");
             }
             tracing::error!(
@@ -229,7 +259,11 @@ impl Orchestrator {
             return;
         }
 
-        let pane_content = match self.tmux.capture_pane(&worker.terminal_target) {
+        let pane_content = match self
+            .interactor
+            .terminal
+            .capture_pane(&worker.terminal_target)
+        {
             Ok(content) => content,
             Err(e) => {
                 tracing::warn!(
@@ -297,9 +331,12 @@ impl Orchestrator {
             }
 
             // Check if any member has pending messages (indicates undelivered work)
-            let has_pending = members
-                .iter()
-                .any(|m| self.db.has_pending_messages(&m.id).unwrap_or(false));
+            let has_pending = members.iter().any(|m| {
+                self.interactor
+                    .data_store
+                    .has_pending_messages(&m.id)
+                    .unwrap_or(false)
+            });
 
             if has_pending {
                 tracing::warn!(

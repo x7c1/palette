@@ -1,13 +1,13 @@
 mod helper;
 
 use helper::{capture_pane, spawn_server, test_session_name_with_guard, wid};
-use palette_db::InsertWorkerRequest;
 use palette_domain::task::TaskId;
 use palette_domain::terminal::TerminalTarget;
 use palette_domain::worker::{ContainerId, WorkerRole, WorkerStatus};
 use palette_domain::workflow::WorkflowId;
 use palette_server::api_types::SendRequest;
 use palette_tmux::TmuxManager;
+use palette_usecase::data_store::InsertWorkerRequest;
 use serde_json::json;
 
 fn register_worker(
@@ -17,9 +17,13 @@ fn register_worker(
     status: WorkerStatus,
 ) {
     let wf_id = WorkflowId::new("wf-test");
-    let _ = state.db.create_workflow(&wf_id, "test/blueprint.yaml");
+    let _ = state
+        .interactor
+        .data_store
+        .create_workflow(&wf_id, "test/blueprint.yaml");
     state
-        .db
+        .interactor
+        .data_store
         .insert_worker(&InsertWorkerRequest {
             id: wid(id),
             workflow_id: wf_id,

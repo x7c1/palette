@@ -13,7 +13,8 @@ pub async fn handle_list_jobs(
 ) -> Result<Json<Vec<JobResponse>>, (StatusCode, String)> {
     let filter = api_filter.into();
     let jobs = state
-        .db
+        .interactor
+        .data_store
         .list_jobs(&filter)
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
     Ok(Json(jobs.into_iter().map(JobResponse::from).collect()))

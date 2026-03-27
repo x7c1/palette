@@ -3,13 +3,14 @@
 use palette_db::Database;
 use palette_docker::DockerManager;
 use palette_domain::job::JobId;
-use palette_domain::rule::RuleEngine;
 use palette_domain::terminal::{TerminalSessionName, TerminalTarget};
 use palette_domain::worker::WorkerId;
+use palette_fs::FsBlueprintReader;
 use palette_orchestrator::{DockerConfig, Orchestrator};
 use palette_server::api_types::{CreateJobRequest, JobStatus, JobType, UpdateJobRequest};
 use palette_server::{AppState, create_router};
 use palette_tmux::TmuxManager;
+use palette_usecase::Interactor;
 use std::process::Command;
 use std::sync::Arc;
 
@@ -49,12 +50,12 @@ pub fn jid(s: &str) -> JobId {
 }
 
 /// Insert a worker record to satisfy FK constraints.
-pub fn setup_worker(db: &Database, worker_id: &str) {
-    use palette_db::InsertWorkerRequest;
+pub fn setup_worker(db: &dyn palette_usecase::DataStore, worker_id: &str) {
     use palette_domain::task::TaskId;
     use palette_domain::terminal::TerminalTarget;
     use palette_domain::worker::*;
     use palette_domain::workflow::WorkflowId;
+    use palette_usecase::data_store::InsertWorkerRequest;
 
     let wf_id = WorkflowId::new("wf-test");
     let _ = db.create_workflow(&wf_id, "test/blueprint.yaml");
@@ -113,27 +114,30 @@ pub async fn spawn_server(
     tmux: TmuxManager,
     session_name: &TerminalSessionName,
 ) -> (String, Arc<AppState>, tokio::sync::oneshot::Sender<()>) {
-    let db = Arc::new(Database::open_in_memory().unwrap());
-    let tmux = Arc::new(tmux);
+    let db = Database::open_in_memory().unwrap();
     let docker = DockerManager::new("http://127.0.0.1:0".to_string());
+
+    let interactor = Arc::new(Interactor {
+        container: Box::new(docker),
+        terminal: Box::new(tmux),
+        data_store: Box::new(db),
+        blueprint: Box::new(FsBlueprintReader),
+    });
 
     let (event_tx, event_rx) = tokio::sync::mpsc::unbounded_channel();
 
     let state = Arc::new(AppState {
-        tmux: Arc::clone(&tmux),
-        db: Arc::clone(&db),
-        rules: RuleEngine::new(Arc::clone(&db), 5),
+        interactor: Arc::clone(&interactor),
+        max_review_rounds: 5,
         event_log: tokio::sync::Mutex::new(Vec::new()),
         event_tx,
     });
 
     // Start orchestrator event loop
     let orchestrator = Arc::new(Orchestrator {
-        db: Arc::clone(&db),
-        docker,
+        interactor: Arc::clone(&interactor),
         docker_config: test_docker_config(),
         plan_dir: String::new(),
-        tmux: Arc::clone(&tmux),
         session_name: session_name.to_string(),
         cancel_token: tokio_util::sync::CancellationToken::new(),
     });

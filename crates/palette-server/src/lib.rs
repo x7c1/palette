@@ -3,16 +3,13 @@ pub mod api_types;
 mod routes;
 
 use axum::Router;
-use palette_db::Database;
-use palette_domain::rule::RuleEngine;
 use palette_domain::server::ServerEvent;
-use palette_tmux::TmuxManager;
+use palette_usecase::Interactor;
 use std::sync::Arc;
 
 pub struct AppState {
-    pub tmux: Arc<TmuxManager>,
-    pub db: Arc<Database>,
-    pub rules: RuleEngine<Arc<Database>>,
+    pub interactor: Arc<Interactor>,
+    pub max_review_rounds: u32,
     pub event_log: tokio::sync::Mutex<Vec<EventRecord>>,
     pub event_tx: tokio::sync::mpsc::UnboundedSender<ServerEvent>,
 }

@@ -14,7 +14,8 @@ pub async fn handle_get_submissions(
 ) -> Result<Json<Vec<ReviewSubmissionResponse>>, (StatusCode, String)> {
     let review_job_id = JobId::new(review_job_id);
     let submissions = state
-        .db
+        .interactor
+        .data_store
         .get_review_submissions(&review_job_id)
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
     Ok(Json(

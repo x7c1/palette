@@ -7,6 +7,7 @@ use axum::{
 };
 use palette_domain::job::{JobId, JobType};
 use palette_domain::server::ServerEvent;
+use palette_usecase::RuleEngine;
 use std::sync::Arc;
 
 pub async fn handle_submit_review(
@@ -19,7 +20,8 @@ pub async fn handle_submit_review(
 
     // Verify the job exists and is a review
     let job = state
-        .db
+        .interactor
+        .data_store
         .get_job(&review_job_id)
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
         .ok_or_else(|| {
@@ -37,15 +39,18 @@ pub async fn handle_submit_review(
     }
 
     let submission = state
-        .db
+        .interactor
+        .data_store
         .submit_review(&review_job_id, &req)
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     // Apply rule engine
-    let effects = state
-        .rules
-        .on_review_submitted(&review_job_id, &submission)
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    let effects = RuleEngine::new(
+        state.interactor.data_store.as_ref(),
+        state.max_review_rounds,
+    )
+    .on_review_submitted(&review_job_id, &submission)
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     for effect in &effects {
         tracing::info!(?effect, "review rule engine effect");
@@ -53,15 +58,21 @@ pub async fn handle_submit_review(
 
     // Notify the review member's supervisor about review results
     if let Some(ref assignee) = job.assignee_id
-        && let Ok(Some(member)) = state.db.find_worker(assignee)
-        && let Ok(Some(supervisor)) = state.db.find_worker(&member.supervisor_id)
+        && let Ok(Some(member)) = state.interactor.data_store.find_worker(assignee)
+        && let Ok(Some(supervisor)) = state
+            .interactor
+            .data_store
+            .find_worker(&member.supervisor_id)
     {
         let verdict_str = match submission.verdict {
             palette_domain::review::Verdict::Approved => "approved",
             palette_domain::review::Verdict::ChangesRequested => "changes_requested",
         };
         let notification = format!("[event] review={review_job_id} type={verdict_str}");
-        let _ = state.db.enqueue_message(&supervisor.id, &notification);
+        let _ = state
+            .interactor
+            .data_store
+            .enqueue_message(&supervisor.id, &notification);
         tracing::info!(
             review_job_id = %review_job_id,
             verdict = verdict_str,

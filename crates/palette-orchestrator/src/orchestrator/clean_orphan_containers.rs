@@ -8,7 +8,7 @@ impl Orchestrator {
     /// corresponding worker record in the database — typically left over from
     /// a previous crash or forced exit.
     pub fn clean_orphan_containers(&self) {
-        let managed = match self.docker.list_managed_containers() {
+        let managed = match self.interactor.container.list_managed_containers() {
             Ok(ids) => ids,
             Err(e) => {
                 tracing::warn!(error = %e, "failed to list managed containers for orphan cleanup");
@@ -19,7 +19,7 @@ impl Orchestrator {
             return;
         }
 
-        let known: HashSet<String> = match self.db.list_all_workers() {
+        let known: HashSet<String> = match self.interactor.data_store.list_all_workers() {
             Ok(workers) => workers
                 .into_iter()
                 .map(|w| w.container_id.to_string())
@@ -41,10 +41,10 @@ impl Orchestrator {
                 continue;
             }
             tracing::info!(container_id = %container_id, "removing orphan container");
-            if let Err(e) = self.docker.stop_container(container_id) {
+            if let Err(e) = self.interactor.container.stop_container(container_id) {
                 tracing::warn!(container_id = %container_id, error = %e, "failed to stop orphan container");
             }
-            if let Err(e) = self.docker.remove_container(container_id) {
+            if let Err(e) = self.interactor.container.remove_container(container_id) {
                 tracing::warn!(container_id = %container_id, error = %e, "failed to remove orphan container");
             }
             orphan_count += 1;

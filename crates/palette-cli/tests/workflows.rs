@@ -72,35 +72,40 @@ async fn workflow_start_creates_task_tree() {
     use palette_domain::task::TaskStatus;
 
     let root = state
-        .db
+        .interactor
+        .data_store
         .get_task_state(&tid(wf_id, "feature-x"))
         .unwrap()
         .unwrap();
     assert_eq!(root.status, TaskStatus::InProgress);
 
     let planning = state
-        .db
+        .interactor
+        .data_store
         .get_task_state(&tid(wf_id, "feature-x/planning"))
         .unwrap()
         .unwrap();
     assert_eq!(planning.status, TaskStatus::InProgress);
 
     let execution = state
-        .db
+        .interactor
+        .data_store
         .get_task_state(&tid(wf_id, "feature-x/execution"))
         .unwrap()
         .unwrap();
     assert_eq!(execution.status, TaskStatus::Pending);
 
     let api_plan = state
-        .db
+        .interactor
+        .data_store
         .get_task_state(&tid(wf_id, "feature-x/planning/api-plan"))
         .unwrap()
         .unwrap();
     assert_eq!(api_plan.status, TaskStatus::InProgress);
 
     let api_plan_review = state
-        .db
+        .interactor
+        .data_store
         .get_task_state(&tid(wf_id, "feature-x/planning/api-plan/api-plan-review"))
         .unwrap()
         .unwrap();
@@ -109,7 +114,8 @@ async fn workflow_start_creates_task_tree() {
     // Verify that a Job was created for the craft task (api-plan)
     use palette_domain::job::JobFilter;
     let jobs = state
-        .db
+        .interactor
+        .data_store
         .list_jobs(&JobFilter {
             job_type: None,
             status: None,
@@ -209,7 +215,8 @@ task:
 
     // step-a should have a Job in Todo state (craft)
     let jobs = state
-        .db
+        .interactor
+        .data_store
         .list_jobs(&JobFilter {
             job_type: None,
             status: None,
@@ -221,7 +228,8 @@ task:
 
     // step-b should be Pending (depends on step-a)
     let step_b = state
-        .db
+        .interactor
+        .data_store
         .get_task_state(&tid(&wf_id, "cascade-test/step-b"))
         .unwrap()
         .unwrap();
@@ -230,15 +238,18 @@ task:
     // Simulate Job completion by sending a StatusChanged(Done) effect to the orchestrator.
     let job_id = &jobs[0].id;
     state
-        .db
+        .interactor
+        .data_store
         .update_job_status(job_id, JStatus::Craft(CraftStatus::InProgress))
         .unwrap();
     state
-        .db
+        .interactor
+        .data_store
         .update_job_status(job_id, JStatus::Craft(CraftStatus::InReview))
         .unwrap();
     state
-        .db
+        .interactor
+        .data_store
         .update_job_status(job_id, JStatus::Craft(CraftStatus::Done))
         .unwrap();
 
@@ -256,7 +267,8 @@ task:
 
     // Verify: step-a task should be Done
     let step_a = state
-        .db
+        .interactor
+        .data_store
         .get_task_state(&tid(&wf_id, "cascade-test/step-a"))
         .unwrap()
         .unwrap();
@@ -264,7 +276,8 @@ task:
 
     // Verify: step-b should now be Ready (dependency satisfied)
     let step_b = state
-        .db
+        .interactor
+        .data_store
         .get_task_state(&tid(&wf_id, "cascade-test/step-b"))
         .unwrap()
         .unwrap();
@@ -272,7 +285,8 @@ task:
 
     // Now complete step-b's job to trigger full workflow completion
     let step_b_job = state
-        .db
+        .interactor
+        .data_store
         .create_job(&palette_domain::job::CreateJobRequest {
             id: Some(palette_domain::job::JobId::new("C-step-b")),
             task_id: tid(&wf_id, "cascade-test/step-b"),
@@ -285,15 +299,18 @@ task:
         })
         .unwrap();
     state
-        .db
+        .interactor
+        .data_store
         .update_job_status(&step_b_job.id, JStatus::Craft(CraftStatus::InProgress))
         .unwrap();
     state
-        .db
+        .interactor
+        .data_store
         .update_job_status(&step_b_job.id, JStatus::Craft(CraftStatus::InReview))
         .unwrap();
     state
-        .db
+        .interactor
+        .data_store
         .update_job_status(&step_b_job.id, JStatus::Craft(CraftStatus::Done))
         .unwrap();
 
@@ -307,7 +324,8 @@ task:
 
     // step-b task should be Done
     let step_b = state
-        .db
+        .interactor
+        .data_store
         .get_task_state(&tid(&wf_id, "cascade-test/step-b"))
         .unwrap()
         .unwrap();
@@ -315,7 +333,8 @@ task:
 
     // Root task should be Done (all children complete)
     let root = state
-        .db
+        .interactor
+        .data_store
         .get_task_state(&tid(&wf_id, "cascade-test"))
         .unwrap()
         .unwrap();
@@ -369,13 +388,18 @@ task:
     use palette_domain::task::TaskStatus;
 
     // craft task should have a Job in Todo state (composite craft with children)
-    let jobs = state.db.list_jobs(&JobFilter::default()).unwrap();
+    let jobs = state
+        .interactor
+        .data_store
+        .list_jobs(&JobFilter::default())
+        .unwrap();
     assert_eq!(jobs.len(), 1, "only craft job should exist");
     let craft_job_id = &jobs[0].id;
 
     // craft/review should be Pending (not activated until craft job reaches InReview)
     let review_task = state
-        .db
+        .interactor
+        .data_store
         .get_task_state(&tid(&wf_id, "ir-test/craft/review"))
         .unwrap()
         .unwrap();
@@ -383,11 +407,13 @@ task:
 
     // Simulate craft job reaching InReview (member stop hook path)
     state
-        .db
+        .interactor
+        .data_store
         .update_job_status(craft_job_id, JStatus::Craft(CraftStatus::InProgress))
         .unwrap();
     state
-        .db
+        .interactor
+        .data_store
         .update_job_status(craft_job_id, JStatus::Craft(CraftStatus::InReview))
         .unwrap();
 
@@ -404,7 +430,8 @@ task:
 
     // Verify: craft task should still be InProgress (not completed yet, has children)
     let craft_task = state
-        .db
+        .interactor
+        .data_store
         .get_task_state(&tid(&wf_id, "ir-test/craft"))
         .unwrap()
         .unwrap();
@@ -412,14 +439,19 @@ task:
 
     // Verify: craft/review task should now be Ready (activated by InReview)
     let review_task = state
-        .db
+        .interactor
+        .data_store
         .get_task_state(&tid(&wf_id, "ir-test/craft/review"))
         .unwrap()
         .unwrap();
     assert_eq!(review_task.status, TaskStatus::Ready);
 
     // Verify: a review Job was created for craft/review
-    let all_jobs = state.db.list_jobs(&JobFilter::default()).unwrap();
+    let all_jobs = state
+        .interactor
+        .data_store
+        .list_jobs(&JobFilter::default())
+        .unwrap();
     let review_jobs: Vec<_> = all_jobs
         .iter()
         .filter(|j| j.task_id.to_string() == tid(&wf_id, "ir-test/craft/review").to_string())
@@ -433,7 +465,8 @@ task:
 
     // step-b should still be Pending (craft task is not completed yet)
     let step_b = state
-        .db
+        .interactor
+        .data_store
         .get_task_state(&tid(&wf_id, "ir-test/step-b"))
         .unwrap()
         .unwrap();
@@ -452,8 +485,8 @@ async fn full_task_tree_cascade_with_review() {
     let client = reqwest::Client::new();
 
     // Insert workers needed for assign_job FK constraints
-    helper::setup_worker(&state.db, "reviewer-a");
-    helper::setup_worker(&state.db, "reviewer-b");
+    helper::setup_worker(&*state.interactor.data_store, "reviewer-a");
+    helper::setup_worker(&*state.interactor.data_store, "reviewer-b");
 
     let yaml = r#"
 task:
@@ -497,14 +530,19 @@ task:
     let wait = || tokio::time::sleep(tokio::time::Duration::from_millis(200));
 
     // --- Phase 1: step-a craft InReview ---
-    let jobs = state.db.list_jobs(&JobFilter::default()).unwrap();
+    let jobs = state
+        .interactor
+        .data_store
+        .list_jobs(&JobFilter::default())
+        .unwrap();
     assert_eq!(jobs.len(), 1);
     let craft_a_id = jobs[0].id.clone();
 
     // step-a is InProgress (composite craft with review child, job created)
     assert_eq!(
         state
-            .db
+            .interactor
+            .data_store
             .get_task_state(&tid(&wf_id, "full/step-a"))
             .unwrap()
             .unwrap()
@@ -513,11 +551,13 @@ task:
     );
 
     state
-        .db
+        .interactor
+        .data_store
         .update_job_status(&craft_a_id, JStatus::Craft(CraftStatus::InProgress))
         .unwrap();
     state
-        .db
+        .interactor
+        .data_store
         .update_job_status(&craft_a_id, JStatus::Craft(CraftStatus::InReview))
         .unwrap();
 
@@ -531,7 +571,8 @@ task:
     // step-a stays InProgress (craft job is InReview, review child activated)
     assert_eq!(
         state
-            .db
+            .interactor
+            .data_store
             .get_task_state(&tid(&wf_id, "full/step-a"))
             .unwrap()
             .unwrap()
@@ -542,7 +583,8 @@ task:
     // step-a/review should be Ready with a review Job
     assert_eq!(
         state
-            .db
+            .interactor
+            .data_store
             .get_task_state(&tid(&wf_id, "full/step-a/review"))
             .unwrap()
             .unwrap()
@@ -550,7 +592,11 @@ task:
         TaskStatus::Ready
     );
 
-    let all_jobs = state.db.list_jobs(&JobFilter::default()).unwrap();
+    let all_jobs = state
+        .interactor
+        .data_store
+        .list_jobs(&JobFilter::default())
+        .unwrap();
     let review_a_job = all_jobs
         .iter()
         .find(|j| j.task_id.as_ref() == tid(&wf_id, "full/step-a/review").to_string())
@@ -560,7 +606,8 @@ task:
     // step-b still Pending
     assert_eq!(
         state
-            .db
+            .interactor
+            .data_store
             .get_task_state(&tid(&wf_id, "full/step-b"))
             .unwrap()
             .unwrap()
@@ -570,7 +617,8 @@ task:
 
     // --- Phase 2: step-a review Done (approved) ---
     state
-        .db
+        .interactor
+        .data_store
         .assign_job(
             &review_a_id,
             &palette_domain::worker::WorkerId::new("reviewer-a"),
@@ -580,7 +628,8 @@ task:
 
     use palette_domain::review::{SubmitReviewRequest, Verdict};
     let sub = state
-        .db
+        .interactor
+        .data_store
         .submit_review(
             &review_a_id,
             &SubmitReviewRequest {
@@ -591,7 +640,10 @@ task:
         )
         .unwrap();
 
-    let engine = palette_domain::rule::RuleEngine::new(&*state.db, 5);
+    let engine = palette_usecase::RuleEngine::new(
+        state.interactor.data_store.as_ref(),
+        state.max_review_rounds,
+    );
     let effects = engine.on_review_submitted(&review_a_id, &sub).unwrap();
 
     let _ = state.event_tx.send(ServerEvent::ProcessEffects { effects });
@@ -600,7 +652,8 @@ task:
     // step-a/review task should be Completed
     assert_eq!(
         state
-            .db
+            .interactor
+            .data_store
             .get_task_state(&tid(&wf_id, "full/step-a/review"))
             .unwrap()
             .unwrap()
@@ -611,7 +664,8 @@ task:
     // step-a (craft task) should be Completed (review child done + own job Done)
     assert_eq!(
         state
-            .db
+            .interactor
+            .data_store
             .get_task_state(&tid(&wf_id, "full/step-a"))
             .unwrap()
             .unwrap()
@@ -621,14 +675,19 @@ task:
 
     // step-b should now be InProgress (composite craft, dependency satisfied)
     let step_b_status = state
-        .db
+        .interactor
+        .data_store
         .get_task_state(&tid(&wf_id, "full/step-b"))
         .unwrap()
         .unwrap()
         .status;
     assert_eq!(step_b_status, TaskStatus::InProgress);
 
-    let all_jobs = state.db.list_jobs(&JobFilter::default()).unwrap();
+    let all_jobs = state
+        .interactor
+        .data_store
+        .list_jobs(&JobFilter::default())
+        .unwrap();
     let craft_b_job = all_jobs
         .iter()
         .find(|j| j.task_id.as_ref() == tid(&wf_id, "full/step-b").to_string())
@@ -637,11 +696,13 @@ task:
 
     // --- Phase 3: step-b craft InReview → review → Done → workflow complete ---
     state
-        .db
+        .interactor
+        .data_store
         .update_job_status(&craft_b_id, JStatus::Craft(CraftStatus::InProgress))
         .unwrap();
     state
-        .db
+        .interactor
+        .data_store
         .update_job_status(&craft_b_id, JStatus::Craft(CraftStatus::InReview))
         .unwrap();
 
@@ -655,7 +716,8 @@ task:
     // step-b/review should be Ready with a Job
     assert_eq!(
         state
-            .db
+            .interactor
+            .data_store
             .get_task_state(&tid(&wf_id, "full/step-b/review"))
             .unwrap()
             .unwrap()
@@ -663,7 +725,11 @@ task:
         TaskStatus::Ready
     );
 
-    let all_jobs = state.db.list_jobs(&JobFilter::default()).unwrap();
+    let all_jobs = state
+        .interactor
+        .data_store
+        .list_jobs(&JobFilter::default())
+        .unwrap();
     let review_b_job = all_jobs
         .iter()
         .find(|j| j.task_id.as_ref() == tid(&wf_id, "full/step-b/review").to_string())
@@ -672,7 +738,8 @@ task:
 
     // Approve step-b review
     state
-        .db
+        .interactor
+        .data_store
         .assign_job(
             &review_b_id,
             &palette_domain::worker::WorkerId::new("reviewer-b"),
@@ -681,7 +748,8 @@ task:
         .unwrap();
 
     let sub = state
-        .db
+        .interactor
+        .data_store
         .submit_review(
             &review_b_id,
             &SubmitReviewRequest {
@@ -699,7 +767,8 @@ task:
     // step-b task (craft) should be Completed
     assert_eq!(
         state
-            .db
+            .interactor
+            .data_store
             .get_task_state(&tid(&wf_id, "full/step-b"))
             .unwrap()
             .unwrap()
@@ -710,7 +779,8 @@ task:
     // Root task Completed
     assert_eq!(
         state
-            .db
+            .interactor
+            .data_store
             .get_task_state(&tid(&wf_id, "full"))
             .unwrap()
             .unwrap()
@@ -719,7 +789,12 @@ task:
     );
 
     // Workflow completed
-    let wf = state.db.get_workflow(&workflow_id).unwrap().unwrap();
+    let wf = state
+        .interactor
+        .data_store
+        .get_workflow(&workflow_id)
+        .unwrap()
+        .unwrap();
     assert_eq!(wf.status, WorkflowStatus::Completed);
 }
 
@@ -734,8 +809,8 @@ async fn craft_waits_for_all_reviews_before_done() {
     let client = reqwest::Client::new();
 
     // Insert workers needed for assign_job FK constraints
-    helper::setup_worker(&state.db, "reviewer-1");
-    helper::setup_worker(&state.db, "reviewer-2");
+    helper::setup_worker(&*state.interactor.data_store, "reviewer-1");
+    helper::setup_worker(&*state.interactor.data_store, "reviewer-2");
 
     // Blueprint: craft with two review children
     let yaml = r#"
@@ -771,14 +846,20 @@ task:
     let wait = || tokio::time::sleep(tokio::time::Duration::from_millis(200));
 
     // Craft → InReview
-    let jobs = state.db.list_jobs(&JobFilter::default()).unwrap();
+    let jobs = state
+        .interactor
+        .data_store
+        .list_jobs(&JobFilter::default())
+        .unwrap();
     let craft_id = jobs[0].id.clone();
     state
-        .db
+        .interactor
+        .data_store
         .update_job_status(&craft_id, JStatus::Craft(CraftStatus::InProgress))
         .unwrap();
     state
-        .db
+        .interactor
+        .data_store
         .update_job_status(&craft_id, JStatus::Craft(CraftStatus::InReview))
         .unwrap();
 
@@ -791,7 +872,11 @@ task:
 
     // Both review jobs should be created (review-1 and review-2 as children of craft)
     let review_prefix = format!("{wf_id}:multi-review/craft/review");
-    let all_jobs = state.db.list_jobs(&JobFilter::default()).unwrap();
+    let all_jobs = state
+        .interactor
+        .data_store
+        .list_jobs(&JobFilter::default())
+        .unwrap();
     let mut review_jobs: Vec<_> = all_jobs
         .iter()
         .filter(|j| j.task_id.as_ref().starts_with(&review_prefix))
@@ -804,7 +889,8 @@ task:
 
     // Approve only review-1
     state
-        .db
+        .interactor
+        .data_store
         .assign_job(
             &review_1_id,
             &palette_domain::worker::WorkerId::new("reviewer-1"),
@@ -814,7 +900,8 @@ task:
 
     use palette_domain::review::{SubmitReviewRequest, Verdict};
     let sub = state
-        .db
+        .interactor
+        .data_store
         .submit_review(
             &review_1_id,
             &SubmitReviewRequest {
@@ -825,13 +912,21 @@ task:
         )
         .unwrap();
 
-    let engine = palette_domain::rule::RuleEngine::new(&*state.db, 5);
+    let engine = palette_usecase::RuleEngine::new(
+        state.interactor.data_store.as_ref(),
+        state.max_review_rounds,
+    );
     let effects = engine.on_review_submitted(&review_1_id, &sub).unwrap();
     let _ = state.event_tx.send(ServerEvent::ProcessEffects { effects });
     wait().await;
 
     // Craft job should still be InReview (not Done) because review-2 is not yet approved
-    let craft_job = state.db.get_job(&craft_id).unwrap().unwrap();
+    let craft_job = state
+        .interactor
+        .data_store
+        .get_job(&craft_id)
+        .unwrap()
+        .unwrap();
     assert_eq!(
         craft_job.status,
         JStatus::Craft(CraftStatus::InReview),
@@ -840,7 +935,8 @@ task:
 
     // Now approve review-2
     state
-        .db
+        .interactor
+        .data_store
         .assign_job(
             &review_2_id,
             &palette_domain::worker::WorkerId::new("reviewer-2"),
@@ -849,7 +945,8 @@ task:
         .unwrap();
 
     let sub = state
-        .db
+        .interactor
+        .data_store
         .submit_review(
             &review_2_id,
             &SubmitReviewRequest {
@@ -865,7 +962,12 @@ task:
     wait().await;
 
     // NOW craft job should be Done
-    let craft_job = state.db.get_job(&craft_id).unwrap().unwrap();
+    let craft_job = state
+        .interactor
+        .data_store
+        .get_job(&craft_id)
+        .unwrap()
+        .unwrap();
     assert_eq!(
         craft_job.status,
         JStatus::Craft(CraftStatus::Done),
@@ -905,7 +1007,7 @@ task:
     let (addr, state, _shutdown_tx) = spawn_server(tmux, &session_name).await;
 
     // Insert worker needed for assign_job FK constraint
-    helper::setup_worker(&state.db, "reviewer-1");
+    helper::setup_worker(&*state.interactor.data_store, "reviewer-1");
 
     // Start workflow
     let client = reqwest::Client::new();
@@ -925,7 +1027,8 @@ task:
 
     // Get craft job
     let craft_job = state
-        .db
+        .interactor
+        .data_store
         .list_jobs(&palette_domain::job::JobFilter {
             job_type: Some(palette_domain::job::JobType::Craft),
             ..Default::default()
@@ -936,11 +1039,13 @@ task:
 
     // Simulate craft: Todo → InProgress → InReview
     state
-        .db
+        .interactor
+        .data_store
         .update_job_status(&craft_id, JStatus::Craft(CraftStatus::InProgress))
         .unwrap();
     state
-        .db
+        .interactor
+        .data_store
         .update_job_status(&craft_id, JStatus::Craft(CraftStatus::InReview))
         .unwrap();
     let _ = state.event_tx.send(ServerEvent::ProcessEffects {
@@ -952,7 +1057,8 @@ task:
 
     // Review job should be created
     let review_jobs = state
-        .db
+        .interactor
+        .data_store
         .list_jobs(&palette_domain::job::JobFilter {
             job_type: Some(palette_domain::job::JobType::Review),
             ..Default::default()
@@ -963,7 +1069,8 @@ task:
 
     // Assign reviewer and submit changes_requested
     state
-        .db
+        .interactor
+        .data_store
         .assign_job(
             &review_id,
             &palette_domain::worker::WorkerId::new("reviewer-1"),
@@ -972,7 +1079,8 @@ task:
         .unwrap();
 
     let sub = state
-        .db
+        .interactor
+        .data_store
         .submit_review(
             &review_id,
             &SubmitReviewRequest {
@@ -983,19 +1091,34 @@ task:
         )
         .unwrap();
 
-    let effects = state.rules.on_review_submitted(&review_id, &sub).unwrap();
+    let effects = palette_usecase::RuleEngine::new(
+        state.interactor.data_store.as_ref(),
+        state.max_review_rounds,
+    )
+    .on_review_submitted(&review_id, &sub)
+    .unwrap();
     let _ = state.event_tx.send(ServerEvent::ProcessEffects { effects });
     wait().await;
 
     // Verify: review job should be ChangesRequested
-    let review_job = state.db.get_job(&review_id).unwrap().unwrap();
+    let review_job = state
+        .interactor
+        .data_store
+        .get_job(&review_id)
+        .unwrap()
+        .unwrap();
     assert_eq!(
         review_job.status,
         JStatus::Review(ReviewStatus::ChangesRequested)
     );
 
     // Verify: craft job should be back to InProgress
-    let craft_job = state.db.get_job(&craft_id).unwrap().unwrap();
+    let craft_job = state
+        .interactor
+        .data_store
+        .get_job(&craft_id)
+        .unwrap()
+        .unwrap();
     assert_eq!(
         craft_job.status,
         JStatus::Craft(CraftStatus::InProgress),
@@ -1004,7 +1127,8 @@ task:
 
     // Crafter fixes and goes back to InReview
     state
-        .db
+        .interactor
+        .data_store
         .update_job_status(&craft_id, JStatus::Craft(CraftStatus::InReview))
         .unwrap();
     let _ = state.event_tx.send(ServerEvent::ProcessEffects {
@@ -1015,7 +1139,12 @@ task:
     wait().await;
 
     // Verify: review job should be reactivated to InProgress
-    let review_job = state.db.get_job(&review_id).unwrap().unwrap();
+    let review_job = state
+        .interactor
+        .data_store
+        .get_job(&review_id)
+        .unwrap()
+        .unwrap();
     assert_eq!(
         review_job.status,
         JStatus::Review(ReviewStatus::InProgress),
@@ -1024,7 +1153,8 @@ task:
 
     // Reviewer approves this time
     let sub2 = state
-        .db
+        .interactor
+        .data_store
         .submit_review(
             &review_id,
             &SubmitReviewRequest {
@@ -1035,15 +1165,30 @@ task:
         )
         .unwrap();
 
-    let effects = state.rules.on_review_submitted(&review_id, &sub2).unwrap();
+    let effects = palette_usecase::RuleEngine::new(
+        state.interactor.data_store.as_ref(),
+        state.max_review_rounds,
+    )
+    .on_review_submitted(&review_id, &sub2)
+    .unwrap();
     let _ = state.event_tx.send(ServerEvent::ProcessEffects { effects });
     wait().await;
 
     // Verify: review job Done, craft job Done, craft task Completed
-    let review_job = state.db.get_job(&review_id).unwrap().unwrap();
+    let review_job = state
+        .interactor
+        .data_store
+        .get_job(&review_id)
+        .unwrap()
+        .unwrap();
     assert_eq!(review_job.status, JStatus::Review(ReviewStatus::Done));
 
-    let craft_job = state.db.get_job(&craft_id).unwrap().unwrap();
+    let craft_job = state
+        .interactor
+        .data_store
+        .get_job(&craft_id)
+        .unwrap()
+        .unwrap();
     assert_eq!(
         craft_job.status,
         JStatus::Craft(CraftStatus::Done),
@@ -1051,7 +1196,8 @@ task:
     );
 
     let craft_task = state
-        .db
+        .interactor
+        .data_store
         .get_task_state(&tid(&wf_id, "cr-test/impl"))
         .unwrap()
         .unwrap();

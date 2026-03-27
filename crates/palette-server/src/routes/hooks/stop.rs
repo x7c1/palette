@@ -34,17 +34,22 @@ pub async fn handle_stop(
     // Save session_id from Claude Code payload (needed for --resume recovery)
     if let Some(session_id) = payload.get("session_id").and_then(|v| v.as_str()) {
         let sid = WorkerSessionId::new(session_id);
-        if let Err(e) = state.db.update_worker_session_id(&member_id, &sid) {
+        if let Err(e) = state
+            .interactor
+            .data_store
+            .update_worker_session_id(&member_id, &sid)
+        {
             tracing::error!(error = %e, "failed to save session_id");
         }
     }
 
     // Update worker status to Idle and resolve supervisor ID
     let supervisor_id = {
-        match state.db.find_worker(&member_id) {
+        match state.interactor.data_store.find_worker(&member_id) {
             Ok(Some(worker)) => {
                 if let Err(e) = state
-                    .db
+                    .interactor
+                    .data_store
                     .update_worker_status(&member_id, WorkerStatus::Idle)
                 {
                     tracing::error!(error = %e, "failed to update worker status to idle");
@@ -62,7 +67,8 @@ pub async fn handle_stop(
     // Transition member's in_progress jobs and notify supervisors
     if let Some(ref supervisor_id) = supervisor_id {
         let member_jobs = state
-            .db
+            .interactor
+            .data_store
             .list_jobs(&JobFilter {
                 assignee_id: Some(member_id.clone()),
                 ..Default::default()
@@ -86,7 +92,11 @@ pub async fn handle_stop(
                         );
                         continue;
                     }
-                    if let Err(e) = state.db.update_job_status(&job.id, in_review) {
+                    if let Err(e) = state
+                        .interactor
+                        .data_store
+                        .update_job_status(&job.id, in_review)
+                    {
                         tracing::error!(job_id = %job.id, error = %e, "failed to transition job to in_review");
                         continue;
                     }
@@ -99,7 +109,8 @@ pub async fn handle_stop(
                     // Only notify ReviewIntegrator supervisors (for multi-review aggregation).
                     // Single-review results are handled mechanically by the orchestrator.
                     let is_review_integrator = state
-                        .db
+                        .interactor
+                        .data_store
                         .find_worker(supervisor_id)
                         .ok()
                         .flatten()
@@ -111,7 +122,11 @@ pub async fn handle_stop(
                             "[review] member={} job={} type=review_complete message: {}",
                             member_id, job.id, last_message,
                         );
-                        if let Err(e) = state.db.enqueue_message(supervisor_id, &report_msg) {
+                        if let Err(e) = state
+                            .interactor
+                            .data_store
+                            .enqueue_message(supervisor_id, &report_msg)
+                        {
                             tracing::error!(error = %e, "failed to enqueue review report");
                         }
                     }
@@ -122,7 +137,11 @@ pub async fn handle_stop(
         if member_jobs.is_empty() {
             // No jobs to transition; just send a stop event
             let notification = format!("[event] member={member_id} type=stop");
-            if let Err(e) = state.db.enqueue_message(supervisor_id, &notification) {
+            if let Err(e) = state
+                .interactor
+                .data_store
+                .enqueue_message(supervisor_id, &notification)
+            {
                 tracing::error!(error = %e, "failed to enqueue stop notification for supervisor");
             }
         }

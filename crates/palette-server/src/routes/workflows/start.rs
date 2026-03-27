@@ -5,13 +5,13 @@ use axum::{
     http::StatusCode,
     response::{IntoResponse, Response},
 };
-use palette_db::CreateTaskRequest;
-use palette_domain::rule::{RuleEffect, TaskEffect, TaskRuleEngine};
+use palette_domain::rule::{RuleEffect, TaskEffect};
 use palette_domain::server::ServerEvent;
-use palette_domain::task::{TaskId, TaskStatus, TaskStore, TaskTree};
+use palette_domain::task::{TaskId, TaskStatus, TaskTree};
 use palette_domain::workflow::WorkflowId;
-use palette_fs::read_blueprint;
-use palette_service::TaskStoreImpl;
+use palette_usecase::data_store::CreateTaskRequest;
+use palette_usecase::task_store::TaskStore;
+use palette_usecase::{RuleEngine, TaskRuleEngine};
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 use std::sync::Arc;
@@ -31,11 +31,12 @@ pub async fn handle_start_workflow(
     State(state): State<Arc<AppState>>,
     Json(req): Json<StartWorkflowRequest>,
 ) -> Result<Response, (StatusCode, String)> {
-    let blueprint = read_blueprint(Path::new(&req.blueprint_path))
-        .map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))?;
-
     let workflow_id = WorkflowId::generate();
-    let tree = blueprint.to_task_tree(&workflow_id);
+    let tree = state
+        .interactor
+        .blueprint
+        .read_blueprint(Path::new(&req.blueprint_path), &workflow_id)
+        .map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))?;
 
     let task_count = register_tasks(&state, &workflow_id, &tree, &req.blueprint_path)?;
 
@@ -76,14 +77,16 @@ fn register_tasks(
     blueprint_path: &str,
 ) -> HandlerResult<usize> {
     state
-        .db
+        .interactor
+        .data_store
         .create_workflow(workflow_id, blueprint_path)
         .map_err(internal_err)?;
 
     let mut count = 0;
     for task_id in tree.task_ids() {
         state
-            .db
+            .interactor
+            .data_store
             .create_task(&CreateTaskRequest {
                 id: task_id.clone(),
                 workflow_id: workflow_id.clone(),
@@ -106,7 +109,12 @@ fn initialize_root(
         .task_ids()
         .map(|id| (id.clone(), TaskStatus::Pending))
         .collect();
-    let task_store = TaskStoreImpl::new(&state.db, tree.clone(), workflow_id.clone(), statuses);
+    let task_store = TaskStore::new(
+        state.interactor.data_store.as_ref(),
+        tree.clone(),
+        workflow_id.clone(),
+        statuses,
+    );
     let task_engine = TaskRuleEngine::new(&task_store);
 
     // Root task: spawn supervisor, then → InProgress
@@ -134,8 +142,8 @@ fn initialize_root(
 /// Resolve which tasks become Ready, activate them, and recurse into composites.
 fn activate_ready_children(
     state: &AppState,
-    task_store: &TaskStoreImpl<'_>,
-    task_engine: &TaskRuleEngine<&TaskStoreImpl<'_>>,
+    task_store: &TaskStore,
+    task_engine: &TaskRuleEngine<'_>,
     child_ids: &[TaskId],
 ) -> HandlerResult<Vec<RuleEffect>> {
     let task_effects = task_engine
@@ -209,7 +217,8 @@ fn create_job(
     job_type: palette_domain::job::JobType,
 ) -> HandlerResult<Vec<RuleEffect>> {
     let job = state
-        .db
+        .interactor
+        .data_store
         .create_job(&palette_domain::job::CreateJobRequest {
             id: Some(palette_domain::job::JobId::generate(job_type)),
             task_id: task.id.clone(),
@@ -222,7 +231,9 @@ fn create_job(
         })
         .map_err(internal_err)?;
 
-    let effects = state.rules.on_job_created(&job.id).map_err(internal_err)?;
+    let effects = RuleEngine::new(state.interactor.data_store.as_ref(), 0)
+        .on_job_created(&job.id)
+        .map_err(internal_err)?;
 
     tracing::info!(
         job_id = %job.id,
