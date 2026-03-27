@@ -19,7 +19,9 @@ const MONITOR_POLL_JITTER: Duration = Duration::from_millis(500);
 const LIVENESS_CHECK_EVERY: u64 = 3;
 
 /// Time without pane content change before a worker is considered stalled.
-const STALL_TIMEOUT: Duration = Duration::from_secs(30);
+/// Claude Code constantly updates the screen while thinking/working, so
+/// 10 seconds of no change reliably indicates a permission prompt or hang.
+const STALL_TIMEOUT: Duration = Duration::from_secs(10);
 
 /// Maximum crash recovery attempts per worker before escalation.
 const CRASH_RETRY_LIMIT: u32 = 3;
