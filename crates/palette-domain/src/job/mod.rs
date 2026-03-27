@@ -20,9 +20,6 @@ pub use job_id::JobId;
 mod job_status;
 pub use job_status::JobStatus;
 
-mod job_store;
-pub use job_store::JobStore;
-
 mod job_type;
 pub use job_type::JobType;
 

@@ -6,8 +6,8 @@ use axum::{
     http::StatusCode,
 };
 use palette_domain::job::{JobId, JobType};
-use palette_domain::rule::RuleEngine;
 use palette_domain::server::ServerEvent;
+use palette_usecase::RuleEngine;
 use std::sync::Arc;
 
 pub async fn handle_submit_review(

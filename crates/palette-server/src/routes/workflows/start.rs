@@ -5,12 +5,13 @@ use axum::{
     http::StatusCode,
     response::{IntoResponse, Response},
 };
-use palette_domain::rule::{RuleEffect, RuleEngine, TaskEffect, TaskRuleEngine};
+use palette_domain::rule::{RuleEffect, TaskEffect};
 use palette_domain::server::ServerEvent;
-use palette_domain::task::{TaskId, TaskStatus, TaskStore, TaskTree};
+use palette_domain::task::{TaskId, TaskStatus, TaskTree};
 use palette_domain::workflow::WorkflowId;
 use palette_usecase::data_store::CreateTaskRequest;
 use palette_usecase::task_store::TaskStoreImpl;
+use palette_usecase::{RuleEngine, TaskRuleEngine};
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 use std::sync::Arc;
@@ -142,7 +143,7 @@ fn initialize_root(
 fn activate_ready_children(
     state: &AppState,
     task_store: &TaskStoreImpl,
-    task_engine: &TaskRuleEngine<&TaskStoreImpl>,
+    task_engine: &TaskRuleEngine<'_>,
     child_ids: &[TaskId],
 ) -> HandlerResult<Vec<RuleEffect>> {
     let task_effects = task_engine

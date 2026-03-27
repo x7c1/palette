@@ -2,8 +2,9 @@ use crate::AppState;
 use crate::api_types::{JobResponse, UpdateJobRequest};
 use axum::{Json, extract::State, http::StatusCode};
 use palette_domain::job::{CraftStatus, JobId, JobStatus};
-use palette_domain::rule::{RuleEffect, RuleEngine, validate_transition};
+use palette_domain::rule::{RuleEffect, validate_transition};
 use palette_domain::server::ServerEvent;
+use palette_usecase::RuleEngine;
 use std::sync::Arc;
 
 pub async fn handle_update_job(

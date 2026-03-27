@@ -1,8 +1,9 @@
 use super::Orchestrator;
 use palette_domain::job::{JobId, JobType};
-use palette_domain::rule::{RuleEffect, RuleEngine};
-use palette_domain::task::{TaskId, TaskStatus, TaskStore};
+use palette_domain::rule::RuleEffect;
+use palette_domain::task::{TaskId, TaskStatus};
 use palette_domain::worker::WorkerRole;
+use palette_usecase::RuleEngine;
 use palette_usecase::task_store::TaskStoreImpl;
 
 impl Orchestrator {
@@ -75,7 +76,8 @@ impl Orchestrator {
         completed_task_id: &TaskId,
         task_store: &TaskStoreImpl,
     ) -> crate::Result<Vec<RuleEffect>> {
-        use palette_domain::rule::{TaskEffect, TaskRuleEngine};
+        use palette_domain::rule::TaskEffect;
+        use palette_usecase::TaskRuleEngine;
 
         let task_engine = TaskRuleEngine::new(task_store);
         let mut pending = task_engine.on_task_completed(completed_task_id)?;
@@ -161,7 +163,7 @@ impl Orchestrator {
         &self,
         task_id: &TaskId,
         task_store: &TaskStoreImpl,
-        task_engine: &palette_domain::rule::TaskRuleEngine<&TaskStoreImpl>,
+        task_engine: &palette_usecase::TaskRuleEngine<'_>,
     ) -> crate::Result<(Vec<palette_domain::rule::TaskEffect>, Vec<RuleEffect>)> {
         let children = task_store.get_child_tasks(task_id)?;
 

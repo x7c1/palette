@@ -6,6 +6,12 @@ pub mod blueprint_reader;
 pub mod interactor;
 pub mod task_store;
 
+mod rule_engine;
+pub use rule_engine::RuleEngine;
+
+mod task_rule_engine;
+pub use task_rule_engine::TaskRuleEngine;
+
 pub use container_runtime::ContainerRuntime;
 pub use data_store::DataStore;
 pub use terminal_session::TerminalSession;

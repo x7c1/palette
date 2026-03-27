@@ -210,28 +210,3 @@ pub trait DataStore: Send + Sync {
         target_id: &WorkerId,
     ) -> Result<bool, Box<dyn std::error::Error + Send + Sync>>;
 }
-
-// Bridge: allow dyn DataStore to be used where JobStore is required (e.g. RuleEngine).
-// The blanket impls in palette-domain for &T and Arc<T> (with ?Sized) delegate to this.
-impl palette_domain::job::JobStore for dyn DataStore {
-    type Error = Box<dyn std::error::Error + Send + Sync>;
-
-    fn get_job(&self, id: &JobId) -> Result<Option<Job>, Self::Error> {
-        DataStore::get_job(self, id)
-    }
-
-    fn update_job_status(&self, id: &JobId, status: JobStatus) -> Result<Job, Self::Error> {
-        DataStore::update_job_status(self, id, status)
-    }
-
-    fn find_assignable_jobs(&self) -> Result<Vec<Job>, Self::Error> {
-        DataStore::find_assignable_jobs(self)
-    }
-
-    fn get_review_submissions(
-        &self,
-        review_id: &JobId,
-    ) -> Result<Vec<ReviewSubmission>, Self::Error> {
-        DataStore::get_review_submissions(self, review_id)
-    }
-}

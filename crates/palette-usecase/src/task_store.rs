@@ -1,5 +1,5 @@
 use crate::{BlueprintReader, DataStore};
-use palette_domain::task::{Task, TaskId, TaskStatus, TaskStore, TaskTree, TaskTreeNode};
+use palette_domain::task::{Task, TaskId, TaskStatus, TaskTree, TaskTreeNode};
 use palette_domain::workflow::WorkflowId;
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -87,14 +87,18 @@ impl<'a> TaskStoreImpl<'a> {
     }
 }
 
-impl TaskStore for TaskStoreImpl<'_> {
-    type Error = Box<dyn std::error::Error + Send + Sync>;
-
-    fn get_task(&self, id: &TaskId) -> Result<Option<Task>, Self::Error> {
+impl TaskStoreImpl<'_> {
+    pub fn get_task(
+        &self,
+        id: &TaskId,
+    ) -> Result<Option<Task>, Box<dyn std::error::Error + Send + Sync>> {
         Ok(self.tree.get(id).map(|node| self.build_task(node)))
     }
 
-    fn get_child_tasks(&self, parent_id: &TaskId) -> Result<Vec<Task>, Self::Error> {
+    pub fn get_child_tasks(
+        &self,
+        parent_id: &TaskId,
+    ) -> Result<Vec<Task>, Box<dyn std::error::Error + Send + Sync>> {
         let Some(parent_node) = self.tree.get(parent_id) else {
             return Ok(vec![]);
         };
@@ -106,7 +110,11 @@ impl TaskStore for TaskStoreImpl<'_> {
             .collect())
     }
 
-    fn update_task_status(&self, id: &TaskId, status: TaskStatus) -> Result<(), Self::Error> {
+    pub fn update_task_status(
+        &self,
+        id: &TaskId,
+        status: TaskStatus,
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         self.data_store.update_task_status(id, status)?;
         self.statuses.borrow_mut().insert(id.clone(), status);
         Ok(())

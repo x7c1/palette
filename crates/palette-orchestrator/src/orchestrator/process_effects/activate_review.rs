@@ -1,7 +1,7 @@
 use super::Orchestrator;
 use palette_domain::job::{JobId, JobStatus, JobType, ReviewStatus};
 use palette_domain::rule::RuleEffect;
-use palette_domain::task::{TaskId, TaskStatus, TaskStore};
+use palette_domain::task::{TaskId, TaskStatus};
 use palette_domain::worker::WorkerRole;
 
 impl Orchestrator {
@@ -39,7 +39,7 @@ impl Orchestrator {
         let mut job_effects = Vec::new();
 
         // First pass: activate Pending children (initial review cycle)
-        use palette_domain::rule::TaskRuleEngine;
+        use palette_usecase::TaskRuleEngine;
         let task_engine = TaskRuleEngine::new(&task_store);
         let child_ids: Vec<TaskId> = children.iter().map(|c| c.id.clone()).collect();
         let task_effects = task_engine.resolve_ready_tasks(&child_ids)?;

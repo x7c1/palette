@@ -2,7 +2,6 @@ use super::Orchestrator;
 use palette_domain::job::{CraftStatus, JobId, JobStatus, JobType};
 use palette_domain::review::Verdict;
 use palette_domain::rule::RuleEffect;
-use palette_domain::task::TaskStore;
 
 impl Orchestrator {
     /// Handle a review verdict (Approved or ChangesRequested).

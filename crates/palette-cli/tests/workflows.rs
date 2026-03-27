@@ -640,7 +640,7 @@ task:
         )
         .unwrap();
 
-    let engine = palette_domain::rule::RuleEngine::new(
+    let engine = palette_usecase::RuleEngine::new(
         state.interactor.data_store.as_ref(),
         state.max_review_rounds,
     );
@@ -912,7 +912,7 @@ task:
         )
         .unwrap();
 
-    let engine = palette_domain::rule::RuleEngine::new(
+    let engine = palette_usecase::RuleEngine::new(
         state.interactor.data_store.as_ref(),
         state.max_review_rounds,
     );
@@ -1091,7 +1091,7 @@ task:
         )
         .unwrap();
 
-    let effects = palette_domain::rule::RuleEngine::new(
+    let effects = palette_usecase::RuleEngine::new(
         state.interactor.data_store.as_ref(),
         state.max_review_rounds,
     )
@@ -1165,7 +1165,7 @@ task:
         )
         .unwrap();
 
-    let effects = palette_domain::rule::RuleEngine::new(
+    let effects = palette_usecase::RuleEngine::new(
         state.interactor.data_store.as_ref(),
         state.max_review_rounds,
     )
