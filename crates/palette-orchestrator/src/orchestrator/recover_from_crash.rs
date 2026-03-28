@@ -55,49 +55,41 @@ impl Orchestrator {
             }
         };
 
-        let mut count = 0;
-
-        for job in &jobs {
-            if job.status.is_done() {
-                continue;
-            }
-
-            let assignee_id = match &job.assignee_id {
-                Some(id) => id,
-                None => continue,
-            };
-
-            let worker = match self.interactor.data_store.find_worker(assignee_id) {
-                Ok(Some(w)) => w,
-                Ok(None) => {
-                    tracing::warn!(
-                        job_id = %job.id,
-                        assignee_id = %assignee_id,
-                        job_status = %job.status,
-                        "recovery: job assigned to non-existent worker"
-                    );
-                    count += 1;
-                    continue;
+        jobs.iter()
+            .filter(|job| !job.status.is_done())
+            .filter_map(|job| {
+                let assignee_id = job.assignee_id.as_ref()?;
+                Some((job, assignee_id))
+            })
+            .filter(|(job, assignee_id)| {
+                match self.interactor.data_store.find_worker(assignee_id) {
+                    Ok(None) => {
+                        tracing::warn!(
+                            job_id = %job.id,
+                            assignee_id = %assignee_id,
+                            job_status = %job.status,
+                            "recovery: job assigned to non-existent worker"
+                        );
+                        true
+                    }
+                    Ok(Some(w)) if w.status == WorkerStatus::Idle => {
+                        tracing::warn!(
+                            job_id = %job.id,
+                            assignee_id = %assignee_id,
+                            job_status = %job.status,
+                            worker_status = ?w.status,
+                            "recovery: job in progress but assignee is idle"
+                        );
+                        true
+                    }
+                    Ok(Some(_)) => false,
+                    Err(e) => {
+                        tracing::error!(error = %e, job_id = %job.id, "recovery: failed to find worker");
+                        false
+                    }
                 }
-                Err(e) => {
-                    tracing::error!(error = %e, job_id = %job.id, "recovery: failed to find worker");
-                    continue;
-                }
-            };
-
-            if worker.status == WorkerStatus::Idle {
-                tracing::warn!(
-                    job_id = %job.id,
-                    assignee_id = %assignee_id,
-                    job_status = %job.status,
-                    worker_status = ?worker.status,
-                    "recovery: job in progress but assignee is idle"
-                );
-                count += 1;
-            }
-        }
-
-        count
+            })
+            .count()
     }
 }
 
