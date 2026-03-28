@@ -23,6 +23,11 @@ const LIVENESS_CHECK_EVERY: u64 = 3;
 /// 10 seconds of no change reliably indicates a permission prompt or hang.
 const STALL_TIMEOUT: Duration = Duration::from_secs(10);
 
+/// Interval between repeated stall alerts for the same worker.
+/// Ensures long-running stalls (e.g. auth errors) remain visible in logs
+/// rather than being reported once and forgotten.
+const STALL_REALERT_INTERVAL: Duration = Duration::from_secs(60);
+
 /// Maximum crash recovery attempts per worker before escalation.
 const CRASH_RETRY_LIMIT: u32 = 3;
 
@@ -30,7 +35,7 @@ const CRASH_RETRY_LIMIT: u32 = 3;
 struct PaneSnapshot {
     hash: u64,
     last_changed: Instant,
-    stall_alerted: bool,
+    stall_alerted_at: Option<Instant>,
 }
 
 impl Orchestrator {
@@ -296,25 +301,35 @@ impl Orchestrator {
         let snapshot = snapshots.entry(worker.id.clone()).or_insert(PaneSnapshot {
             hash,
             last_changed: now,
-            stall_alerted: false,
+            stall_alerted_at: None,
         });
 
         if snapshot.hash != hash {
             snapshot.hash = hash;
             snapshot.last_changed = now;
-            snapshot.stall_alerted = false;
+            snapshot.stall_alerted_at = None;
             return;
         }
 
         // Hash unchanged — check if stall timeout exceeded
-        if !snapshot.stall_alerted && now.duration_since(snapshot.last_changed) >= STALL_TIMEOUT {
-            snapshot.stall_alerted = true;
+        let stalled_duration = now.duration_since(snapshot.last_changed);
+        if stalled_duration < STALL_TIMEOUT {
+            return;
+        }
+
+        let should_alert = match snapshot.stall_alerted_at {
+            None => true,
+            Some(last_alert) => now.duration_since(last_alert) >= STALL_REALERT_INTERVAL,
+        };
+
+        if should_alert {
+            snapshot.stall_alerted_at = Some(now);
 
             tracing::warn!(
                 worker_id = %worker.id,
                 role = %worker.role,
-                "stall detected: pane unchanged for {:?}",
-                STALL_TIMEOUT,
+                stalled_secs = stalled_duration.as_secs(),
+                "stall detected: pane unchanged for {stalled_duration:?}",
             );
         }
     }
@@ -564,7 +579,7 @@ mod tests {
         // First check: establishes baseline
         orch.check_all_workers(false, &mut snapshots, &mut retries);
         assert!(snapshots.contains_key(&WorkerId::new("m-1")));
-        assert!(!snapshots[&WorkerId::new("m-1")].stall_alerted);
+        assert!(snapshots[&WorkerId::new("m-1")].stall_alerted_at.is_none());
     }
 
     #[test]
@@ -590,7 +605,85 @@ mod tests {
 
         // Second check: same content + timeout exceeded → stall detected
         orch.check_all_workers(false, &mut snapshots, &mut retries);
-        assert!(snapshots[&WorkerId::new("m-1")].stall_alerted);
+        assert!(snapshots[&WorkerId::new("m-1")].stall_alerted_at.is_some());
+    }
+
+    #[test]
+    fn stall_realert_after_interval() {
+        let worker = make_worker("m-1", WorkerRole::Member, WorkerStatus::Working);
+        let data_store = MockDataStore::with_workers(vec![worker]);
+        let container = MockContainerRuntime::with_running(&["container-m-1"]);
+        let terminal = MockTerminalSession::new();
+        terminal.set_pane_content("pane-m-1", "stuck output");
+
+        let orch = make_orchestrator(data_store, container, terminal);
+        let mut snapshots = HashMap::new();
+        let mut retries = HashMap::new();
+
+        // First check: establishes baseline
+        orch.check_all_workers(false, &mut snapshots, &mut retries);
+
+        // Backdate to trigger initial stall alert
+        let stall_start = Instant::now() - STALL_REALERT_INTERVAL - STALL_TIMEOUT;
+        snapshots
+            .get_mut(&WorkerId::new("m-1"))
+            .unwrap()
+            .last_changed = stall_start;
+
+        orch.check_all_workers(false, &mut snapshots, &mut retries);
+        let first_alert = snapshots[&WorkerId::new("m-1")].stall_alerted_at.unwrap();
+
+        // Immediately check again — should NOT re-alert (interval not elapsed)
+        orch.check_all_workers(false, &mut snapshots, &mut retries);
+        let same_alert = snapshots[&WorkerId::new("m-1")].stall_alerted_at.unwrap();
+        assert_eq!(
+            first_alert, same_alert,
+            "should not re-alert before interval elapses"
+        );
+
+        // Backdate the alert time to simulate interval passing
+        snapshots
+            .get_mut(&WorkerId::new("m-1"))
+            .unwrap()
+            .stall_alerted_at = Some(Instant::now() - STALL_REALERT_INTERVAL);
+
+        orch.check_all_workers(false, &mut snapshots, &mut retries);
+        let second_alert = snapshots[&WorkerId::new("m-1")].stall_alerted_at.unwrap();
+        assert_ne!(
+            first_alert, second_alert,
+            "should re-alert after interval elapses"
+        );
+    }
+
+    #[test]
+    fn stall_realert_resets_on_pane_change() {
+        let worker = make_worker("m-1", WorkerRole::Member, WorkerStatus::Working);
+        let data_store = MockDataStore::with_workers(vec![worker]);
+        let container = MockContainerRuntime::with_running(&["container-m-1"]);
+        let terminal = MockTerminalSession::new();
+        terminal.set_pane_content("pane-m-1", "stuck output");
+
+        let orch = make_orchestrator(data_store, container, terminal);
+        let mut snapshots = HashMap::new();
+        let mut retries = HashMap::new();
+
+        // Trigger a stall alert
+        orch.check_all_workers(false, &mut snapshots, &mut retries);
+        snapshots
+            .get_mut(&WorkerId::new("m-1"))
+            .unwrap()
+            .last_changed = Instant::now() - STALL_TIMEOUT - Duration::from_secs(1);
+        orch.check_all_workers(false, &mut snapshots, &mut retries);
+        assert!(snapshots[&WorkerId::new("m-1")].stall_alerted_at.is_some());
+
+        // Simulate pane content change by altering the snapshot hash directly.
+        // When check_stall captures a different hash, it resets the alert.
+        snapshots.get_mut(&WorkerId::new("m-1")).unwrap().hash = 0;
+        orch.check_all_workers(false, &mut snapshots, &mut retries);
+        assert!(
+            snapshots[&WorkerId::new("m-1")].stall_alerted_at.is_none(),
+            "alert should reset when pane content changes"
+        );
     }
 
     #[test]
