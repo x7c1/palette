@@ -7,6 +7,7 @@ pub fn worker_status_id(status: WorkerStatus) -> i64 {
         WorkerStatus::Idle => 3,
         WorkerStatus::WaitingPermission => 4,
         WorkerStatus::Crashed => 5,
+        WorkerStatus::Suspended => 6,
     }
 }
 
@@ -17,6 +18,7 @@ pub fn worker_status_from_id(id: i64) -> Result<WorkerStatus, String> {
         3 => Ok(WorkerStatus::Idle),
         4 => Ok(WorkerStatus::WaitingPermission),
         5 => Ok(WorkerStatus::Crashed),
+        6 => Ok(WorkerStatus::Suspended),
         _ => Err(format!("unknown worker_status id: {id}")),
     }
 }

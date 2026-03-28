@@ -5,6 +5,7 @@ pub enum WorkerStatus {
     Idle,
     WaitingPermission,
     Crashed,
+    Suspended,
 }
 
 impl WorkerStatus {
@@ -15,6 +16,7 @@ impl WorkerStatus {
             WorkerStatus::Idle => "idle",
             WorkerStatus::WaitingPermission => "waiting_permission",
             WorkerStatus::Crashed => "crashed",
+            WorkerStatus::Suspended => "suspended",
         }
     }
 }

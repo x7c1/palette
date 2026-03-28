@@ -109,6 +109,8 @@ impl Orchestrator {
                 WorkerStatus::Booting => continue,
                 // Already handling crash recovery
                 WorkerStatus::Crashed => continue,
+                // Suspended workers are managed by suspend/resume API
+                WorkerStatus::Suspended => continue,
                 WorkerStatus::Working | WorkerStatus::Idle | WorkerStatus::WaitingPermission => {
                     if check_liveness
                         && !self
@@ -838,11 +840,12 @@ mod tests {
     }
 
     #[test]
-    fn booting_and_crashed_workers_skipped_in_liveness_check() {
+    fn booting_crashed_and_suspended_workers_skipped_in_liveness_check() {
         let booting = make_worker("m-1", WorkerRole::Member, WorkerStatus::Booting);
         let crashed = make_worker("m-2", WorkerRole::Member, WorkerStatus::Crashed);
-        let data_store = MockDataStore::with_workers(vec![booting, crashed]);
-        // Neither container is running, but they should be skipped
+        let suspended = make_worker("m-3", WorkerRole::Member, WorkerStatus::Suspended);
+        let data_store = MockDataStore::with_workers(vec![booting, crashed, suspended]);
+        // No container is running, but they should all be skipped
         let container = MockContainerRuntime::new();
         let terminal = MockTerminalSession::new();
 
@@ -852,7 +855,7 @@ mod tests {
 
         orch.check_all_workers(true, &mut snapshots, &mut retries);
 
-        // No crash retries should be recorded (both were skipped)
+        // No crash retries should be recorded (all were skipped)
         assert!(retries.is_empty());
     }
 }

@@ -181,6 +181,11 @@ pub trait DataStore: Send + Sync {
         id: &WorkflowId,
     ) -> Result<Option<Workflow>, Box<dyn std::error::Error + Send + Sync>>;
 
+    fn list_workflows(
+        &self,
+        status: Option<WorkflowStatus>,
+    ) -> Result<Vec<Workflow>, Box<dyn std::error::Error + Send + Sync>>;
+
     fn update_workflow_status(
         &self,
         id: &WorkflowId,

@@ -24,6 +24,12 @@ pub fn create_router(state: Arc<AppState>) -> Router {
         .route("/events", get(handle_events))
         // Workflow API
         .route("/workflows/start", post(workflows::handle_start_workflow))
+        .route(
+            "/workflows/suspend",
+            post(workflows::handle_suspend_workflow),
+        )
+        .route("/workflows/resume", post(workflows::handle_resume_workflow))
+        .route("/workflows", get(workflows::handle_list_workflows))
         // Job API
         .route("/jobs/create", post(jobs::handle_create_job))
         .route("/jobs/update", post(jobs::handle_update_job))

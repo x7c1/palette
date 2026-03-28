@@ -193,6 +193,7 @@ INSERT OR IGNORE INTO worker_statuses (id, name) VALUES (2, 'working');
 INSERT OR IGNORE INTO worker_statuses (id, name) VALUES (3, 'idle');
 INSERT OR IGNORE INTO worker_statuses (id, name) VALUES (4, 'waiting_permission');
 INSERT OR IGNORE INTO worker_statuses (id, name) VALUES (5, 'crashed');
+INSERT OR IGNORE INTO worker_statuses (id, name) VALUES (6, 'suspended');
 "#;
 
 pub(crate) fn initialize(conn: &Connection) -> rusqlite::Result<()> {

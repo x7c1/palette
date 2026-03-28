@@ -176,6 +176,9 @@ impl DataStore for MockDataStore {
     fn get_workflow(&self, _: &WorkflowId) -> Result<Option<Workflow>, BoxErr> {
         unimplemented!()
     }
+    fn list_workflows(&self, _: Option<WorkflowStatus>) -> Result<Vec<Workflow>, BoxErr> {
+        unimplemented!()
+    }
     fn update_workflow_status(&self, _: &WorkflowId, _: WorkflowStatus) -> Result<(), BoxErr> {
         unimplemented!()
     }

@@ -11,6 +11,11 @@ impl Orchestrator {
                 let _ = self.deliver_queued_messages(&target_id);
             }
             ServerEvent::NotifyDeliveryLoop => self.deliver_to_all_idle(),
+            ServerEvent::ResumeWorkers { worker_ids } => {
+                for worker_id in worker_ids {
+                    self.spawn_readiness_watcher(worker_id);
+                }
+            }
         }
     }
 
