@@ -15,6 +15,7 @@ pub struct MockDataStore {
     pub messages: Mutex<HashMap<WorkerId, Vec<String>>>,
     pub status_updates: Mutex<Vec<(WorkerId, WorkerStatus)>>,
     pub assignable_jobs: Mutex<Vec<Job>>,
+    pub jobs: Mutex<Vec<Job>>,
 }
 
 impl MockDataStore {
@@ -24,6 +25,7 @@ impl MockDataStore {
             messages: Mutex::new(HashMap::new()),
             status_updates: Mutex::new(Vec::new()),
             assignable_jobs: Mutex::new(Vec::new()),
+            jobs: Mutex::new(Vec::new()),
         }
     }
 
@@ -96,7 +98,19 @@ impl DataStore for MockDataStore {
         unimplemented!()
     }
     fn list_idle_or_waiting_workers(&self) -> Result<Vec<WorkerState>, BoxErr> {
-        unimplemented!()
+        Ok(self
+            .workers
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|w| {
+                matches!(
+                    w.status,
+                    WorkerStatus::Idle | WorkerStatus::WaitingPermission
+                )
+            })
+            .cloned()
+            .collect())
     }
     fn update_worker_session_id(&self, _: &WorkerId, _: &WorkerSessionId) -> Result<(), BoxErr> {
         unimplemented!()
@@ -117,7 +131,7 @@ impl DataStore for MockDataStore {
         unimplemented!()
     }
     fn list_jobs(&self, _: &JobFilter) -> Result<Vec<Job>, BoxErr> {
-        unimplemented!()
+        Ok(self.jobs.lock().unwrap().clone())
     }
     fn assign_job(&self, _: &JobId, _: &WorkerId, _: JobType) -> Result<Job, BoxErr> {
         unimplemented!()
@@ -168,7 +182,13 @@ impl DataStore for MockDataStore {
     fn increment_worker_counter(&self, _: &WorkflowId) -> Result<usize, BoxErr> {
         unimplemented!()
     }
-    fn dequeue_message(&self, _: &WorkerId) -> Result<Option<String>, BoxErr> {
-        unimplemented!()
+    fn dequeue_message(&self, target_id: &WorkerId) -> Result<Option<String>, BoxErr> {
+        let mut messages = self.messages.lock().unwrap();
+        if let Some(queue) = messages.get_mut(target_id) {
+            if !queue.is_empty() {
+                return Ok(Some(queue.remove(0)));
+            }
+        }
+        Ok(None)
     }
 }
