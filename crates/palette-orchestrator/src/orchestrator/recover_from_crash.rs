@@ -34,18 +34,28 @@ impl Orchestrator {
         self.deliver_to_all_idle();
 
         // Step 3: Detect Job/Worker state inconsistencies
-        self.check_job_worker_consistency();
+        let inconsistencies = self.check_job_worker_consistency();
+        if inconsistencies > 0 {
+            tracing::warn!(
+                count = inconsistencies,
+                "recovery: detected job/worker state inconsistencies"
+            );
+        }
     }
 
-    /// Detect jobs whose assignee is idle but the job is still in progress.
-    fn check_job_worker_consistency(&self) {
+    /// Detect jobs whose assignee is idle or missing while the job is not done.
+    ///
+    /// Returns the number of inconsistencies found.
+    fn check_job_worker_consistency(&self) -> usize {
         let jobs = match self.interactor.data_store.list_jobs(&JobFilter::default()) {
             Ok(j) => j,
             Err(e) => {
                 tracing::error!(error = %e, "recovery: failed to list jobs for consistency check");
-                return;
+                return 0;
             }
         };
+
+        let mut count = 0;
 
         for job in &jobs {
             if job.status.is_done() {
@@ -66,6 +76,7 @@ impl Orchestrator {
                         job_status = %job.status,
                         "recovery: job assigned to non-existent worker"
                     );
+                    count += 1;
                     continue;
                 }
                 Err(e) => {
@@ -82,8 +93,11 @@ impl Orchestrator {
                     worker_status = ?worker.status,
                     "recovery: job in progress but assignee is idle"
                 );
+                count += 1;
             }
         }
+
+        count
     }
 }
 
@@ -174,7 +188,7 @@ mod tests {
     }
 
     #[test]
-    fn recovery_detects_idle_worker_with_in_progress_job() {
+    fn consistency_detects_idle_worker_with_in_progress_job() {
         let worker = make_worker("m-1", WorkerRole::Member, WorkerStatus::Idle);
         let data_store = MockDataStore::with_workers(vec![worker]);
 
@@ -187,13 +201,11 @@ mod tests {
         let terminal = MockTerminalSession::new();
 
         let orch = make_orchestrator(data_store, container, terminal);
-
-        // Should not panic — logs a warning about the inconsistency
-        orch.recover_from_crash();
+        assert_eq!(orch.check_job_worker_consistency(), 1);
     }
 
     #[test]
-    fn recovery_detects_job_assigned_to_missing_worker() {
+    fn consistency_detects_job_assigned_to_missing_worker() {
         let data_store = MockDataStore::new();
         // Worker "m-1" does NOT exist in workers list
         *data_store.workers.lock().unwrap() = vec![make_worker(
@@ -211,13 +223,11 @@ mod tests {
         let terminal = MockTerminalSession::new();
 
         let orch = make_orchestrator(data_store, container, terminal);
-
-        // Should not panic — logs a warning about non-existent worker
-        orch.recover_from_crash();
+        assert_eq!(orch.check_job_worker_consistency(), 1);
     }
 
     #[test]
-    fn recovery_ignores_done_jobs() {
+    fn consistency_ignores_done_jobs() {
         let worker = make_worker("m-1", WorkerRole::Member, WorkerStatus::Idle);
         let data_store = MockDataStore::with_workers(vec![worker]);
 
@@ -230,8 +240,23 @@ mod tests {
         let terminal = MockTerminalSession::new();
 
         let orch = make_orchestrator(data_store, container, terminal);
+        assert_eq!(orch.check_job_worker_consistency(), 0);
+    }
 
-        // Should not panic — done jobs are skipped
-        orch.recover_from_crash();
+    #[test]
+    fn consistency_ignores_working_worker() {
+        let worker = make_worker("m-1", WorkerRole::Member, WorkerStatus::Working);
+        let data_store = MockDataStore::with_workers(vec![worker]);
+
+        let mut job = make_job("C-1");
+        job.assignee_id = Some(WorkerId::new("m-1"));
+        job.status = JobStatus::in_progress(JobType::Craft);
+        *data_store.jobs.lock().unwrap() = vec![job];
+
+        let container = MockContainerRuntime::with_running(&["container-m-1"]);
+        let terminal = MockTerminalSession::new();
+
+        let orch = make_orchestrator(data_store, container, terminal);
+        assert_eq!(orch.check_job_worker_consistency(), 0);
     }
 }
