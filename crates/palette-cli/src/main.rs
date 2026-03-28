@@ -72,6 +72,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Resume readiness watchers for workers that were booting when we last shut down
     orchestrator.resume_booting_watchers();
 
+    // Recover from previous Orchestrator crash (health check, message delivery, consistency)
+    orchestrator.recover_from_crash();
+
     // Start orchestrator event loop with shutdown signal
     let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel();
     let orchestrator_handle = orchestrator.start(event_rx, shutdown_rx);
