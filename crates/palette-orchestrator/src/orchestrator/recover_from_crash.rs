@@ -83,6 +83,8 @@ impl Orchestrator {
                         true
                     }
                     Ok(Some(_)) => false,
+                    // DB error means we can't determine consistency, not that
+                    // an inconsistency exists. Logged as error separately.
                     Err(e) => {
                         tracing::error!(error = %e, job_id = %job.id, "recovery: failed to find worker");
                         false
