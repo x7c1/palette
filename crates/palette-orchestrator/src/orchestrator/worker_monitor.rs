@@ -631,15 +631,11 @@ mod tests {
             .last_changed = stall_start;
 
         orch.check_all_workers(false, &mut snapshots, &mut retries);
-        let first_alert = snapshots[&WorkerId::new("m-1")]
-            .stall_alerted_at
-            .unwrap();
+        let first_alert = snapshots[&WorkerId::new("m-1")].stall_alerted_at.unwrap();
 
         // Immediately check again — should NOT re-alert (interval not elapsed)
         orch.check_all_workers(false, &mut snapshots, &mut retries);
-        let same_alert = snapshots[&WorkerId::new("m-1")]
-            .stall_alerted_at
-            .unwrap();
+        let same_alert = snapshots[&WorkerId::new("m-1")].stall_alerted_at.unwrap();
         assert_eq!(
             first_alert, same_alert,
             "should not re-alert before interval elapses"
@@ -652,9 +648,7 @@ mod tests {
             .stall_alerted_at = Some(Instant::now() - STALL_REALERT_INTERVAL);
 
         orch.check_all_workers(false, &mut snapshots, &mut retries);
-        let second_alert = snapshots[&WorkerId::new("m-1")]
-            .stall_alerted_at
-            .unwrap();
+        let second_alert = snapshots[&WorkerId::new("m-1")].stall_alerted_at.unwrap();
         assert_ne!(
             first_alert, second_alert,
             "should re-alert after interval elapses"
