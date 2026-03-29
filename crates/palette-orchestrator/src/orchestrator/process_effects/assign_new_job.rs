@@ -27,12 +27,12 @@ impl Orchestrator {
             .get_task_state(&job.task_id)?
             .ok_or_else(|| crate::Error::Internal(format!("task not found: {}", job.task_id)))?;
         if self.is_workflow_suspending(&task_state.workflow_id)? {
-            tracing::info!(job_id = %job_id, "suspend in progress, deferring job assignment");
+            tracing::warn!(job_id = %job_id, "suspend in progress, deferring job assignment");
             return Ok(());
         }
         let active = self.interactor.data_store.count_active_workers()?;
         if active >= self.docker_config.max_workers {
-            tracing::info!(
+            tracing::warn!(
                 job_id = %job_id,
                 active = active,
                 max = self.docker_config.max_workers,
