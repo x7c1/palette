@@ -37,7 +37,7 @@ fn default_member_image() -> String {
 }
 
 fn default_settings_template() -> String {
-    "config/hooks/member-settings.json".to_string()
+    "config/hooks/worker-settings.json".to_string()
 }
 
 fn default_leader_prompt() -> String {

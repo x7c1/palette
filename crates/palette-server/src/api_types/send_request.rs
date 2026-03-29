@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct SendRequest {
-    pub member_id: Option<String>,
+    pub worker_id: Option<String>,
     #[serde(default)]
     pub target: Option<String>,
     pub message: String,

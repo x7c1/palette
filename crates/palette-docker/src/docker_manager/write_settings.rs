@@ -4,26 +4,33 @@ use palette_domain::worker::ContainerId;
 
 impl DockerManager {
     /// Write the settings.json file inside a running container.
-    /// Reads the template from `template_path`, replaces PALETTE_URL placeholder,
-    /// and adds member_id to hook URLs as query parameter.
+    /// Reads the template from `template_path`, replaces placeholders,
+    /// and adds worker_id to hook URLs as query parameter.
     pub fn write_settings(
         &self,
         container_id: &ContainerId,
         template_path: &std::path::Path,
-        member_id: &str,
+        worker_id: &str,
     ) -> crate::Result<()> {
         let template = std::fs::read_to_string(template_path)?;
 
         // Replace template placeholders with actual URLs
         let settings = template
             .replace(
+                "{{PALETTE_SESSION_START_URL}}",
+                &format!(
+                    "{}/hooks/session-start?worker_id={worker_id}",
+                    self.palette_url
+                ),
+            )
+            .replace(
                 "{{PALETTE_STOP_URL}}",
-                &format!("{}/hooks/stop?member_id={member_id}", self.palette_url),
+                &format!("{}/hooks/stop?worker_id={worker_id}", self.palette_url),
             )
             .replace(
                 "{{PALETTE_NOTIFICATION_URL}}",
                 &format!(
-                    "{}/hooks/notification?member_id={member_id}",
+                    "{}/hooks/notification?worker_id={worker_id}",
                     self.palette_url
                 ),
             );
@@ -49,7 +56,7 @@ impl DockerManager {
             )));
         }
 
-        tracing::info!(container_id = %container_id, member_id = member_id, "wrote settings.json");
+        tracing::info!(container_id = %container_id, worker_id = worker_id, "wrote settings.json");
         Ok(())
     }
 }
@@ -66,6 +73,7 @@ mod tests {
             &template_path,
             r#"{
   "hooks": {
+    "SessionStart": [{"hooks": [{"type": "http", "url": "{{PALETTE_SESSION_START_URL}}"}]}],
     "Stop": [{"hooks": [{"type": "http", "url": "{{PALETTE_STOP_URL}}"}]}],
     "Notification": [{"matcher": "permission_prompt", "hooks": [{"type": "http", "url": "{{PALETTE_NOTIFICATION_URL}}"}]}]
   }
@@ -80,17 +88,24 @@ mod tests {
         let template = std::fs::read_to_string(&template_path).unwrap();
         let settings = template
             .replace(
+                "{{PALETTE_SESSION_START_URL}}",
+                &format!("{}/hooks/session-start?worker_id=worker-a", mgr.palette_url),
+            )
+            .replace(
                 "{{PALETTE_STOP_URL}}",
-                &format!("{}/hooks/stop?member_id=member-a", mgr.palette_url),
+                &format!("{}/hooks/stop?worker_id=worker-a", mgr.palette_url),
             )
             .replace(
                 "{{PALETTE_NOTIFICATION_URL}}",
-                &format!("{}/hooks/notification?member_id=member-a", mgr.palette_url),
+                &format!("{}/hooks/notification?worker_id=worker-a", mgr.palette_url),
             );
 
-        assert!(settings.contains(&format!("{palette_url}/hooks/stop?member_id=member-a")));
         assert!(settings.contains(&format!(
-            "{palette_url}/hooks/notification?member_id=member-a"
+            "{palette_url}/hooks/session-start?worker_id=worker-a"
+        )));
+        assert!(settings.contains(&format!("{palette_url}/hooks/stop?worker_id=worker-a")));
+        assert!(settings.contains(&format!(
+            "{palette_url}/hooks/notification?worker_id=worker-a"
         )));
     }
 }

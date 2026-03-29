@@ -22,29 +22,31 @@ pub async fn handle_notification(
     Query(query): Query<HookQuery>,
     Json(payload): Json<serde_json::Value>,
 ) -> StatusCode {
-    let member_id_str = query.member_id.as_deref().unwrap_or("unknown");
-    let member_id = WorkerId::new(member_id_str);
-    tracing::info!(member_id = member_id_str, payload = %payload, "received notification hook");
+    let worker_id_str = query.worker_id.as_deref().unwrap_or("unknown");
+    let worker_id = WorkerId::new(worker_id_str);
+    tracing::info!(worker_id = worker_id_str, payload = %payload, "received notification hook");
 
     let record = EventRecord {
         timestamp: now(),
         event_type: "notification".to_string(),
         payload: serde_json::json!({
-            "member_id": member_id_str,
+            "worker_id": worker_id_str,
             "original": payload,
         }),
     };
     state.event_log.lock().await.push(record);
+
+    super::save_session_id(state.interactor.data_store.as_ref(), &worker_id, &payload);
 
     let notification_payload: NotificationPayload =
         serde_json::from_value(payload).unwrap_or(NotificationPayload {
             transcript_path: None,
         });
 
-    // Update member status to WaitingPermission and resolve context
-    let member_context = {
-        let member = match state.interactor.data_store.find_worker(&member_id) {
-            Ok(Some(m)) => m,
+    // Update worker status to WaitingPermission and resolve context
+    let worker_context = {
+        let worker = match state.interactor.data_store.find_worker(&worker_id) {
+            Ok(Some(w)) => w,
             _ => {
                 let _ = state.event_tx.send(ServerEvent::NotifyDeliveryLoop);
                 return StatusCode::OK;
@@ -53,14 +55,14 @@ pub async fn handle_notification(
         if let Err(e) = state
             .interactor
             .data_store
-            .update_worker_status(&member_id, WorkerStatus::WaitingPermission)
+            .update_worker_status(&worker_id, WorkerStatus::WaitingPermission)
         {
             tracing::error!(error = %e, "failed to update worker status");
         }
-        MemberContext {
-            supervisor_id: member.supervisor_id.clone(),
-            terminal_target: member.terminal_target.clone(),
-            container_id: member.container_id.clone(),
+        WorkerContext {
+            supervisor_id: worker.supervisor_id.clone(),
+            terminal_target: worker.terminal_target.clone(),
+            container_id: worker.container_id.clone(),
         }
     };
 
@@ -68,17 +70,17 @@ pub async fn handle_notification(
     let pending_tool = match notification_payload.transcript_path {
         Some(ref path) if !path.is_empty() => extract_pending_tool(
             state.interactor.container.as_ref(),
-            &member_context.container_id,
+            &worker_context.container_id,
             path,
         ),
         _ => None,
     };
 
-    // Capture the member's pane content (last 10 non-empty lines, joined as single line)
+    // Capture the worker's pane content (last 10 non-empty lines, joined as single line)
     let pane_content = state
         .interactor
         .terminal
-        .capture_pane(&member_context.terminal_target)
+        .capture_pane(&worker_context.terminal_target)
         .ok()
         .map(|content| {
             let lines: Vec<&str> = content.lines().filter(|l| !l.trim().is_empty()).collect();
@@ -87,7 +89,7 @@ pub async fn handle_notification(
         });
 
     // Build notification message
-    let mut notification = format!("[event] member={member_id} type=permission_prompt");
+    let mut notification = format!("[event] member={worker_id} type=permission_prompt");
     if let Some(ref tool) = pending_tool {
         notification.push_str(&format!(" tool={} input={}", tool.name, tool.input));
     }
@@ -95,10 +97,11 @@ pub async fn handle_notification(
         notification.push_str(&format!(" pane=[{pane}]"));
     }
 
-    if let Err(e) = state
-        .interactor
-        .data_store
-        .enqueue_message(&member_context.supervisor_id, &notification)
+    if let Some(ref supervisor_id) = worker_context.supervisor_id
+        && let Err(e) = state
+            .interactor
+            .data_store
+            .enqueue_message(supervisor_id, &notification)
     {
         tracing::error!(error = %e, "failed to enqueue notification for supervisor");
     }
@@ -108,8 +111,8 @@ pub async fn handle_notification(
     StatusCode::OK
 }
 
-struct MemberContext {
-    supervisor_id: WorkerId,
+struct WorkerContext {
+    supervisor_id: Option<WorkerId>,
     terminal_target: palette_domain::terminal::TerminalTarget,
     container_id: palette_domain::worker::ContainerId,
 }
@@ -144,7 +147,7 @@ enum ContentBlock {
     Other,
 }
 
-/// Read the member's transcript and extract the last tool_use entry.
+/// Read the worker's transcript and extract the last tool_use entry.
 fn extract_pending_tool(
     container: &dyn palette_usecase::ContainerRuntime,
     container_id: &palette_domain::worker::ContainerId,

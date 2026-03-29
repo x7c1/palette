@@ -101,9 +101,9 @@ mod tests {
         use crate::task::TaskId;
         WorkerState {
             id: WorkerId::new(id),
-            workflow_id: crate::workflow::WorkflowId::new(""),
+            workflow_id: crate::workflow::WorkflowId::new("wf-test"),
             role,
-            supervisor_id: WorkerId::new(""),
+            supervisor_id: None,
             container_id: ContainerId::new(format!("container-{id}")),
             terminal_target: TerminalTarget::new(format!("pane-{id}")),
             status: WorkerStatus::Idle,

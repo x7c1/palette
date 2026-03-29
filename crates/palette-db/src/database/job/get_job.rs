@@ -1,4 +1,5 @@
 use super::super::*;
+use super::row::row_to_job;
 
 impl Database {
     pub fn get_job(&self, id: &JobId) -> crate::Result<Option<Job>> {

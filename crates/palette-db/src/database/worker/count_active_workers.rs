@@ -34,7 +34,7 @@ mod tests {
             workflow_id: wf_id,
             role,
             status,
-            supervisor_id: WorkerId::new(""),
+            supervisor_id: None,
             container_id: ContainerId::new(format!("container-{id}")),
             terminal_target: TerminalTarget::new(format!("pane-{id}")),
             session_id: None,

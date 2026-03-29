@@ -14,7 +14,7 @@ pub struct InsertWorkerRequest {
     pub workflow_id: WorkflowId,
     pub role: WorkerRole,
     pub status: WorkerStatus,
-    pub supervisor_id: WorkerId,
+    pub supervisor_id: Option<WorkerId>,
     pub container_id: ContainerId,
     pub terminal_target: TerminalTarget,
     pub session_id: Option<WorkerSessionId>,
@@ -180,6 +180,11 @@ pub trait DataStore: Send + Sync {
         &self,
         id: &WorkflowId,
     ) -> Result<Option<Workflow>, Box<dyn std::error::Error + Send + Sync>>;
+
+    fn list_workflows(
+        &self,
+        status: Option<WorkflowStatus>,
+    ) -> Result<Vec<Workflow>, Box<dyn std::error::Error + Send + Sync>>;
 
     fn update_workflow_status(
         &self,

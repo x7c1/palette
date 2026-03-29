@@ -44,26 +44,14 @@ impl Orchestrator {
             }
         };
 
-        // Try to create Docker container; use empty container_id on failure
-        let container_id = match self.spawn_supervisor_container(
+        let container_id = self.spawn_supervisor_container(
             sup_name,
             image,
             prompt_path,
             &self.session_name,
             &terminal_target,
             role,
-        ) {
-            Ok(cid) => cid,
-            Err(e) => {
-                tracing::error!(
-                    error = %e,
-                    supervisor_id = %sup_id,
-                    task_id = %task_id,
-                    "failed to create supervisor container, registering with empty container_id"
-                );
-                ContainerId::new("")
-            }
-        };
+        )?;
 
         // Register in DB
         self.interactor
@@ -73,7 +61,7 @@ impl Orchestrator {
                 workflow_id: task_state.workflow_id,
                 role,
                 status: WorkerStatus::Booting,
-                supervisor_id: WorkerId::new(""),
+                supervisor_id: None,
                 container_id,
                 terminal_target,
                 // Claude Code session does not exist yet; it will be created once the process boots.

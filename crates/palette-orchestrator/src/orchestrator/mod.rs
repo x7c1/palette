@@ -1,3 +1,4 @@
+mod assign_deferred_jobs;
 mod clean_orphan_containers;
 mod deliver_queued_messages;
 mod deliver_to_all_idle;
@@ -10,6 +11,7 @@ mod spawn_member;
 mod spawn_readiness_watcher;
 mod spawn_supervisor;
 mod start;
+mod suspend;
 mod worker_monitor;
 
 use palette_usecase::Interactor;

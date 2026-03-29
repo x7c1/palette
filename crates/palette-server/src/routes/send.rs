@@ -11,8 +11,8 @@ pub async fn handle_send(
     State(state): State<Arc<AppState>>,
     Json(req): Json<SendRequest>,
 ) -> Result<Json<SendResponse>, (StatusCode, String)> {
-    // If using direct target (no member_id), send immediately without queuing
-    if req.member_id.is_none() {
+    // If using direct target (no worker_id), send immediately without queuing
+    if req.worker_id.is_none() {
         if let Some(ref target) = req.target {
             tracing::info!(target = %target, message = %req.message, "sending keys via tmux (direct)");
             let record = EventRecord {
@@ -37,18 +37,18 @@ pub async fn handle_send(
         }
         return Err((
             StatusCode::BAD_REQUEST,
-            "either member_id or target is required".to_string(),
+            "either worker_id or target is required".to_string(),
         ));
     }
 
-    let member_id_str = req.member_id.as_ref().unwrap();
-    let member_id = WorkerId::new(member_id_str.as_str());
+    let worker_id_str = req.worker_id.as_ref().unwrap();
+    let worker_id = WorkerId::new(worker_id_str.as_str());
 
     // Check if target can receive input — idle or waiting for permission
     let worker = state
         .interactor
         .data_store
-        .find_worker(&member_id)
+        .find_worker(&worker_id)
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     let (can_receive, is_waiting_permission) = worker
@@ -67,7 +67,7 @@ pub async fn handle_send(
     let has_pending = state
         .interactor
         .data_store
-        .has_pending_messages(&member_id)
+        .has_pending_messages(&worker_id)
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     let queued = if can_receive && (!has_pending || is_waiting_permission) {
@@ -78,7 +78,7 @@ pub async fn handle_send(
             .ok_or_else(|| {
                 (
                     StatusCode::NOT_FOUND,
-                    format!("member not found: {member_id}"),
+                    format!("worker not found: {worker_id}"),
                 )
             })?;
 
@@ -91,11 +91,13 @@ pub async fn handle_send(
         )
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
-        // Update status to Working
-        let _ = state
+        if let Err(e) = state
             .interactor
             .data_store
-            .update_worker_status(&member_id, WorkerStatus::Working);
+            .update_worker_status(&worker_id, WorkerStatus::Working)
+        {
+            tracing::error!(worker_id = worker_id_str.as_str(), error = %e, "failed to update worker status to Working");
+        }
 
         false
     } else {
@@ -103,9 +105,9 @@ pub async fn handle_send(
         state
             .interactor
             .data_store
-            .enqueue_message(&member_id, &req.message)
+            .enqueue_message(&worker_id, &req.message)
             .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-        tracing::info!(member_id = member_id_str.as_str(), "message queued");
+        tracing::info!(worker_id = worker_id_str.as_str(), "message queued");
         true
     };
 
@@ -113,7 +115,7 @@ pub async fn handle_send(
         timestamp: now(),
         event_type: "send".to_string(),
         payload: serde_json::json!({
-            "member_id": member_id_str,
+            "worker_id": worker_id_str,
             "message": req.message,
             "queued": queued,
         }),

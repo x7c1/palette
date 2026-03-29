@@ -8,7 +8,7 @@ pub struct WorkerState {
     pub id: WorkerId,
     pub workflow_id: WorkflowId,
     pub role: WorkerRole,
-    pub supervisor_id: WorkerId,
+    pub supervisor_id: Option<WorkerId>,
     pub container_id: ContainerId,
     pub terminal_target: TerminalTarget,
     pub status: WorkerStatus,

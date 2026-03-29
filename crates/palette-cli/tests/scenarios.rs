@@ -25,7 +25,7 @@ fn insert_worker(
     state: &palette_server::AppState,
     id: &str,
     role: WorkerRole,
-    supervisor_id: &str,
+    supervisor_id: Option<&str>,
     terminal_target: &TerminalTarget,
     status: WorkerStatus,
     task_id: &str,
@@ -39,8 +39,8 @@ fn insert_worker(
             workflow_id: workflow_id.clone(),
             role,
             status,
-            supervisor_id: wid(supervisor_id),
-            container_id: ContainerId::new(""),
+            supervisor_id: supervisor_id.map(wid),
+            container_id: ContainerId::new("stub"),
             terminal_target: terminal_target.clone(),
             session_id: None,
             task_id: TaskId::new(task_id),
@@ -102,7 +102,7 @@ async fn scenario3_message_queuing_to_leader() {
         &state,
         "review-integrator-1",
         WorkerRole::ReviewIntegrator,
-        "",
+        None,
         &ri_pane,
         WorkerStatus::Working,
         "task-ri",
@@ -112,7 +112,7 @@ async fn scenario3_message_queuing_to_leader() {
         &state,
         "member-a",
         WorkerRole::Member,
-        "review-integrator-1",
+        Some("review-integrator-1"),
         &member_a_pane,
         WorkerStatus::Working,
         "task-R-A",
@@ -122,7 +122,7 @@ async fn scenario3_message_queuing_to_leader() {
         &state,
         "member-b",
         WorkerRole::Member,
-        "review-integrator-1",
+        Some("review-integrator-1"),
         &member_b_pane,
         WorkerStatus::Working,
         "task-R-B",
@@ -186,7 +186,7 @@ async fn scenario3_message_queuing_to_leader() {
 
     // member-a stops
     let resp = client
-        .post(format!("{base_url}/hooks/stop?member_id=member-a"))
+        .post(format!("{base_url}/hooks/stop?worker_id=member-a"))
         .json(&json!({"last_assistant_message": "review findings A"}))
         .send()
         .await
@@ -195,7 +195,7 @@ async fn scenario3_message_queuing_to_leader() {
 
     // member-b stops
     let resp = client
-        .post(format!("{base_url}/hooks/stop?member_id=member-b"))
+        .post(format!("{base_url}/hooks/stop?worker_id=member-b"))
         .json(&json!({"last_assistant_message": "review findings B"}))
         .send()
         .await
@@ -223,7 +223,7 @@ async fn scenario3_message_queuing_to_leader() {
     // --- RI stops (first time) → first queued message delivered ---
     let resp = client
         .post(format!(
-            "{base_url}/hooks/stop?member_id=review-integrator-1"
+            "{base_url}/hooks/stop?worker_id=review-integrator-1"
         ))
         .json(&json!({}))
         .send()
@@ -252,7 +252,7 @@ async fn scenario3_message_queuing_to_leader() {
     // --- RI stops (second time) → second queued message delivered ---
     let resp = client
         .post(format!(
-            "{base_url}/hooks/stop?member_id=review-integrator-1"
+            "{base_url}/hooks/stop?worker_id=review-integrator-1"
         ))
         .json(&json!({}))
         .send()

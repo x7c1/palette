@@ -119,11 +119,11 @@ CREATE TABLE IF NOT EXISTS workers (
     workflow_id TEXT NOT NULL,
     role_id INTEGER NOT NULL,
     status_id INTEGER NOT NULL,
-    supervisor_id TEXT NOT NULL DEFAULT '',
-    container_id TEXT NOT NULL DEFAULT '',
-    terminal_target TEXT NOT NULL DEFAULT '',
+    supervisor_id TEXT,
+    container_id TEXT NOT NULL,
+    terminal_target TEXT NOT NULL,
     session_id TEXT,
-    task_id TEXT NOT NULL DEFAULT '',
+    task_id TEXT NOT NULL,
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL,
     FOREIGN KEY (workflow_id) REFERENCES workflows(id),
@@ -172,6 +172,7 @@ INSERT OR IGNORE INTO task_statuses (id, name) VALUES (5, 'completed');
 INSERT OR IGNORE INTO workflow_statuses (id, name) VALUES (1, 'active');
 INSERT OR IGNORE INTO workflow_statuses (id, name) VALUES (2, 'suspended');
 INSERT OR IGNORE INTO workflow_statuses (id, name) VALUES (3, 'completed');
+INSERT OR IGNORE INTO workflow_statuses (id, name) VALUES (4, 'suspending');
 
 -- Verdict types
 INSERT OR IGNORE INTO verdict_types (id, name) VALUES (1, 'approved');
@@ -193,6 +194,7 @@ INSERT OR IGNORE INTO worker_statuses (id, name) VALUES (2, 'working');
 INSERT OR IGNORE INTO worker_statuses (id, name) VALUES (3, 'idle');
 INSERT OR IGNORE INTO worker_statuses (id, name) VALUES (4, 'waiting_permission');
 INSERT OR IGNORE INTO worker_statuses (id, name) VALUES (5, 'crashed');
+INSERT OR IGNORE INTO worker_statuses (id, name) VALUES (6, 'suspended');
 "#;
 
 pub(crate) fn initialize(conn: &Connection) -> rusqlite::Result<()> {

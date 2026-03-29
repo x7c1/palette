@@ -231,6 +231,13 @@ impl DataStore for Database {
         Ok(Database::get_workflow(self, id)?)
     }
 
+    fn list_workflows(
+        &self,
+        status: Option<WorkflowStatus>,
+    ) -> Result<Vec<Workflow>, Box<dyn std::error::Error + Send + Sync>> {
+        Ok(Database::list_workflows(self, status)?)
+    }
+
     fn update_workflow_status(
         &self,
         id: &WorkflowId,

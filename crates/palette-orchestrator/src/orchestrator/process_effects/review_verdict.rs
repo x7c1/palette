@@ -79,12 +79,14 @@ impl Orchestrator {
             if child.job_type != Some(JobType::Review) {
                 return true;
             }
-            self.interactor
-                .data_store
-                .get_job_by_task_id(&child.id)
-                .ok()
-                .flatten()
-                .is_some_and(|j| j.status.is_done())
+            match self.interactor.data_store.get_job_by_task_id(&child.id) {
+                Ok(Some(j)) => j.status.is_done(),
+                Ok(None) => false,
+                Err(e) => {
+                    tracing::error!(error = %e, task_id = %child.id, "failed to get job for review completion check");
+                    false
+                }
+            }
         });
 
         if !all_reviews_done {

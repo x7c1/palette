@@ -11,4 +11,8 @@ pub enum ServerEvent {
     DeliverMessages { target_id: WorkerId },
     /// Deliver queued messages to all idle targets.
     NotifyDeliveryLoop,
+    /// Resume suspended workers: spawn readiness watchers and deliver messages.
+    ResumeWorkers { worker_ids: Vec<WorkerId> },
+    /// Suspend all active workers: stop containers, update status, update workflow.
+    SuspendWorkflow,
 }

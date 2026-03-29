@@ -1,0 +1,71 @@
+{
+  "attribution": {
+    "commit": "",
+    "pr": ""
+  },
+  "permissions": {
+    "allow": [
+      "Bash(cat *)",
+      "Bash(cd *)",
+      "Bash(cp *)",
+      "Bash(echo)",
+      "Bash(echo *)",
+      "Bash(find *)",
+      "Bash(grep *)",
+      "Bash(head *)",
+      "Bash(ls)",
+      "Bash(ls *)",
+      "Bash(mkdir *)",
+      "Bash(mv *)",
+      "Bash(pwd)",
+      "Bash(tail *)",
+      "Bash(wc *)",
+      "Bash(git add *)",
+      "Bash(git branch *)",
+      "Bash(git checkout *)",
+      "Bash(git clone *)",
+      "Bash(git commit *)",
+      "Bash(git diff *)",
+      "Bash(git log *)",
+      "Bash(git push *)",
+      "Bash(git status *)",
+      "Read(*)",
+      "Edit(*)",
+      "Write(*)",
+      "Glob(*)"
+    ]
+  },
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "curl -sf -X POST -H 'Content-Type: application/json' -d @- '{{PALETTE_SESSION_START_URL}}' || true"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "http",
+            "url": "{{PALETTE_STOP_URL}}"
+          }
+        ]
+      }
+    ],
+    "Notification": [
+      {
+        "matcher": "permission_prompt",
+        "hooks": [
+          {
+            "type": "http",
+            "url": "{{PALETTE_NOTIFICATION_URL}}"
+          }
+        ]
+      }
+    ]
+  }
+}

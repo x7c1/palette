@@ -11,6 +11,22 @@ impl Orchestrator {
                 let _ = self.deliver_queued_messages(&target_id);
             }
             ServerEvent::NotifyDeliveryLoop => self.deliver_to_all_idle(),
+            ServerEvent::ResumeWorkers { worker_ids } => {
+                for worker_id in worker_ids {
+                    self.spawn_readiness_watcher(worker_id);
+                }
+                // Re-assign jobs that were deferred during suspend.
+                // Delayed to give workers time to boot and become ready.
+                let this = Arc::clone(self);
+                tokio::spawn(async move {
+                    tokio::time::sleep(std::time::Duration::from_secs(15)).await;
+                    this.assign_deferred_jobs();
+                });
+            }
+            ServerEvent::SuspendWorkflow => {
+                let this = Arc::clone(self);
+                tokio::task::spawn_blocking(move || this.suspend());
+            }
         }
     }
 

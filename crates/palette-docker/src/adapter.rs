@@ -50,6 +50,10 @@ impl ContainerRuntime for DockerManager {
         is_container_running(container_id)
     }
 
+    fn is_claude_running(&self, container_id: &ContainerId) -> bool {
+        DockerManager::is_claude_running(container_id)
+    }
+
     fn list_managed_containers(
         &self,
     ) -> Result<Vec<ContainerId>, Box<dyn std::error::Error + Send + Sync>> {
@@ -60,9 +64,9 @@ impl ContainerRuntime for DockerManager {
         &self,
         container_id: &ContainerId,
         template_path: &Path,
-        member_id: &str,
+        worker_id: &str,
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-        Ok(self.write_settings(container_id, template_path, member_id)?)
+        Ok(self.write_settings(container_id, template_path, worker_id)?)
     }
 
     fn copy_file_to_container(

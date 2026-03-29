@@ -2,6 +2,7 @@ mod claude_exec_command;
 mod copy_dir_to_container;
 mod copy_file_to_container;
 pub(crate) mod create_container;
+mod is_claude_running;
 mod is_container_running;
 mod list_managed_containers;
 mod remove_container;

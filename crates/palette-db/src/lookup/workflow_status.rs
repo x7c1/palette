@@ -5,6 +5,7 @@ pub fn workflow_status_id(status: WorkflowStatus) -> i64 {
         WorkflowStatus::Active => 1,
         WorkflowStatus::Suspended => 2,
         WorkflowStatus::Completed => 3,
+        WorkflowStatus::Suspending => 4,
     }
 }
 
@@ -13,6 +14,7 @@ pub fn workflow_status_from_id(id: i64) -> Result<WorkflowStatus, String> {
         1 => Ok(WorkflowStatus::Active),
         2 => Ok(WorkflowStatus::Suspended),
         3 => Ok(WorkflowStatus::Completed),
+        4 => Ok(WorkflowStatus::Suspending),
         _ => Err(format!("invalid workflow_status id: {id}")),
     }
 }

@@ -7,6 +7,7 @@ use palette_usecase::data_store::InsertWorkerRequest;
 
 impl Orchestrator {
     /// Assign a new job to a freshly spawned member.
+    /// Skipped when the workflow is suspending (no new members during suspend).
     pub(super) fn assign_new_job(
         &self,
         job_id: &JobId,
@@ -18,9 +19,20 @@ impl Orchestrator {
             Some(j) => j.clone(),
             None => return Ok(()),
         };
+
+        // Don't spawn new members while a suspend is in progress
+        let task_state = self
+            .interactor
+            .data_store
+            .get_task_state(&job.task_id)?
+            .ok_or_else(|| crate::Error::Internal(format!("task not found: {}", job.task_id)))?;
+        if self.is_workflow_suspending(&task_state.workflow_id)? {
+            tracing::warn!(job_id = %job_id, "suspend in progress, deferring job assignment");
+            return Ok(());
+        }
         let active = self.interactor.data_store.count_active_workers()?;
         if active >= self.docker_config.max_workers {
-            tracing::info!(
+            tracing::warn!(
                 job_id = %job_id,
                 active = active,
                 max = self.docker_config.max_workers,
@@ -33,11 +45,6 @@ impl Orchestrator {
         let workspace = self.resolve_workspace(&job)?;
 
         // Spawn a new member with supervisor from the task tree
-        let task_state = self
-            .interactor
-            .data_store
-            .get_task_state(&job.task_id)?
-            .ok_or_else(|| crate::Error::Internal(format!("task not found: {}", job.task_id)))?;
         let supervisor_id = self.find_supervisor_for_job(&job.task_id)?;
         let seq = self
             .interactor

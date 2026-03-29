@@ -6,7 +6,7 @@ use axum::{
 };
 use palette_domain::job::{CraftStatus, JobFilter, JobStatus};
 use palette_domain::server::ServerEvent;
-use palette_domain::worker::{WorkerId, WorkerSessionId, WorkerStatus};
+use palette_domain::worker::{WorkerId, WorkerStatus};
 use std::sync::Arc;
 
 use super::HookQuery;
@@ -17,45 +17,52 @@ pub async fn handle_stop(
     Query(query): Query<HookQuery>,
     Json(payload): Json<serde_json::Value>,
 ) -> StatusCode {
-    let member_id_str = query.member_id.as_deref().unwrap_or("unknown");
-    let member_id = WorkerId::new(member_id_str);
-    tracing::info!(member_id = member_id_str, payload = %payload, "received stop hook");
+    let worker_id_str = query.worker_id.as_deref().unwrap_or("unknown");
+    let worker_id = WorkerId::new(worker_id_str);
+    tracing::info!(worker_id = worker_id_str, payload = %payload, "received stop hook");
 
     let record = EventRecord {
         timestamp: now(),
         event_type: "stop".to_string(),
         payload: serde_json::json!({
-            "member_id": member_id_str,
+            "worker_id": worker_id_str,
             "original": payload,
         }),
     };
     state.event_log.lock().await.push(record);
 
-    // Save session_id from Claude Code payload (needed for --resume recovery)
-    if let Some(session_id) = payload.get("session_id").and_then(|v| v.as_str()) {
-        let sid = WorkerSessionId::new(session_id);
-        if let Err(e) = state
-            .interactor
-            .data_store
-            .update_worker_session_id(&member_id, &sid)
-        {
-            tracing::error!(error = %e, "failed to save session_id");
-        }
-    }
+    super::save_session_id(state.interactor.data_store.as_ref(), &worker_id, &payload);
 
-    // Update worker status to Idle and resolve supervisor ID
+    // Update worker status to Idle and resolve supervisor ID.
+    // Only transition workers that were actively working. A Booting
+    // worker that fires a stop hook means its startup failed (e.g.
+    // `--resume` "No conversation found") — leave it in Booting so
+    // the readiness watcher can detect the failure and fall back to
+    // a fresh start.
     let supervisor_id = {
-        match state.interactor.data_store.find_worker(&member_id) {
+        match state.interactor.data_store.find_worker(&worker_id) {
             Ok(Some(worker)) => {
-                if let Err(e) = state
-                    .interactor
-                    .data_store
-                    .update_worker_status(&member_id, WorkerStatus::Idle)
-                {
-                    tracing::error!(error = %e, "failed to update worker status to idle");
+                let should_idle = matches!(
+                    worker.status,
+                    WorkerStatus::Working | WorkerStatus::WaitingPermission | WorkerStatus::Idle
+                );
+                if should_idle {
+                    if let Err(e) = state
+                        .interactor
+                        .data_store
+                        .update_worker_status(&worker_id, WorkerStatus::Idle)
+                    {
+                        tracing::error!(error = %e, "failed to update worker status to idle");
+                    }
+                } else {
+                    tracing::info!(
+                        worker_id = worker_id_str,
+                        status = ?worker.status,
+                        "stop hook ignored: worker not in active state"
+                    );
                 }
-                if worker.role == palette_domain::worker::WorkerRole::Member {
-                    Some(worker.supervisor_id.clone())
+                if should_idle && worker.role == palette_domain::worker::WorkerRole::Member {
+                    worker.supervisor_id.clone()
                 } else {
                     None
                 }
@@ -64,23 +71,25 @@ pub async fn handle_stop(
         }
     };
 
-    // Transition member's in_progress jobs and notify supervisors
+    // Transition worker's in_progress jobs and notify supervisors
     if let Some(ref supervisor_id) = supervisor_id {
-        let member_jobs = state
-            .interactor
-            .data_store
-            .list_jobs(&JobFilter {
-                assignee_id: Some(member_id.clone()),
-                ..Default::default()
-            })
-            .unwrap_or_default();
+        let worker_jobs = match state.interactor.data_store.list_jobs(&JobFilter {
+            assignee_id: Some(worker_id.clone()),
+            ..Default::default()
+        }) {
+            Ok(jobs) => jobs,
+            Err(e) => {
+                tracing::error!(worker_id = worker_id_str, error = %e, "failed to list jobs for stop transition");
+                vec![]
+            }
+        };
 
         let last_message = payload
             .get("last_assistant_message")
             .and_then(|v| v.as_str())
             .unwrap_or("(work completed)");
 
-        for job in &member_jobs {
+        for job in &worker_jobs {
             match job.job_type {
                 palette_domain::job::JobType::Craft => {
                     let in_review = JobStatus::Craft(CraftStatus::InReview);
@@ -108,19 +117,24 @@ pub async fn handle_stop(
                 palette_domain::job::JobType::Review => {
                     // Only notify ReviewIntegrator supervisors (for multi-review aggregation).
                     // Single-review results are handled mechanically by the orchestrator.
-                    let is_review_integrator = state
+                    let is_review_integrator = match state
                         .interactor
                         .data_store
                         .find_worker(supervisor_id)
-                        .ok()
-                        .flatten()
-                        .is_some_and(|s| {
+                    {
+                        Ok(Some(s)) => {
                             s.role == palette_domain::worker::WorkerRole::ReviewIntegrator
-                        });
+                        }
+                        Ok(None) => false,
+                        Err(e) => {
+                            tracing::error!(error = %e, supervisor_id = %supervisor_id, "failed to find supervisor for review notification");
+                            false
+                        }
+                    };
                     if is_review_integrator {
                         let report_msg = format!(
                             "[review] member={} job={} type=review_complete message: {}",
-                            member_id, job.id, last_message,
+                            worker_id, job.id, last_message,
                         );
                         if let Err(e) = state
                             .interactor
@@ -134,9 +148,9 @@ pub async fn handle_stop(
             }
         }
 
-        if member_jobs.is_empty() {
+        if worker_jobs.is_empty() {
             // No jobs to transition; just send a stop event
-            let notification = format!("[event] member={member_id} type=stop");
+            let notification = format!("[event] member={worker_id} type=stop");
             if let Err(e) = state
                 .interactor
                 .data_store
@@ -147,9 +161,9 @@ pub async fn handle_stop(
         }
     }
 
-    // Fire-and-forget: deliver queued messages to the now-idle member
+    // Fire-and-forget: deliver queued messages to the now-idle worker
     let _ = state.event_tx.send(ServerEvent::DeliverMessages {
-        target_id: member_id,
+        target_id: worker_id,
     });
     let _ = state.event_tx.send(ServerEvent::NotifyDeliveryLoop);
 

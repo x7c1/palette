@@ -91,7 +91,7 @@ fn docker_exec(container: &str, cmd: &str) -> Result<String> {
 ///
 /// - Creates tmux session and windows
 /// - Creates and starts Docker containers (leader + member)
-/// - Injects settings.json with correct palette_url and member_id
+/// - Injects settings.json with correct palette_url and worker_id
 /// - Copies prompt files into containers
 /// - Sends `docker exec -it ... claude` command to tmux panes
 /// - Verifies all of the above via assertions
@@ -173,20 +173,20 @@ fn launch() -> Result<()> {
         "cat /home/agent/.claude/settings.json",
     )?;
     let expected_leader_stop = format!(
-        "{}/hooks/stop?member_id=leader-1",
+        "{}/hooks/stop?worker_id=leader-1",
         config.docker.palette_url
     );
     let expected_leader_notif = format!(
-        "{}/hooks/notification?member_id=leader-1",
+        "{}/hooks/notification?worker_id=leader-1",
         config.docker.palette_url
     );
     assert!(
         leader_settings.contains(&expected_leader_stop),
-        "leader settings should contain stop hook with member_id.\nActual:\n{leader_settings}"
+        "leader settings should contain stop hook with worker_id.\nActual:\n{leader_settings}"
     );
     assert!(
         leader_settings.contains(&expected_leader_notif),
-        "leader settings should contain notification hook with member_id"
+        "leader settings should contain notification hook with worker_id"
     );
 
     let member_settings = docker_exec(
@@ -194,12 +194,12 @@ fn launch() -> Result<()> {
         "cat /home/agent/.claude/settings.json",
     )?;
     let expected_member_stop = format!(
-        "{}/hooks/stop?member_id=member-a",
+        "{}/hooks/stop?worker_id=member-a",
         config.docker.palette_url
     );
     assert!(
         member_settings.contains(&expected_member_stop),
-        "member settings should contain stop hook with member_id"
+        "member settings should contain stop hook with worker_id"
     );
 
     // --- Copy prompt files ---
