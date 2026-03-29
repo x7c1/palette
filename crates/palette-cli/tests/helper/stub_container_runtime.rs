@@ -63,12 +63,7 @@ impl palette_usecase::ContainerRuntime for StubContainerRuntime {
     fn claude_exec_command(&self, _: &ContainerId, _: &str, _: WorkerRole) -> String {
         String::new()
     }
-    fn claude_resume_command(
-        &self,
-        _: &ContainerId,
-        _: &WorkerSessionId,
-        _: WorkerRole,
-    ) -> String {
+    fn claude_resume_command(&self, _: &ContainerId, _: &WorkerSessionId, _: WorkerRole) -> String {
         String::new()
     }
 }
