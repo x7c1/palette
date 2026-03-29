@@ -6,7 +6,7 @@ use axum::{
 };
 use palette_domain::job::{CraftStatus, JobFilter, JobStatus};
 use palette_domain::server::ServerEvent;
-use palette_domain::worker::{WorkerId, WorkerSessionId, WorkerStatus};
+use palette_domain::worker::{WorkerId, WorkerStatus};
 use std::sync::Arc;
 
 use super::HookQuery;
@@ -31,17 +31,7 @@ pub async fn handle_stop(
     };
     state.event_log.lock().await.push(record);
 
-    // Save session_id from Claude Code payload (needed for --resume recovery)
-    if let Some(session_id) = payload.get("session_id").and_then(|v| v.as_str()) {
-        let sid = WorkerSessionId::new(session_id);
-        if let Err(e) = state
-            .interactor
-            .data_store
-            .update_worker_session_id(&worker_id, &sid)
-        {
-            tracing::error!(error = %e, "failed to save session_id");
-        }
-    }
+    super::save_session_id(state.interactor.data_store.as_ref(), &worker_id, &payload);
 
     // Update worker status to Idle and resolve supervisor ID
     let supervisor_id = {

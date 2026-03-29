@@ -36,6 +36,8 @@ pub async fn handle_notification(
     };
     state.event_log.lock().await.push(record);
 
+    super::save_session_id(state.interactor.data_store.as_ref(), &worker_id, &payload);
+
     let notification_payload: NotificationPayload =
         serde_json::from_value(payload).unwrap_or(NotificationPayload {
             transcript_path: None,

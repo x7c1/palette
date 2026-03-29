@@ -1,6 +1,6 @@
 use crate::AppState;
 use axum::{Json, extract::Query, extract::State, http::StatusCode};
-use palette_domain::worker::{WorkerId, WorkerSessionId};
+use palette_domain::worker::WorkerId;
 use std::sync::Arc;
 
 use super::HookQuery;
@@ -13,32 +13,9 @@ pub async fn handle_session_start(
     let worker_id_str = query.worker_id.as_deref().unwrap_or("unknown");
     let worker_id = WorkerId::new(worker_id_str);
 
-    let Some(session_id) = payload.get("session_id").and_then(|v| v.as_str()) else {
-        tracing::warn!(
-            worker_id = worker_id_str,
-            "session-start hook: no session_id in payload"
-        );
-        return StatusCode::OK;
-    };
+    tracing::info!(worker_id = worker_id_str, "received session-start hook");
 
-    let sid = WorkerSessionId::new(session_id);
-    if let Err(e) = state
-        .interactor
-        .data_store
-        .update_worker_session_id(&worker_id, &sid)
-    {
-        tracing::error!(
-            worker_id = worker_id_str,
-            error = %e,
-            "failed to save session_id on session start"
-        );
-    } else {
-        tracing::info!(
-            worker_id = worker_id_str,
-            session_id = session_id,
-            "saved session_id from session start"
-        );
-    }
+    super::save_session_id(state.interactor.data_store.as_ref(), &worker_id, &payload);
 
     StatusCode::OK
 }
