@@ -112,13 +112,14 @@ impl Orchestrator {
     /// If no messages are queued but the worker has an in-progress job
     /// (resume after suspend), send a continuation prompt.
     fn activate_worker(self: &Arc<Self>, target_id: &WorkerId) {
-        let is_booting = self
-            .interactor
-            .data_store
-            .find_worker(target_id)
-            .ok()
-            .flatten()
-            .is_some_and(|a| a.status == WorkerStatus::Booting);
+        let is_booting = match self.interactor.data_store.find_worker(target_id) {
+            Ok(Some(w)) => w.status == WorkerStatus::Booting,
+            Ok(None) => false,
+            Err(e) => {
+                tracing::error!(error = %e, target_id = %target_id, "failed to find worker during activation");
+                false
+            }
+        };
 
         if is_booting
             && let Err(e) = self

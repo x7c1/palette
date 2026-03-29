@@ -1,5 +1,6 @@
 use super::super::*;
 use crate::models::QueuedMessage;
+use rusqlite::OptionalExtension;
 
 impl Database {
     /// Dequeue the next message for a target (FIFO). Returns None if empty.
@@ -17,7 +18,7 @@ impl Database {
                     created_at: parse_datetime(&row.get::<_, String>(3)?),
                 })
             })
-            .ok();
+            .optional()?;
 
         if let Some(ref msg) = msg {
             conn.execute("DELETE FROM message_queue WHERE id = ?1", params![msg.id])?;

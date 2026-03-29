@@ -115,15 +115,20 @@ pub async fn handle_stop(
                 palette_domain::job::JobType::Review => {
                     // Only notify ReviewIntegrator supervisors (for multi-review aggregation).
                     // Single-review results are handled mechanically by the orchestrator.
-                    let is_review_integrator = state
+                    let is_review_integrator = match state
                         .interactor
                         .data_store
                         .find_worker(supervisor_id)
-                        .ok()
-                        .flatten()
-                        .is_some_and(|s| {
+                    {
+                        Ok(Some(s)) => {
                             s.role == palette_domain::worker::WorkerRole::ReviewIntegrator
-                        });
+                        }
+                        Ok(None) => false,
+                        Err(e) => {
+                            tracing::error!(error = %e, supervisor_id = %supervisor_id, "failed to find supervisor for review notification");
+                            false
+                        }
+                    };
                     if is_review_integrator {
                         let report_msg = format!(
                             "[review] member={} job={} type=review_complete message: {}",
