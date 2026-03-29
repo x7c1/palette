@@ -23,9 +23,9 @@ impl Orchestrator {
                     this.assign_deferred_jobs();
                 });
             }
-            ServerEvent::SuspendWorkflow => {
+            ServerEvent::SuspendWorkflow { workflow_id } => {
                 let this = Arc::clone(self);
-                tokio::task::spawn_blocking(move || this.suspend());
+                tokio::task::spawn_blocking(move || this.suspend(&workflow_id));
             }
         }
     }

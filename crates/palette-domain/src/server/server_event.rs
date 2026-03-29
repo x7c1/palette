@@ -1,5 +1,6 @@
 use crate::rule::RuleEffect;
 use crate::worker::WorkerId;
+use crate::workflow::WorkflowId;
 
 /// Events emitted by the server for asynchronous processing by the orchestrator.
 #[derive(Debug)]
@@ -13,6 +14,6 @@ pub enum ServerEvent {
     NotifyDeliveryLoop,
     /// Resume suspended workers: spawn readiness watchers and deliver messages.
     ResumeWorkers { worker_ids: Vec<WorkerId> },
-    /// Suspend all active workers: stop containers, update status, update workflow.
-    SuspendWorkflow,
+    /// Suspend workers belonging to the specified workflow.
+    SuspendWorkflow { workflow_id: WorkflowId },
 }

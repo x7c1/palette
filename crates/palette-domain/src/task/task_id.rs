@@ -24,6 +24,13 @@ impl TaskId {
     pub fn child(&self, key: &TaskKey) -> Self {
         Self(format!("{}/{}", self.0, key))
     }
+
+    /// Return the parent task ID by stripping the last path component.
+    ///
+    /// Returns `None` if this is a root task ID (no `/` separator).
+    pub fn parent(&self) -> Option<Self> {
+        self.0.rfind('/').map(|pos| Self(self.0[..pos].to_string()))
+    }
 }
 
 impl fmt::Display for TaskId {

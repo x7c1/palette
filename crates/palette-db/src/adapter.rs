@@ -214,6 +214,17 @@ impl DataStore for Database {
         Ok(Database::update_task_status(self, id, status)?)
     }
 
+    fn delete_task(&self, id: &TaskId) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        Ok(Database::delete_task(self, id)?)
+    }
+
+    fn delete_jobs_by_task_id(
+        &self,
+        task_id: &TaskId,
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        Ok(Database::delete_jobs_by_task_id(self, task_id)?)
+    }
+
     // -- Workflow --
 
     fn create_workflow(

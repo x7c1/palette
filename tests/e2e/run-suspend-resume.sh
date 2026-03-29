@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
-# E2E: Workflow Suspend and Resume
+# E2E: Workflow Suspend, Blueprint Reconciliation, and Resume
 # Verify that suspending stops all containers (without removing them),
-# marks workers as Suspended, and that resuming restarts containers
-# and resumes Claude Code sessions.
+# marks workers as Suspended, that Blueprint reconciliation validates
+# and applies changes during suspend, and that resuming restarts
+# containers and resumes Claude Code sessions.
 #
 # Steps:
 #   1. Reset and build
@@ -10,9 +11,12 @@
 #   3. Wait for workers to appear
 #   4. Suspend the workflow
 #   5. Verify: containers stopped (not removed), workers Suspended, workflow Suspended
-#   6. Resume the workflow
-#   7. Verify: containers running, workers active, workflow Active
-#   8. Wait for jobs to complete
+#   6. Blueprint Reconciliation:
+#      a. Validate invalid change (add child to InProgress subtree) → error
+#      b. Validate valid change (add task under Pending phase) → success
+#   7. Resume the workflow (with valid Blueprint change)
+#   8. Verify: containers running, workers active, workflow Active
+#   9. Wait for jobs to complete (including the new task from reconciliation)
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -21,11 +25,19 @@ cd "$ROOT_DIR"
 
 PALETTE_URL="http://127.0.0.1:7100"
 BLUEPRINT_PATH="$ROOT_DIR/tests/e2e/fixtures/dynamic-supervisor.yaml"
+BLUEPRINT_ORIG="$ROOT_DIR/tests/e2e/fixtures/dynamic-supervisor.yaml.orig"
+RECONCILE_VALID="$ROOT_DIR/tests/e2e/fixtures/reconcile-valid.yaml"
+RECONCILE_INVALID="$ROOT_DIR/tests/e2e/fixtures/reconcile-invalid.yaml"
 LOG_FILE="data/palette.log"
 PID_FILE="data/palette.pid"
 DB_FILE="data/palette.db"
 
 cleanup() {
+  # Restore original Blueprint if we backed it up
+  if [[ -f "$BLUEPRINT_ORIG" ]]; then
+    cp "$BLUEPRINT_ORIG" "$BLUEPRINT_PATH"
+    rm -f "$BLUEPRINT_ORIG"
+  fi
   "$SCRIPT_DIR/stop-palette.sh" 2>/dev/null || true
 }
 trap cleanup EXIT
@@ -72,7 +84,9 @@ if [[ "$HTTP_CODE" -lt 200 || "$HTTP_CODE" -ge 300 ]]; then
   echo "FAIL: POST /workflows/start returned HTTP $HTTP_CODE"
   exit 1
 fi
-echo "Workflow started (HTTP $HTTP_CODE)"
+
+WORKFLOW_ID=$(jq -r '.workflow_id' /tmp/palette-e2e-response.json)
+echo "Workflow started: $WORKFLOW_ID (HTTP $HTTP_CODE)"
 
 # Wait for at least one worker to appear (max 60 seconds)
 echo "Waiting for workers to spawn..."
@@ -91,8 +105,6 @@ for i in $(seq 1 30); do
 done
 
 # Wait for at least one worker to be in Working status via API.
-# This ensures a member is actively doing work when we suspend,
-# not just that a job exists in the DB.
 echo "Waiting for a worker to be in Working status..."
 for i in $(seq 1 30); do
   WORKING=$(curl -sf "$PALETTE_URL/workers" 2>/dev/null \
@@ -114,18 +126,16 @@ done
 echo ""
 echo "=== Step 4: Suspend workflow ==="
 HTTP_CODE=$(curl -s -o /tmp/palette-suspend-response.json -w '%{http_code}' \
-  -X POST "$PALETTE_URL/workflows/suspend")
+  -X POST "$PALETTE_URL/workflows/$WORKFLOW_ID/suspend")
 
 if [[ "$HTTP_CODE" -lt 200 || "$HTTP_CODE" -ge 300 ]]; then
-  echo "FAIL: POST /workflows/suspend returned HTTP $HTTP_CODE"
+  echo "FAIL: POST /workflows/$WORKFLOW_ID/suspend returned HTTP $HTTP_CODE"
   cat /tmp/palette-suspend-response.json
   exit 1
 fi
 echo "Suspend accepted (HTTP $HTTP_CODE)"
 
 # Poll until workflow status is suspended.
-# The workflow transitions Active → Suspending (waiting for in-progress tasks) → Suspended.
-# Timeout is generous because workers need to finish their current task first.
 echo "Waiting for suspend to complete..."
 SEEN_SUSPENDING=false
 for i in $(seq 1 60); do
@@ -199,27 +209,101 @@ else
   PASS=false
 fi
 
-# --- Step 6: Resume workflow ---
+# --- Step 6: Blueprint Reconciliation ---
 echo ""
-echo "=== Step 6: Resume workflow ==="
+echo "=== Step 6: Blueprint Reconciliation ==="
+
+# Back up the original Blueprint
+cp "$BLUEPRINT_PATH" "$BLUEPRINT_ORIG"
+
+# 6a: Validate invalid change — add child under phase-a (InProgress subtree)
+echo "--- 6a: Validate invalid Blueprint change ---"
+cp "$RECONCILE_INVALID" "$BLUEPRINT_PATH"
+
+HTTP_CODE=$(curl -s -o /tmp/palette-validate-invalid.json -w '%{http_code}' \
+  -X POST "$PALETTE_URL/workflows/$WORKFLOW_ID/validate-blueprint")
+
+if [[ "$HTTP_CODE" -ne 200 ]]; then
+  echo "FAIL: validate-blueprint returned HTTP $HTTP_CODE (expected 200)"
+  cat /tmp/palette-validate-invalid.json
+  PASS=false
+else
+  VALID=$(jq -r '.valid' /tmp/palette-validate-invalid.json)
+  ERROR_COUNT=$(jq '.errors | length' /tmp/palette-validate-invalid.json)
+  if [[ "$VALID" == "false" && "$ERROR_COUNT" -gt 0 ]]; then
+    echo "PASS: Invalid Blueprint correctly rejected ($ERROR_COUNT errors)"
+    jq -r '.errors[] | "  \(.task_id): \(.message)"' /tmp/palette-validate-invalid.json
+  else
+    echo "FAIL: Expected validation to fail, got valid=$VALID errors=$ERROR_COUNT"
+    cat /tmp/palette-validate-invalid.json
+    PASS=false
+  fi
+fi
+
+# 6b: Validate valid change — add task under phase-b (Pending)
+echo "--- 6b: Validate valid Blueprint change ---"
+cp "$RECONCILE_VALID" "$BLUEPRINT_PATH"
+
+HTTP_CODE=$(curl -s -o /tmp/palette-validate-valid.json -w '%{http_code}' \
+  -X POST "$PALETTE_URL/workflows/$WORKFLOW_ID/validate-blueprint")
+
+if [[ "$HTTP_CODE" -ne 200 ]]; then
+  echo "FAIL: validate-blueprint returned HTTP $HTTP_CODE (expected 200)"
+  cat /tmp/palette-validate-valid.json
+  PASS=false
+else
+  VALID=$(jq -r '.valid' /tmp/palette-validate-valid.json)
+  ADDED=$(jq '.added_tasks | length' /tmp/palette-validate-valid.json)
+  if [[ "$VALID" == "true" && "$ADDED" -gt 0 ]]; then
+    echo "PASS: Valid Blueprint change accepted ($ADDED tasks to add)"
+    jq -r '.added_tasks[]' /tmp/palette-validate-valid.json | while read -r tid; do
+      echo "  + $tid"
+    done
+  else
+    echo "FAIL: Expected validation to pass with added tasks, got valid=$VALID added=$ADDED"
+    cat /tmp/palette-validate-valid.json
+    PASS=false
+  fi
+fi
+
+# Leave the valid Blueprint in place for resume
+
+# --- Step 7: Resume workflow ---
+echo ""
+echo "=== Step 7: Resume workflow ==="
 HTTP_CODE=$(curl -s --max-time 120 -o /tmp/palette-resume-response.json -w '%{http_code}' \
-  -X POST "$PALETTE_URL/workflows/resume")
+  -X POST "$PALETTE_URL/workflows/$WORKFLOW_ID/resume")
 
 if [[ "$HTTP_CODE" -lt 200 || "$HTTP_CODE" -ge 300 ]]; then
-  echo "FAIL: POST /workflows/resume returned HTTP $HTTP_CODE"
+  echo "FAIL: POST /workflows/$WORKFLOW_ID/resume returned HTTP $HTTP_CODE"
   cat /tmp/palette-resume-response.json
   exit 1
 fi
 
 RESUMED_COUNT=$(jq -r '.resumed_count' /tmp/palette-resume-response.json)
+RECONCILED=$(jq -r '.reconciliation // empty' /tmp/palette-resume-response.json)
 echo "Resumed $RESUMED_COUNT workers"
+if [[ -n "$RECONCILED" ]]; then
+  TASKS_CREATED=$(jq -r '.reconciliation.tasks_created' /tmp/palette-resume-response.json)
+  echo "Reconciliation: $TASKS_CREATED tasks created"
+  if [[ "$TASKS_CREATED" -gt 0 ]]; then
+    echo "PASS: Reconciliation created new tasks"
+  else
+    echo "FAIL: Expected reconciliation to create tasks"
+    PASS=false
+  fi
+fi
+
+# Restore original Blueprint
+cp "$BLUEPRINT_ORIG" "$BLUEPRINT_PATH"
+rm -f "$BLUEPRINT_ORIG"
 
 # Wait for containers to restart and Claude Code to boot
 sleep 10
 
-# --- Step 7: Verify resume ---
+# --- Step 8: Verify resume ---
 echo ""
-echo "=== Step 7: Verify resume ==="
+echo "=== Step 8: Verify resume ==="
 
 # Check: containers are running again
 RUNNING_AFTER=$(docker ps -q --filter label=palette.managed=true 2>/dev/null | wc -l | tr -d ' ')
@@ -256,9 +340,17 @@ else
   PASS=false
 fi
 
-# --- Step 8: Wait for jobs to complete (max 300 seconds) ---
+# Check: reconciliation log message
+if grep -q "reconciliation complete" "$LOG_FILE" 2>/dev/null; then
+  echo "PASS: Reconciliation log message found"
+else
+  echo "FAIL: No reconciliation log message"
+  PASS=false
+fi
+
+# --- Step 9: Wait for jobs to complete (max 300 seconds) ---
 echo ""
-echo "=== Step 8: Wait for jobs to complete ==="
+echo "=== Step 9: Wait for jobs to complete ==="
 for i in $(seq 1 60); do
   WORKERS_JSON=$(curl -sf "$PALETTE_URL/workers" 2>/dev/null || echo "[]")
   CRASHED=$(echo "$WORKERS_JSON" | jq '[.[] | select(.status == "crashed")] | length' 2>/dev/null || echo "0")
@@ -287,9 +379,20 @@ for i in $(seq 1 60); do
   sleep 5
 done
 
+# Verify the reconciled task got a job
+if command -v sqlite3 &>/dev/null && [[ -f "$DB_FILE" ]]; then
+  EXTRA_JOB=$(sqlite3 "$DB_FILE" "SELECT COUNT(*) FROM jobs WHERE task_id LIKE '%/extra-craft';" 2>/dev/null || echo "0")
+  if [[ "$EXTRA_JOB" -gt 0 ]]; then
+    echo "PASS: Job created for reconciled extra-craft task"
+  else
+    echo "FAIL: No job found for reconciled extra-craft task"
+    PASS=false
+  fi
+fi
+
 echo ""
 if [[ "$PASS" == true ]]; then
-  echo "=== All suspend/resume checks passed ==="
+  echo "=== All suspend/resume/reconciliation checks passed ==="
   scripts/reset.sh 2>&1
   exit 0
 else

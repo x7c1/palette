@@ -170,6 +170,12 @@ impl DataStore for MockDataStore {
     fn update_task_status(&self, _: &TaskId, _: TaskStatus) -> Result<(), BoxErr> {
         unimplemented!()
     }
+    fn delete_task(&self, _: &TaskId) -> Result<(), BoxErr> {
+        unimplemented!()
+    }
+    fn delete_jobs_by_task_id(&self, _: &TaskId) -> Result<(), BoxErr> {
+        unimplemented!()
+    }
     fn create_workflow(&self, _: &WorkflowId, _: &str) -> Result<(), BoxErr> {
         unimplemented!()
     }
