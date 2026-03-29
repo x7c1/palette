@@ -18,6 +18,7 @@ pub fn create_router(state: Arc<AppState>) -> Router {
         // Hooks
         .route("/hooks/stop", post(hooks::handle_stop))
         .route("/hooks/notification", post(hooks::handle_notification))
+        .route("/hooks/session-start", post(hooks::handle_session_start))
         // Send
         .route("/send", post(send::handle_send))
         // Events

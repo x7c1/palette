@@ -186,7 +186,7 @@ async fn scenario3_message_queuing_to_leader() {
 
     // member-a stops
     let resp = client
-        .post(format!("{base_url}/hooks/stop?member_id=member-a"))
+        .post(format!("{base_url}/hooks/stop?worker_id=member-a"))
         .json(&json!({"last_assistant_message": "review findings A"}))
         .send()
         .await
@@ -195,7 +195,7 @@ async fn scenario3_message_queuing_to_leader() {
 
     // member-b stops
     let resp = client
-        .post(format!("{base_url}/hooks/stop?member_id=member-b"))
+        .post(format!("{base_url}/hooks/stop?worker_id=member-b"))
         .json(&json!({"last_assistant_message": "review findings B"}))
         .send()
         .await
@@ -223,7 +223,7 @@ async fn scenario3_message_queuing_to_leader() {
     // --- RI stops (first time) → first queued message delivered ---
     let resp = client
         .post(format!(
-            "{base_url}/hooks/stop?member_id=review-integrator-1"
+            "{base_url}/hooks/stop?worker_id=review-integrator-1"
         ))
         .json(&json!({}))
         .send()
@@ -252,7 +252,7 @@ async fn scenario3_message_queuing_to_leader() {
     // --- RI stops (second time) → second queued message delivered ---
     let resp = client
         .post(format!(
-            "{base_url}/hooks/stop?member_id=review-integrator-1"
+            "{base_url}/hooks/stop?worker_id=review-integrator-1"
         ))
         .json(&json!({}))
         .send()

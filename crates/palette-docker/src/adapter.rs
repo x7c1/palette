@@ -60,9 +60,9 @@ impl ContainerRuntime for DockerManager {
         &self,
         container_id: &ContainerId,
         template_path: &Path,
-        member_id: &str,
+        worker_id: &str,
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-        Ok(self.write_settings(container_id, template_path, member_id)?)
+        Ok(self.write_settings(container_id, template_path, worker_id)?)
     }
 
     fn copy_file_to_container(

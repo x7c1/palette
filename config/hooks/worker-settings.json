@@ -17,6 +17,16 @@
     ]
   },
   "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "http",
+            "url": "{{PALETTE_SESSION_START_URL}}"
+          }
+        ]
+      }
+    ],
     "Stop": [
       {
         "hooks": [

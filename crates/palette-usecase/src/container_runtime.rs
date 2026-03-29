@@ -41,7 +41,7 @@ pub trait ContainerRuntime: Send + Sync {
         &self,
         container_id: &ContainerId,
         template_path: &Path,
-        member_id: &str,
+        worker_id: &str,
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>>;
 
     fn copy_file_to_container(

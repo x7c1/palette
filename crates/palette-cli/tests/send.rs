@@ -55,7 +55,7 @@ async fn send_keys_delivers_to_tmux_pane() {
     let resp = client
         .post(format!("{base_url}/send"))
         .json(&SendRequest {
-            member_id: Some("worker".to_string()),
+            worker_id: Some("worker".to_string()),
             target: None,
             message: "echo hello-palette-test".to_string(),
             no_enter: false,
@@ -91,7 +91,7 @@ async fn send_keys_with_direct_target() {
     let resp = client
         .post(format!("{base_url}/send"))
         .json(&SendRequest {
-            member_id: None,
+            worker_id: None,
             target: Some(target.to_string()),
             message: "echo direct-test".to_string(),
             no_enter: false,
@@ -126,7 +126,7 @@ async fn send_queues_when_member_is_working() {
     let resp = client
         .post(format!("{base_url}/send"))
         .json(&SendRequest {
-            member_id: Some("worker".to_string()),
+            worker_id: Some("worker".to_string()),
             target: None,
             message: "queued message".to_string(),
             no_enter: false,
@@ -140,7 +140,7 @@ async fn send_queues_when_member_is_working() {
 
     // Stop hook should deliver the queued message
     let resp = client
-        .post(format!("{base_url}/hooks/stop?member_id=worker"))
+        .post(format!("{base_url}/hooks/stop?worker_id=worker"))
         .json(&json!({}))
         .send()
         .await

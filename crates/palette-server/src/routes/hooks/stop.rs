@@ -17,15 +17,15 @@ pub async fn handle_stop(
     Query(query): Query<HookQuery>,
     Json(payload): Json<serde_json::Value>,
 ) -> StatusCode {
-    let member_id_str = query.member_id.as_deref().unwrap_or("unknown");
-    let member_id = WorkerId::new(member_id_str);
-    tracing::info!(member_id = member_id_str, payload = %payload, "received stop hook");
+    let worker_id_str = query.worker_id.as_deref().unwrap_or("unknown");
+    let worker_id = WorkerId::new(worker_id_str);
+    tracing::info!(worker_id = worker_id_str, payload = %payload, "received stop hook");
 
     let record = EventRecord {
         timestamp: now(),
         event_type: "stop".to_string(),
         payload: serde_json::json!({
-            "member_id": member_id_str,
+            "worker_id": worker_id_str,
             "original": payload,
         }),
     };
@@ -37,7 +37,7 @@ pub async fn handle_stop(
         if let Err(e) = state
             .interactor
             .data_store
-            .update_worker_session_id(&member_id, &sid)
+            .update_worker_session_id(&worker_id, &sid)
         {
             tracing::error!(error = %e, "failed to save session_id");
         }
@@ -45,12 +45,12 @@ pub async fn handle_stop(
 
     // Update worker status to Idle and resolve supervisor ID
     let supervisor_id = {
-        match state.interactor.data_store.find_worker(&member_id) {
+        match state.interactor.data_store.find_worker(&worker_id) {
             Ok(Some(worker)) => {
                 if let Err(e) = state
                     .interactor
                     .data_store
-                    .update_worker_status(&member_id, WorkerStatus::Idle)
+                    .update_worker_status(&worker_id, WorkerStatus::Idle)
                 {
                     tracing::error!(error = %e, "failed to update worker status to idle");
                 }
@@ -64,13 +64,13 @@ pub async fn handle_stop(
         }
     };
 
-    // Transition member's in_progress jobs and notify supervisors
+    // Transition worker's in_progress jobs and notify supervisors
     if let Some(ref supervisor_id) = supervisor_id {
-        let member_jobs = state
+        let worker_jobs = state
             .interactor
             .data_store
             .list_jobs(&JobFilter {
-                assignee_id: Some(member_id.clone()),
+                assignee_id: Some(worker_id.clone()),
                 ..Default::default()
             })
             .unwrap_or_default();
@@ -80,7 +80,7 @@ pub async fn handle_stop(
             .and_then(|v| v.as_str())
             .unwrap_or("(work completed)");
 
-        for job in &member_jobs {
+        for job in &worker_jobs {
             match job.job_type {
                 palette_domain::job::JobType::Craft => {
                     let in_review = JobStatus::Craft(CraftStatus::InReview);
@@ -120,7 +120,7 @@ pub async fn handle_stop(
                     if is_review_integrator {
                         let report_msg = format!(
                             "[review] member={} job={} type=review_complete message: {}",
-                            member_id, job.id, last_message,
+                            worker_id, job.id, last_message,
                         );
                         if let Err(e) = state
                             .interactor
@@ -134,9 +134,9 @@ pub async fn handle_stop(
             }
         }
 
-        if member_jobs.is_empty() {
+        if worker_jobs.is_empty() {
             // No jobs to transition; just send a stop event
-            let notification = format!("[event] member={member_id} type=stop");
+            let notification = format!("[event] member={worker_id} type=stop");
             if let Err(e) = state
                 .interactor
                 .data_store
@@ -147,9 +147,9 @@ pub async fn handle_stop(
         }
     }
 
-    // Fire-and-forget: deliver queued messages to the now-idle member
+    // Fire-and-forget: deliver queued messages to the now-idle worker
     let _ = state.event_tx.send(ServerEvent::DeliverMessages {
-        target_id: member_id,
+        target_id: worker_id,
     });
     let _ = state.event_tx.send(ServerEvent::NotifyDeliveryLoop);
 
