@@ -21,8 +21,8 @@
       {
         "hooks": [
           {
-            "type": "http",
-            "url": "{{PALETTE_SESSION_START_URL}}"
+            "type": "command",
+            "command": "curl -sf -X POST -H 'Content-Type: application/json' -d \"$(cat)\" '{{PALETTE_SESSION_START_URL}}' || true"
           }
         ]
       }
