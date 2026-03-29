@@ -13,7 +13,7 @@ pub async fn handle_session_start(
     let worker_id_str = query.worker_id.as_deref().unwrap_or("unknown");
     let worker_id = WorkerId::new(worker_id_str);
 
-    tracing::info!(worker_id = worker_id_str, "received session-start hook");
+    tracing::info!(worker_id = worker_id_str, payload = %payload, "received session-start hook");
 
     super::save_session_id(state.interactor.data_store.as_ref(), &worker_id, &payload);
 

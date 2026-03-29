@@ -22,7 +22,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "curl -sf -X POST -H 'Content-Type: application/json' -d \"$(cat)\" '{{PALETTE_SESSION_START_URL}}' || true"
+            "command": "curl -sf -X POST -H 'Content-Type: application/json' -d @- '{{PALETTE_SESSION_START_URL}}' || true"
           }
         ]
       }
