@@ -35,9 +35,9 @@ pub fn validate_diff(
 ) -> ValidationResult {
     let mut errors = Vec::new();
 
-    // Check added tasks: no ancestor in the new tree may be immutable in DB
+    // Check added tasks: the nearest existing parent must not be immutable
     for task_id in &diff.added_tasks {
-        if let Some(ancestor) = find_immutable_ancestor_in_tree(task_id, tree, db_statuses) {
+        if let Some(ancestor) = find_immutable_parent_in_tree(task_id, tree, db_statuses) {
             errors.push(ValidationError {
                 task_id: task_id.to_string(),
                 message: format!(
@@ -49,7 +49,7 @@ pub fn validate_diff(
     }
 
     // Check removed tasks: task itself must not be immutable,
-    // and no ancestor (via TaskId path) may be immutable
+    // and its direct parent must not be immutable
     for task_id in &diff.removed_tasks {
         if let Some(&status) = db_statuses.get(task_id)
             && is_immutable(status)
@@ -60,7 +60,7 @@ pub fn validate_diff(
             });
             continue;
         }
-        if let Some(ancestor) = find_immutable_ancestor_by_id(task_id, db_statuses) {
+        if let Some(ancestor) = find_immutable_parent_by_id(task_id, db_statuses) {
             errors.push(ValidationError {
                 task_id: task_id.to_string(),
                 message: format!(
@@ -81,9 +81,11 @@ fn is_immutable(status: TaskStatus) -> bool {
     )
 }
 
-/// Walk up the tree structure (using TaskTree parent_id) to find an immutable ancestor.
+/// Walk up the tree to find the nearest ancestor that exists in the DB,
+/// and check if it is immutable. This is the "direct parent" check:
+/// a Pending parent forms a mutable boundary, so we stop there.
 /// Used for added tasks that exist in the new Blueprint.
-fn find_immutable_ancestor_in_tree(
+fn find_immutable_parent_in_tree(
     task_id: &TaskId,
     tree: &TaskTree,
     db_statuses: &HashMap<TaskId, TaskStatus>,
@@ -92,11 +94,15 @@ fn find_immutable_ancestor_in_tree(
     let mut current_id = node.parent_id.clone()?;
 
     loop {
-        if let Some(&status) = db_statuses.get(&current_id)
-            && is_immutable(status)
-        {
-            return Some(current_id);
+        if let Some(&status) = db_statuses.get(&current_id) {
+            // Found the nearest existing ancestor — check only this one
+            return if is_immutable(status) {
+                Some(current_id)
+            } else {
+                None
+            };
         }
+        // Parent is also new (not in DB), keep walking up
         match tree.get(&current_id).and_then(|n| n.parent_id.clone()) {
             Some(parent) => current_id = parent,
             None => return None,
@@ -104,18 +110,21 @@ fn find_immutable_ancestor_in_tree(
     }
 }
 
-/// Walk up the TaskId path hierarchy to find an immutable ancestor.
+/// Check if the direct parent (in the DB) of a removed task is immutable.
 /// Used for removed tasks that are no longer in the Blueprint's tree.
-fn find_immutable_ancestor_by_id(
+fn find_immutable_parent_by_id(
     task_id: &TaskId,
     db_statuses: &HashMap<TaskId, TaskStatus>,
 ) -> Option<TaskId> {
     let mut current = task_id.parent();
     while let Some(parent_id) = current {
-        if let Some(&status) = db_statuses.get(&parent_id)
-            && is_immutable(status)
-        {
-            return Some(parent_id);
+        if let Some(&status) = db_statuses.get(&parent_id) {
+            // Found the nearest existing ancestor — check only this one
+            return if is_immutable(status) {
+                Some(parent_id)
+            } else {
+                None
+            };
         }
         current = parent_id.parent();
     }
