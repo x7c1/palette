@@ -23,7 +23,7 @@ pub(crate) fn row_to_job(row: &rusqlite::Row) -> rusqlite::Result<Job> {
         task_id: TaskId::new(row.get::<_, String>("task_id")?),
         job_type,
         title: row.get("title")?,
-        plan_path: row.get("plan_path")?,
+        plan_path: row.get("plan_path")?, // nullable TEXT → Option<String>
         assignee_id: row
             .get::<_, Option<String>>("assignee_id")?
             .map(WorkerId::new),

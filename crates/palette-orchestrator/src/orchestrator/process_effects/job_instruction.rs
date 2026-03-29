@@ -8,10 +8,10 @@ const PLAN_DIR_MOUNT: &str = "/home/agent/plans";
 
 /// Format a job into an instruction message for a member.
 pub(super) fn format_job_instruction(job: &Job) -> String {
-    let mut msg = format!(
-        "## Task: {}\n\nID: {}\nPlan: {}/{}\n",
-        job.title, job.id, PLAN_DIR_MOUNT, job.plan_path
-    );
+    let mut msg = format!("## Task: {}\n\nID: {}\n", job.title, job.id);
+    if let Some(ref plan_path) = job.plan_path {
+        msg.push_str(&format!("Plan: {PLAN_DIR_MOUNT}/{plan_path}\n"));
+    }
     if let Some(ref repo) = job.repository {
         msg.push_str(&format!(
             "\nRepository: {} (branch: {})\n",

@@ -63,7 +63,7 @@ mod tests {
                 id: Some(jid("C-001")),
                 job_type: JobType::Craft,
                 title: "Implement feature".to_string(),
-                plan_path: "2026/feature-x/api-impl".to_string(),
+                plan_path: Some("2026/feature-x/api-impl".to_string()),
                 assignee_id: Some(wid("member-a")),
                 priority: Some(Priority::High),
                 repository: Some(Repository {

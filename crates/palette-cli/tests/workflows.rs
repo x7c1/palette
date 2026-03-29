@@ -292,7 +292,7 @@ task:
             task_id: tid(&wf_id, "cascade-test/step-b"),
             job_type: JobType::Craft,
             title: "step-b".to_string(),
-            plan_path: "test/step-b".to_string(),
+            plan_path: Some("test/step-b".to_string()),
             assignee_id: None,
             priority: None,
             repository: None,
