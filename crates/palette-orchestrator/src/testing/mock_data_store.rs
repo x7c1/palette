@@ -170,6 +170,12 @@ impl DataStore for MockDataStore {
     fn update_task_status(&self, _: &TaskId, _: TaskStatus) -> Result<(), BoxErr> {
         unimplemented!()
     }
+    fn delete_task(&self, _: &TaskId) -> Result<(), BoxErr> {
+        unimplemented!()
+    }
+    fn delete_jobs_by_task_id(&self, _: &TaskId) -> Result<(), BoxErr> {
+        unimplemented!()
+    }
     fn create_workflow(&self, _: &WorkflowId, _: &str) -> Result<(), BoxErr> {
         unimplemented!()
     }
@@ -179,6 +185,7 @@ impl DataStore for MockDataStore {
             status: WorkflowStatus::Active,
             blueprint_path: String::new(),
             started_at: chrono::Utc::now(),
+            blueprint_hash: None,
         }))
     }
     fn list_workflows(&self, _: Option<WorkflowStatus>) -> Result<Vec<Workflow>, BoxErr> {
@@ -188,6 +195,9 @@ impl DataStore for MockDataStore {
         unimplemented!()
     }
     fn increment_worker_counter(&self, _: &WorkflowId) -> Result<usize, BoxErr> {
+        unimplemented!()
+    }
+    fn update_blueprint_hash(&self, _: &WorkflowId, _: Option<&str>) -> Result<(), BoxErr> {
         unimplemented!()
     }
     fn dequeue_message(&self, target_id: &WorkerId) -> Result<Option<String>, BoxErr> {

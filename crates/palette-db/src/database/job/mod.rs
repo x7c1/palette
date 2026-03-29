@@ -1,5 +1,6 @@
 mod assign_job;
 mod create_job;
+mod delete_jobs_by_task;
 mod find_assignable_jobs;
 mod get_job;
 mod get_job_by_task;

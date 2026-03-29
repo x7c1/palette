@@ -1,10 +1,15 @@
 use crate::AppState;
-use axum::{Json, extract::State, http::StatusCode, response::IntoResponse, response::Response};
+use axum::{
+    Json,
+    extract::{Path, State},
+    http::StatusCode,
+    response::{IntoResponse, Response},
+};
 use palette_domain::server::ServerEvent;
 use palette_domain::worker::WorkerStatus;
-use palette_domain::workflow::WorkflowStatus;
+use palette_domain::workflow::{WorkflowId, WorkflowStatus};
 use serde::Serialize;
-use std::collections::HashSet;
+use sha2::{Digest, Sha256};
 use std::sync::Arc;
 
 #[derive(Debug, Serialize)]
@@ -14,7 +19,14 @@ pub struct ResumeWorkflowResponse {
 
 pub async fn handle_resume_workflow(
     State(state): State<Arc<AppState>>,
+    Path(id): Path<String>,
 ) -> Result<Response, (StatusCode, String)> {
+    let workflow_id = WorkflowId::new(&id);
+
+    // Verify Blueprint hasn't changed since the last apply
+    verify_blueprint_hash(&state, &workflow_id)?;
+
+    // --- Resume Workers ---
     let workers = state
         .interactor
         .data_store
@@ -23,20 +35,17 @@ pub async fn handle_resume_workflow(
 
     let suspended: Vec<_> = workers
         .into_iter()
-        .filter(|w| w.status == WorkerStatus::Suspended)
+        .filter(|w| w.status == WorkerStatus::Suspended && w.workflow_id == workflow_id)
         .collect();
 
     if suspended.is_empty() {
-        tracing::info!("resume: no suspended workers found");
+        tracing::info!(workflow_id = %workflow_id, "resume: no suspended workers found");
         return Ok((
             StatusCode::OK,
             Json(ResumeWorkflowResponse { resumed_count: 0 }),
         )
             .into_response());
     }
-
-    // Collect workflow IDs to update their status
-    let workflow_ids: HashSet<_> = suspended.iter().map(|w| w.workflow_id.clone()).collect();
 
     let mut resumed_ids = Vec::new();
 
@@ -58,9 +67,6 @@ pub async fn handle_resume_workflow(
         }
 
         // Resume the Claude Code session if a session_id is available.
-        // Graceful suspend ensures all workers finish their current task
-        // before stopping, so both supervisors and members have meaningful
-        // session context to resume.
         let cmd = if let Some(ref session_id) = worker.session_id {
             state.interactor.container.claude_resume_command(
                 &worker.container_id,
@@ -108,19 +114,23 @@ pub async fn handle_resume_workflow(
     let resumed_count = resumed_ids.len();
 
     // Update workflow status back to Active
-    for workflow_id in &workflow_ids {
-        if let Err(e) = state
-            .interactor
-            .data_store
-            .update_workflow_status(workflow_id, WorkflowStatus::Active)
-        {
-            tracing::warn!(
-                workflow_id = %workflow_id,
-                error = %e,
-                "failed to update workflow status to Active"
-            );
-        }
+    if let Err(e) = state
+        .interactor
+        .data_store
+        .update_workflow_status(&workflow_id, WorkflowStatus::Active)
+    {
+        tracing::warn!(
+            workflow_id = %workflow_id,
+            error = %e,
+            "failed to update workflow status to Active"
+        );
     }
+
+    // Clear the blueprint hash (no longer relevant once resumed)
+    let _ = state
+        .interactor
+        .data_store
+        .update_blueprint_hash(&workflow_id, None);
 
     // Send event to orchestrator to spawn readiness watchers
     if !resumed_ids.is_empty() {
@@ -136,4 +146,84 @@ pub async fn handle_resume_workflow(
         Json(ResumeWorkflowResponse { resumed_count }),
     )
         .into_response())
+}
+
+/// Verify that the Blueprint file hasn't changed since the last apply.
+///
+/// - If no blueprint_hash is stored: check that the Blueprint on disk matches
+///   what's in the DB (no diff). If there are changes, require an apply first.
+/// - If a blueprint_hash is stored: re-hash the file and compare.
+fn verify_blueprint_hash(
+    state: &AppState,
+    workflow_id: &WorkflowId,
+) -> Result<(), (StatusCode, String)> {
+    let internal = |e: Box<dyn std::error::Error + Send + Sync>| {
+        (StatusCode::INTERNAL_SERVER_ERROR, e.to_string())
+    };
+
+    let workflow = state
+        .interactor
+        .data_store
+        .get_workflow(workflow_id)
+        .map_err(internal)?
+        .ok_or_else(|| {
+            (
+                StatusCode::NOT_FOUND,
+                format!("workflow {} not found", workflow_id),
+            )
+        })?;
+
+    let blueprint_path = std::path::Path::new(&workflow.blueprint_path);
+
+    match &workflow.blueprint_hash {
+        Some(stored_hash) => {
+            // Apply was called — verify the file hasn't changed since
+            let content = std::fs::read(blueprint_path).map_err(|e| {
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    format!("failed to read blueprint: {e}"),
+                )
+            })?;
+            let current_hash = hex_sha256(&content);
+            if current_hash != *stored_hash {
+                return Err((
+                    StatusCode::BAD_REQUEST,
+                    "blueprint changed since last apply; run apply-blueprint again".to_string(),
+                ));
+            }
+        }
+        None => {
+            // No apply was called — check if the Blueprint has changed at all
+            let tree = state
+                .interactor
+                .blueprint
+                .read_blueprint(blueprint_path, workflow_id)
+                .map_err(|e| {
+                    (
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        format!("failed to read blueprint: {e}"),
+                    )
+                })?;
+            let db_statuses = state
+                .interactor
+                .data_store
+                .get_task_statuses(workflow_id)
+                .map_err(internal)?;
+
+            let diff = palette_usecase::reconciliation::compute_diff(&tree, &db_statuses);
+            if !diff.added_tasks.is_empty() || !diff.removed_tasks.is_empty() {
+                return Err((
+                    StatusCode::BAD_REQUEST,
+                    "blueprint has unapplied changes; run apply-blueprint first".to_string(),
+                ));
+            }
+        }
+    }
+
+    Ok(())
+}
+
+fn hex_sha256(data: &[u8]) -> String {
+    let digest = Sha256::digest(data);
+    format!("{digest:x}")
 }

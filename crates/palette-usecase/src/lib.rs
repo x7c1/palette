@@ -4,6 +4,7 @@ pub mod terminal_session;
 
 pub mod blueprint_reader;
 pub mod interactor;
+pub mod reconciliation;
 pub mod task_store;
 
 mod rule_engine;

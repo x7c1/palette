@@ -168,6 +168,13 @@ pub trait DataStore: Send + Sync {
         status: TaskStatus,
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>>;
 
+    fn delete_task(&self, id: &TaskId) -> Result<(), Box<dyn std::error::Error + Send + Sync>>;
+
+    fn delete_jobs_by_task_id(
+        &self,
+        task_id: &TaskId,
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>>;
+
     // -- Workflow --
 
     fn create_workflow(
@@ -196,6 +203,12 @@ pub trait DataStore: Send + Sync {
         &self,
         workflow_id: &WorkflowId,
     ) -> Result<usize, Box<dyn std::error::Error + Send + Sync>>;
+
+    fn update_blueprint_hash(
+        &self,
+        id: &WorkflowId,
+        hash: Option<&str>,
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>>;
 
     // -- Message Queue --
 

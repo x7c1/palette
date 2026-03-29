@@ -1,3 +1,5 @@
+mod task_activation;
+
 mod list;
 pub use list::handle_list_workflows;
 
@@ -9,3 +11,6 @@ pub use start::handle_start_workflow;
 
 mod suspend;
 pub use suspend::handle_suspend_workflow;
+
+mod apply_blueprint;
+pub use apply_blueprint::handle_apply_blueprint;

@@ -214,6 +214,17 @@ impl DataStore for Database {
         Ok(Database::update_task_status(self, id, status)?)
     }
 
+    fn delete_task(&self, id: &TaskId) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        Ok(Database::delete_task(self, id)?)
+    }
+
+    fn delete_jobs_by_task_id(
+        &self,
+        task_id: &TaskId,
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        Ok(Database::delete_jobs_by_task_id(self, task_id)?)
+    }
+
     // -- Workflow --
 
     fn create_workflow(
@@ -251,6 +262,14 @@ impl DataStore for Database {
         workflow_id: &WorkflowId,
     ) -> Result<usize, Box<dyn std::error::Error + Send + Sync>> {
         Ok(Database::increment_worker_counter(self, workflow_id)?)
+    }
+
+    fn update_blueprint_hash(
+        &self,
+        id: &WorkflowId,
+        hash: Option<&str>,
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        Ok(Database::update_blueprint_hash(self, id, hash)?)
     }
 
     // -- Message Queue --

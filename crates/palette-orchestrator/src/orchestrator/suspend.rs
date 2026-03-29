@@ -1,7 +1,6 @@
 use super::Orchestrator;
 use palette_domain::worker::{WorkerId, WorkerState, WorkerStatus};
-use palette_domain::workflow::WorkflowStatus;
-use std::collections::HashSet;
+use palette_domain::workflow::{WorkflowId, WorkflowStatus};
 use std::time::{Duration, Instant};
 
 /// Poll interval while waiting for in-progress workers to finish.
@@ -11,7 +10,7 @@ const SUSPEND_POLL_INTERVAL: Duration = Duration::from_secs(3);
 const SUSPEND_TIMEOUT: Duration = Duration::from_secs(300);
 
 impl Orchestrator {
-    /// Gracefully suspend all active workers.
+    /// Gracefully suspend workers belonging to the specified workflow.
     ///
     /// 1. Set workflow status to `Suspending` (blocks new job assignment and
     ///    message delivery).
@@ -21,7 +20,7 @@ impl Orchestrator {
     /// 3. Suspend idle members as they finish, then supervisors.
     /// 4. On timeout, force-stop remaining workers with a warning.
     /// 5. Set workflow status to `Suspended`.
-    pub fn suspend(&self) {
+    pub fn suspend(&self, workflow_id: &WorkflowId) {
         let workers = match self.interactor.data_store.list_all_workers() {
             Ok(w) => w,
             Err(e) => {
@@ -33,32 +32,29 @@ impl Orchestrator {
         let suspendable: Vec<_> = workers
             .iter()
             .filter(|w| {
-                matches!(
-                    w.status,
-                    WorkerStatus::Booting
-                        | WorkerStatus::Working
-                        | WorkerStatus::Idle
-                        | WorkerStatus::WaitingPermission
-                )
+                w.workflow_id == *workflow_id
+                    && matches!(
+                        w.status,
+                        WorkerStatus::Booting
+                            | WorkerStatus::Working
+                            | WorkerStatus::Idle
+                            | WorkerStatus::WaitingPermission
+                    )
             })
             .collect();
 
         if suspendable.is_empty() {
-            tracing::info!("suspend: no workers to suspend");
+            tracing::info!(workflow_id = %workflow_id, "suspend: no workers to suspend");
             return;
         }
 
-        let workflow_ids: HashSet<_> = suspendable.iter().map(|w| w.workflow_id.clone()).collect();
-
-        // Phase 1: Mark workflows as Suspending to block new assignments/delivery
-        for workflow_id in &workflow_ids {
-            if let Err(e) = self
-                .interactor
-                .data_store
-                .update_workflow_status(workflow_id, WorkflowStatus::Suspending)
-            {
-                tracing::warn!(workflow_id = %workflow_id, error = %e, "failed to set Suspending");
-            }
+        // Phase 1: Mark workflow as Suspending to block new assignments/delivery
+        if let Err(e) = self
+            .interactor
+            .data_store
+            .update_workflow_status(workflow_id, WorkflowStatus::Suspending)
+        {
+            tracing::warn!(workflow_id = %workflow_id, error = %e, "failed to set Suspending");
         }
 
         // Partition workers into members and supervisors
@@ -111,7 +107,7 @@ impl Orchestrator {
                         false
                     }
                     WorkerStatus::Crashed => {
-                        // Plan: crashed during suspend → mark Suspended without recovery
+                        // Crashed during suspend → mark Suspended without recovery
                         tracing::info!(worker_id = %id, "suspend: crashed member, marking Suspended");
                         if let Err(e) = self
                             .interactor
@@ -162,19 +158,17 @@ impl Orchestrator {
             }
         }
 
-        // Phase 5: Mark workflows as Suspended
-        for workflow_id in &workflow_ids {
-            if let Err(e) = self
-                .interactor
-                .data_store
-                .update_workflow_status(workflow_id, WorkflowStatus::Suspended)
-            {
-                tracing::warn!(
-                    workflow_id = %workflow_id,
-                    error = %e,
-                    "failed to update workflow status to Suspended"
-                );
-            }
+        // Phase 5: Mark workflow as Suspended
+        if let Err(e) = self
+            .interactor
+            .data_store
+            .update_workflow_status(workflow_id, WorkflowStatus::Suspended)
+        {
+            tracing::warn!(
+                workflow_id = %workflow_id,
+                error = %e,
+                "failed to update workflow status to Suspended"
+            );
         }
 
         tracing::info!(suspended_count, "suspend complete");
