@@ -264,6 +264,14 @@ impl DataStore for Database {
         Ok(Database::increment_worker_counter(self, workflow_id)?)
     }
 
+    fn update_blueprint_hash(
+        &self,
+        id: &WorkflowId,
+        hash: Option<&str>,
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        Ok(Database::update_blueprint_hash(self, id, hash)?)
+    }
+
     // -- Message Queue --
 
     fn enqueue_message(

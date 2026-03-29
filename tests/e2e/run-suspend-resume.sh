@@ -216,57 +216,54 @@ echo "=== Step 6: Blueprint Reconciliation ==="
 # Back up the original Blueprint
 cp "$BLUEPRINT_PATH" "$BLUEPRINT_ORIG"
 
-# 6a: Validate invalid change — add child under phase-a (InProgress subtree)
-echo "--- 6a: Validate invalid Blueprint change ---"
+# 6a: Apply invalid change — add child under phase-a (InProgress subtree)
+echo "--- 6a: Apply invalid Blueprint change ---"
 cp "$RECONCILE_INVALID" "$BLUEPRINT_PATH"
 
-HTTP_CODE=$(curl -s -o /tmp/palette-validate-invalid.json -w '%{http_code}' \
-  -X POST "$PALETTE_URL/workflows/$WORKFLOW_ID/validate-blueprint")
+HTTP_CODE=$(curl -s -o /tmp/palette-apply-invalid.json -w '%{http_code}' \
+  -X POST "$PALETTE_URL/workflows/$WORKFLOW_ID/apply-blueprint")
 
 if [[ "$HTTP_CODE" -ne 200 ]]; then
-  echo "FAIL: validate-blueprint returned HTTP $HTTP_CODE (expected 200)"
-  cat /tmp/palette-validate-invalid.json
+  echo "FAIL: apply-blueprint returned HTTP $HTTP_CODE (expected 200)"
+  cat /tmp/palette-apply-invalid.json
   PASS=false
 else
-  VALID=$(jq -r '.valid' /tmp/palette-validate-invalid.json)
-  ERROR_COUNT=$(jq '.errors | length' /tmp/palette-validate-invalid.json)
-  if [[ "$VALID" == "false" && "$ERROR_COUNT" -gt 0 ]]; then
+  APPLIED=$(jq -r '.applied' /tmp/palette-apply-invalid.json)
+  ERROR_COUNT=$(jq '.errors | length' /tmp/palette-apply-invalid.json)
+  if [[ "$APPLIED" == "false" && "$ERROR_COUNT" -gt 0 ]]; then
     echo "PASS: Invalid Blueprint correctly rejected ($ERROR_COUNT errors)"
-    jq -r '.errors[] | "  \(.task_id): \(.message)"' /tmp/palette-validate-invalid.json
+    jq -r '.errors[] | "  \(.task_id): \(.message)"' /tmp/palette-apply-invalid.json
   else
-    echo "FAIL: Expected validation to fail, got valid=$VALID errors=$ERROR_COUNT"
-    cat /tmp/palette-validate-invalid.json
+    echo "FAIL: Expected apply to fail, got applied=$APPLIED errors=$ERROR_COUNT"
+    cat /tmp/palette-apply-invalid.json
     PASS=false
   fi
 fi
 
-# 6b: Validate valid change — add task under phase-b (Pending)
-echo "--- 6b: Validate valid Blueprint change ---"
+# 6b: Apply valid change — add task under phase-b (Pending)
+echo "--- 6b: Apply valid Blueprint change ---"
 cp "$RECONCILE_VALID" "$BLUEPRINT_PATH"
 
-HTTP_CODE=$(curl -s -o /tmp/palette-validate-valid.json -w '%{http_code}' \
-  -X POST "$PALETTE_URL/workflows/$WORKFLOW_ID/validate-blueprint")
+HTTP_CODE=$(curl -s -o /tmp/palette-apply-valid.json -w '%{http_code}' \
+  -X POST "$PALETTE_URL/workflows/$WORKFLOW_ID/apply-blueprint")
 
 if [[ "$HTTP_CODE" -ne 200 ]]; then
-  echo "FAIL: validate-blueprint returned HTTP $HTTP_CODE (expected 200)"
-  cat /tmp/palette-validate-valid.json
+  echo "FAIL: apply-blueprint returned HTTP $HTTP_CODE (expected 200)"
+  cat /tmp/palette-apply-valid.json
   PASS=false
 else
-  VALID=$(jq -r '.valid' /tmp/palette-validate-valid.json)
-  ADDED=$(jq '.added_tasks | length' /tmp/palette-validate-valid.json)
-  if [[ "$VALID" == "true" && "$ADDED" -gt 0 ]]; then
-    echo "PASS: Valid Blueprint change accepted ($ADDED tasks to add)"
-    jq -r '.added_tasks[]' /tmp/palette-validate-valid.json | while read -r tid; do
-      echo "  + $tid"
-    done
+  APPLIED=$(jq -r '.applied' /tmp/palette-apply-valid.json)
+  TASKS_CREATED=$(jq -r '.tasks_created' /tmp/palette-apply-valid.json)
+  if [[ "$APPLIED" == "true" && "$TASKS_CREATED" -gt 0 ]]; then
+    echo "PASS: Valid Blueprint change applied ($TASKS_CREATED tasks created)"
   else
-    echo "FAIL: Expected validation to pass with added tasks, got valid=$VALID added=$ADDED"
-    cat /tmp/palette-validate-valid.json
+    echo "FAIL: Expected apply to succeed with created tasks, got applied=$APPLIED tasks_created=$TASKS_CREATED"
+    cat /tmp/palette-apply-valid.json
     PASS=false
   fi
 fi
 
-# Leave the valid Blueprint in place for resume
+# Leave the valid Blueprint in place for resume (hash was saved by apply)
 
 # --- Step 7: Resume workflow ---
 echo ""
@@ -281,18 +278,7 @@ if [[ "$HTTP_CODE" -lt 200 || "$HTTP_CODE" -ge 300 ]]; then
 fi
 
 RESUMED_COUNT=$(jq -r '.resumed_count' /tmp/palette-resume-response.json)
-RECONCILED=$(jq -r '.reconciliation // empty' /tmp/palette-resume-response.json)
 echo "Resumed $RESUMED_COUNT workers"
-if [[ -n "$RECONCILED" ]]; then
-  TASKS_CREATED=$(jq -r '.reconciliation.tasks_created' /tmp/palette-resume-response.json)
-  echo "Reconciliation: $TASKS_CREATED tasks created"
-  if [[ "$TASKS_CREATED" -gt 0 ]]; then
-    echo "PASS: Reconciliation created new tasks"
-  else
-    echo "FAIL: Expected reconciliation to create tasks"
-    PASS=false
-  fi
-fi
 
 # Restore original Blueprint
 cp "$BLUEPRINT_ORIG" "$BLUEPRINT_PATH"

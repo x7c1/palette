@@ -44,6 +44,7 @@ CREATE TABLE IF NOT EXISTS workflows (
     status_id INTEGER NOT NULL,
     worker_counter INTEGER NOT NULL DEFAULT 0,
     started_at TEXT NOT NULL,
+    blueprint_hash TEXT,
     FOREIGN KEY (status_id) REFERENCES workflow_statuses(id)
 );
 

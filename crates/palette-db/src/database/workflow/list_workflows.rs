@@ -7,11 +7,11 @@ impl Database {
 
         let (sql, param_values): (&str, Vec<Box<dyn rusqlite::types::ToSql>>) = match status {
             Some(s) => (
-                "SELECT id, blueprint_path, status_id, started_at FROM workflows WHERE status_id = ?1",
+                "SELECT id, blueprint_path, status_id, started_at, blueprint_hash FROM workflows WHERE status_id = ?1",
                 vec![Box::new(crate::lookup::workflow_status_id(s))],
             ),
             None => (
-                "SELECT id, blueprint_path, status_id, started_at FROM workflows",
+                "SELECT id, blueprint_path, status_id, started_at, blueprint_hash FROM workflows",
                 vec![],
             ),
         };
@@ -28,6 +28,7 @@ impl Database {
                 blueprint_path: row.get("blueprint_path")?,
                 status,
                 started_at: parse_datetime(&row.get::<_, String>("started_at")?),
+                blueprint_hash: row.get("blueprint_hash")?,
             })
         })?;
 

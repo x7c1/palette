@@ -12,5 +12,5 @@ pub use start::handle_start_workflow;
 mod suspend;
 pub use suspend::handle_suspend_workflow;
 
-mod validate_blueprint;
-pub use validate_blueprint::handle_validate_blueprint;
+mod apply_blueprint;
+pub use apply_blueprint::handle_apply_blueprint;

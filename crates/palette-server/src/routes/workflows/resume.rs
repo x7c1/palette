@@ -1,4 +1,3 @@
-use super::task_activation::{activate_ready_children, internal_err};
 use crate::AppState;
 use axum::{
     Json,
@@ -7,26 +6,15 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use palette_domain::server::ServerEvent;
-use palette_domain::task::TaskId;
 use palette_domain::worker::WorkerStatus;
 use palette_domain::workflow::{WorkflowId, WorkflowStatus};
-use palette_usecase::TaskRuleEngine;
-use palette_usecase::reconciliation;
-use palette_usecase::task_store::TaskStore;
 use serde::Serialize;
+use sha2::{Digest, Sha256};
 use std::sync::Arc;
 
 #[derive(Debug, Serialize)]
 pub struct ResumeWorkflowResponse {
     pub resumed_count: usize,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub reconciliation: Option<ReconciliationSummary>,
-}
-
-#[derive(Debug, Serialize)]
-pub struct ReconciliationSummary {
-    pub tasks_created: usize,
-    pub tasks_deleted: usize,
 }
 
 pub async fn handle_resume_workflow(
@@ -35,8 +23,8 @@ pub async fn handle_resume_workflow(
 ) -> Result<Response, (StatusCode, String)> {
     let workflow_id = WorkflowId::new(&id);
 
-    // --- Blueprint Reconciliation ---
-    let reconciliation_summary = reconcile_blueprint(&state, &workflow_id)?;
+    // Verify Blueprint hasn't changed since the last apply
+    verify_blueprint_hash(&state, &workflow_id)?;
 
     // --- Resume Workers ---
     let workers = state
@@ -54,10 +42,7 @@ pub async fn handle_resume_workflow(
         tracing::info!(workflow_id = %workflow_id, "resume: no suspended workers found");
         return Ok((
             StatusCode::OK,
-            Json(ResumeWorkflowResponse {
-                resumed_count: 0,
-                reconciliation: reconciliation_summary,
-            }),
+            Json(ResumeWorkflowResponse { resumed_count: 0 }),
         )
             .into_response());
     }
@@ -141,6 +126,12 @@ pub async fn handle_resume_workflow(
         );
     }
 
+    // Clear the blueprint hash (no longer relevant once resumed)
+    let _ = state
+        .interactor
+        .data_store
+        .update_blueprint_hash(&workflow_id, None);
+
     // Send event to orchestrator to spawn readiness watchers
     if !resumed_ids.is_empty() {
         let _ = state.event_tx.send(ServerEvent::ResumeWorkers {
@@ -152,26 +143,29 @@ pub async fn handle_resume_workflow(
 
     Ok((
         StatusCode::OK,
-        Json(ResumeWorkflowResponse {
-            resumed_count,
-            reconciliation: reconciliation_summary,
-        }),
+        Json(ResumeWorkflowResponse { resumed_count }),
     )
         .into_response())
 }
 
-/// Run Blueprint reconciliation: validate changes and apply them to the DB.
-/// Returns None if no changes were detected, or a summary of the reconciliation.
-fn reconcile_blueprint(
+/// Verify that the Blueprint file hasn't changed since the last apply.
+///
+/// - If no blueprint_hash is stored: check that the Blueprint on disk matches
+///   what's in the DB (no diff). If there are changes, require an apply first.
+/// - If a blueprint_hash is stored: re-hash the file and compare.
+fn verify_blueprint_hash(
     state: &AppState,
     workflow_id: &WorkflowId,
-) -> Result<Option<ReconciliationSummary>, (StatusCode, String)> {
-    // Load workflow to get blueprint path
+) -> Result<(), (StatusCode, String)> {
+    let internal = |e: Box<dyn std::error::Error + Send + Sync>| {
+        (StatusCode::INTERNAL_SERVER_ERROR, e.to_string())
+    };
+
     let workflow = state
         .interactor
         .data_store
         .get_workflow(workflow_id)
-        .map_err(internal_err)?
+        .map_err(internal)?
         .ok_or_else(|| {
             (
                 StatusCode::NOT_FOUND,
@@ -179,103 +173,57 @@ fn reconcile_blueprint(
             )
         })?;
 
-    // Re-read Blueprint from disk
-    let tree = state
-        .interactor
-        .blueprint
-        .read_blueprint(std::path::Path::new(&workflow.blueprint_path), workflow_id)
-        .map_err(|e| {
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                format!("failed to read blueprint: {e}"),
-            )
-        })?;
+    let blueprint_path = std::path::Path::new(&workflow.blueprint_path);
 
-    // Get current task statuses from DB
-    let db_statuses = state
-        .interactor
-        .data_store
-        .get_task_statuses(workflow_id)
-        .map_err(internal_err)?;
+    match &workflow.blueprint_hash {
+        Some(stored_hash) => {
+            // Apply was called — verify the file hasn't changed since
+            let content = std::fs::read(blueprint_path).map_err(|e| {
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    format!("failed to read blueprint: {e}"),
+                )
+            })?;
+            let current_hash = hex_sha256(&content);
+            if current_hash != *stored_hash {
+                return Err((
+                    StatusCode::BAD_REQUEST,
+                    "blueprint changed since last apply; run apply-blueprint again".to_string(),
+                ));
+            }
+        }
+        None => {
+            // No apply was called — check if the Blueprint has changed at all
+            let tree = state
+                .interactor
+                .blueprint
+                .read_blueprint(blueprint_path, workflow_id)
+                .map_err(|e| {
+                    (
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        format!("failed to read blueprint: {e}"),
+                    )
+                })?;
+            let db_statuses = state
+                .interactor
+                .data_store
+                .get_task_statuses(workflow_id)
+                .map_err(internal)?;
 
-    // Compute diff
-    let diff = reconciliation::compute_diff(&tree, &db_statuses);
-
-    if diff.added_tasks.is_empty() && diff.removed_tasks.is_empty() {
-        tracing::info!(workflow_id = %workflow_id, "reconciliation: no blueprint changes");
-        return Ok(None);
-    }
-
-    // Validate
-    let validation = reconciliation::validate_diff(&diff, &tree, &db_statuses);
-    if !validation.is_valid() {
-        let messages: Vec<String> = validation
-            .errors
-            .iter()
-            .map(|e| format!("{}: {}", e.task_id, e.message))
-            .collect();
-        return Err((
-            StatusCode::BAD_REQUEST,
-            format!("blueprint validation failed: {}", messages.join("; ")),
-        ));
-    }
-
-    // Execute reconciliation
-    let result = reconciliation::reconcile(
-        state.interactor.data_store.as_ref(),
-        &diff,
-        workflow_id,
-        &tree,
-        &db_statuses,
-    )
-    .map_err(internal_err)?;
-
-    tracing::info!(
-        workflow_id = %workflow_id,
-        tasks_created = result.tasks_created,
-        tasks_deleted = result.tasks_deleted,
-        tasks_demoted = result.tasks_demoted.len(),
-        "reconciliation complete"
-    );
-
-    // Activate newly Ready tasks (Pending tasks whose dependencies are now met)
-    let updated_statuses = state
-        .interactor
-        .data_store
-        .get_task_statuses(workflow_id)
-        .map_err(internal_err)?;
-
-    let task_store = TaskStore::new(
-        state.interactor.data_store.as_ref(),
-        tree,
-        workflow_id.clone(),
-        updated_statuses,
-    );
-    let task_engine = TaskRuleEngine::new(&task_store);
-
-    // Collect all Pending task IDs for ready-resolution
-    let pending_ids: Vec<TaskId> = task_store
-        .tree()
-        .task_ids()
-        .filter(|id| {
-            task_store
-                .get_task(id)
-                .ok()
-                .flatten()
-                .is_some_and(|t| t.status == palette_domain::task::TaskStatus::Pending)
-        })
-        .cloned()
-        .collect();
-
-    if !pending_ids.is_empty() {
-        let effects = activate_ready_children(state, &task_store, &task_engine, &pending_ids)?;
-        if !effects.is_empty() {
-            let _ = state.event_tx.send(ServerEvent::ProcessEffects { effects });
+            let diff = palette_usecase::reconciliation::compute_diff(&tree, &db_statuses);
+            if !diff.added_tasks.is_empty() || !diff.removed_tasks.is_empty() {
+                return Err((
+                    StatusCode::BAD_REQUEST,
+                    "blueprint has unapplied changes; run apply-blueprint first".to_string(),
+                ));
+            }
         }
     }
 
-    Ok(Some(ReconciliationSummary {
-        tasks_created: result.tasks_created,
-        tasks_deleted: result.tasks_deleted,
-    }))
+    Ok(())
+}
+
+fn hex_sha256(data: &[u8]) -> String {
+    let digest = Sha256::digest(data);
+    format!("{digest:x}")
 }

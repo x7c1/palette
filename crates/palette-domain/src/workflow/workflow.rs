@@ -10,4 +10,7 @@ pub struct Workflow {
     pub blueprint_path: String,
     pub status: WorkflowStatus,
     pub started_at: DateTime<Utc>,
+    /// SHA-256 hash of the Blueprint file at the time of the last apply.
+    /// None if no apply has been performed (Blueprint unchanged since start).
+    pub blueprint_hash: Option<String>,
 }

@@ -204,6 +204,12 @@ pub trait DataStore: Send + Sync {
         workflow_id: &WorkflowId,
     ) -> Result<usize, Box<dyn std::error::Error + Send + Sync>>;
 
+    fn update_blueprint_hash(
+        &self,
+        id: &WorkflowId,
+        hash: Option<&str>,
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>>;
+
     // -- Message Queue --
 
     fn enqueue_message(

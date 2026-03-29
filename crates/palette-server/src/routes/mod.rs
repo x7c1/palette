@@ -34,8 +34,8 @@ pub fn create_router(state: Arc<AppState>) -> Router {
             post(workflows::handle_resume_workflow),
         )
         .route(
-            "/workflows/{id}/validate-blueprint",
-            post(workflows::handle_validate_blueprint),
+            "/workflows/{id}/apply-blueprint",
+            post(workflows::handle_apply_blueprint),
         )
         .route("/workflows", get(workflows::handle_list_workflows))
         // Job API
