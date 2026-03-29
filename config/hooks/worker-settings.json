@@ -5,15 +5,34 @@
   },
   "permissions": {
     "allow": [
-      "Bash(ls)",
-      "Bash(ls *)",
+      "Bash(cat *)",
       "Bash(cd *)",
+      "Bash(cp *)",
       "Bash(echo)",
       "Bash(echo *)",
-      "Bash(cat *)",
+      "Bash(find *)",
+      "Bash(grep *)",
+      "Bash(head *)",
+      "Bash(ls)",
+      "Bash(ls *)",
+      "Bash(mkdir *)",
+      "Bash(mv *)",
       "Bash(pwd)",
+      "Bash(tail *)",
+      "Bash(wc *)",
+      "Bash(git add *)",
+      "Bash(git branch *)",
       "Bash(git checkout *)",
-      "Bash(git clone *)"
+      "Bash(git clone *)",
+      "Bash(git commit *)",
+      "Bash(git diff *)",
+      "Bash(git log *)",
+      "Bash(git push *)",
+      "Bash(git status *)",
+      "Read(*)",
+      "Edit(*)",
+      "Write(*)",
+      "Glob(*)"
     ]
   },
   "hooks": {
