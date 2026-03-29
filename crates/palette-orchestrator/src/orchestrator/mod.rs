@@ -10,6 +10,7 @@ mod spawn_member;
 mod spawn_readiness_watcher;
 mod spawn_supervisor;
 mod start;
+mod suspend;
 mod worker_monitor;
 
 use palette_usecase::Interactor;

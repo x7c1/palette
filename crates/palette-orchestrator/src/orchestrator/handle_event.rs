@@ -16,6 +16,7 @@ impl Orchestrator {
                     self.spawn_readiness_watcher(worker_id);
                 }
             }
+            ServerEvent::SuspendWorkflow => self.suspend(),
         }
     }
 
