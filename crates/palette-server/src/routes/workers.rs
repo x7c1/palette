@@ -8,7 +8,7 @@ pub struct WorkerResponse {
     pub workflow_id: String,
     pub role: String,
     pub status: String,
-    pub supervisor_id: String,
+    pub supervisor_id: Option<String>,
     pub container_id: String,
     pub terminal_target: String,
     pub task_id: String,
@@ -30,11 +30,7 @@ pub async fn handle_list_workers(
             workflow_id: w.workflow_id.to_string(),
             role: w.role.as_str().to_string(),
             status: w.status.as_str().to_string(),
-            supervisor_id: w
-                .supervisor_id
-                .as_ref()
-                .map(|s| s.to_string())
-                .unwrap_or_default(),
+            supervisor_id: w.supervisor_id.as_ref().map(|s| s.to_string()),
             container_id: w.container_id.to_string(),
             terminal_target: w.terminal_target.to_string(),
             task_id: w.task_id.to_string(),
