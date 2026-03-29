@@ -8,7 +8,10 @@ pub fn is_container_running(container_id: &str) -> bool {
             let stdout = String::from_utf8_lossy(&out.stdout);
             stdout.trim() == "true"
         }
-        Err(_) => false,
+        Err(e) => {
+            tracing::warn!(container_id, error = %e, "failed to inspect container");
+            false
+        }
     }
 }
 

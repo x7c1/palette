@@ -8,7 +8,10 @@ impl DockerManager {
         let output = run_docker(["exec", cid, "pgrep", "-f", "claude"]);
         match output {
             Ok(out) => out.status.success(),
-            Err(_) => false,
+            Err(e) => {
+                tracing::warn!(container_id = cid, error = %e, "failed to check if claude is running");
+                false
+            }
         }
     }
 }
