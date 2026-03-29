@@ -10,7 +10,7 @@ pub struct Job {
     pub task_id: TaskId,
     pub job_type: JobType,
     pub title: String,
-    pub plan_path: Option<String>,
+    pub plan_path: String,
     pub assignee_id: Option<WorkerId>,
     pub status: JobStatus,
     pub priority: Option<Priority>,

@@ -12,7 +12,7 @@ pub struct JobResponse {
     #[serde(rename = "type")]
     pub job_type: JobType,
     pub title: String,
-    pub plan_path: Option<String>,
+    pub plan_path: String,
     pub assignee_id: Option<String>,
     pub status: JobStatus,
     pub priority: Option<Priority>,
