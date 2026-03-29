@@ -19,7 +19,7 @@ pub fn make_worker(id: &str, role: WorkerRole, status: WorkerStatus) -> WorkerSt
         id: WorkerId::new(id),
         workflow_id: WorkflowId::new("wf-test"),
         role,
-        supervisor_id: WorkerId::new("sup-1"),
+        supervisor_id: Some(WorkerId::new("sup-1")),
         container_id: ContainerId::new(format!("container-{id}")),
         terminal_target: TerminalTarget::new(format!("pane-{id}")),
         status,

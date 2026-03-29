@@ -39,6 +39,10 @@ impl ContainerRuntime for MockContainerRuntime {
             .contains(container_id)
     }
 
+    fn is_claude_running(&self, _container_id: &ContainerId) -> bool {
+        true
+    }
+
     fn start_container(&self, container_id: &ContainerId) -> Result<(), BoxErr> {
         self.started_containers
             .lock()

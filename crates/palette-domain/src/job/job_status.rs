@@ -42,6 +42,14 @@ impl JobStatus {
             JobStatus::Craft(CraftStatus::Done) | JobStatus::Review(ReviewStatus::Done)
         )
     }
+
+    /// Returns true if the worker is actively working on this job.
+    pub fn is_in_progress(&self) -> bool {
+        matches!(
+            self,
+            JobStatus::Craft(CraftStatus::InProgress) | JobStatus::Review(ReviewStatus::InProgress)
+        )
+    }
 }
 
 impl fmt::Display for JobStatus {

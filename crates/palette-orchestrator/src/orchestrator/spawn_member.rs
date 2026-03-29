@@ -83,7 +83,7 @@ impl Orchestrator {
             id: member_id.clone(),
             workflow_id,
             role: WorkerRole::Member,
-            supervisor_id,
+            supervisor_id: Some(supervisor_id),
             container_id,
             terminal_target,
             status: WorkerStatus::Booting,

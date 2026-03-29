@@ -29,8 +29,8 @@ fn register_worker(
             workflow_id: wf_id,
             role: WorkerRole::Member,
             status,
-            supervisor_id: wid(""),
-            container_id: ContainerId::new(""),
+            supervisor_id: None,
+            container_id: ContainerId::new("stub"),
             terminal_target: terminal_target.clone(),
             session_id: None,
             task_id: TaskId::new(format!("task-{id}")),
@@ -138,7 +138,7 @@ async fn send_queues_when_member_is_working() {
     let body: serde_json::Value = resp.json().await.unwrap();
     assert_eq!(body["queued"], true);
 
-    // Stop hook should deliver the queued message
+    // Stop hook should deliver the queued message.
     let resp = client
         .post(format!("{base_url}/hooks/stop?worker_id=worker"))
         .json(&json!({}))

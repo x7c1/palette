@@ -173,8 +173,13 @@ impl DataStore for MockDataStore {
     fn create_workflow(&self, _: &WorkflowId, _: &str) -> Result<(), BoxErr> {
         unimplemented!()
     }
-    fn get_workflow(&self, _: &WorkflowId) -> Result<Option<Workflow>, BoxErr> {
-        unimplemented!()
+    fn get_workflow(&self, id: &WorkflowId) -> Result<Option<Workflow>, BoxErr> {
+        Ok(Some(Workflow {
+            id: id.clone(),
+            status: WorkflowStatus::Active,
+            blueprint_path: String::new(),
+            started_at: chrono::Utc::now(),
+        }))
     }
     fn list_workflows(&self, _: Option<WorkflowStatus>) -> Result<Vec<Workflow>, BoxErr> {
         unimplemented!()

@@ -14,7 +14,7 @@ pub struct InsertWorkerRequest {
     pub workflow_id: WorkflowId,
     pub role: WorkerRole,
     pub status: WorkerStatus,
-    pub supervisor_id: WorkerId,
+    pub supervisor_id: Option<WorkerId>,
     pub container_id: ContainerId,
     pub terminal_target: TerminalTarget,
     pub session_id: Option<WorkerSessionId>,

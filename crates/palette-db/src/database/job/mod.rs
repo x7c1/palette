@@ -7,5 +7,6 @@ mod get_review_comments;
 mod get_review_submissions;
 mod list_jobs;
 pub(crate) mod repository_row;
+pub(crate) mod row;
 mod submit_review;
 mod update_job_status;

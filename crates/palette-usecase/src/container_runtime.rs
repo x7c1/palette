@@ -33,6 +33,9 @@ pub trait ContainerRuntime: Send + Sync {
 
     fn is_container_running(&self, container_id: &str) -> bool;
 
+    /// Check whether a Claude Code process is running inside the container.
+    fn is_claude_running(&self, container_id: &ContainerId) -> bool;
+
     fn list_managed_containers(
         &self,
     ) -> Result<Vec<ContainerId>, Box<dyn std::error::Error + Send + Sync>>;

@@ -57,7 +57,10 @@ pub async fn handle_resume_workflow(
             continue;
         }
 
-        // Send resume command with session_id, or fresh start if no session
+        // Resume the Claude Code session if a session_id is available.
+        // Graceful suspend ensures all workers finish their current task
+        // before stopping, so both supervisors and members have meaningful
+        // session context to resume.
         let cmd = if let Some(ref session_id) = worker.session_id {
             state.interactor.container.claude_resume_command(
                 &worker.container_id,

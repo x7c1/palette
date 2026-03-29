@@ -230,7 +230,9 @@ impl Orchestrator {
         self.spawn_readiness_watcher(worker.id.clone());
 
         // Alert the supervisor (for members only)
-        if worker.role == WorkerRole::Member {
+        if worker.role == WorkerRole::Member
+            && let Some(ref supervisor_id) = worker.supervisor_id
+        {
             let alert = format!(
                 "[alert] member={} type=crash_recovery attempt={}",
                 worker.id, *retries,
@@ -238,7 +240,7 @@ impl Orchestrator {
             if let Err(e) = self
                 .interactor
                 .data_store
-                .enqueue_message(&worker.supervisor_id, &alert)
+                .enqueue_message(supervisor_id, &alert)
             {
                 tracing::error!(error = %e, "failed to enqueue crash alert for supervisor");
             }
@@ -250,14 +252,14 @@ impl Orchestrator {
     /// Escalate when crash recovery retries are exhausted.
     fn escalate_crash(&self, worker: &WorkerState) {
         if worker.role == WorkerRole::Member {
-            let alert = format!(
-                "[alert] member={} type=crash_unrecoverable retries_exhausted=true",
-                worker.id,
-            );
-            if let Err(e) = self
-                .interactor
-                .data_store
-                .enqueue_message(&worker.supervisor_id, &alert)
+            if let Some(ref supervisor_id) = worker.supervisor_id
+                && let Err(e) = self.interactor.data_store.enqueue_message(
+                    supervisor_id,
+                    &format!(
+                        "[alert] member={} type=crash_unrecoverable retries_exhausted=true",
+                        worker.id,
+                    ),
+                )
             {
                 tracing::error!(error = %e, "failed to enqueue crash escalation");
             }
@@ -383,9 +385,11 @@ impl Orchestrator {
         // Group members by supervisor
         let mut supervisor_members: HashMap<WorkerId, Vec<&WorkerState>> = HashMap::new();
         for w in workers {
-            if w.role == WorkerRole::Member {
+            if w.role == WorkerRole::Member
+                && let Some(ref supervisor_id) = w.supervisor_id
+            {
                 supervisor_members
-                    .entry(w.supervisor_id.clone())
+                    .entry(supervisor_id.clone())
                     .or_default()
                     .push(w);
             }

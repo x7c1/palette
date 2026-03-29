@@ -97,10 +97,11 @@ pub async fn handle_notification(
         notification.push_str(&format!(" pane=[{pane}]"));
     }
 
-    if let Err(e) = state
-        .interactor
-        .data_store
-        .enqueue_message(&worker_context.supervisor_id, &notification)
+    if let Some(ref supervisor_id) = worker_context.supervisor_id
+        && let Err(e) = state
+            .interactor
+            .data_store
+            .enqueue_message(supervisor_id, &notification)
     {
         tracing::error!(error = %e, "failed to enqueue notification for supervisor");
     }
@@ -111,7 +112,7 @@ pub async fn handle_notification(
 }
 
 struct WorkerContext {
-    supervisor_id: WorkerId,
+    supervisor_id: Option<WorkerId>,
     terminal_target: palette_domain::terminal::TerminalTarget,
     container_id: palette_domain::worker::ContainerId,
 }

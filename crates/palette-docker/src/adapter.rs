@@ -50,6 +50,10 @@ impl ContainerRuntime for DockerManager {
         is_container_running(container_id)
     }
 
+    fn is_claude_running(&self, container_id: &ContainerId) -> bool {
+        DockerManager::is_claude_running(container_id)
+    }
+
     fn list_managed_containers(
         &self,
     ) -> Result<Vec<ContainerId>, Box<dyn std::error::Error + Send + Sync>> {

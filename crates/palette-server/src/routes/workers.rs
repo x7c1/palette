@@ -30,7 +30,11 @@ pub async fn handle_list_workers(
             workflow_id: w.workflow_id.to_string(),
             role: w.role.as_str().to_string(),
             status: w.status.as_str().to_string(),
-            supervisor_id: w.supervisor_id.to_string(),
+            supervisor_id: w
+                .supervisor_id
+                .as_ref()
+                .map(|s| s.to_string())
+                .unwrap_or_default(),
             container_id: w.container_id.to_string(),
             terminal_target: w.terminal_target.to_string(),
             task_id: w.task_id.to_string(),

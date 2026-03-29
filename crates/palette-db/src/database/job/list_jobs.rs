@@ -1,4 +1,5 @@
 use super::super::*;
+use super::row::row_to_job;
 
 impl Database {
     pub fn list_jobs(&self, filter: &JobFilter) -> crate::Result<Vec<Job>> {

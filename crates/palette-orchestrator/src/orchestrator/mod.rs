@@ -1,3 +1,4 @@
+mod assign_deferred_jobs;
 mod clean_orphan_containers;
 mod deliver_queued_messages;
 mod deliver_to_all_idle;

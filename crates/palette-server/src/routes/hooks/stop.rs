@@ -33,19 +33,36 @@ pub async fn handle_stop(
 
     super::save_session_id(state.interactor.data_store.as_ref(), &worker_id, &payload);
 
-    // Update worker status to Idle and resolve supervisor ID
+    // Update worker status to Idle and resolve supervisor ID.
+    // Only transition workers that were actively working. A Booting
+    // worker that fires a stop hook means its startup failed (e.g.
+    // `--resume` "No conversation found") — leave it in Booting so
+    // the readiness watcher can detect the failure and fall back to
+    // a fresh start.
     let supervisor_id = {
         match state.interactor.data_store.find_worker(&worker_id) {
             Ok(Some(worker)) => {
-                if let Err(e) = state
-                    .interactor
-                    .data_store
-                    .update_worker_status(&worker_id, WorkerStatus::Idle)
-                {
-                    tracing::error!(error = %e, "failed to update worker status to idle");
+                let should_idle = matches!(
+                    worker.status,
+                    WorkerStatus::Working | WorkerStatus::WaitingPermission | WorkerStatus::Idle
+                );
+                if should_idle {
+                    if let Err(e) = state
+                        .interactor
+                        .data_store
+                        .update_worker_status(&worker_id, WorkerStatus::Idle)
+                    {
+                        tracing::error!(error = %e, "failed to update worker status to idle");
+                    }
+                } else {
+                    tracing::info!(
+                        worker_id = worker_id_str,
+                        status = ?worker.status,
+                        "stop hook ignored: worker not in active state"
+                    );
                 }
-                if worker.role == palette_domain::worker::WorkerRole::Member {
-                    Some(worker.supervisor_id.clone())
+                if should_idle && worker.role == palette_domain::worker::WorkerRole::Member {
+                    worker.supervisor_id.clone()
                 } else {
                     None
                 }

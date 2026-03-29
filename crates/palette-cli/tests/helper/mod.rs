@@ -1,7 +1,6 @@
 #![allow(dead_code)]
 
 use palette_db::Database;
-use palette_docker::DockerManager;
 use palette_domain::job::JobId;
 use palette_domain::terminal::{TerminalSessionName, TerminalTarget};
 use palette_domain::worker::WorkerId;
@@ -64,7 +63,7 @@ pub fn setup_worker(db: &dyn palette_usecase::DataStore, worker_id: &str) {
         workflow_id: wf_id,
         role: WorkerRole::Member,
         status: WorkerStatus::Booting,
-        supervisor_id: WorkerId::new(""),
+        supervisor_id: None,
         container_id: ContainerId::new(format!("container-{worker_id}")),
         terminal_target: TerminalTarget::new(format!("pane-{worker_id}")),
         session_id: None,
@@ -115,10 +114,9 @@ pub async fn spawn_server(
     session_name: &TerminalSessionName,
 ) -> (String, Arc<AppState>, tokio::sync::oneshot::Sender<()>) {
     let db = Database::open_in_memory().unwrap();
-    let docker = DockerManager::new("http://127.0.0.1:0".to_string());
 
     let interactor = Arc::new(Interactor {
-        container: Box::new(docker),
+        container: Box::new(StubContainerRuntime),
         terminal: Box::new(tmux),
         data_store: Box::new(db),
         blueprint: Box::new(FsBlueprintReader),
@@ -169,6 +167,9 @@ impl Drop for SessionGuard {
             .output();
     }
 }
+
+mod stub_container_runtime;
+pub use stub_container_runtime::StubContainerRuntime;
 
 /// Capture the content of a tmux pane (including scrollback buffer)
 pub fn capture_pane(target: &TerminalTarget) -> String {

@@ -90,8 +90,25 @@ for i in $(seq 1 30); do
   sleep 2
 done
 
-# Give workers a moment to start processing
-sleep 5
+# Wait for at least one worker to be in Working status via API.
+# This ensures a member is actively doing work when we suspend,
+# not just that a job exists in the DB.
+echo "Waiting for a worker to be in Working status..."
+for i in $(seq 1 30); do
+  WORKING=$(curl -sf "$PALETTE_URL/workers" 2>/dev/null \
+    | jq '[.[] | select(.status == "working")] | length' 2>/dev/null || echo "0")
+  if [[ "$WORKING" -gt 0 ]]; then
+    echo "Worker in Working status after $((i*2)) seconds"
+    break
+  fi
+  if [[ $i -eq 30 ]]; then
+    echo "FAIL: No worker entered Working status within 60 seconds"
+    curl -sf "$PALETTE_URL/workers" 2>/dev/null | jq '.[] | {id, status}' 2>/dev/null
+    tail -20 "$LOG_FILE"
+    exit 1
+  fi
+  sleep 2
+done
 
 # --- Step 4: Suspend workflow ---
 echo ""
@@ -106,16 +123,26 @@ if [[ "$HTTP_CODE" -lt 200 || "$HTTP_CODE" -ge 300 ]]; then
 fi
 echo "Suspend accepted (HTTP $HTTP_CODE)"
 
-# Poll until workflow status is suspended (max 120s — docker stop takes ~10s per container)
+# Poll until workflow status is suspended.
+# The workflow transitions Active → Suspending (waiting for in-progress tasks) → Suspended.
+# Timeout is generous because workers need to finish their current task first.
 echo "Waiting for suspend to complete..."
-for i in $(seq 1 24); do
+SEEN_SUSPENDING=false
+for i in $(seq 1 60); do
+  SUSPENDING_WORKFLOWS=$(curl -sf "$PALETTE_URL/workflows?status=suspending" 2>/dev/null | jq 'length' 2>/dev/null || echo "0")
   SUSPENDED_WORKFLOWS=$(curl -sf "$PALETTE_URL/workflows?status=suspended" 2>/dev/null | jq 'length' 2>/dev/null || echo "0")
+
+  if [[ "$SUSPENDING_WORKFLOWS" -gt 0 && "$SEEN_SUSPENDING" == false ]]; then
+    echo "  Workflow entered Suspending state (waiting for tasks to complete)"
+    SEEN_SUSPENDING=true
+  fi
+
   if [[ "$SUSPENDED_WORKFLOWS" -gt 0 ]]; then
     echo "Suspend complete after $((i*5)) seconds"
     break
   fi
-  if [[ $i -eq 24 ]]; then
-    echo "FAIL: Suspend did not complete within 120 seconds"
+  if [[ $i -eq 60 ]]; then
+    echo "FAIL: Suspend did not complete within 300 seconds"
     tail -20 "$LOG_FILE"
     exit 1
   fi
@@ -221,10 +248,18 @@ else
   PASS=false
 fi
 
-# --- Step 8: Wait for jobs to complete (max 120 seconds) ---
+# Check: Claude Code readiness after resume
+if grep -q "Claude Code is ready" "$LOG_FILE" 2>/dev/null; then
+  echo "PASS: Claude Code readiness detected after resume"
+else
+  echo "FAIL: No Claude Code readiness detected"
+  PASS=false
+fi
+
+# --- Step 8: Wait for jobs to complete (max 300 seconds) ---
 echo ""
 echo "=== Step 8: Wait for jobs to complete ==="
-for i in $(seq 1 24); do
+for i in $(seq 1 60); do
   WORKERS_JSON=$(curl -sf "$PALETTE_URL/workers" 2>/dev/null || echo "[]")
   CRASHED=$(echo "$WORKERS_JSON" | jq '[.[] | select(.status == "crashed")] | length' 2>/dev/null || echo "0")
 
@@ -245,8 +280,9 @@ for i in $(seq 1 24); do
     echo "All jobs completed"
     break
   fi
-  if [[ $i -eq 24 ]]; then
-    echo "WARN: Jobs did not all complete within 120 seconds (this may be expected for long-running tasks)"
+  if [[ $i -eq 60 ]]; then
+    echo "FAIL: Jobs did not all complete within 300 seconds"
+    PASS=false
   fi
   sleep 5
 done

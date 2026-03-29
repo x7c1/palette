@@ -1,4 +1,5 @@
 use super::super::*;
+use super::row::row_to_job;
 
 impl Database {
     /// Find jobs that are assignable: status = 'todo' with no assignee_id.

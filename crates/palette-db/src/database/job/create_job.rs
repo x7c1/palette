@@ -1,4 +1,5 @@
 use super::super::*;
+use super::row::query_job;
 
 impl Database {
     pub fn create_job(&self, req: &CreateJobRequest) -> crate::Result<Job> {

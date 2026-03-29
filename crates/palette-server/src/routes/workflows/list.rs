@@ -23,6 +23,7 @@ pub async fn handle_list_workflows(
 ) -> Result<Json<Vec<WorkflowResponse>>, (StatusCode, String)> {
     let status_filter = match query.status.as_deref() {
         Some("active") => Some(WorkflowStatus::Active),
+        Some("suspending") => Some(WorkflowStatus::Suspending),
         Some("suspended") => Some(WorkflowStatus::Suspended),
         Some("completed") => Some(WorkflowStatus::Completed),
         Some(unknown) => {

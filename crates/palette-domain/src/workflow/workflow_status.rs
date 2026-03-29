@@ -5,7 +5,10 @@ use std::fmt;
 pub enum WorkflowStatus {
     /// Workflow is running.
     Active,
-    /// Workflow is paused (e.g., due to an Escalation).
+    /// Suspend requested; waiting for in-progress workers to finish.
+    /// New job assignments and message delivery are blocked.
+    Suspending,
+    /// Workflow is paused (all workers stopped).
     Suspended,
     /// All Tasks in the Workflow are complete.
     Completed,
@@ -15,6 +18,7 @@ impl WorkflowStatus {
     pub fn as_str(&self) -> &'static str {
         match self {
             WorkflowStatus::Active => "active",
+            WorkflowStatus::Suspending => "suspending",
             WorkflowStatus::Suspended => "suspended",
             WorkflowStatus::Completed => "completed",
         }

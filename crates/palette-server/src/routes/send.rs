@@ -91,11 +91,13 @@ pub async fn handle_send(
         )
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
-        // Update status to Working
-        let _ = state
+        if let Err(e) = state
             .interactor
             .data_store
-            .update_worker_status(&worker_id, WorkerStatus::Working);
+            .update_worker_status(&worker_id, WorkerStatus::Working)
+        {
+            tracing::error!(worker_id = worker_id_str.as_str(), error = %e, "failed to update worker status to Working");
+        }
 
         false
     } else {
