@@ -73,14 +73,16 @@ pub async fn handle_stop(
 
     // Transition worker's in_progress jobs and notify supervisors
     if let Some(ref supervisor_id) = supervisor_id {
-        let worker_jobs = state
-            .interactor
-            .data_store
-            .list_jobs(&JobFilter {
-                assignee_id: Some(worker_id.clone()),
-                ..Default::default()
-            })
-            .unwrap_or_default();
+        let worker_jobs = match state.interactor.data_store.list_jobs(&JobFilter {
+            assignee_id: Some(worker_id.clone()),
+            ..Default::default()
+        }) {
+            Ok(jobs) => jobs,
+            Err(e) => {
+                tracing::error!(worker_id = worker_id_str, error = %e, "failed to list jobs for stop transition");
+                vec![]
+            }
+        };
 
         let last_message = payload
             .get("last_assistant_message")
