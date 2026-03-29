@@ -224,7 +224,10 @@ fn create_job(
             task_id: task.id.clone(),
             job_type,
             title: task.key.to_string(),
-            plan_path: task.plan_path.clone().unwrap_or_default(),
+            plan_path: task
+                .plan_path
+                .clone()
+                .ok_or_else(|| internal_err(format!("task {} has no plan_path", task.id)))?,
             assignee_id: None,
             priority: task.priority,
             repository: task.repository.clone(),

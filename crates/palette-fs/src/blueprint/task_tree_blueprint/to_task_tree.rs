@@ -19,8 +19,13 @@ impl TaskTreeBlueprint {
         let root_id = TaskId::root(workflow_id, &to_key(&root.key));
         let mut nodes = HashMap::new();
 
-        insert_node(&root_id, None, root, &mut nodes);
-        collect_nodes(&root_id, &root.children, &mut nodes);
+        insert_node(&root_id, None, None, root, &mut nodes);
+        collect_nodes(
+            &root_id,
+            root.plan_path.as_deref(),
+            &root.children,
+            &mut nodes,
+        );
 
         TaskTree::new(root_id, nodes)
     }
@@ -29,6 +34,7 @@ impl TaskTreeBlueprint {
 fn insert_node(
     task_id: &TaskId,
     parent_id: Option<&TaskId>,
+    parent_plan_path: Option<&str>,
     node: &TaskNode,
     nodes: &mut HashMap<TaskId, TaskTreeNode>,
 ) {
@@ -47,13 +53,19 @@ fn insert_node(
         vec![]
     };
 
+    // Inherit plan_path from parent if not explicitly set
+    let plan_path = node
+        .plan_path
+        .clone()
+        .or_else(|| parent_plan_path.map(String::from));
+
     nodes.insert(
         task_id.clone(),
         TaskTreeNode {
             id: task_id.clone(),
             parent_id: parent_id.cloned(),
             key: to_key(&node.key),
-            plan_path: node.plan_path.clone(),
+            plan_path,
             job_type: node.job_type.map(JobType::from),
             priority: node.priority.map(Priority::from),
             repository: node.repository.clone().map(Repository::from),
@@ -65,16 +77,24 @@ fn insert_node(
 
 fn collect_nodes(
     parent_task_id: &TaskId,
+    parent_plan_path: Option<&str>,
     children: &[TaskNode],
     nodes: &mut HashMap<TaskId, TaskTreeNode>,
 ) {
     for child in children {
         let child_task_id = parent_task_id.child(&to_key(&child.key));
+        let child_plan_path = child.plan_path.as_deref().or(parent_plan_path);
 
-        insert_node(&child_task_id, Some(parent_task_id), child, nodes);
+        insert_node(
+            &child_task_id,
+            Some(parent_task_id),
+            parent_plan_path,
+            child,
+            nodes,
+        );
 
         if !child.children.is_empty() {
-            collect_nodes(&child_task_id, &child.children, nodes);
+            collect_nodes(&child_task_id, child_plan_path, &child.children, nodes);
         }
     }
 }
@@ -132,10 +152,15 @@ task:
         assert!(api_plan.depends_on.is_empty());
         assert_eq!(api_plan.children.len(), 1);
 
-        // api-plan-review (child of api-plan, review type)
+        // api-plan-review (child of api-plan, review type, inherits plan_path)
         let review = tree.find_by_key("api-plan-review").unwrap();
         assert_eq!(review.job_type, Some(JobType::Review));
         assert_eq!(review.parent_id.as_ref().unwrap(), &api_plan.id);
+        assert_eq!(
+            review.plan_path.as_deref(),
+            Some("planning/api-plan"),
+            "review should inherit plan_path from parent craft"
+        );
         assert!(review.depends_on.is_empty());
 
         // execution (depends on planning)
