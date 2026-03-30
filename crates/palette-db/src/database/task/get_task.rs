@@ -32,11 +32,11 @@ impl Database {
         let conn = lock(&self.conn)?;
         let mut stmt =
             conn.prepare("SELECT id, workflow_id, status_id FROM tasks WHERE id = ?1")?;
-        let mut rows = stmt.query_map(params![id.as_ref()], read_task_row)?;
-        match rows.next().transpose()? {
-            Some(row) => into_task_state(row).map(Some),
-            None => Ok(None),
-        }
+        stmt.query_map(params![id.as_ref()], read_task_row)?
+            .next()
+            .transpose()?
+            .map(into_task_state)
+            .transpose()
     }
 
     /// Get all task statuses for a workflow, keyed by TaskId.

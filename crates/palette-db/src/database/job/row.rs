@@ -72,9 +72,9 @@ pub(crate) fn query_job(conn: &Connection, id: &JobId) -> crate::Result<Option<J
         "SELECT id, task_id, type_id, title, plan_path, assignee_id, status_id, priority_id, repository, pr_url, created_at, updated_at, notes, assigned_at
          FROM jobs WHERE id = ?1",
     )?;
-    let mut rows = stmt.query_map(params![id.as_ref()], read_job_row)?;
-    match rows.next().transpose()? {
-        Some(row) => into_job(row).map(Some),
-        None => Ok(None),
-    }
+    stmt.query_map(params![id.as_ref()], read_job_row)?
+        .next()
+        .transpose()?
+        .map(into_job)
+        .transpose()
 }

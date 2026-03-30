@@ -12,11 +12,11 @@ impl Database {
         let conn = lock(&self.conn)?;
         let sql = format!("SELECT {COLUMNS} FROM workers WHERE container_id = ?1");
         let mut stmt = conn.prepare(&sql)?;
-        let mut rows = stmt.query_map(params![container_id.as_ref()], read_worker_row)?;
-        match rows.next().transpose()? {
-            Some(row) => into_worker_state(row).map(Some),
-            None => Ok(None),
-        }
+        stmt.query_map(params![container_id.as_ref()], read_worker_row)?
+            .next()
+            .transpose()?
+            .map(into_worker_state)
+            .transpose()
     }
 }
 

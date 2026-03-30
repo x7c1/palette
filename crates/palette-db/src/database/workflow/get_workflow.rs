@@ -9,10 +9,10 @@ impl Database {
         let mut stmt = conn.prepare(
             "SELECT id, blueprint_path, status_id, started_at, blueprint_hash FROM workflows WHERE id = ?1",
         )?;
-        let mut rows = stmt.query_map(params![id.as_ref()], read_workflow_row)?;
-        match rows.next().transpose()? {
-            Some(row) => into_workflow(row).map(Some),
-            None => Ok(None),
-        }
+        stmt.query_map(params![id.as_ref()], read_workflow_row)?
+            .next()
+            .transpose()?
+            .map(into_workflow)
+            .transpose()
     }
 }

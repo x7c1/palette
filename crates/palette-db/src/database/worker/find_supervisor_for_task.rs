@@ -14,14 +14,14 @@ impl Database {
         let sql =
             format!("SELECT {COLUMNS} FROM workers WHERE task_id = ?1 AND role_id IN (?2, ?3)");
         let mut stmt = conn.prepare(&sql)?;
-        let mut rows = stmt.query_map(
+        stmt.query_map(
             params![task_id.as_ref(), role_leader, role_ri],
             read_worker_row,
-        )?;
-        match rows.next().transpose()? {
-            Some(row) => into_worker_state(row).map(Some),
-            None => Ok(None),
-        }
+        )?
+        .next()
+        .transpose()?
+        .map(into_worker_state)
+        .transpose()
     }
 }
 
