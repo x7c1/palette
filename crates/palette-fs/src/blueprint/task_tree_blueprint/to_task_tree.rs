@@ -25,53 +25,6 @@ impl BlueprintError {
     }
 }
 
-/// Validate that a task key matches `[a-z0-9-]+`.
-fn validate_key(key: &str) -> Result<TaskKey, BlueprintError> {
-    if key.is_empty()
-        || !key
-            .bytes()
-            .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'-')
-    {
-        return Err(BlueprintError::InvalidKey {
-            key: key.to_string(),
-        });
-    }
-    Ok(TaskKey::new(key))
-}
-
-/// Validate that a craft task has at least one review child.
-fn validate_craft_has_review(node: &TaskNode) -> Result<(), BlueprintError> {
-    if let Some(job_type) = node.job_type
-        && matches!(JobType::from(job_type), JobType::Craft)
-    {
-        let has_review = node.children.iter().any(|c| {
-            c.job_type
-                .is_some_and(|jt| matches!(JobType::from(jt), JobType::Review))
-        });
-        if !has_review {
-            return Err(BlueprintError::MissingReviewChild {
-                task_key: node.key.clone(),
-            });
-        }
-    }
-    Ok(())
-}
-
-/// Validate all nodes in the Blueprint tree recursively.
-///
-/// Collects all errors rather than stopping at the first one.
-fn validate_all(node: &TaskNode, errors: &mut Vec<BlueprintError>) {
-    if let Err(e) = validate_key(&node.key) {
-        errors.push(e);
-    }
-    if let Err(e) = validate_craft_has_review(node) {
-        errors.push(e);
-    }
-    for child in &node.children {
-        validate_all(child, errors);
-    }
-}
-
 impl TaskTreeBlueprint {
     /// Convert this Blueprint into a domain TaskTree.
     ///
@@ -101,6 +54,48 @@ impl TaskTreeBlueprint {
 
         Ok(TaskTree::new(root_id, nodes))
     }
+}
+
+fn validate_all(node: &TaskNode, errors: &mut Vec<BlueprintError>) {
+    if let Err(e) = validate_key(&node.key) {
+        errors.push(e);
+    }
+    if let Err(e) = validate_craft_has_review(node) {
+        errors.push(e);
+    }
+    for child in &node.children {
+        validate_all(child, errors);
+    }
+}
+
+fn validate_key(key: &str) -> Result<TaskKey, BlueprintError> {
+    if key.is_empty()
+        || !key
+            .bytes()
+            .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'-')
+    {
+        return Err(BlueprintError::InvalidKey {
+            key: key.to_string(),
+        });
+    }
+    Ok(TaskKey::new(key))
+}
+
+fn validate_craft_has_review(node: &TaskNode) -> Result<(), BlueprintError> {
+    if let Some(job_type) = node.job_type
+        && matches!(JobType::from(job_type), JobType::Craft)
+    {
+        let has_review = node.children.iter().any(|c| {
+            c.job_type
+                .is_some_and(|jt| matches!(JobType::from(jt), JobType::Review))
+        });
+        if !has_review {
+            return Err(BlueprintError::MissingReviewChild {
+                task_key: node.key.clone(),
+            });
+        }
+    }
+    Ok(())
 }
 
 fn to_key(s: &str) -> TaskKey {
