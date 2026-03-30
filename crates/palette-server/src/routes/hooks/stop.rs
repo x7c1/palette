@@ -145,11 +145,11 @@ fn handle_craft_stop(state: &AppState, job: &Job) {
     };
     let in_review = match CraftTransition::SubmitForReview.validate(current) {
         Ok(status) => status,
-        Err(_) => {
+        Err(e) => {
             tracing::info!(
                 job_id = %job.id,
-                status = ?job.status,
-                "skipping craft stop transition (invalid transition)"
+                error = %e,
+                "skipping craft stop transition"
             );
             return;
         }
