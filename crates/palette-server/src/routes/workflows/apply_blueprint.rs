@@ -157,8 +157,6 @@ pub async fn handle_apply_blueprint(
         .filter(|id| {
             task_store
                 .get_task(id)
-                .ok()
-                .flatten()
                 .is_some_and(|t| t.status == palette_domain::task::TaskStatus::Pending)
         })
         .cloned()

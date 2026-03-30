@@ -53,12 +53,9 @@ impl Orchestrator {
             return Ok(vec![]);
         };
 
-        let task_store = self
-            .interactor
-            .create_task_store(&task_state.workflow_id)
-            .map_err(|e| crate::Error::External(e))?;
+        let task_store = self.interactor.create_task_store(&task_state.workflow_id)?;
 
-        let Some(review_task) = task_store.get_task(review_task_id)? else {
+        let Some(review_task) = task_store.get_task(review_task_id) else {
             return Ok(vec![]);
         };
 
@@ -74,7 +71,7 @@ impl Orchestrator {
         }
 
         // Check if ALL review children of the parent have their jobs Done
-        let siblings = task_store.get_child_tasks(parent_id)?;
+        let siblings = task_store.get_child_tasks(parent_id);
         let all_reviews_done = siblings.iter().all(|child| {
             if child.job_type != Some(JobType::Review) {
                 return true;
@@ -129,12 +126,9 @@ impl Orchestrator {
             return Ok(vec![]);
         };
 
-        let task_store = self
-            .interactor
-            .create_task_store(&task_state.workflow_id)
-            .map_err(|e| crate::Error::External(e))?;
+        let task_store = self.interactor.create_task_store(&task_state.workflow_id)?;
 
-        let Some(review_task) = task_store.get_task(review_task_id)? else {
+        let Some(review_task) = task_store.get_task(review_task_id) else {
             return Ok(vec![]);
         };
 

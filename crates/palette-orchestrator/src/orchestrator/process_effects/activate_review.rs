@@ -19,18 +19,15 @@ impl Orchestrator {
             return Ok(vec![]);
         };
 
-        let task_store = self
-            .interactor
-            .create_task_store(&task_state.workflow_id)
-            .map_err(|e| crate::Error::External(e))?;
+        let task_store = self.interactor.create_task_store(&task_state.workflow_id)?;
 
-        let children = task_store.get_child_tasks(task_id)?;
+        let children = task_store.get_child_tasks(task_id);
         if children.is_empty() {
             return Ok(vec![]);
         }
 
         // Ensure the craft task is InProgress (it should be, since its job is active)
-        if let Some(task) = task_store.get_task(task_id)?
+        if let Some(task) = task_store.get_task(task_id)
             && task.status != TaskStatus::InProgress
         {
             task_store.update_task_status(task_id, TaskStatus::InProgress)?;
@@ -42,7 +39,7 @@ impl Orchestrator {
         use palette_usecase::TaskRuleEngine;
         let task_engine = TaskRuleEngine::new(&task_store);
         let child_ids: Vec<TaskId> = children.iter().map(|c| c.id.clone()).collect();
-        let task_effects = task_engine.resolve_ready_tasks(&child_ids)?;
+        let task_effects = task_engine.resolve_ready_tasks(&child_ids);
 
         let mut pending = task_effects;
         while !pending.is_empty() {
@@ -62,9 +59,9 @@ impl Orchestrator {
                 if *new_status == TaskStatus::Ready {
                     // If this is a review-integrate composite (has children + job_type: review),
                     // spawn a ReviewIntegrator supervisor before activation
-                    let grandchildren = task_store.get_child_tasks(task_id)?;
+                    let grandchildren = task_store.get_child_tasks(task_id);
                     if !grandchildren.is_empty()
-                        && let Some(child_task) = task_store.get_task(task_id)?
+                        && let Some(child_task) = task_store.get_task(task_id)
                         && child_task.job_type == Some(JobType::Review)
                     {
                         job_effects.push(RuleEffect::SpawnSupervisor {

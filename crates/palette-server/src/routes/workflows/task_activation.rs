@@ -14,9 +14,7 @@ pub(super) fn activate_ready_children(
     task_engine: &TaskRuleEngine<'_>,
     child_ids: &[TaskId],
 ) -> crate::Result<Vec<RuleEffect>> {
-    let task_effects = task_engine
-        .resolve_ready_tasks(child_ids)
-        .map_err(Error::internal)?;
+    let task_effects = task_engine.resolve_ready_tasks(child_ids);
 
     let mut effects = Vec::new();
 
@@ -38,12 +36,10 @@ pub(super) fn activate_ready_children(
             continue;
         }
 
-        let Some(task) = task_store.get_task(task_id).map_err(Error::internal)? else {
+        let Some(task) = task_store.get_task(task_id) else {
             continue;
         };
-        let children = task_store
-            .get_child_tasks(task_id)
-            .map_err(Error::internal)?;
+        let children = task_store.get_child_tasks(task_id);
 
         if let Some(job_type) = task.job_type {
             // Task with job: create job and set composite to InProgress

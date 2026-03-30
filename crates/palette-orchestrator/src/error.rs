@@ -18,6 +18,12 @@ impl From<Box<dyn std::error::Error + Send + Sync>> for Error {
     }
 }
 
+impl From<palette_usecase::TaskStoreError> for Error {
+    fn from(e: palette_usecase::TaskStoreError) -> Self {
+        Self::External(Box::new(e))
+    }
+}
+
 impl std::error::Error for Error {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self {

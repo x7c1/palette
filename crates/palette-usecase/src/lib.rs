@@ -6,6 +6,9 @@ pub mod blueprint_reader;
 pub mod interactor;
 pub mod reconciliation;
 pub mod task_store;
+pub mod task_store_error;
+
+pub use task_store_error::TaskStoreError;
 
 mod rule_engine;
 pub use rule_engine::RuleEngine;

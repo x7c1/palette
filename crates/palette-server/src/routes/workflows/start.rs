@@ -115,7 +115,6 @@ fn initialize_root(
     // Root task: spawn supervisor, then → InProgress
     let root = task_store
         .get_task(task_store.root_id())
-        .map_err(Error::internal)?
         .ok_or_else(|| Error::internal("root task not found"))?;
 
     let mut effects = vec![RuleEffect::SpawnSupervisor {
