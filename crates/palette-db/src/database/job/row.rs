@@ -48,12 +48,18 @@ pub(crate) fn into_job(row: JobRow) -> crate::Result<Job> {
     let task_id =
         TaskId::parse(row.task_id).map_err(|e| crate::Error::Internal(Box::new(e.reason_key())))?;
 
+    let title =
+        Title::parse(row.title).map_err(|e| crate::Error::Internal(Box::new(e.reason_key())))?;
+
+    let plan_path = PlanPath::parse(row.plan_path)
+        .map_err(|e| crate::Error::Internal(Box::new(e.reason_key())))?;
+
     Ok(Job {
-        id: JobId::new(row.id),
+        id: JobId::parse(row.id).map_err(|e| crate::Error::Internal(Box::new(e.reason_key())))?,
         task_id,
         job_type,
-        title: row.title,
-        plan_path: row.plan_path,
+        title,
+        plan_path,
         assignee_id: row.assignee_id.map(WorkerId::new),
         status,
         priority,

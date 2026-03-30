@@ -2,10 +2,6 @@ use super::{FieldError, JobType, Priority, Repository};
 use palette_domain as domain;
 use serde::{Deserialize, Serialize};
 
-const MAX_TITLE_LEN: usize = 500;
-const MAX_ID_LEN: usize = 256;
-const MAX_PATH_LEN: usize = 1024;
-
 #[derive(Debug, Serialize, Deserialize)]
 pub struct CreateJobRequest {
     pub id: Option<String>,
@@ -23,15 +19,10 @@ impl CreateJobRequest {
     pub fn validate(&self) -> Result<domain::job::CreateJobRequest, Vec<FieldError>> {
         let mut hints = Vec::new();
 
-        if self.title.trim().is_empty() {
+        if let Err(e) = domain::job::Title::parse(&self.title) {
             hints.push(FieldError {
                 field: "title".into(),
-                reason: "title/required".into(),
-            });
-        } else if self.title.len() > MAX_TITLE_LEN {
-            hints.push(FieldError {
-                field: "title".into(),
-                reason: "title/too_long".into(),
+                reason: e.reason_key(),
             });
         }
 
@@ -42,39 +33,29 @@ impl CreateJobRequest {
             });
         }
 
-        if self.plan_path.trim().is_empty() {
+        if let Err(e) = domain::job::PlanPath::parse(&self.plan_path) {
             hints.push(FieldError {
                 field: "plan_path".into(),
-                reason: "plan_path/required".into(),
-            });
-        } else if self.plan_path.len() > MAX_PATH_LEN {
-            hints.push(FieldError {
-                field: "plan_path".into(),
-                reason: "plan_path/too_long".into(),
+                reason: e.reason_key(),
             });
         }
 
-        if let Some(ref id) = self.id {
-            if id.trim().is_empty() {
-                hints.push(FieldError {
-                    field: "id".into(),
-                    reason: "job_id/required".into(),
-                });
-            } else if id.len() > MAX_ID_LEN {
-                hints.push(FieldError {
-                    field: "id".into(),
-                    reason: "job_id/too_long".into(),
-                });
-            }
+        if let Some(ref id) = self.id
+            && let Err(e) = domain::job::JobId::parse(id)
+        {
+            hints.push(FieldError {
+                field: "id".into(),
+                reason: e.reason_key(),
+            });
         }
 
         if !hints.is_empty() {
             return Err(hints);
         }
 
-        // All validations passed — parse again to obtain the value.
-        // TaskId::parse is pure and cheap; duplicating the call avoids
-        // carrying an Option that would require expect/unwrap.
+        // All validations passed — parse again to obtain the values.
+        // These are pure and cheap; duplicating the call avoids
+        // carrying Options that would require expect/unwrap.
         let task_id = domain::task::TaskId::parse(&self.task_id).map_err(|e| {
             vec![FieldError {
                 field: "task_id".into(),
@@ -82,12 +63,38 @@ impl CreateJobRequest {
             }]
         })?;
 
+        let title = domain::job::Title::parse(&self.title).map_err(|e| {
+            vec![FieldError {
+                field: "title".into(),
+                reason: e.reason_key(),
+            }]
+        })?;
+
+        let plan_path = domain::job::PlanPath::parse(&self.plan_path).map_err(|e| {
+            vec![FieldError {
+                field: "plan_path".into(),
+                reason: e.reason_key(),
+            }]
+        })?;
+
+        let id = self
+            .id
+            .as_deref()
+            .map(domain::job::JobId::parse)
+            .transpose()
+            .map_err(|e| {
+                vec![FieldError {
+                    field: "id".into(),
+                    reason: e.reason_key(),
+                }]
+            })?;
+
         Ok(domain::job::CreateJobRequest {
-            id: self.id.as_deref().map(domain::job::JobId::new),
+            id,
             task_id,
             job_type: self.job_type.into(),
-            title: self.title.clone(),
-            plan_path: self.plan_path.clone(),
+            title,
+            plan_path,
             assignee_id: self
                 .assignee_id
                 .as_deref()

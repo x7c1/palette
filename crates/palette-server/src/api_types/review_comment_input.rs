@@ -1,9 +1,6 @@
 use super::FieldError;
+use palette_domain as domain;
 use serde::{Deserialize, Serialize};
-
-const MAX_FILE_PATH_LEN: usize = 1024;
-const MAX_LINE: i32 = 1_000_000;
-const MAX_BODY_LEN: usize = 10_000;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ReviewCommentInput {
@@ -15,39 +12,24 @@ pub struct ReviewCommentInput {
 impl ReviewCommentInput {
     /// Collect validation hints for this comment at the given index.
     pub fn collect_hints(&self, index: usize, hints: &mut Vec<FieldError>) {
-        if self.file.trim().is_empty() {
+        if let Err(e) = domain::review::FilePath::parse(&self.file) {
             hints.push(FieldError {
                 field: format!("comments[{index}].file"),
-                reason: "file_path/required".into(),
-            });
-        } else if self.file.len() > MAX_FILE_PATH_LEN {
-            hints.push(FieldError {
-                field: format!("comments[{index}].file"),
-                reason: "file_path/too_long".into(),
+                reason: e.reason_key(),
             });
         }
 
-        if self.line < 0 {
+        if let Err(e) = domain::review::LineNumber::parse(self.line) {
             hints.push(FieldError {
                 field: format!("comments[{index}].line"),
-                reason: "line/negative".into(),
-            });
-        } else if self.line > MAX_LINE {
-            hints.push(FieldError {
-                field: format!("comments[{index}].line"),
-                reason: "line/too_large".into(),
+                reason: e.reason_key(),
             });
         }
 
-        if self.body.trim().is_empty() {
+        if let Err(e) = domain::review::CommentBody::parse(&self.body) {
             hints.push(FieldError {
                 field: format!("comments[{index}].body"),
-                reason: "body/required".into(),
-            });
-        } else if self.body.len() > MAX_BODY_LEN {
-            hints.push(FieldError {
-                field: format!("comments[{index}].body"),
-                reason: "body/too_long".into(),
+                reason: e.reason_key(),
             });
         }
     }

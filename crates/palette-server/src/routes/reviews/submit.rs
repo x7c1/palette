@@ -17,7 +17,13 @@ pub async fn handle_submit_review(
     Path(review_job_id): Path<String>,
     Json(api_req): Json<SubmitReviewRequest>,
 ) -> crate::Result<(StatusCode, Json<ReviewSubmissionResponse>)> {
-    let review_job_id = JobId::new(review_job_id);
+    let review_job_id = JobId::parse(review_job_id).map_err(|e| Error::BadRequest {
+        code: crate::api_types::ErrorCode::InputValidationFailed,
+        errors: vec![crate::api_types::FieldError {
+            field: "review_job_id".into(),
+            reason: e.reason_key(),
+        }],
+    })?;
     let req = api_req.validate().map_err(|errors| Error::BadRequest {
         code: ErrorCode::InputValidationFailed,
         errors,

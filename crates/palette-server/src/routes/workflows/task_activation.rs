@@ -92,11 +92,14 @@ pub(super) fn create_job(
             id: Some(JobId::generate(job_type)),
             task_id: task.id.clone(),
             job_type,
-            title: task.key.to_string(),
-            plan_path: task
-                .plan_path
-                .clone()
-                .ok_or_else(|| Error::internal(format!("task {} has no plan_path", task.id)))?,
+            title: palette_domain::job::Title::parse(task.key.to_string())
+                .map_err(|e| Error::internal(e.reason_key()))?,
+            plan_path: palette_domain::job::PlanPath::parse(
+                task.plan_path
+                    .clone()
+                    .ok_or_else(|| Error::internal(format!("task {} has no plan_path", task.id)))?,
+            )
+            .map_err(|e| Error::internal(e.reason_key()))?,
             assignee_id: None,
             priority: task.priority,
             repository: task.repository.clone(),

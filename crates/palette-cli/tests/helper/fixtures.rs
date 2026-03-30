@@ -7,7 +7,7 @@ pub fn wid(s: &str) -> WorkerId {
 }
 
 pub fn jid(s: &str) -> JobId {
-    JobId::new(s)
+    JobId::parse(s).unwrap()
 }
 
 /// Insert a worker record to satisfy FK constraints.

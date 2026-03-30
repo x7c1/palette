@@ -13,7 +13,7 @@ pub fn test_db() -> Database {
 }
 
 pub fn jid(s: &str) -> JobId {
-    JobId::new(s)
+    JobId::parse(s).unwrap()
 }
 
 pub fn wid(s: &str) -> WorkerId {
@@ -61,8 +61,8 @@ pub fn create_craft(db: &Database, id: &str, priority: Option<Priority>) {
         task_id,
         id: Some(jid(id)),
         job_type: JobType::Craft,
-        title: format!("Job {id}"),
-        plan_path: format!("test/{id}"),
+        title: Title::parse(format!("Job {id}")).unwrap(),
+        plan_path: PlanPath::parse(format!("test/{id}")).unwrap(),
         assignee_id: None,
         priority,
         repository: None,
@@ -76,8 +76,8 @@ pub fn create_review(db: &Database, id: &str) {
         task_id,
         id: Some(jid(id)),
         job_type: JobType::Review,
-        title: format!("Review {id}"),
-        plan_path: format!("test/{id}"),
+        title: Title::parse(format!("Review {id}")).unwrap(),
+        plan_path: PlanPath::parse(format!("test/{id}")).unwrap(),
         assignee_id: None,
         priority: None,
         repository: None,

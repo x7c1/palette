@@ -40,7 +40,12 @@ impl Database {
             tx.execute(
                 "INSERT INTO review_comments (submission_id, file, line, body)
                  VALUES (?1, ?2, ?3, ?4)",
-                params![submission_id, comment.file, comment.line, comment.body],
+                params![
+                    submission_id,
+                    comment.file.as_ref(),
+                    comment.line.value(),
+                    comment.body.as_ref()
+                ],
             )?;
         }
 
@@ -72,8 +77,8 @@ mod tests {
             task_id: craft_task,
             id: Some(jid("C-001")),
             job_type: JobType::Craft,
-            title: "Craft".to_string(),
-            plan_path: "test/C-001".to_string(),
+            title: Title::parse("Craft").unwrap(),
+            plan_path: PlanPath::parse("test/C-001").unwrap(),
             assignee_id: None,
             priority: None,
             repository: None,
@@ -85,8 +90,8 @@ mod tests {
             task_id: review_task,
             id: Some(jid("R-001")),
             job_type: JobType::Review,
-            title: "Review".to_string(),
-            plan_path: "test/R-001".to_string(),
+            title: Title::parse("Review").unwrap(),
+            plan_path: PlanPath::parse("test/R-001").unwrap(),
             assignee_id: None,
             priority: None,
             repository: None,
@@ -100,9 +105,9 @@ mod tests {
                     verdict: Verdict::ChangesRequested,
                     summary: Some("Needs fixes".to_string()),
                     comments: vec![ReviewCommentInput {
-                        file: "src/main.rs".to_string(),
-                        line: 10,
-                        body: "Fix this".to_string(),
+                        file: FilePath::parse("src/main.rs").unwrap(),
+                        line: LineNumber::parse(10).unwrap(),
+                        body: CommentBody::parse("Fix this").unwrap(),
                     }],
                 },
             )

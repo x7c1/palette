@@ -18,7 +18,7 @@ mod job_filter;
 pub use job_filter::JobFilter;
 
 mod job_id;
-pub use job_id::JobId;
+pub use job_id::{InvalidJobId, JobId};
 
 mod job_status;
 pub use job_status::JobStatus;
@@ -37,6 +37,12 @@ pub use review_status::ReviewStatus;
 
 mod review_transition;
 pub use review_transition::ReviewTransition;
+
+mod plan_path;
+pub use plan_path::{InvalidPlanPath, PlanPath};
+
+mod title;
+pub use title::{InvalidTitle, Title};
 
 mod transition_error;
 pub use transition_error::TransitionError;

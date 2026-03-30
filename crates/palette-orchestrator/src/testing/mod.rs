@@ -32,11 +32,11 @@ pub fn make_job(id: &str) -> Job {
     use chrono::Utc;
     let now = Utc::now();
     Job {
-        id: JobId::new(id),
+        id: JobId::parse(id).unwrap(),
         task_id: TaskId::parse(format!("wf-test:{id}")).unwrap(),
         job_type: JobType::Review,
-        title: id.to_string(),
-        plan_path: String::new(),
+        title: palette_domain::job::Title::parse(id).unwrap(),
+        plan_path: palette_domain::job::PlanPath::parse(format!("test/{id}")).unwrap(),
         assignee_id: None,
         status: JobStatus::todo(JobType::Review),
         priority: None,

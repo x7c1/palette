@@ -29,8 +29,8 @@ impl From<domain::job::Job> for JobResponse {
         Self {
             id: t.id.to_string(),
             job_type: t.job_type.into(),
-            title: t.title,
-            plan_path: t.plan_path,
+            title: t.title.into(),
+            plan_path: t.plan_path.into(),
             assignee_id: t.assignee_id.map(|a| a.to_string()),
             status: t.status.into(),
             priority: t.priority.map(Priority::from),

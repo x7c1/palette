@@ -18,7 +18,8 @@ fn into_review_submission(row: ReviewSubmissionRow) -> crate::Result<ReviewSubmi
 
     Ok(ReviewSubmission {
         id: row.id,
-        review_job_id: JobId::new(row.review_job_id),
+        review_job_id: JobId::parse(row.review_job_id)
+            .map_err(|e| crate::Error::Internal(Box::new(e.reason_key())))?,
         round: row.round as i32,
         verdict,
         summary: row.summary,

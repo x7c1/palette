@@ -39,10 +39,10 @@ async fn review_submit_and_get_submissions() {
         .data_store
         .create_job(&CreateJobRequest {
             task_id,
-            id: Some(JobId::new("R-001")),
+            id: Some(JobId::parse("R-001").unwrap()),
             job_type: JobType::Review,
-            title: "Review".to_string(),
-            plan_path: "test/R-001".to_string(),
+            title: palette_domain::job::Title::parse("Review").unwrap(),
+            plan_path: palette_domain::job::PlanPath::parse("test/R-001").unwrap(),
             assignee_id: None,
             priority: None,
             repository: None,
@@ -82,7 +82,7 @@ async fn review_submit_and_get_submissions() {
     let review = state
         .interactor
         .data_store
-        .get_job(&JobId::new("R-001"))
+        .get_job(&JobId::parse("R-001").unwrap())
         .unwrap()
         .unwrap();
     assert_eq!(
@@ -119,10 +119,10 @@ async fn review_approved_completes_review_job() {
         .data_store
         .create_job(&CreateJobRequest {
             task_id,
-            id: Some(JobId::new("R-001")),
+            id: Some(JobId::parse("R-001").unwrap()),
             job_type: JobType::Review,
-            title: "Review".to_string(),
-            plan_path: "test/R-001".to_string(),
+            title: palette_domain::job::Title::parse("Review").unwrap(),
+            plan_path: palette_domain::job::PlanPath::parse("test/R-001").unwrap(),
             assignee_id: None,
             priority: None,
             repository: None,
@@ -154,7 +154,7 @@ async fn review_approved_completes_review_job() {
     let review = state
         .interactor
         .data_store
-        .get_job(&JobId::new("R-001"))
+        .get_job(&JobId::parse("R-001").unwrap())
         .unwrap()
         .unwrap();
     assert_eq!(review.status, JobStatus::Review(ReviewStatus::Done));

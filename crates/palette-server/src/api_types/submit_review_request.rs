@@ -31,18 +31,38 @@ impl SubmitReviewRequest {
             return Err(hints);
         }
 
+        // All validations passed — parse again to build domain types.
+        let comments = self
+            .comments
+            .iter()
+            .map(|c| {
+                Ok(domain::review::ReviewCommentInput {
+                    file: domain::review::FilePath::parse(&c.file).map_err(|e| {
+                        vec![FieldError {
+                            field: "file".into(),
+                            reason: e.reason_key(),
+                        }]
+                    })?,
+                    line: domain::review::LineNumber::parse(c.line).map_err(|e| {
+                        vec![FieldError {
+                            field: "line".into(),
+                            reason: e.reason_key(),
+                        }]
+                    })?,
+                    body: domain::review::CommentBody::parse(&c.body).map_err(|e| {
+                        vec![FieldError {
+                            field: "body".into(),
+                            reason: e.reason_key(),
+                        }]
+                    })?,
+                })
+            })
+            .collect::<Result<Vec<_>, Vec<FieldError>>>()?;
+
         Ok(domain::review::SubmitReviewRequest {
             verdict: self.verdict.into(),
             summary: self.summary.clone(),
-            comments: self
-                .comments
-                .iter()
-                .map(|c| domain::review::ReviewCommentInput {
-                    file: c.file.clone(),
-                    line: c.line,
-                    body: c.body.clone(),
-                })
-                .collect(),
+            comments,
         })
     }
 }

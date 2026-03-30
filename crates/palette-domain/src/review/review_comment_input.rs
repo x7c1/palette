@@ -1,6 +1,8 @@
+use super::{CommentBody, FilePath, LineNumber};
+
 #[derive(Debug, Clone)]
 pub struct ReviewCommentInput {
-    pub file: String,
-    pub line: i32,
-    pub body: String,
+    pub file: FilePath,
+    pub line: LineNumber,
+    pub body: CommentBody,
 }

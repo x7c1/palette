@@ -27,8 +27,8 @@ impl Database {
                 id.as_ref(),
                 req.task_id.as_ref(),
                 crate::lookup::job_type_id(req.job_type),
-                req.title,
-                req.plan_path,
+                req.title.as_ref(),
+                req.plan_path.as_ref(),
                 req.assignee_id.as_ref().map(|a| a.as_ref()),
                 crate::lookup::job_status_id(initial_status),
                 req.priority.map(crate::lookup::priority_id),
@@ -62,8 +62,8 @@ mod tests {
                 task_id,
                 id: Some(jid("C-001")),
                 job_type: JobType::Craft,
-                title: "Implement feature".to_string(),
-                plan_path: "2026/feature-x/api-impl".to_string(),
+                title: Title::parse("Implement feature").unwrap(),
+                plan_path: PlanPath::parse("2026/feature-x/api-impl").unwrap(),
                 assignee_id: Some(wid("member-a")),
                 priority: Some(Priority::High),
                 repository: Some(Repository {
@@ -79,6 +79,6 @@ mod tests {
         assert_eq!(job.priority, Some(Priority::High));
 
         let fetched = db.get_job(&jid("C-001")).unwrap().unwrap();
-        assert_eq!(fetched.title, "Implement feature");
+        assert_eq!(fetched.title.as_ref(), "Implement feature");
     }
 }
