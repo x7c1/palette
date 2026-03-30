@@ -20,12 +20,8 @@ impl Database {
         let params: Vec<&dyn rusqlite::types::ToSql> =
             param_values.iter().map(|b| b.as_ref()).collect();
         let mut stmt = conn.prepare(sql)?;
-        let rows = stmt.query_map(params.as_slice(), read_workflow_row)?;
-
-        let mut workflows = Vec::new();
-        for row in rows {
-            workflows.push(into_workflow(row?)?);
-        }
-        Ok(workflows)
+        stmt.query_map(params.as_slice(), read_workflow_row)?
+            .map(|row| into_workflow(row?))
+            .collect::<crate::Result<Vec<_>>>()
     }
 }

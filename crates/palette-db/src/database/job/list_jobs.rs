@@ -24,13 +24,9 @@ impl Database {
         let mut stmt = conn.prepare(&sql)?;
         let params_ref: Vec<&dyn rusqlite::types::ToSql> =
             param_values.iter().map(|p| p.as_ref()).collect();
-        let rows = stmt.query_map(params_ref.as_slice(), read_job_row)?;
-
-        let mut jobs = Vec::new();
-        for row in rows {
-            jobs.push(into_job(row?)?);
-        }
-        Ok(jobs)
+        stmt.query_map(params_ref.as_slice(), read_job_row)?
+            .map(|row| into_job(row?))
+            .collect::<crate::Result<Vec<_>>>()
     }
 }
 

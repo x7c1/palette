@@ -36,11 +36,8 @@ impl Database {
             "SELECT id, review_job_id, round, verdict_id, summary, created_at
              FROM review_submissions WHERE review_job_id = ?1 ORDER BY round",
         )?;
-        let rows = stmt.query_map(params![review_job_id.as_ref()], read_review_submission_row)?;
-        let mut submissions = Vec::new();
-        for row in rows {
-            submissions.push(into_review_submission(row?)?);
-        }
-        Ok(submissions)
+        stmt.query_map(params![review_job_id.as_ref()], read_review_submission_row)?
+            .map(|row| into_review_submission(row?))
+            .collect::<crate::Result<Vec<_>>>()
     }
 }

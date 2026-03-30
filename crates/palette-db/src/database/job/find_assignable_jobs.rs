@@ -25,12 +25,9 @@ impl Database {
                  ELSE 3
                END",
         )?;
-        let rows = stmt.query_map(params![craft_todo, review_todo], read_job_row)?;
-        let mut jobs = Vec::new();
-        for row in rows {
-            jobs.push(into_job(row?)?);
-        }
-        Ok(jobs)
+        stmt.query_map(params![craft_todo, review_todo], read_job_row)?
+            .map(|row| into_job(row?))
+            .collect::<crate::Result<Vec<_>>>()
     }
 }
 

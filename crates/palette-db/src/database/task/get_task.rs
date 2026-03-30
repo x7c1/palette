@@ -47,12 +47,11 @@ impl Database {
         let conn = lock(&self.conn)?;
         let mut stmt =
             conn.prepare("SELECT id, workflow_id, status_id FROM tasks WHERE workflow_id = ?1")?;
-        let rows = stmt.query_map(params![workflow_id.as_ref()], read_task_row)?;
-        let mut map = HashMap::new();
-        for row in rows {
-            let state = into_task_state(row?)?;
-            map.insert(state.id, state.status);
-        }
-        Ok(map)
+        stmt.query_map(params![workflow_id.as_ref()], read_task_row)?
+            .map(|row| {
+                let state = into_task_state(row?)?;
+                Ok((state.id, state.status))
+            })
+            .collect::<crate::Result<HashMap<_, _>>>()
     }
 }

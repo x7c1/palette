@@ -18,11 +18,8 @@ impl Database {
             params![workflow_id.as_ref(), role_leader, role_ri],
             read_worker_row,
         )?;
-        let mut results = Vec::new();
-        for row in rows {
-            results.push(into_worker_state(row?)?);
-        }
-        Ok(results)
+        rows.map(|row| into_worker_state(row?))
+            .collect::<crate::Result<Vec<_>>>()
     }
 
     /// List all members for a workflow.
@@ -32,11 +29,8 @@ impl Database {
         let sql = format!("SELECT {COLUMNS} FROM workers WHERE workflow_id = ?1 AND role_id = ?2");
         let mut stmt = conn.prepare(&sql)?;
         let rows = stmt.query_map(params![workflow_id.as_ref(), role_member], read_worker_row)?;
-        let mut results = Vec::new();
-        for row in rows {
-            results.push(into_worker_state(row?)?);
-        }
-        Ok(results)
+        rows.map(|row| into_worker_state(row?))
+            .collect::<crate::Result<Vec<_>>>()
     }
 
     /// List all workers (all workflows).
@@ -45,11 +39,8 @@ impl Database {
         let sql = format!("SELECT {COLUMNS} FROM workers");
         let mut stmt = conn.prepare(&sql)?;
         let rows = stmt.query_map([], read_worker_row)?;
-        let mut results = Vec::new();
-        for row in rows {
-            results.push(into_worker_state(row?)?);
-        }
-        Ok(results)
+        rows.map(|row| into_worker_state(row?))
+            .collect::<crate::Result<Vec<_>>>()
     }
 
     /// List all workers in Booting status (all workflows).
@@ -59,11 +50,8 @@ impl Database {
         let sql = format!("SELECT {COLUMNS} FROM workers WHERE status_id = ?1");
         let mut stmt = conn.prepare(&sql)?;
         let rows = stmt.query_map(params![booting_id], read_worker_row)?;
-        let mut results = Vec::new();
-        for row in rows {
-            results.push(into_worker_state(row?)?);
-        }
-        Ok(results)
+        rows.map(|row| into_worker_state(row?))
+            .collect::<crate::Result<Vec<_>>>()
     }
 
     /// List all workers that are idle or waiting for permission (all workflows).
@@ -74,11 +62,8 @@ impl Database {
         let sql = format!("SELECT {COLUMNS} FROM workers WHERE status_id IN (?1, ?2)");
         let mut stmt = conn.prepare(&sql)?;
         let rows = stmt.query_map(params![idle_id, waiting_id], read_worker_row)?;
-        let mut results = Vec::new();
-        for row in rows {
-            results.push(into_worker_state(row?)?);
-        }
-        Ok(results)
+        rows.map(|row| into_worker_state(row?))
+            .collect::<crate::Result<Vec<_>>>()
     }
 }
 
