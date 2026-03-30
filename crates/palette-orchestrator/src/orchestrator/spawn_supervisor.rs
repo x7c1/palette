@@ -16,7 +16,9 @@ impl Orchestrator {
             .interactor
             .data_store
             .get_task_state(task_id)?
-            .ok_or_else(|| crate::Error::Internal(format!("task not found: {task_id}")))?;
+            .ok_or_else(|| crate::Error::TaskNotFound {
+                task_id: task_id.clone(),
+            })?;
         let seq = self
             .interactor
             .data_store
@@ -38,9 +40,10 @@ impl Orchestrator {
                 &self.docker_config.review_integrator_prompt,
             ),
             WorkerRole::Member => {
-                return Err(crate::Error::Internal(
-                    "cannot spawn a supervisor with Member role".into(),
-                ));
+                return Err(crate::Error::InvalidTaskState {
+                    task_id: task_id.clone(),
+                    detail: "cannot spawn a supervisor with Member role".into(),
+                });
             }
         };
 

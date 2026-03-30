@@ -30,7 +30,7 @@ impl Orchestrator {
         let task_store = self
             .interactor
             .create_task_store(&task_state.workflow_id)
-            .map_err(|e| crate::Error::Internal(e.to_string()))?;
+            .map_err(|e| crate::Error::External(e))?;
 
         // Check if all children are Completed (if any)
         let children = task_store.get_child_tasks(task_id)?;
@@ -225,9 +225,12 @@ impl Orchestrator {
         &self,
         task: &palette_domain::task::Task,
     ) -> crate::Result<Vec<RuleEffect>> {
-        let job_type = task.job_type.ok_or_else(|| {
-            crate::Error::Internal(format!("task {} has no job_type", task.id))
-        })?;
+        let job_type = task
+            .job_type
+            .ok_or_else(|| crate::Error::InvalidTaskState {
+                task_id: task.id.clone(),
+                detail: "missing job_type".into(),
+            })?;
         let job =
             self.interactor
                 .data_store
@@ -235,12 +238,22 @@ impl Orchestrator {
                     Some(JobId::generate(job_type)),
                     task.id.clone(),
                     job_type,
-                    palette_domain::job::Title::parse(task.key.to_string())
-                        .map_err(|e| crate::Error::Internal(e.reason_key()))?,
+                    palette_domain::job::Title::parse(task.key.to_string()).map_err(|e| {
+                        crate::Error::InvalidTaskState {
+                            task_id: task.id.clone(),
+                            detail: e.reason_key(),
+                        }
+                    })?,
                     palette_domain::job::PlanPath::parse(task.plan_path.clone().ok_or_else(
-                        || crate::Error::Internal(format!("task {} has no plan_path", task.id)),
+                        || crate::Error::InvalidTaskState {
+                            task_id: task.id.clone(),
+                            detail: "missing plan_path".into(),
+                        },
                     )?)
-                    .map_err(|e| crate::Error::Internal(e.reason_key()))?,
+                    .map_err(|e| crate::Error::InvalidTaskState {
+                        task_id: task.id.clone(),
+                        detail: e.reason_key(),
+                    })?,
                     None,
                     task.priority,
                     task.repository.clone(),
@@ -267,11 +280,13 @@ impl Orchestrator {
             .interactor
             .data_store
             .get_task_state(task_id)?
-            .ok_or_else(|| crate::Error::Internal(format!("task not found: {task_id}")))?;
+            .ok_or_else(|| crate::Error::TaskNotFound {
+                task_id: task_id.clone(),
+            })?;
         let task_store = self
             .interactor
             .create_task_store(&task_state.workflow_id)
-            .map_err(|e| crate::Error::Internal(e.to_string()))?;
+            .map_err(|e| crate::Error::External(e))?;
 
         let mut current_id = task_id.clone();
         loop {
@@ -282,16 +297,20 @@ impl Orchestrator {
             {
                 return Ok(sup.id.clone());
             }
-            let task = task_store
-                .get_task(&current_id)?
-                .ok_or_else(|| crate::Error::Internal(format!("task not found: {current_id}")))?;
+            let task =
+                task_store
+                    .get_task(&current_id)?
+                    .ok_or_else(|| crate::Error::TaskNotFound {
+                        task_id: current_id.clone(),
+                    })?;
             match task.parent_id {
                 Some(ref pid) => current_id = pid.clone(),
                 None => break,
             }
         }
-        Err(crate::Error::Internal(format!(
-            "no supervisor found for task {task_id}"
-        )))
+        Err(crate::Error::InvalidTaskState {
+            task_id: task_id.clone(),
+            detail: "no supervisor found in task ancestry".into(),
+        })
     }
 }

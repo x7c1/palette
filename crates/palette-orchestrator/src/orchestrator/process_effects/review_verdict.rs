@@ -56,7 +56,7 @@ impl Orchestrator {
         let task_store = self
             .interactor
             .create_task_store(&task_state.workflow_id)
-            .map_err(|e| crate::Error::Internal(e.to_string()))?;
+            .map_err(|e| crate::Error::External(e))?;
 
         let Some(review_task) = task_store.get_task(review_task_id)? else {
             return Ok(vec![]);
@@ -132,7 +132,7 @@ impl Orchestrator {
         let task_store = self
             .interactor
             .create_task_store(&task_state.workflow_id)
-            .map_err(|e| crate::Error::Internal(e.to_string()))?;
+            .map_err(|e| crate::Error::External(e))?;
 
         let Some(review_task) = task_store.get_task(review_task_id)? else {
             return Ok(vec![]);
