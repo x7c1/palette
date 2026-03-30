@@ -19,7 +19,13 @@ pub async fn handle_suspend_workflow(
     State(state): State<Arc<AppState>>,
     Path(id): Path<String>,
 ) -> crate::Result<Response> {
-    let workflow_id = WorkflowId::new(id);
+    let workflow_id = WorkflowId::parse(id).map_err(|e| crate::Error::BadRequest {
+        code: crate::api_types::ErrorCode::InputValidationFailed,
+        field_hints: vec![crate::api_types::FieldHint {
+            field: "id".into(),
+            reason: e.reason_key().into(),
+        }],
+    })?;
     let _ = state
         .event_tx
         .send(ServerEvent::SuspendWorkflow { workflow_id });

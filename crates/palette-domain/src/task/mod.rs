@@ -2,7 +2,7 @@ mod task_key;
 pub use task_key::TaskKey;
 
 mod task_id;
-pub use task_id::TaskId;
+pub use task_id::{InvalidTaskId, TaskId};
 
 mod task_status;
 pub use task_status::TaskStatus;

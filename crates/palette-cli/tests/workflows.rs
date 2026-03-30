@@ -191,10 +191,16 @@ task:
     - key: step-a
       type: craft
       plan_path: test/step-a
+      children:
+        - key: review
+          type: review
     - key: step-b
       type: craft
       plan_path: test/step-b
       depends_on: [step-a]
+      children:
+        - key: review
+          type: review
 "#;
     let blueprint_file = write_blueprint_file(yaml);
 
@@ -235,7 +241,10 @@ task:
         .unwrap();
     assert_eq!(step_b.status, TaskStatus::Pending);
 
-    // Simulate Job completion by sending a StatusChanged(Done) effect to the orchestrator.
+    // Simulate Job lifecycle: InProgress → InReview → review approved → Done
+    use palette_domain::rule::RuleEffect;
+    use palette_domain::server::ServerEvent;
+
     let job_id = &jobs[0].id;
     state
         .interactor
@@ -247,22 +256,51 @@ task:
         .data_store
         .update_job_status(job_id, JStatus::Craft(CraftStatus::InReview))
         .unwrap();
+
+    // CraftReadyForReview creates the review job
+    let _ = state.event_tx.send(ServerEvent::ProcessEffects {
+        effects: vec![RuleEffect::CraftReadyForReview {
+            craft_job_id: job_id.clone(),
+        }],
+    });
+    tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
+
+    // Approve the review
+    let all_jobs_a = state
+        .interactor
+        .data_store
+        .list_jobs(&JobFilter::default())
+        .unwrap();
+    let review_a = all_jobs_a
+        .iter()
+        .find(|j| j.task_id.as_ref() == tid(wf_id, "cascade-test/step-a/review").to_string())
+        .expect("step-a/review job should exist");
+
+    helper::setup_worker(&*state.interactor.data_store, "reviewer-a");
     state
         .interactor
         .data_store
-        .update_job_status(job_id, JStatus::Craft(CraftStatus::Done))
+        .assign_job(&review_a.id, &helper::wid("reviewer-a"), JobType::Review)
         .unwrap();
-
-    // Send StatusChanged effect to trigger orchestrator processing
-    use palette_domain::rule::RuleEffect;
-    use palette_domain::server::ServerEvent;
-    let _ = state.event_tx.send(ServerEvent::ProcessEffects {
-        effects: vec![RuleEffect::JobCompleted {
-            job_id: job_id.clone(),
-        }],
-    });
-
-    // Give the orchestrator event loop time to process
+    let sub = state
+        .interactor
+        .data_store
+        .submit_review(
+            &review_a.id,
+            &palette_domain::review::SubmitReviewRequest {
+                verdict: palette_domain::review::Verdict::Approved,
+                summary: Some("LGTM".into()),
+                comments: vec![],
+            },
+        )
+        .unwrap();
+    let effects = palette_usecase::RuleEngine::new(
+        state.interactor.data_store.as_ref(),
+        state.max_review_rounds,
+    )
+    .on_review_submitted(&review_a.id, &sub)
+    .unwrap();
+    let _ = state.event_tx.send(ServerEvent::ProcessEffects { effects });
     tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
 
     // Verify: step-a task should be Done
@@ -274,53 +312,89 @@ task:
         .unwrap();
     assert_eq!(step_a.status, TaskStatus::Completed);
 
-    // Verify: step-b should now be Ready (dependency satisfied)
+    // Verify: step-b should now be activated (dependency satisfied)
     let step_b = state
         .interactor
         .data_store
         .get_task_state(&tid(&wf_id, "cascade-test/step-b"))
         .unwrap()
         .unwrap();
-    assert_eq!(step_b.status, TaskStatus::Ready);
+    assert!(
+        step_b.status == TaskStatus::Ready || step_b.status == TaskStatus::InProgress,
+        "step-b should be Ready or InProgress, got: {:?}",
+        step_b.status,
+    );
 
-    // Now complete step-b's job to trigger full workflow completion
-    let step_b_job = state
+    // Find the step-b craft job (auto-created by the orchestrator when step-b activated)
+    let all_jobs_b = state
         .interactor
         .data_store
-        .create_job(&palette_domain::job::CreateJobRequest {
-            id: Some(palette_domain::job::JobId::new("C-step-b")),
-            task_id: tid(&wf_id, "cascade-test/step-b"),
-            job_type: JobType::Craft,
-            title: "step-b".to_string(),
-            plan_path: "test/step-b".to_string(),
-            assignee_id: None,
-            priority: None,
-            repository: None,
+        .list_jobs(&JobFilter::default())
+        .unwrap();
+    let step_b_job = all_jobs_b
+        .iter()
+        .find(|j| {
+            j.task_id.as_ref() == tid(wf_id, "cascade-test/step-b").to_string()
+                && j.job_type == JobType::Craft
         })
+        .expect("step-b craft job should exist (auto-created)");
+    let step_b_job_id = step_b_job.id.clone();
+
+    state
+        .interactor
+        .data_store
+        .update_job_status(&step_b_job_id, JStatus::Craft(CraftStatus::InProgress))
         .unwrap();
     state
         .interactor
         .data_store
-        .update_job_status(&step_b_job.id, JStatus::Craft(CraftStatus::InProgress))
-        .unwrap();
-    state
-        .interactor
-        .data_store
-        .update_job_status(&step_b_job.id, JStatus::Craft(CraftStatus::InReview))
-        .unwrap();
-    state
-        .interactor
-        .data_store
-        .update_job_status(&step_b_job.id, JStatus::Craft(CraftStatus::Done))
+        .update_job_status(&step_b_job_id, JStatus::Craft(CraftStatus::InReview))
         .unwrap();
 
     let _ = state.event_tx.send(ServerEvent::ProcessEffects {
-        effects: vec![RuleEffect::JobCompleted {
-            job_id: step_b_job.id.clone(),
+        effects: vec![RuleEffect::CraftReadyForReview {
+            craft_job_id: step_b_job_id.clone(),
         }],
     });
-
     tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
+
+    // Approve the review for step-b
+    let all_jobs_b2 = state
+        .interactor
+        .data_store
+        .list_jobs(&JobFilter::default())
+        .unwrap();
+    let review_b = all_jobs_b2
+        .iter()
+        .find(|j| j.task_id.as_ref() == tid(wf_id, "cascade-test/step-b/review").to_string())
+        .expect("step-b/review job should exist");
+
+    helper::setup_worker(&*state.interactor.data_store, "reviewer-b");
+    state
+        .interactor
+        .data_store
+        .assign_job(&review_b.id, &helper::wid("reviewer-b"), JobType::Review)
+        .unwrap();
+    let sub = state
+        .interactor
+        .data_store
+        .submit_review(
+            &review_b.id,
+            &palette_domain::review::SubmitReviewRequest {
+                verdict: palette_domain::review::Verdict::Approved,
+                summary: Some("LGTM".into()),
+                comments: vec![],
+            },
+        )
+        .unwrap();
+    let effects = palette_usecase::RuleEngine::new(
+        state.interactor.data_store.as_ref(),
+        state.max_review_rounds,
+    )
+    .on_review_submitted(&review_b.id, &sub)
+    .unwrap();
+    let _ = state.event_tx.send(ServerEvent::ProcessEffects { effects });
+    tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
 
     // step-b task should be Done
     let step_b = state
@@ -369,6 +443,9 @@ task:
         - key: craft
           type: craft
           plan_path: test/step-b-craft
+          children:
+            - key: review
+              type: review
 "#;
     let blueprint_file = write_blueprint_file(yaml);
 

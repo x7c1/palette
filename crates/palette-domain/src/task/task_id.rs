@@ -2,6 +2,8 @@ use super::TaskKey;
 use crate::workflow::WorkflowId;
 use std::fmt;
 
+const MAX_ID_LEN: usize = 512;
+
 /// Task identifier in the format `{workflow_id}:{key_path}`.
 ///
 /// The key_path is a `/`-separated path of task keys from root to the node.
@@ -9,10 +11,23 @@ use std::fmt;
 pub struct TaskId(String);
 
 impl TaskId {
-    // TODO: validate that id matches the {workflow_id}:{key_path} format
-    //       (see plan 011-api-input-validation)
+    /// Create a TaskId without validation.
+    ///
+    /// Use this for trusted internal sources (e.g., database reads,
+    /// programmatic construction). For external input, use [`parse`].
     pub fn new(id: impl Into<String>) -> Self {
         Self(id.into())
+    }
+
+    /// Parse and validate a TaskId from external input.
+    ///
+    /// Requires the `{workflow_id}:{key_path}` format (must contain `:`).
+    pub fn parse(id: impl Into<String>) -> Result<Self, InvalidTaskId> {
+        let id = id.into();
+        if id.is_empty() || id.len() > MAX_ID_LEN || !id.contains(':') {
+            return Err(InvalidTaskId { id });
+        }
+        Ok(Self(id))
     }
 
     /// Create a root task ID from a workflow ID and root key.
@@ -42,5 +57,17 @@ impl fmt::Display for TaskId {
 impl AsRef<str> for TaskId {
     fn as_ref(&self) -> &str {
         &self.0
+    }
+}
+
+/// Invalid format for a task ID.
+#[derive(Debug)]
+pub struct InvalidTaskId {
+    pub id: String,
+}
+
+impl InvalidTaskId {
+    pub fn reason_key(&self) -> &str {
+        "invalid_format"
     }
 }

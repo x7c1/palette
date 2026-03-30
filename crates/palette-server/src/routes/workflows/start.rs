@@ -37,13 +37,7 @@ pub async fn handle_start_workflow(
         .interactor
         .blueprint
         .read_blueprint(Path::new(&req.blueprint_path), &workflow_id)
-        .map_err(|e| Error::BadRequest {
-            code: crate::api_types::ErrorCode::BlueprintInvalid,
-            field_hints: vec![crate::api_types::FieldHint {
-                field: "blueprint_path".into(),
-                reason: format!("{e}"),
-            }],
-        })?;
+        .map_err(super::blueprint_read_error_to_server_error)?;
 
     let task_count = register_tasks(&state, &workflow_id, &tree, &req.blueprint_path)?;
 

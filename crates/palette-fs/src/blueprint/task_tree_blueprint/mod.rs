@@ -1,4 +1,5 @@
 mod to_task_tree;
+pub use to_task_tree::BlueprintError;
 
 use super::TaskNode;
 use serde::Deserialize;

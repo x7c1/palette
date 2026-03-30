@@ -1,22 +1,115 @@
 use super::{TaskNode, TaskTreeBlueprint};
 use palette_domain::job::{JobType, Priority, Repository};
 use palette_domain::task::{TaskId, TaskKey, TaskTree, TaskTreeNode};
-
-/// Convert a Blueprint string key to a domain TaskKey.
-fn to_key(s: &str) -> TaskKey {
-    TaskKey::new(s)
-}
 use palette_domain::workflow::WorkflowId;
 use std::collections::HashMap;
+
+/// Blueprint validation error.
+#[derive(Debug)]
+pub enum BlueprintError {
+    /// Task key contains invalid characters (must be `[a-z0-9-]+`).
+    InvalidKey { key: String },
+    /// Craft task has no review child.
+    MissingReviewChild { task_key: String },
+}
+
+impl BlueprintError {
+    pub fn reason_key(&self) -> &str {
+        match self {
+            BlueprintError::InvalidKey { .. } => "invalid_format",
+            BlueprintError::MissingReviewChild { .. } => "missing_review_child",
+        }
+    }
+
+    pub fn field_path(&self) -> String {
+        match self {
+            BlueprintError::InvalidKey { key } => format!("tasks[key={key}].key"),
+            BlueprintError::MissingReviewChild { task_key } => {
+                format!("tasks[key={task_key}].children")
+            }
+        }
+    }
+}
+
+impl std::fmt::Display for BlueprintError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            BlueprintError::InvalidKey { key } => {
+                write!(f, "invalid task key '{key}': must match [a-z0-9-]+")
+            }
+            BlueprintError::MissingReviewChild { task_key } => {
+                write!(f, "craft task '{task_key}' has no review child")
+            }
+        }
+    }
+}
+
+impl std::error::Error for BlueprintError {}
+
+/// Validate that a task key matches `[a-z0-9-]+`.
+fn validate_key(key: &str) -> Result<TaskKey, BlueprintError> {
+    if key.is_empty()
+        || !key
+            .bytes()
+            .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'-')
+    {
+        return Err(BlueprintError::InvalidKey {
+            key: key.to_string(),
+        });
+    }
+    Ok(TaskKey::new(key))
+}
+
+/// Validate that a craft task has at least one review child.
+fn validate_craft_has_review(node: &TaskNode) -> Result<(), BlueprintError> {
+    if let Some(job_type) = node.job_type
+        && matches!(JobType::from(job_type), JobType::Craft)
+    {
+        let has_review = node.children.iter().any(|c| {
+            c.job_type
+                .is_some_and(|jt| matches!(JobType::from(jt), JobType::Review))
+        });
+        if !has_review {
+            return Err(BlueprintError::MissingReviewChild {
+                task_key: node.key.clone(),
+            });
+        }
+    }
+    Ok(())
+}
+
+/// Validate all nodes in the Blueprint tree recursively.
+///
+/// Collects all errors rather than stopping at the first one.
+fn validate_all(node: &TaskNode, errors: &mut Vec<BlueprintError>) {
+    if let Err(e) = validate_key(&node.key) {
+        errors.push(e);
+    }
+    if let Err(e) = validate_craft_has_review(node) {
+        errors.push(e);
+    }
+    for child in &node.children {
+        validate_all(child, errors);
+    }
+}
 
 impl TaskTreeBlueprint {
     /// Convert this Blueprint into a domain TaskTree.
     ///
     /// Task IDs are built as `{workflow_id}:{key_path}` where key_path
     /// is the `/`-separated path of task keys from root to the node.
-    pub fn to_task_tree(&self, workflow_id: &WorkflowId) -> TaskTree {
+    ///
+    /// Validates key formats and structural constraints before building.
+    pub fn to_task_tree(&self, workflow_id: &WorkflowId) -> Result<TaskTree, Vec<BlueprintError>> {
+        let mut errors = Vec::new();
+        validate_all(&self.task, &mut errors);
+        if !errors.is_empty() {
+            return Err(errors);
+        }
+
         let root = &self.task;
-        let root_id = TaskId::root(workflow_id, &to_key(&root.key));
+        let root_key = TaskKey::new(&root.key);
+        let root_id = TaskId::root(workflow_id, &root_key);
         let mut nodes = HashMap::new();
 
         insert_node(&root_id, None, None, root, &mut nodes);
@@ -27,8 +120,12 @@ impl TaskTreeBlueprint {
             &mut nodes,
         );
 
-        TaskTree::new(root_id, nodes)
+        Ok(TaskTree::new(root_id, nodes))
     }
+}
+
+fn to_key(s: &str) -> TaskKey {
+    TaskKey::new(s)
 }
 
 fn insert_node(
@@ -126,9 +223,12 @@ task:
         - key: api-impl
           type: craft
           plan_path: execution/api-impl
+          children:
+            - key: api-impl-review
+              type: review
 "#;
         let blueprint: TaskTreeBlueprint = serde_yaml::from_str(yaml).unwrap();
-        let tree = blueprint.to_task_tree(&wf_id);
+        let tree = blueprint.to_task_tree(&wf_id).unwrap();
 
         // Root
         assert_eq!(tree.root_id(), &TaskId::new("wf-test:feature-x"));
@@ -167,7 +267,55 @@ task:
         let execution = tree.find_by_key("execution").unwrap();
         assert_eq!(execution.depends_on, vec![planning.id.clone()]);
 
-        // Total: root + planning + api-plan + api-plan-review + execution + api-impl = 6
-        assert_eq!(tree.task_ids().count(), 6);
+        // Total: root + planning + api-plan + api-plan-review + execution + api-impl + api-impl-review = 7
+        assert_eq!(tree.task_ids().count(), 7);
+    }
+
+    #[test]
+    fn rejects_invalid_key_format() {
+        let wf_id = WorkflowId::new("wf-test");
+        let yaml = r#"
+task:
+  key: Feature_X
+  children:
+    - key: valid-key
+"#;
+        let blueprint: TaskTreeBlueprint = serde_yaml::from_str(yaml).unwrap();
+        let errors = blueprint.to_task_tree(&wf_id).unwrap_err();
+        assert_eq!(errors.len(), 1);
+        assert!(matches!(&errors[0], BlueprintError::InvalidKey { key } if key == "Feature_X"));
+    }
+
+    #[test]
+    fn rejects_craft_without_review_child() {
+        let wf_id = WorkflowId::new("wf-test");
+        let yaml = r#"
+task:
+  key: root
+  children:
+    - key: my-craft
+      type: craft
+"#;
+        let blueprint: TaskTreeBlueprint = serde_yaml::from_str(yaml).unwrap();
+        let errors = blueprint.to_task_tree(&wf_id).unwrap_err();
+        assert_eq!(errors.len(), 1);
+        assert!(
+            matches!(&errors[0], BlueprintError::MissingReviewChild { task_key } if task_key == "my-craft")
+        );
+    }
+
+    #[test]
+    fn collects_multiple_errors() {
+        let wf_id = WorkflowId::new("wf-test");
+        let yaml = r#"
+task:
+  key: INVALID
+  children:
+    - key: craft-no-review
+      type: craft
+"#;
+        let blueprint: TaskTreeBlueprint = serde_yaml::from_str(yaml).unwrap();
+        let errors = blueprint.to_task_tree(&wf_id).unwrap_err();
+        assert_eq!(errors.len(), 2);
     }
 }

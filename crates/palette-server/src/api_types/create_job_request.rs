@@ -35,15 +35,10 @@ impl CreateJobRequest {
             });
         }
 
-        if self.task_id.trim().is_empty() {
+        if let Err(e) = domain::task::TaskId::parse(&self.task_id) {
             hints.push(FieldHint {
                 field: "task_id".into(),
-                reason: "required".into(),
-            });
-        } else if self.task_id.len() > MAX_ID_LEN {
-            hints.push(FieldHint {
-                field: "task_id".into(),
-                reason: "too_long".into(),
+                reason: e.reason_key().into(),
             });
         }
 
@@ -79,6 +74,7 @@ impl CreateJobRequest {
 
         Ok(domain::job::CreateJobRequest {
             id: self.id.as_deref().map(domain::job::JobId::new),
+            // Already validated by TaskId::parse above
             task_id: domain::task::TaskId::new(&self.task_id),
             job_type: self.job_type.into(),
             title: self.title.clone(),

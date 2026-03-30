@@ -285,7 +285,7 @@ async fn scenario3_message_queuing_to_leader() {
 /// - Workflow completion destroys all supervisors
 #[tokio::test]
 async fn dynamic_supervisor_lifecycle() {
-    use palette_domain::job::{CraftStatus, JobFilter, JobStatus as JStatus};
+    use palette_domain::job::{CraftStatus, JobFilter, JobStatus as JStatus, JobType};
     use palette_domain::rule::RuleEffect;
     use palette_domain::server::ServerEvent;
     use palette_domain::task::TaskStatus;
@@ -300,12 +300,18 @@ task:
         - key: craft
           type: craft
           plan_path: test/a-craft
+          children:
+            - key: review
+              type: review
     - key: phase-b
       depends_on: [phase-a]
       children:
         - key: craft
           type: craft
           plan_path: test/b-craft
+          children:
+            - key: review
+              type: review
 "#;
 
     let (session, _guard) = test_session_name_with_guard("dyn-sup");
@@ -402,7 +408,7 @@ task:
         );
     }
 
-    // --- Phase 2: Complete phase-a/craft ---
+    // --- Phase 2: Complete phase-a/craft through review ---
     let jobs = state
         .interactor
         .data_store
@@ -421,17 +427,51 @@ task:
         .data_store
         .update_job_status(&craft_a_id, JStatus::Craft(CraftStatus::InReview))
         .unwrap();
+
+    // CraftReadyForReview triggers review job creation
+    let _ = state.event_tx.send(ServerEvent::ProcessEffects {
+        effects: vec![RuleEffect::CraftReadyForReview {
+            craft_job_id: craft_a_id.clone(),
+        }],
+    });
+    wait().await;
+
+    // Approve the review to complete the craft
+    let all_jobs_a = state
+        .interactor
+        .data_store
+        .list_jobs(&JobFilter::default())
+        .unwrap();
+    let review_a = all_jobs_a
+        .iter()
+        .find(|j| j.task_id.as_ref() == tid(wf_id, "sup-test/phase-a/craft/review").to_string())
+        .expect("phase-a/craft/review job should exist");
+
+    helper::setup_worker(&*state.interactor.data_store, "reviewer-a");
     state
         .interactor
         .data_store
-        .update_job_status(&craft_a_id, JStatus::Craft(CraftStatus::Done))
+        .assign_job(&review_a.id, &wid("reviewer-a"), JobType::Review)
         .unwrap();
-
-    let _ = state.event_tx.send(ServerEvent::ProcessEffects {
-        effects: vec![RuleEffect::JobCompleted {
-            job_id: craft_a_id.clone(),
-        }],
-    });
+    let sub = state
+        .interactor
+        .data_store
+        .submit_review(
+            &review_a.id,
+            &palette_domain::review::SubmitReviewRequest {
+                verdict: palette_domain::review::Verdict::Approved,
+                summary: Some("LGTM".to_string()),
+                comments: vec![],
+            },
+        )
+        .unwrap();
+    let effects = palette_usecase::RuleEngine::new(
+        state.interactor.data_store.as_ref(),
+        state.max_review_rounds,
+    )
+    .on_review_submitted(&review_a.id, &sub)
+    .unwrap();
+    let _ = state.event_tx.send(ServerEvent::ProcessEffects { effects });
     wait().await;
 
     // phase-a should be Completed
@@ -493,7 +533,7 @@ task:
         );
     }
 
-    // --- Phase 3: Complete phase-b/craft ---
+    // --- Phase 3: Complete phase-b/craft through review ---
     let all_jobs = state
         .interactor
         .data_store
@@ -515,17 +555,50 @@ task:
         .data_store
         .update_job_status(&craft_b_id, JStatus::Craft(CraftStatus::InReview))
         .unwrap();
+
+    let _ = state.event_tx.send(ServerEvent::ProcessEffects {
+        effects: vec![RuleEffect::CraftReadyForReview {
+            craft_job_id: craft_b_id.clone(),
+        }],
+    });
+    wait().await;
+
+    // Approve the review
+    let all_jobs_b = state
+        .interactor
+        .data_store
+        .list_jobs(&JobFilter::default())
+        .unwrap();
+    let review_b = all_jobs_b
+        .iter()
+        .find(|j| j.task_id.as_ref() == tid(wf_id, "sup-test/phase-b/craft/review").to_string())
+        .expect("phase-b/craft/review job should exist");
+
+    helper::setup_worker(&*state.interactor.data_store, "reviewer-b");
     state
         .interactor
         .data_store
-        .update_job_status(&craft_b_id, JStatus::Craft(CraftStatus::Done))
+        .assign_job(&review_b.id, &wid("reviewer-b"), JobType::Review)
         .unwrap();
-
-    let _ = state.event_tx.send(ServerEvent::ProcessEffects {
-        effects: vec![RuleEffect::JobCompleted {
-            job_id: craft_b_id.clone(),
-        }],
-    });
+    let sub = state
+        .interactor
+        .data_store
+        .submit_review(
+            &review_b.id,
+            &palette_domain::review::SubmitReviewRequest {
+                verdict: palette_domain::review::Verdict::Approved,
+                summary: Some("LGTM".to_string()),
+                comments: vec![],
+            },
+        )
+        .unwrap();
+    let effects = palette_usecase::RuleEngine::new(
+        state.interactor.data_store.as_ref(),
+        state.max_review_rounds,
+    )
+    .on_review_submitted(&review_b.id, &sub)
+    .unwrap();
+    let _ = state.event_tx.send(ServerEvent::ProcessEffects { effects });
     wait().await;
 
     // All supervisors should be destroyed

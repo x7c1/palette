@@ -22,7 +22,13 @@ pub async fn handle_resume_workflow(
     State(state): State<Arc<AppState>>,
     Path(id): Path<String>,
 ) -> crate::Result<Response> {
-    let workflow_id = WorkflowId::new(&id);
+    let workflow_id = WorkflowId::parse(&id).map_err(|e| Error::BadRequest {
+        code: crate::api_types::ErrorCode::InputValidationFailed,
+        field_hints: vec![crate::api_types::FieldHint {
+            field: "id".into(),
+            reason: e.reason_key().into(),
+        }],
+    })?;
 
     // Verify Blueprint hasn't changed since the last apply
     verify_blueprint_hash(&state, &workflow_id)?;
@@ -184,7 +190,7 @@ fn verify_blueprint_hash(state: &AppState, workflow_id: &WorkflowId) -> crate::R
                 .interactor
                 .blueprint
                 .read_blueprint(blueprint_path, workflow_id)
-                .map_err(Error::internal)?;
+                .map_err(super::blueprint_read_error_to_server_error)?;
             let db_statuses = state
                 .interactor
                 .data_store

@@ -35,7 +35,13 @@ pub async fn handle_apply_blueprint(
     State(state): State<Arc<AppState>>,
     Path(id): Path<String>,
 ) -> crate::Result<Response> {
-    let workflow_id = WorkflowId::new(&id);
+    let workflow_id = WorkflowId::parse(&id).map_err(|e| Error::BadRequest {
+        code: crate::api_types::ErrorCode::InputValidationFailed,
+        field_hints: vec![crate::api_types::FieldHint {
+            field: "id".into(),
+            reason: e.reason_key().into(),
+        }],
+    })?;
 
     // Look up the workflow to get its blueprint_path
     let workflow = state
@@ -57,7 +63,7 @@ pub async fn handle_apply_blueprint(
         .interactor
         .blueprint
         .read_blueprint(blueprint_path, &workflow_id)
-        .map_err(Error::internal)?;
+        .map_err(super::blueprint_read_error_to_server_error)?;
 
     // Get current task statuses from DB
     let db_statuses = state
