@@ -1,37 +1,18 @@
 use super::super::*;
-use crate::models::QueuedMessage;
+use crate::models::{QueuedMessage, QueuedMessageRow};
 use rusqlite::OptionalExtension;
 
 impl Database {
     /// Dequeue the next message for a target (FIFO). Returns None if empty.
     pub fn dequeue_message(&self, target_id: &WorkerId) -> crate::Result<Option<QueuedMessage>> {
         let conn = lock(&self.conn)?;
-        let raw = conn
+        let msg = conn
             .prepare(
                 "SELECT id, target_id, message, created_at FROM message_queue WHERE target_id = ?1 ORDER BY id LIMIT 1",
             )?
-            .query_row(params![target_id.as_ref()], |row| {
-                Ok((
-                    row.get::<_, i64>(0)?,
-                    row.get::<_, String>(1)?,
-                    row.get::<_, String>(2)?,
-                    row.get::<_, String>(3)?,
-                ))
-            })
-            .optional()?;
-
-        let msg = raw
-            .map(
-                |(id, tid, message, created_at)| -> crate::Result<QueuedMessage> {
-                    let target_id = WorkerId::parse(tid).map_err(corrupt_parse)?;
-                    Ok(QueuedMessage {
-                        id,
-                        target_id,
-                        message,
-                        created_at: parse_datetime(&created_at),
-                    })
-                },
-            )
+            .query_row(params![target_id.as_ref()], read_queued_message_row)
+            .optional()?
+            .map(into_queued_message)
             .transpose()?;
 
         if let Some(ref msg) = msg {
@@ -39,6 +20,24 @@ impl Database {
         }
         Ok(msg)
     }
+}
+
+fn read_queued_message_row(row: &rusqlite::Row) -> rusqlite::Result<QueuedMessageRow> {
+    Ok(QueuedMessageRow {
+        id: row.get("id")?,
+        target_id: row.get("target_id")?,
+        message: row.get("message")?,
+        created_at: row.get("created_at")?,
+    })
+}
+
+fn into_queued_message(row: QueuedMessageRow) -> crate::Result<QueuedMessage> {
+    Ok(QueuedMessage {
+        id: row.id,
+        target_id: WorkerId::parse(row.target_id).map_err(corrupt_parse)?,
+        message: row.message,
+        created_at: parse_datetime(&row.created_at),
+    })
 }
 
 #[cfg(test)]

@@ -1,6 +1,9 @@
 mod queued_message;
 pub use queued_message::QueuedMessage;
 
+mod queued_message_row;
+pub(crate) use queued_message_row::QueuedMessageRow;
+
 mod job_row;
 pub(crate) use job_row::JobRow;
 
