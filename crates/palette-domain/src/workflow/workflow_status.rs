@@ -15,6 +15,18 @@ pub enum WorkflowStatus {
 }
 
 impl WorkflowStatus {
+    pub fn parse(s: &str) -> Result<Self, InvalidWorkflowStatus> {
+        match s {
+            "active" => Ok(Self::Active),
+            "suspending" => Ok(Self::Suspending),
+            "suspended" => Ok(Self::Suspended),
+            "completed" => Ok(Self::Completed),
+            _ => Err(InvalidWorkflowStatus::Unknown {
+                value: s.to_string(),
+            }),
+        }
+    }
+
     pub fn as_str(&self) -> &'static str {
         match self {
             WorkflowStatus::Active => "active",
@@ -29,4 +41,10 @@ impl fmt::Display for WorkflowStatus {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         fmt::Display::fmt(self.as_str(), f)
     }
+}
+
+#[derive(Debug, palette_macros::ReasonKey)]
+#[reason_namespace = "workflow_status"]
+pub enum InvalidWorkflowStatus {
+    Unknown { value: String },
 }

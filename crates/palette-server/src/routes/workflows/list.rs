@@ -1,4 +1,3 @@
-use crate::api_types::{ErrorCode, InputError, Location};
 use crate::{AppState, Error};
 use axum::{Json, extract::Query, extract::State};
 use palette_domain::workflow::WorkflowStatus;
@@ -22,23 +21,12 @@ pub async fn handle_list_workflows(
     State(state): State<Arc<AppState>>,
     Query(query): Query<ListWorkflowsQuery>,
 ) -> crate::Result<Json<Vec<WorkflowResponse>>> {
-    let status_filter = match query.status.as_deref() {
-        Some("active") => Some(WorkflowStatus::Active),
-        Some("suspending") => Some(WorkflowStatus::Suspending),
-        Some("suspended") => Some(WorkflowStatus::Suspended),
-        Some("completed") => Some(WorkflowStatus::Completed),
-        Some(_) => {
-            return Err(Error::BadRequest {
-                code: ErrorCode::InputValidationFailed,
-                errors: vec![InputError {
-                    location: Location::Query,
-                    hint: "status".into(),
-                    reason: "workflow_status/invalid_format".into(),
-                }],
-            });
-        }
-        None => None,
-    };
+    let status_filter = query
+        .status
+        .as_deref()
+        .map(WorkflowStatus::parse)
+        .transpose()
+        .map_err(Error::invalid_query("status"))?;
 
     let workflows = state
         .interactor
