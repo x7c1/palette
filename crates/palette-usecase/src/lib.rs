@@ -17,5 +17,5 @@ pub use container_runtime::ContainerRuntime;
 pub use data_store::DataStore;
 pub use terminal_session::TerminalSession;
 
-pub use blueprint_reader::BlueprintReader;
+pub use blueprint_reader::{BlueprintReader, ReadBlueprintError};
 pub use interactor::Interactor;

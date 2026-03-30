@@ -1037,6 +1037,7 @@ dependencies = [
 name = "palette-usecase"
 version = "0.1.0"
 dependencies = [
+ "palette-core",
  "palette-domain",
 ]
 

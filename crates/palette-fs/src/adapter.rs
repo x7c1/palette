@@ -1,7 +1,8 @@
-use palette_domain::ReasonKey;
+use palette_core::{FieldError, ReasonKey};
 use palette_domain::task::TaskTree;
 use palette_domain::workflow::WorkflowId;
 use palette_usecase::BlueprintReader;
+use palette_usecase::blueprint_reader::ReadBlueprintError;
 use std::path::Path;
 
 /// Filesystem-backed blueprint reader.
@@ -14,14 +15,19 @@ impl BlueprintReader for FsBlueprintReader {
         &self,
         path: &Path,
         workflow_id: &WorkflowId,
-    ) -> Result<TaskTree, Box<dyn std::error::Error + Send + Sync>> {
-        let blueprint = crate::read_blueprint(path)?;
+    ) -> Result<TaskTree, ReadBlueprintError> {
+        let blueprint =
+            crate::read_blueprint(path).map_err(|e| ReadBlueprintError::Read(Box::new(e)))?;
         let tree = blueprint.to_task_tree(workflow_id).map_err(|errors| {
-            let messages: Vec<String> = errors
-                .iter()
-                .map(|e| format!("{}:{}", e.field_path(), e.reason_key()))
-                .collect();
-            messages.join("; ")
+            ReadBlueprintError::Validation(
+                errors
+                    .iter()
+                    .map(|e| FieldError {
+                        field: e.field_path(),
+                        reason: e.reason_key(),
+                    })
+                    .collect(),
+            )
         })?;
         Ok(tree)
     }

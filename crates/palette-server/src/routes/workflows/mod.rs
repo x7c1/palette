@@ -17,14 +17,21 @@ pub use apply_blueprint::handle_apply_blueprint;
 
 use crate::Error;
 use crate::api_types::{ErrorCode, FieldError};
+use palette_usecase::ReadBlueprintError;
 
-/// Convert a `BlueprintReader::read_blueprint` error into a server error.
-fn blueprint_read_error_to_server_error(e: Box<dyn std::error::Error + Send + Sync>) -> Error {
-    Error::BadRequest {
-        code: ErrorCode::BlueprintInvalid,
-        errors: vec![FieldError {
-            field: "blueprint_path".into(),
-            reason: format!("{e}"),
-        }],
+/// Convert a `ReadBlueprintError` into a server error.
+fn blueprint_read_error_to_server_error(e: ReadBlueprintError) -> Error {
+    match e {
+        ReadBlueprintError::Read(cause) => Error::BadRequest {
+            code: ErrorCode::BlueprintInvalid,
+            errors: vec![FieldError {
+                field: "blueprint_path".into(),
+                reason: format!("{cause}"),
+            }],
+        },
+        ReadBlueprintError::Validation(errors) => Error::BadRequest {
+            code: ErrorCode::BlueprintInvalid,
+            errors,
+        },
     }
 }
