@@ -22,11 +22,4 @@ pub enum ResourceKind {
     ReviewSubmission,
 }
 
-/// A field-level validation error.
-#[derive(Debug, Clone, Serialize)]
-pub struct FieldError {
-    /// JSON field name (user-facing, not internal field name).
-    pub field: String,
-    /// Machine-readable reason code in `{type}/{reason}` format.
-    pub reason: String,
-}
+pub use palette_core::FieldError;

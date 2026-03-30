@@ -86,26 +86,25 @@ pub(super) fn create_job(
     task: &palette_domain::task::Task,
     job_type: JobType,
 ) -> crate::Result<Vec<RuleEffect>> {
-    let job = state
-        .interactor
-        .data_store
-        .create_job(&CreateJobRequest {
-            id: Some(JobId::generate(job_type)),
-            task_id: task.id.clone(),
-            job_type,
-            title: palette_domain::job::Title::parse(task.key.to_string())
+    let job =
+        state
+            .interactor
+            .data_store
+            .create_job(&CreateJobRequest::new(
+                Some(JobId::generate(job_type)),
+                task.id.clone(),
+                job_type,
+                palette_domain::job::Title::parse(task.key.to_string())
+                    .map_err(|e| Error::internal(e.reason_key()))?,
+                palette_domain::job::PlanPath::parse(task.plan_path.clone().ok_or_else(|| {
+                    Error::internal(format!("task {} has no plan_path", task.id))
+                })?)
                 .map_err(|e| Error::internal(e.reason_key()))?,
-            plan_path: palette_domain::job::PlanPath::parse(
-                task.plan_path
-                    .clone()
-                    .ok_or_else(|| Error::internal(format!("task {} has no plan_path", task.id)))?,
-            )
-            .map_err(|e| Error::internal(e.reason_key()))?,
-            assignee_id: None,
-            priority: task.priority,
-            repository: task.repository.clone(),
-        })
-        .map_err(Error::internal)?;
+                None,
+                task.priority,
+                task.repository.clone(),
+            ))
+            .map_err(Error::internal)?;
 
     let effects = RuleEngine::new(state.interactor.data_store.as_ref(), 0)
         .on_job_created(&job.id)

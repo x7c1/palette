@@ -73,29 +73,29 @@ mod tests {
     fn submit_and_get_review() {
         let db = test_db();
         let craft_task = setup_task(&db, "wf-test:task-C-001");
-        db.create_job(&CreateJobRequest {
-            task_id: craft_task,
-            id: Some(jid("C-001")),
-            job_type: JobType::Craft,
-            title: Title::parse("Craft").unwrap(),
-            plan_path: PlanPath::parse("test/C-001").unwrap(),
-            assignee_id: None,
-            priority: None,
-            repository: None,
-        })
+        db.create_job(&CreateJobRequest::new(
+            Some(jid("C-001")),
+            craft_task,
+            JobType::Craft,
+            Title::parse("Craft").unwrap(),
+            PlanPath::parse("test/C-001").unwrap(),
+            None,
+            None,
+            None,
+        ))
         .unwrap();
 
         let review_task = setup_task(&db, "wf-test:task-R-001");
-        db.create_job(&CreateJobRequest {
-            task_id: review_task,
-            id: Some(jid("R-001")),
-            job_type: JobType::Review,
-            title: Title::parse("Review").unwrap(),
-            plan_path: PlanPath::parse("test/R-001").unwrap(),
-            assignee_id: None,
-            priority: None,
-            repository: None,
-        })
+        db.create_job(&CreateJobRequest::new(
+            Some(jid("R-001")),
+            review_task,
+            JobType::Review,
+            Title::parse("Review").unwrap(),
+            PlanPath::parse("test/R-001").unwrap(),
+            None,
+            None,
+            None,
+        ))
         .unwrap();
 
         let sub = db

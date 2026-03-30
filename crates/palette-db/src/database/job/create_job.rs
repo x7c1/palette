@@ -58,19 +58,19 @@ mod tests {
         setup_worker(&db, "member-a");
         let task_id = setup_task(&db, "wf-test:task-C-001");
         let job = db
-            .create_job(&CreateJobRequest {
+            .create_job(&CreateJobRequest::new(
+                Some(jid("C-001")),
                 task_id,
-                id: Some(jid("C-001")),
-                job_type: JobType::Craft,
-                title: Title::parse("Implement feature").unwrap(),
-                plan_path: PlanPath::parse("2026/feature-x/api-impl").unwrap(),
-                assignee_id: Some(wid("member-a")),
-                priority: Some(Priority::High),
-                repository: Some(Repository {
+                JobType::Craft,
+                Title::parse("Implement feature").unwrap(),
+                PlanPath::parse("2026/feature-x/api-impl").unwrap(),
+                Some(wid("member-a")),
+                Some(Priority::High),
+                Some(Repository {
                     name: "x7c1/palette".to_string(),
                     branch: "feature/test".to_string(),
                 }),
-            })
+            ))
             .unwrap();
 
         assert_eq!(job.id, jid("C-001"));

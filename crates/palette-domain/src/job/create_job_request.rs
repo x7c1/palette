@@ -3,6 +3,7 @@ use crate::task::TaskId;
 use crate::worker::WorkerId;
 
 #[derive(Debug, Clone)]
+#[non_exhaustive]
 pub struct CreateJobRequest {
     pub id: Option<JobId>,
     pub task_id: TaskId,
@@ -12,4 +13,28 @@ pub struct CreateJobRequest {
     pub assignee_id: Option<WorkerId>,
     pub priority: Option<Priority>,
     pub repository: Option<Repository>,
+}
+
+impl CreateJobRequest {
+    pub fn new(
+        id: Option<JobId>,
+        task_id: TaskId,
+        job_type: JobType,
+        title: Title,
+        plan_path: PlanPath,
+        assignee_id: Option<WorkerId>,
+        priority: Option<Priority>,
+        repository: Option<Repository>,
+    ) -> Self {
+        Self {
+            id,
+            task_id,
+            job_type,
+            title,
+            plan_path,
+            assignee_id,
+            priority,
+            repository,
+        }
+    }
 }

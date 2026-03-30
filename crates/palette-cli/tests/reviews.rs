@@ -37,16 +37,16 @@ async fn review_submit_and_get_submissions() {
     let review_job = state
         .interactor
         .data_store
-        .create_job(&CreateJobRequest {
+        .create_job(&CreateJobRequest::new(
+            Some(JobId::parse("R-001").unwrap()),
             task_id,
-            id: Some(JobId::parse("R-001").unwrap()),
-            job_type: JobType::Review,
-            title: palette_domain::job::Title::parse("Review").unwrap(),
-            plan_path: palette_domain::job::PlanPath::parse("test/R-001").unwrap(),
-            assignee_id: None,
-            priority: None,
-            repository: None,
-        })
+            JobType::Review,
+            palette_domain::job::Title::parse("Review").unwrap(),
+            palette_domain::job::PlanPath::parse("test/R-001").unwrap(),
+            None,
+            None,
+            None,
+        ))
         .unwrap();
     helper::setup_worker(&*state.interactor.data_store, "member-b");
     state
@@ -117,16 +117,16 @@ async fn review_approved_completes_review_job() {
     let review_job = state
         .interactor
         .data_store
-        .create_job(&CreateJobRequest {
+        .create_job(&CreateJobRequest::new(
+            Some(JobId::parse("R-001").unwrap()),
             task_id,
-            id: Some(JobId::parse("R-001").unwrap()),
-            job_type: JobType::Review,
-            title: palette_domain::job::Title::parse("Review").unwrap(),
-            plan_path: palette_domain::job::PlanPath::parse("test/R-001").unwrap(),
-            assignee_id: None,
-            priority: None,
-            repository: None,
-        })
+            JobType::Review,
+            palette_domain::job::Title::parse("Review").unwrap(),
+            palette_domain::job::PlanPath::parse("test/R-001").unwrap(),
+            None,
+            None,
+            None,
+        ))
         .unwrap();
     helper::setup_worker(&*state.interactor.data_store, "member-b");
     state

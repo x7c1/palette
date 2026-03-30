@@ -135,30 +135,30 @@ async fn scenario3_message_queuing_to_leader() {
     state
         .interactor
         .data_store
-        .create_job(&CreateJobRequest {
-            task_id: task_a,
-            id: Some(jid("R-A")),
-            job_type: JobType::Review,
-            title: palette_domain::job::Title::parse("Review A").unwrap(),
-            plan_path: palette_domain::job::PlanPath::parse("test/R-A").unwrap(),
-            assignee_id: None,
-            priority: None,
-            repository: None,
-        })
+        .create_job(&CreateJobRequest::new(
+            Some(jid("R-A")),
+            task_a,
+            JobType::Review,
+            palette_domain::job::Title::parse("Review A").unwrap(),
+            palette_domain::job::PlanPath::parse("test/R-A").unwrap(),
+            None,
+            None,
+            None,
+        ))
         .unwrap();
     state
         .interactor
         .data_store
-        .create_job(&CreateJobRequest {
-            task_id: task_b,
-            id: Some(jid("R-B")),
-            job_type: JobType::Review,
-            title: palette_domain::job::Title::parse("Review B").unwrap(),
-            plan_path: palette_domain::job::PlanPath::parse("test/R-B").unwrap(),
-            assignee_id: None,
-            priority: None,
-            repository: None,
-        })
+        .create_job(&CreateJobRequest::new(
+            Some(jid("R-B")),
+            task_b,
+            JobType::Review,
+            palette_domain::job::Title::parse("Review B").unwrap(),
+            palette_domain::job::PlanPath::parse("test/R-B").unwrap(),
+            None,
+            None,
+            None,
+        ))
         .unwrap();
 
     state

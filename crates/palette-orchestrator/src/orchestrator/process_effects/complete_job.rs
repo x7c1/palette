@@ -229,22 +229,20 @@ impl Orchestrator {
         let job =
             self.interactor
                 .data_store
-                .create_job(&palette_domain::job::CreateJobRequest {
-                    id: Some(JobId::generate(job_type)),
-                    task_id: task.id.clone(),
+                .create_job(&palette_domain::job::CreateJobRequest::new(
+                    Some(JobId::generate(job_type)),
+                    task.id.clone(),
                     job_type,
-                    title: palette_domain::job::Title::parse(task.key.to_string())
+                    palette_domain::job::Title::parse(task.key.to_string())
                         .map_err(|e| crate::Error::Internal(e.reason_key()))?,
-                    plan_path: palette_domain::job::PlanPath::parse(
-                        task.plan_path.clone().ok_or_else(|| {
-                            crate::Error::Internal(format!("task {} has no plan_path", task.id))
-                        })?,
-                    )
+                    palette_domain::job::PlanPath::parse(task.plan_path.clone().ok_or_else(
+                        || crate::Error::Internal(format!("task {} has no plan_path", task.id)),
+                    )?)
                     .map_err(|e| crate::Error::Internal(e.reason_key()))?,
-                    assignee_id: None,
-                    priority: task.priority,
-                    repository: task.repository.clone(),
-                })?;
+                    None,
+                    task.priority,
+                    task.repository.clone(),
+                ))?;
 
         let rules = RuleEngine::new(self.interactor.data_store.as_ref(), 0);
         let effects = rules.on_job_created(&job.id)?;

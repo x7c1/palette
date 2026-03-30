@@ -934,6 +934,9 @@ dependencies = [
 [[package]]
 name = "palette-core"
 version = "0.1.0"
+dependencies = [
+ "serde",
+]
 
 [[package]]
 name = "palette-db"
@@ -1009,7 +1012,9 @@ version = "0.1.0"
 dependencies = [
  "axum",
  "chrono",
+ "palette-core",
  "palette-domain",
+ "palette-macros",
  "palette-usecase",
  "serde",
  "serde_json",

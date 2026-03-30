@@ -1,6 +1,16 @@
+mod validate;
+
 use proc_macro::TokenStream;
 use quote::quote;
 use syn::{Data, DeriveInput, Fields, Lit, Meta, parse_macro_input};
+
+/// Validate multiple fields and construct a domain type, collecting all errors.
+///
+/// See module [`validate`] for details.
+#[proc_macro]
+pub fn validate(input: TokenStream) -> TokenStream {
+    validate::expand(input)
+}
 
 /// Derive macro that generates `namespace()`, `value()`, and `reason_key()` methods.
 ///

@@ -57,30 +57,30 @@ pub fn setup_worker(db: &Database, worker_id: &str) {
 
 pub fn create_craft(db: &Database, id: &str, priority: Option<Priority>) {
     let task_id = setup_task(db, &format!("wf-test:task-{id}"));
-    db.create_job(&CreateJobRequest {
+    db.create_job(&CreateJobRequest::new(
+        Some(jid(id)),
         task_id,
-        id: Some(jid(id)),
-        job_type: JobType::Craft,
-        title: Title::parse(format!("Job {id}")).unwrap(),
-        plan_path: PlanPath::parse(format!("test/{id}")).unwrap(),
-        assignee_id: None,
+        JobType::Craft,
+        Title::parse(format!("Job {id}")).unwrap(),
+        PlanPath::parse(format!("test/{id}")).unwrap(),
+        None,
         priority,
-        repository: None,
-    })
+        None,
+    ))
     .unwrap();
 }
 
 pub fn create_review(db: &Database, id: &str) {
     let task_id = setup_task(db, &format!("wf-test:task-{id}"));
-    db.create_job(&CreateJobRequest {
+    db.create_job(&CreateJobRequest::new(
+        Some(jid(id)),
         task_id,
-        id: Some(jid(id)),
-        job_type: JobType::Review,
-        title: Title::parse(format!("Review {id}")).unwrap(),
-        plan_path: PlanPath::parse(format!("test/{id}")).unwrap(),
-        assignee_id: None,
-        priority: None,
-        repository: None,
-    })
+        JobType::Review,
+        Title::parse(format!("Review {id}")).unwrap(),
+        PlanPath::parse(format!("test/{id}")).unwrap(),
+        None,
+        None,
+        None,
+    ))
     .unwrap();
 }

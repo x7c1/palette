@@ -27,16 +27,16 @@ mod tests {
     fn update_job_status() {
         let db = test_db();
         let task_id = setup_task(&db, "wf-test:task-C-001");
-        db.create_job(&CreateJobRequest {
+        db.create_job(&CreateJobRequest::new(
+            Some(jid("C-001")),
             task_id,
-            id: Some(jid("C-001")),
-            job_type: JobType::Craft,
-            title: Title::parse("Craft").unwrap(),
-            plan_path: PlanPath::parse("test/C-001").unwrap(),
-            assignee_id: None,
-            priority: None,
-            repository: None,
-        })
+            JobType::Craft,
+            Title::parse("Craft").unwrap(),
+            PlanPath::parse("test/C-001").unwrap(),
+            None,
+            None,
+            None,
+        ))
         .unwrap();
 
         let updated = db
