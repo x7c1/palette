@@ -18,7 +18,7 @@ fn write_blueprint_file(yaml: &str) -> tempfile::NamedTempFile {
 }
 
 fn tid(wf_id: &str, key_path: &str) -> TaskId {
-    TaskId::new(format!("{wf_id}:{key_path}"))
+    TaskId::parse(format!("{wf_id}:{key_path}")).unwrap()
 }
 
 fn insert_worker(
@@ -43,7 +43,7 @@ fn insert_worker(
             container_id: ContainerId::new("stub"),
             terminal_target: terminal_target.clone(),
             session_id: None,
-            task_id: TaskId::new(task_id),
+            task_id: TaskId::parse(task_id).unwrap(),
         })
         .unwrap();
 }
@@ -63,15 +63,15 @@ async fn scenario3_message_queuing_to_leader() {
     let (base_url, state, _shutdown_tx) = spawn_server(tmux, &session).await;
 
     // Set up workflow and tasks for review jobs
-    let wf_id = WorkflowId::new("wf-scenario3");
+    let wf_id = WorkflowId::parse("wf-scenario3").unwrap();
     state
         .interactor
         .data_store
         .create_workflow(&wf_id, "test/blueprint.yaml")
         .unwrap();
-    let task_a = TaskId::new("task-R-A");
-    let task_b = TaskId::new("task-R-B");
-    let task_ri = TaskId::new("task-ri");
+    let task_a = TaskId::parse("wf-scenario3:task-R-A").unwrap();
+    let task_b = TaskId::parse("wf-scenario3:task-R-B").unwrap();
+    let task_ri = TaskId::parse("wf-scenario3:task-ri").unwrap();
     state
         .interactor
         .data_store
@@ -105,7 +105,7 @@ async fn scenario3_message_queuing_to_leader() {
         None,
         &ri_pane,
         WorkerStatus::Working,
-        "task-ri",
+        "wf-scenario3:task-ri",
         &wf_id,
     );
     insert_worker(
@@ -115,7 +115,7 @@ async fn scenario3_message_queuing_to_leader() {
         Some("review-integrator-1"),
         &member_a_pane,
         WorkerStatus::Working,
-        "task-R-A",
+        "wf-scenario3:task-R-A",
         &wf_id,
     );
     insert_worker(
@@ -125,7 +125,7 @@ async fn scenario3_message_queuing_to_leader() {
         Some("review-integrator-1"),
         &member_b_pane,
         WorkerStatus::Working,
-        "task-R-B",
+        "wf-scenario3:task-R-B",
         &wf_id,
     );
 
@@ -336,7 +336,7 @@ task:
     assert_eq!(resp.status(), 201);
     let body: serde_json::Value = resp.json().await.unwrap();
     let wf_id = body["workflow_id"].as_str().unwrap();
-    let workflow_id = palette_domain::workflow::WorkflowId::new(wf_id);
+    let workflow_id = palette_domain::workflow::WorkflowId::parse(wf_id).unwrap();
 
     wait().await;
 
@@ -684,7 +684,7 @@ task:
     assert_eq!(resp.status(), 201);
     let body: serde_json::Value = resp.json().await.unwrap();
     let wf_id = body["workflow_id"].as_str().unwrap();
-    let workflow_id = palette_domain::workflow::WorkflowId::new(wf_id);
+    let workflow_id = palette_domain::workflow::WorkflowId::parse(wf_id).unwrap();
 
     wait().await;
 

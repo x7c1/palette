@@ -36,14 +36,14 @@ mod tests {
         insert_test_worker(&db, "member-1", WorkerRole::Member, "wf-1");
 
         let sup = db
-            .find_supervisor_for_task(&TaskId::new("task-leader-1"))
+            .find_supervisor_for_task(&TaskId::parse("wf-1:leader-1").unwrap())
             .unwrap()
             .unwrap();
         assert_eq!(sup.id, WorkerId::new("leader-1"));
 
         // Member should not be found
         assert!(
-            db.find_supervisor_for_task(&TaskId::new("task-member-1"))
+            db.find_supervisor_for_task(&TaskId::parse("wf-1:member-1").unwrap())
                 .unwrap()
                 .is_none()
         );

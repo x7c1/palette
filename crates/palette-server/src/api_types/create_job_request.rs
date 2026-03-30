@@ -72,10 +72,19 @@ impl CreateJobRequest {
             return Err(hints);
         }
 
+        // All validations passed — parse again to obtain the value.
+        // TaskId::parse is pure and cheap; duplicating the call avoids
+        // carrying an Option that would require expect/unwrap.
+        let task_id = domain::task::TaskId::parse(&self.task_id).map_err(|e| {
+            vec![FieldHint {
+                field: "task_id".into(),
+                reason: e.reason_key().into(),
+            }]
+        })?;
+
         Ok(domain::job::CreateJobRequest {
             id: self.id.as_deref().map(domain::job::JobId::new),
-            // Already validated by TaskId::parse above
-            task_id: domain::task::TaskId::new(&self.task_id),
+            task_id,
             job_type: self.job_type.into(),
             title: self.title.clone(),
             plan_path: self.plan_path.clone(),

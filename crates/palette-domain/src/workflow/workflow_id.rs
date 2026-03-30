@@ -7,14 +7,6 @@ const MAX_ID_LEN: usize = 256;
 pub struct WorkflowId(String);
 
 impl WorkflowId {
-    /// Create a WorkflowId without validation.
-    ///
-    /// Use this for trusted internal sources (e.g., database reads,
-    /// programmatic construction). For external input, use [`parse`].
-    pub fn new(id: impl Into<String>) -> Self {
-        Self(id.into())
-    }
-
     /// Parse and validate a WorkflowId from external input.
     ///
     /// Rejects `:` and `/` (which would collide with TaskId format)
@@ -54,5 +46,11 @@ pub struct InvalidWorkflowId {
 impl InvalidWorkflowId {
     pub fn reason_key(&self) -> &str {
         "invalid_format"
+    }
+}
+
+impl fmt::Display for InvalidWorkflowId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "invalid workflow ID: {}", self.id)
     }
 }

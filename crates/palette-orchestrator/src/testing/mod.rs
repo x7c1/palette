@@ -17,14 +17,14 @@ use palette_domain::workflow::WorkflowId;
 pub fn make_worker(id: &str, role: WorkerRole, status: WorkerStatus) -> WorkerState {
     WorkerState {
         id: WorkerId::new(id),
-        workflow_id: WorkflowId::new("wf-test"),
+        workflow_id: WorkflowId::parse("wf-test").unwrap(),
         role,
         supervisor_id: Some(WorkerId::new("sup-1")),
         container_id: ContainerId::new(format!("container-{id}")),
         terminal_target: TerminalTarget::new(format!("pane-{id}")),
         status,
         session_id: None,
-        task_id: TaskId::new(format!("task-{id}")),
+        task_id: TaskId::parse(format!("wf-test:{id}")).unwrap(),
     }
 }
 
@@ -33,7 +33,7 @@ pub fn make_job(id: &str) -> Job {
     let now = Utc::now();
     Job {
         id: JobId::new(id),
-        task_id: TaskId::new(format!("task-{id}")),
+        task_id: TaskId::parse(format!("wf-test:{id}")).unwrap(),
         job_type: JobType::Review,
         title: id.to_string(),
         plan_path: String::new(),

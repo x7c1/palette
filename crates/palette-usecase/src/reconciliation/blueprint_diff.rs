@@ -82,7 +82,7 @@ mod tests {
 
     #[test]
     fn no_changes() {
-        let wf = WorkflowId::new("wf-1");
+        let wf = WorkflowId::parse("wf-1").unwrap();
         let tree = make_tree(&wf, &["a", "b"]);
         let root_id = TaskId::root(&wf, &TaskKey::new("root"));
         let db: HashMap<_, _> = [
@@ -105,7 +105,7 @@ mod tests {
 
     #[test]
     fn detects_added_tasks() {
-        let wf = WorkflowId::new("wf-1");
+        let wf = WorkflowId::parse("wf-1").unwrap();
         let tree = make_tree(&wf, &["a", "b", "c"]);
         let root_id = TaskId::root(&wf, &TaskKey::new("root"));
         let db: HashMap<_, _> = [
@@ -129,7 +129,7 @@ mod tests {
 
     #[test]
     fn detects_removed_tasks() {
-        let wf = WorkflowId::new("wf-1");
+        let wf = WorkflowId::parse("wf-1").unwrap();
         let tree = make_tree(&wf, &["a"]);
         let root_id = TaskId::root(&wf, &TaskKey::new("root"));
         let db: HashMap<_, _> = [

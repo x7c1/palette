@@ -13,7 +13,8 @@ pub(super) fn row_to_worker_state(row: &rusqlite::Row) -> rusqlite::Result<Worke
     let status_id: i64 = row.get("status_id")?;
     Ok(WorkerState {
         id: WorkerId::new(row.get::<_, String>("id")?),
-        workflow_id: WorkflowId::new(row.get::<_, String>("workflow_id")?),
+        workflow_id: WorkflowId::parse(row.get::<_, String>("workflow_id")?)
+            .map_err(|e| id_conversion_error(e.to_string()))?,
         role: lookup::worker_role_from_id(role_id).map_err(id_conversion_error)?,
         status: lookup::worker_status_from_id(status_id).map_err(id_conversion_error)?,
         supervisor_id: row
@@ -24,6 +25,7 @@ pub(super) fn row_to_worker_state(row: &rusqlite::Row) -> rusqlite::Result<Worke
         session_id: row
             .get::<_, Option<String>>("session_id")?
             .map(WorkerSessionId::new),
-        task_id: TaskId::new(row.get::<_, String>("task_id")?),
+        task_id: TaskId::parse(row.get::<_, String>("task_id")?)
+            .map_err(|e| id_conversion_error(e.to_string()))?,
     })
 }

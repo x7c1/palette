@@ -13,7 +13,8 @@ impl Database {
             let status = crate::lookup::workflow_status_from_id(status_id)
                 .map_err(super::super::id_conversion_error)?;
             Ok(Workflow {
-                id: WorkflowId::new(row.get::<_, String>("id")?),
+                id: WorkflowId::parse(row.get::<_, String>("id")?)
+                    .map_err(|e| super::super::id_conversion_error(e.to_string()))?,
                 blueprint_path: row.get("blueprint_path")?,
                 status,
                 started_at: parse_datetime(&row.get::<_, String>("started_at")?),

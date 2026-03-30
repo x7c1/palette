@@ -56,7 +56,7 @@ mod tests {
     fn create_and_get_job() {
         let db = test_db();
         setup_worker(&db, "member-a");
-        let task_id = setup_task(&db, "task-C-001");
+        let task_id = setup_task(&db, "wf-test:task-C-001");
         let job = db
             .create_job(&CreateJobRequest {
                 task_id,

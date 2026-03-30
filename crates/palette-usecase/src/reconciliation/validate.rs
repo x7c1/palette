@@ -137,7 +137,7 @@ mod tests {
     use palette_domain::task::{TaskKey, TaskTreeNode};
 
     fn wf() -> palette_domain::workflow::WorkflowId {
-        palette_domain::workflow::WorkflowId::new("wf-1")
+        palette_domain::workflow::WorkflowId::parse("wf-1").unwrap()
     }
 
     fn root_id() -> TaskId {

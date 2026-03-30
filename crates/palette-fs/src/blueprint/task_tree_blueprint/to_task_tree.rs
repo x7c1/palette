@@ -203,7 +203,7 @@ mod tests {
 
     #[test]
     fn builds_flat_index_from_nested_blueprint() {
-        let wf_id = WorkflowId::new("wf-test");
+        let wf_id = WorkflowId::parse("wf-test").unwrap();
         let yaml = r#"
 task:
   key: feature-x
@@ -231,7 +231,7 @@ task:
         let tree = blueprint.to_task_tree(&wf_id).unwrap();
 
         // Root
-        assert_eq!(tree.root_id(), &TaskId::new("wf-test:feature-x"));
+        assert_eq!(tree.root_id(), &TaskId::parse("wf-test:feature-x").unwrap());
         let root = tree.find_by_key("feature-x").unwrap();
         assert_eq!(root.key, "feature-x");
         assert!(root.parent_id.is_none());
@@ -239,7 +239,10 @@ task:
 
         // planning (composite, no job_type)
         let planning = tree.find_by_key("planning").unwrap();
-        assert_eq!(planning.id, TaskId::new("wf-test:feature-x/planning"));
+        assert_eq!(
+            planning.id,
+            TaskId::parse("wf-test:feature-x/planning").unwrap()
+        );
         assert_eq!(planning.parent_id.as_ref().unwrap(), tree.root_id());
         assert!(planning.job_type.is_none());
         assert_eq!(planning.children.len(), 1);
@@ -273,7 +276,7 @@ task:
 
     #[test]
     fn rejects_invalid_key_format() {
-        let wf_id = WorkflowId::new("wf-test");
+        let wf_id = WorkflowId::parse("wf-test").unwrap();
         let yaml = r#"
 task:
   key: Feature_X
@@ -288,7 +291,7 @@ task:
 
     #[test]
     fn rejects_craft_without_review_child() {
-        let wf_id = WorkflowId::new("wf-test");
+        let wf_id = WorkflowId::parse("wf-test").unwrap();
         let yaml = r#"
 task:
   key: root
@@ -306,7 +309,7 @@ task:
 
     #[test]
     fn collects_multiple_errors() {
-        let wf_id = WorkflowId::new("wf-test");
+        let wf_id = WorkflowId::parse("wf-test").unwrap();
         let yaml = r#"
 task:
   key: INVALID

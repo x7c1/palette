@@ -16,7 +16,7 @@ fn register_worker(
     terminal_target: &TerminalTarget,
     status: WorkerStatus,
 ) {
-    let wf_id = WorkflowId::new("wf-test");
+    let wf_id = WorkflowId::parse("wf-test").unwrap();
     let _ = state
         .interactor
         .data_store
@@ -33,7 +33,7 @@ fn register_worker(
             container_id: ContainerId::new("stub"),
             terminal_target: terminal_target.clone(),
             session_id: None,
-            task_id: TaskId::new(format!("task-{id}")),
+            task_id: TaskId::parse(format!("wf-test:{id}")).unwrap(),
         })
         .unwrap();
 }

@@ -26,7 +26,7 @@ mod tests {
     #[test]
     fn update_job_status() {
         let db = test_db();
-        let task_id = setup_task(&db, "task-C-001");
+        let task_id = setup_task(&db, "wf-test:task-C-001");
         db.create_job(&CreateJobRequest {
             task_id,
             id: Some(jid("C-001")),

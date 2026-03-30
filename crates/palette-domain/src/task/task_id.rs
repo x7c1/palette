@@ -11,14 +11,6 @@ const MAX_ID_LEN: usize = 512;
 pub struct TaskId(String);
 
 impl TaskId {
-    /// Create a TaskId without validation.
-    ///
-    /// Use this for trusted internal sources (e.g., database reads,
-    /// programmatic construction). For external input, use [`parse`].
-    pub fn new(id: impl Into<String>) -> Self {
-        Self(id.into())
-    }
-
     /// Parse and validate a TaskId from external input.
     ///
     /// Requires the `{workflow_id}:{key_path}` format (must contain `:`).
@@ -69,5 +61,11 @@ pub struct InvalidTaskId {
 impl InvalidTaskId {
     pub fn reason_key(&self) -> &str {
         "invalid_format"
+    }
+}
+
+impl fmt::Display for InvalidTaskId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "invalid task ID: {}", self.id)
     }
 }

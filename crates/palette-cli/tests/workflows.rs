@@ -15,7 +15,7 @@ fn write_blueprint_file(yaml: &str) -> tempfile::NamedTempFile {
 
 /// Build a TaskId from a workflow ID and key path.
 fn tid(wf_id: &str, key_path: &str) -> TaskId {
-    TaskId::new(format!("{wf_id}:{key_path}"))
+    TaskId::parse(format!("{wf_id}:{key_path}")).unwrap()
 }
 
 const TASK_TREE_YAML: &str = r#"
@@ -596,7 +596,7 @@ task:
     assert_eq!(resp.status(), 201);
     let resp_body: serde_json::Value = resp.json().await.unwrap();
     let wf_id = resp_body["workflow_id"].as_str().unwrap();
-    let workflow_id = palette_domain::workflow::WorkflowId::new(wf_id);
+    let workflow_id = palette_domain::workflow::WorkflowId::parse(wf_id).unwrap();
 
     use palette_domain::job::{CraftStatus, JobFilter, JobStatus as JStatus, JobType};
     use palette_domain::rule::RuleEffect;

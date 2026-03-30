@@ -43,7 +43,7 @@ mod tests {
     #[test]
     fn list_jobs_with_filter() {
         let db = test_db();
-        let craft_task = setup_task(&db, "task-C-001");
+        let craft_task = setup_task(&db, "wf-test:task-C-001");
         db.create_job(&CreateJobRequest {
             task_id: craft_task,
             id: Some(jid("C-001")),
@@ -56,7 +56,7 @@ mod tests {
         })
         .unwrap();
 
-        let review_task = setup_task(&db, "task-R-001");
+        let review_task = setup_task(&db, "wf-test:task-R-001");
         db.create_job(&CreateJobRequest {
             task_id: review_task,
             id: Some(jid("R-001")),

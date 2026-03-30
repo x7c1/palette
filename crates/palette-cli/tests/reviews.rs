@@ -7,9 +7,10 @@ use palette_server::api_types::{ReviewCommentInput, SubmitReviewRequest, Verdict
 use palette_tmux::TmuxManager;
 use palette_usecase::data_store::CreateTaskRequest;
 
-fn setup_review_task(state: &palette_server::AppState, task_name: &str) -> TaskId {
-    let wf_id = WorkflowId::new(format!("wf-{task_name}"));
-    let task_id = TaskId::new(task_name);
+fn setup_review_task(state: &palette_server::AppState, task_id_str: &str) -> TaskId {
+    let task_id = TaskId::parse(task_id_str).unwrap();
+    let wf_part = task_id_str.split(':').next().unwrap();
+    let wf_id = WorkflowId::parse(wf_part).unwrap();
     let _ = state
         .interactor
         .data_store
@@ -32,7 +33,7 @@ async fn review_submit_and_get_submissions() {
     use palette_domain::job::{CreateJobRequest, JobId, JobStatus, JobType, ReviewStatus};
     use palette_domain::worker::WorkerId;
 
-    let task_id = setup_review_task(&state, "task-R-001");
+    let task_id = setup_review_task(&state, "wf-review:task-R-001");
     let review_job = state
         .interactor
         .data_store
@@ -112,7 +113,7 @@ async fn review_approved_completes_review_job() {
     use palette_domain::job::{CreateJobRequest, JobId, JobStatus, JobType, ReviewStatus};
     use palette_domain::worker::WorkerId;
 
-    let task_id = setup_review_task(&state, "task-R-001");
+    let task_id = setup_review_task(&state, "wf-review:task-R-001");
     let review_job = state
         .interactor
         .data_store

@@ -18,7 +18,7 @@ pub fn setup_worker(db: &dyn palette_usecase::DataStore, worker_id: &str) {
     use palette_domain::workflow::WorkflowId;
     use palette_usecase::data_store::InsertWorkerRequest;
 
-    let wf_id = WorkflowId::new("wf-test");
+    let wf_id = WorkflowId::parse("wf-test").unwrap();
     let _ = db.create_workflow(&wf_id, "test/blueprint.yaml");
     db.insert_worker(&InsertWorkerRequest {
         id: WorkerId::new(worker_id),
@@ -29,7 +29,7 @@ pub fn setup_worker(db: &dyn palette_usecase::DataStore, worker_id: &str) {
         container_id: ContainerId::new(format!("container-{worker_id}")),
         terminal_target: TerminalTarget::new(format!("pane-{worker_id}")),
         session_id: None,
-        task_id: TaskId::new(format!("task-{worker_id}")),
+        task_id: TaskId::parse(format!("wf-test:{worker_id}")).unwrap(),
     })
     .unwrap();
 }
