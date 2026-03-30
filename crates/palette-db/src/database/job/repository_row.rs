@@ -30,7 +30,8 @@ pub(crate) fn repository_to_json(repo: &Repository) -> String {
 }
 
 pub(crate) fn repository_from_json(json: &str) -> crate::Result<Repository> {
-    let row: RepositoryRow = serde_json::from_str(json)
-        .map_err(|e| corrupt(format!("repository/{e}")))?;
-    row.into_domain().map_err(corrupt_parse)
+    serde_json::from_str::<RepositoryRow>(json)
+        .map_err(|e| corrupt(format!("repository/{e}")))?
+        .into_domain()
+        .map_err(corrupt_parse)
 }
