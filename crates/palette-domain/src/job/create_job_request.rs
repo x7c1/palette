@@ -16,6 +16,7 @@ pub struct CreateJobRequest {
 }
 
 impl CreateJobRequest {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         id: Option<JobId>,
         task_id: TaskId,
