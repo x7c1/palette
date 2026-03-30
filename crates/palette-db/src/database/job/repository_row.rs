@@ -29,9 +29,8 @@ pub(crate) fn repository_to_json(repo: &Repository) -> String {
 }
 
 pub(crate) fn repository_from_json(json: &str) -> crate::Result<Option<Repository>> {
-    let row: Option<RepositoryRow> = serde_json::from_str(json).ok();
-    match row {
-        Some(r) => Ok(Some(r.into_domain().map_err(super::super::corrupt_parse)?)),
-        None => Ok(None),
-    }
+    serde_json::from_str::<RepositoryRow>(json)
+        .ok()
+        .map(|r| r.into_domain().map_err(super::super::corrupt_parse))
+        .transpose()
 }
