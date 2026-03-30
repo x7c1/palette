@@ -8,35 +8,35 @@ A Blueprint is produced by a [Crafter](../worker/member/crafter/) as the deliver
 
 A Blueprint is a static definition — it describes *what* should be done, not the state of ongoing work. When a Blueprint is used to start a [Workflow](../workflow/), the Workflow tracks the execution state separately.
 
+A Blueprint can be edited while the Workflow is suspended. The [Operator](../operator/) edits the Blueprint, then applies the changes. Applying validates the edits against change rules and reconciles the differences with the Workflow's state in the database.
+
 ## Examples
 
 ```yaml
 task:
-  id: 2026/feature-x
-  title: Add feature X
+  key: feature-x
+  children:
+    - key: planning
+      children:
+        - key: api-plan
+          type: craft
+          plan_path: planning/api-plan
+        - key: api-plan-review
+          type: review
+          depends_on: [api-plan]
 
-children:
-  - id: planning
-    children:
-      - id: api-plan
-        type: craft
-        plan_path: 2026/feature-x/planning/api-plan
-      - id: api-plan-review
-        type: review
-        depends_on: [api-plan]
-
-  - id: execution
-    depends_on: [planning]
-    children:
-      - id: api-impl
-        type: craft
-        plan_path: 2026/feature-x/execution/api-impl
-        repository:
-          name: x7c1/palette
-          branch: feature/x-api-impl
-      - id: api-impl-review
-        type: review
-        depends_on: [api-impl]
+    - key: execution
+      depends_on: [planning]
+      children:
+        - key: api-impl
+          type: craft
+          plan_path: execution/api-impl
+          repository:
+            name: x7c1/palette
+            branch: feature/x-api-impl
+        - key: api-impl-review
+          type: review
+          depends_on: [api-impl]
 ```
 
 ## Collocations
@@ -44,11 +44,15 @@ children:
 - produce (a Blueprint as the deliverable of a planning Task)
 - review (a Blueprint for quality and completeness)
 - parse (a Blueprint from YAML)
+- edit (a Blueprint while the Workflow is suspended)
+- apply (a Blueprint change to reconcile with the Workflow's state)
 
 ## Domain Rules
 
 - A Blueprint must contain exactly one root Task.
 - A Blueprint is the source of truth for the Task tree structure.
+- A Blueprint can only be edited while the Workflow is suspended.
+- Edits are restricted to Tasks that are Pending or Ready. Tasks that are Completed, InProgress, or Suspended — and their subtrees — cannot be modified.
 
 ## Related Concepts
 

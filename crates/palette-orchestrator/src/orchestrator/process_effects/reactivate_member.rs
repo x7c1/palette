@@ -1,6 +1,6 @@
 use super::Orchestrator;
 use super::job_instruction::format_job_instruction;
-use palette_domain::job::{JobId, JobStatus};
+use palette_domain::job::{CraftTransition, JobId, ReviewTransition};
 use palette_domain::server::PendingDelivery;
 use palette_domain::worker::WorkerId;
 
@@ -23,10 +23,15 @@ impl Orchestrator {
         self.interactor
             .data_store
             .enqueue_message(member_id, &instruction)?;
-        let in_progress = JobStatus::in_progress(job.job_type);
+        // ReactivateMember is used for both craft (ChangesRequested → re-work)
+        // and review (re-review cycle). The transition meaning differs by job type.
+        let reactivated_status = match job.job_type {
+            palette_domain::job::JobType::Craft => CraftTransition::RequestChanges.to_job_status(),
+            palette_domain::job::JobType::Review => ReviewTransition::Restart.to_job_status(),
+        };
         self.interactor
             .data_store
-            .update_job_status(job_id, in_progress)?;
+            .update_job_status(job_id, reactivated_status)?;
         deliveries.push(PendingDelivery {
             target_id: member_id.clone(),
             terminal_target: member.terminal_target.clone(),

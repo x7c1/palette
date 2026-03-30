@@ -1,5 +1,5 @@
 use crate::DataStore;
-use palette_domain::job::{JobError, JobId, JobStatus, ReviewStatus};
+use palette_domain::job::{JobError, JobId, ReviewTransition};
 use palette_domain::review::{ReviewSubmission, Verdict};
 use palette_domain::rule::RuleEffect;
 
@@ -74,12 +74,12 @@ impl<'a> RuleEngine<'a> {
             Verdict::ChangesRequested => {
                 self.store.update_job_status(
                     review_job_id,
-                    JobStatus::Review(ReviewStatus::ChangesRequested),
+                    ReviewTransition::RequestChanges.to_job_status(),
                 )?;
             }
             Verdict::Approved => {
                 self.store
-                    .update_job_status(review_job_id, JobStatus::Review(ReviewStatus::Done))?;
+                    .update_job_status(review_job_id, ReviewTransition::Approve.to_job_status())?;
                 if let Some(ref assignee) = review_job.assignee_id {
                     effects.push(RuleEffect::DestroyMember {
                         member_id: assignee.clone(),

@@ -1,5 +1,5 @@
 use super::Orchestrator;
-use palette_domain::job::{CraftStatus, JobId, JobStatus, JobType};
+use palette_domain::job::{CraftStatus, CraftTransition, JobId, JobStatus, JobType};
 use palette_domain::review::Verdict;
 use palette_domain::rule::RuleEffect;
 
@@ -96,7 +96,7 @@ impl Orchestrator {
         // All review children are done — transition craft job to Done
         self.interactor
             .data_store
-            .update_job_status(&craft_job.id, JobStatus::Craft(CraftStatus::Done))?;
+            .update_job_status(&craft_job.id, CraftTransition::Approve.to_job_status())?;
         tracing::info!(
             craft_job_id = %craft_job.id,
             "craft job completed (all child reviews done)"
@@ -150,9 +150,10 @@ impl Orchestrator {
         }
 
         // Move craft job back to InProgress
-        self.interactor
-            .data_store
-            .update_job_status(&craft_job.id, JobStatus::Craft(CraftStatus::InProgress))?;
+        self.interactor.data_store.update_job_status(
+            &craft_job.id,
+            CraftTransition::RequestChanges.to_job_status(),
+        )?;
         tracing::info!(
             craft_job_id = %craft_job.id,
             review_job_id = %review_job_id,

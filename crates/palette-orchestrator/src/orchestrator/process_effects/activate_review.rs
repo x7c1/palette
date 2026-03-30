@@ -1,5 +1,5 @@
 use super::Orchestrator;
-use palette_domain::job::{JobId, JobStatus, JobType, ReviewStatus};
+use palette_domain::job::{JobId, JobStatus, JobType, ReviewStatus, ReviewTransition};
 use palette_domain::rule::RuleEffect;
 use palette_domain::task::{TaskId, TaskStatus};
 use palette_domain::worker::WorkerRole;
@@ -100,7 +100,7 @@ impl Orchestrator {
             }
             self.interactor
                 .data_store
-                .update_job_status(&review_job.id, JobStatus::Review(ReviewStatus::InProgress))?;
+                .update_job_status(&review_job.id, ReviewTransition::Restart.to_job_status())?;
             tracing::info!(
                 job_id = %review_job.id,
                 task_id = %child.id,

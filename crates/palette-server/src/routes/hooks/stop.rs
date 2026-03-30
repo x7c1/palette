@@ -4,7 +4,7 @@ use axum::{
     extract::{Query, State},
     http::StatusCode,
 };
-use palette_domain::job::{CraftStatus, JobFilter, JobStatus};
+use palette_domain::job::{CraftTransition, JobFilter};
 use palette_domain::server::ServerEvent;
 use palette_domain::worker::{WorkerId, WorkerStatus};
 use std::sync::Arc;
@@ -92,15 +92,20 @@ pub async fn handle_stop(
         for job in &worker_jobs {
             match job.job_type {
                 palette_domain::job::JobType::Craft => {
-                    let in_review = JobStatus::Craft(CraftStatus::InReview);
-                    if palette_domain::rule::validate_transition(job.status, in_review).is_err() {
-                        tracing::info!(
-                            job_id = %job.id,
-                            status = ?job.status,
-                            "skipping craft stop transition (invalid transition)"
-                        );
+                    let palette_domain::job::JobStatus::Craft(current) = job.status else {
                         continue;
-                    }
+                    };
+                    let in_review = match CraftTransition::SubmitForReview.validate(current) {
+                        Ok(status) => status,
+                        Err(_) => {
+                            tracing::info!(
+                                job_id = %job.id,
+                                status = ?job.status,
+                                "skipping craft stop transition (invalid transition)"
+                            );
+                            continue;
+                        }
+                    };
                     if let Err(e) = state
                         .interactor
                         .data_store

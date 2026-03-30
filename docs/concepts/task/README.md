@@ -12,7 +12,7 @@ Dependencies between Tasks are defined among siblings — Tasks that share the s
 
 A Composite Task is a Task that has child Tasks. A [Leader](../worker/supervisor/leader/) can be assigned to a Composite Task to supervise its child Tasks, handle decisions that arise during execution, and raise [Escalations](../escalation/) when a decision exceeds its confidence.
 
-A Task may become a Composite Task at any point — for example, when a Task that already has a Job assigned needs to be partially broken down further.
+A Task can become a Composite Task through [Blueprint](../blueprint/) editing during a [Workflow](../workflow/) suspend — for example, when a Pending Task needs to be broken down into child Tasks before work begins.
 
 ## Completion
 

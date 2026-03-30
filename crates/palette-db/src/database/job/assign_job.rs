@@ -1,4 +1,5 @@
 use super::super::*;
+use palette_domain::job::{CraftTransition, ReviewTransition};
 
 impl Database {
     /// Assign a job to a member and set status to in_progress.
@@ -8,7 +9,10 @@ impl Database {
         assignee_id: &WorkerId,
         job_type: JobType,
     ) -> crate::Result<Job> {
-        let in_progress = JobStatus::in_progress(job_type);
+        let in_progress = match job_type {
+            JobType::Craft => CraftTransition::Start.to_job_status(),
+            JobType::Review => ReviewTransition::Start.to_job_status(),
+        };
         let conn = lock(&self.conn)?;
         let now = Utc::now().to_rfc3339();
         let updated = conn.execute(

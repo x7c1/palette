@@ -1,6 +1,9 @@
 mod craft_status;
 pub use craft_status::CraftStatus;
 
+mod craft_transition;
+pub use craft_transition::CraftTransition;
+
 mod create_job_request;
 pub use create_job_request::CreateJobRequest;
 
@@ -31,6 +34,9 @@ pub use repository::Repository;
 
 mod review_status;
 pub use review_status::ReviewStatus;
+
+mod review_transition;
+pub use review_transition::ReviewTransition;
 
 mod transition_error;
 pub use transition_error::TransitionError;
