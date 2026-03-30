@@ -22,11 +22,11 @@ pub enum ResourceKind {
     ReviewSubmission,
 }
 
-/// A hint indicating which user-facing field caused the error.
+/// A field-level validation error.
 #[derive(Debug, Clone, Serialize)]
-pub struct FieldHint {
+pub struct FieldError {
     /// JSON field name (user-facing, not internal field name).
     pub field: String,
-    /// Machine-readable reason code derived from the source error type.
+    /// Machine-readable reason code in `{type}/{reason}` format.
     pub reason: String,
 }

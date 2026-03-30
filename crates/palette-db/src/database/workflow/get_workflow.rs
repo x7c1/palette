@@ -14,7 +14,7 @@ impl Database {
                 .map_err(super::super::id_conversion_error)?;
             Ok(Workflow {
                 id: WorkflowId::parse(row.get::<_, String>("id")?)
-                    .map_err(|e| super::super::id_conversion_error(e.reason_key().into()))?,
+                    .map_err(|e| super::super::id_conversion_error(e.reason_key()))?,
                 blueprint_path: row.get("blueprint_path")?,
                 status,
                 started_at: parse_datetime(&row.get::<_, String>("started_at")?),

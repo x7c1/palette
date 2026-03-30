@@ -20,6 +20,6 @@ impl std::error::Error for TransitionError {}
 impl TransitionError {
     /// Machine-readable reason key for field hints.
     pub fn reason_key(&self) -> &str {
-        "invalid_transition"
+        "job_status/invalid_transition"
     }
 }

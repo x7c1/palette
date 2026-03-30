@@ -1,5 +1,5 @@
 use crate::api_types::{
-    ErrorCode, FieldHint, ResourceKind, ReviewSubmissionResponse, SubmitReviewRequest,
+    ErrorCode, FieldError, ResourceKind, ReviewSubmissionResponse, SubmitReviewRequest,
 };
 use crate::{AppState, Error};
 use axum::{
@@ -18,12 +18,10 @@ pub async fn handle_submit_review(
     Json(api_req): Json<SubmitReviewRequest>,
 ) -> crate::Result<(StatusCode, Json<ReviewSubmissionResponse>)> {
     let review_job_id = JobId::new(review_job_id);
-    let req = api_req
-        .validate()
-        .map_err(|field_hints| Error::BadRequest {
-            code: ErrorCode::InputValidationFailed,
-            field_hints,
-        })?;
+    let req = api_req.validate().map_err(|errors| Error::BadRequest {
+        code: ErrorCode::InputValidationFailed,
+        errors,
+    })?;
 
     // Verify the job exists and is a review
     let job = state
@@ -39,9 +37,9 @@ pub async fn handle_submit_review(
     if job.job_type != JobType::Review {
         return Err(Error::BadRequest {
             code: ErrorCode::NotReviewJob,
-            field_hints: vec![FieldHint {
+            errors: vec![FieldError {
                 field: "review_job_id".into(),
-                reason: "not_review_job".into(),
+                reason: "job/not_review_job".into(),
             }],
         });
     }

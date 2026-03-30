@@ -37,9 +37,9 @@ pub async fn handle_apply_blueprint(
 ) -> crate::Result<Response> {
     let workflow_id = WorkflowId::parse(&id).map_err(|e| Error::BadRequest {
         code: crate::api_types::ErrorCode::InputValidationFailed,
-        field_hints: vec![crate::api_types::FieldHint {
+        errors: vec![crate::api_types::FieldError {
             field: "id".into(),
-            reason: e.reason_key().into(),
+            reason: e.reason_key(),
         }],
     })?;
 

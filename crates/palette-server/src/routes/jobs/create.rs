@@ -7,12 +7,10 @@ pub async fn handle_create_job(
     State(state): State<Arc<AppState>>,
     Json(api_req): Json<CreateJobRequest>,
 ) -> crate::Result<(StatusCode, Json<JobResponse>)> {
-    let req = api_req
-        .validate()
-        .map_err(|field_hints| Error::BadRequest {
-            code: ErrorCode::InputValidationFailed,
-            field_hints,
-        })?;
+    let req = api_req.validate().map_err(|errors| Error::BadRequest {
+        code: ErrorCode::InputValidationFailed,
+        errors,
+    })?;
     let job = state
         .interactor
         .data_store

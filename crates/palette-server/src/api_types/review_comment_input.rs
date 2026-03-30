@@ -1,4 +1,4 @@
-use super::FieldHint;
+use super::FieldError;
 use serde::{Deserialize, Serialize};
 
 const MAX_FILE_PATH_LEN: usize = 1024;
@@ -14,40 +14,40 @@ pub struct ReviewCommentInput {
 
 impl ReviewCommentInput {
     /// Collect validation hints for this comment at the given index.
-    pub fn collect_hints(&self, index: usize, hints: &mut Vec<FieldHint>) {
+    pub fn collect_hints(&self, index: usize, hints: &mut Vec<FieldError>) {
         if self.file.trim().is_empty() {
-            hints.push(FieldHint {
+            hints.push(FieldError {
                 field: format!("comments[{index}].file"),
-                reason: "required".into(),
+                reason: "file_path/required".into(),
             });
         } else if self.file.len() > MAX_FILE_PATH_LEN {
-            hints.push(FieldHint {
+            hints.push(FieldError {
                 field: format!("comments[{index}].file"),
-                reason: "too_long".into(),
+                reason: "file_path/too_long".into(),
             });
         }
 
         if self.line < 0 {
-            hints.push(FieldHint {
+            hints.push(FieldError {
                 field: format!("comments[{index}].line"),
-                reason: "negative".into(),
+                reason: "line/negative".into(),
             });
         } else if self.line > MAX_LINE {
-            hints.push(FieldHint {
+            hints.push(FieldError {
                 field: format!("comments[{index}].line"),
-                reason: "too_large".into(),
+                reason: "line/too_large".into(),
             });
         }
 
         if self.body.trim().is_empty() {
-            hints.push(FieldHint {
+            hints.push(FieldError {
                 field: format!("comments[{index}].body"),
-                reason: "required".into(),
+                reason: "body/required".into(),
             });
         } else if self.body.len() > MAX_BODY_LEN {
-            hints.push(FieldHint {
+            hints.push(FieldError {
                 field: format!("comments[{index}].body"),
-                reason: "too_long".into(),
+                reason: "body/too_long".into(),
             });
         }
     }

@@ -5,7 +5,8 @@ use palette_domain::workflow::WorkflowId;
 use std::collections::HashMap;
 
 /// Blueprint validation error.
-#[derive(Debug)]
+#[derive(Debug, palette_macros::ReasonKey)]
+#[reason_namespace = "blueprint"]
 pub enum BlueprintError {
     /// Task key contains invalid characters (must be `[a-z0-9-]+`).
     InvalidKey { key: String },
@@ -14,13 +15,6 @@ pub enum BlueprintError {
 }
 
 impl BlueprintError {
-    pub fn reason_key(&self) -> &str {
-        match self {
-            BlueprintError::InvalidKey { .. } => "invalid_format",
-            BlueprintError::MissingReviewChild { .. } => "missing_review_child",
-        }
-    }
-
     pub fn field_path(&self) -> String {
         match self {
             BlueprintError::InvalidKey { key } => format!("tasks[key={key}].key"),

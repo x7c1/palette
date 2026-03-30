@@ -59,7 +59,8 @@ impl AsRef<str> for TaskId {
 }
 
 /// Invalid format for a task ID.
-#[derive(Debug)]
+#[derive(Debug, palette_macros::ReasonKey)]
+#[reason_namespace = "task_id"]
 pub enum InvalidTaskId {
     Empty,
     TooLong {
@@ -69,14 +70,4 @@ pub enum InvalidTaskId {
     MissingColon {
         id: String,
     },
-}
-
-impl InvalidTaskId {
-    pub fn reason_key(&self) -> &str {
-        match self {
-            InvalidTaskId::Empty => "required",
-            InvalidTaskId::TooLong { .. } => "too_long",
-            InvalidTaskId::MissingColon { .. } => "missing_colon",
-        }
-    }
 }

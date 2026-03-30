@@ -2,7 +2,7 @@ use axum::Json;
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 
-use crate::api_types::{ErrorCode, FieldHint, ResourceKind};
+use crate::api_types::{ErrorCode, FieldError, ResourceKind};
 
 pub type Result<T> = std::result::Result<T, Error>;
 
@@ -11,10 +11,10 @@ pub type Result<T> = std::result::Result<T, Error>;
 #[derive(Debug)]
 pub enum Error {
     /// Client input error (400).
-    /// `code` identifies the error kind; `field_hints` indicates which fields are problematic.
+    /// `code` identifies the error kind; `errors` indicates which fields are problematic.
     BadRequest {
         code: ErrorCode,
-        field_hints: Vec<FieldHint>,
+        errors: Vec<FieldError>,
     },
     /// Resource not found (404).
     NotFound { resource: ResourceKind, id: String },
@@ -35,11 +35,11 @@ impl Error {
 impl IntoResponse for Error {
     fn into_response(self) -> Response {
         match self {
-            Error::BadRequest { code, field_hints } => (
+            Error::BadRequest { code, errors } => (
                 StatusCode::BAD_REQUEST,
                 Json(serde_json::json!({
                     "code": code,
-                    "field_hints": field_hints,
+                    "errors": errors,
                 })),
             )
                 .into_response(),
@@ -76,12 +76,12 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn bad_request_returns_400_with_code_and_field_hints() {
+    async fn bad_request_returns_400_with_code_and_errors() {
         let error = Error::BadRequest {
             code: ErrorCode::InputValidationFailed,
-            field_hints: vec![FieldHint {
+            errors: vec![FieldError {
                 field: "title".into(),
-                reason: "required".into(),
+                reason: "title/required".into(),
             }],
         };
         let resp = error.into_response();
@@ -89,22 +89,22 @@ mod tests {
 
         let body = response_body(resp).await;
         assert_eq!(body["code"], "input_validation_failed");
-        assert_eq!(body["field_hints"][0]["field"], "title");
-        assert_eq!(body["field_hints"][0]["reason"], "required");
+        assert_eq!(body["errors"][0]["field"], "title");
+        assert_eq!(body["errors"][0]["reason"], "title/required");
     }
 
     #[tokio::test]
-    async fn bad_request_empty_field_hints() {
+    async fn bad_request_empty_errors() {
         let error = Error::BadRequest {
             code: ErrorCode::InvalidStateTransition,
-            field_hints: vec![],
+            errors: vec![],
         };
         let resp = error.into_response();
         assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
 
         let body = response_body(resp).await;
         assert_eq!(body["code"], "invalid_state_transition");
-        assert!(body["field_hints"].as_array().unwrap().is_empty());
+        assert!(body["errors"].as_array().unwrap().is_empty());
     }
 
     #[tokio::test]
@@ -138,7 +138,7 @@ mod tests {
     async fn response_has_no_message_field() {
         let error = Error::BadRequest {
             code: ErrorCode::InputValidationFailed,
-            field_hints: vec![],
+            errors: vec![],
         };
         let resp = error.into_response();
         let body = response_body(resp).await;

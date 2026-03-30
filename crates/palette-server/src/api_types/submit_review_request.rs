@@ -1,4 +1,4 @@
-use super::{FieldHint, ReviewCommentInput, Verdict};
+use super::{FieldError, ReviewCommentInput, Verdict};
 use palette_domain as domain;
 use serde::{Deserialize, Serialize};
 
@@ -13,13 +13,13 @@ pub struct SubmitReviewRequest {
 }
 
 impl SubmitReviewRequest {
-    pub fn validate(&self) -> Result<domain::review::SubmitReviewRequest, Vec<FieldHint>> {
+    pub fn validate(&self) -> Result<domain::review::SubmitReviewRequest, Vec<FieldError>> {
         let mut hints = Vec::new();
 
         if self.comments.len() > MAX_COMMENTS {
-            hints.push(FieldHint {
+            hints.push(FieldError {
                 field: "comments".into(),
-                reason: "too_many".into(),
+                reason: "comments/too_many".into(),
             });
         } else {
             for (i, c) in self.comments.iter().enumerate() {

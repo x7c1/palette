@@ -6,6 +6,7 @@ license.workspace = true
 
 [dependencies]
 palette-domain = { path = "../palette-domain" }
+palette-macros = { path = "../palette-macros" }
 palette-usecase = { path = "../palette-usecase" }
 serde.workspace = true
 serde_yaml.workspace = true

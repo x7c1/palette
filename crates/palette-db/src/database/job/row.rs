@@ -21,7 +21,7 @@ pub(crate) fn row_to_job(row: &rusqlite::Row) -> rusqlite::Result<Job> {
     Ok(Job {
         id: JobId::new(row.get::<_, String>("id")?),
         task_id: TaskId::parse(row.get::<_, String>("task_id")?)
-            .map_err(|e| id_conversion_error(e.reason_key().into()))?,
+            .map_err(|e| id_conversion_error(e.reason_key()))?,
         job_type,
         title: row.get("title")?,
         plan_path: row.get("plan_path")?,

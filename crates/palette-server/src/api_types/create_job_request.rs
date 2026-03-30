@@ -1,4 +1,4 @@
-use super::{FieldHint, JobType, Priority, Repository};
+use super::{FieldError, JobType, Priority, Repository};
 use palette_domain as domain;
 use serde::{Deserialize, Serialize};
 
@@ -20,50 +20,50 @@ pub struct CreateJobRequest {
 }
 
 impl CreateJobRequest {
-    pub fn validate(&self) -> Result<domain::job::CreateJobRequest, Vec<FieldHint>> {
+    pub fn validate(&self) -> Result<domain::job::CreateJobRequest, Vec<FieldError>> {
         let mut hints = Vec::new();
 
         if self.title.trim().is_empty() {
-            hints.push(FieldHint {
+            hints.push(FieldError {
                 field: "title".into(),
-                reason: "required".into(),
+                reason: "title/required".into(),
             });
         } else if self.title.len() > MAX_TITLE_LEN {
-            hints.push(FieldHint {
+            hints.push(FieldError {
                 field: "title".into(),
-                reason: "too_long".into(),
+                reason: "title/too_long".into(),
             });
         }
 
         if let Err(e) = domain::task::TaskId::parse(&self.task_id) {
-            hints.push(FieldHint {
+            hints.push(FieldError {
                 field: "task_id".into(),
-                reason: e.reason_key().into(),
+                reason: e.reason_key(),
             });
         }
 
         if self.plan_path.trim().is_empty() {
-            hints.push(FieldHint {
+            hints.push(FieldError {
                 field: "plan_path".into(),
-                reason: "required".into(),
+                reason: "plan_path/required".into(),
             });
         } else if self.plan_path.len() > MAX_PATH_LEN {
-            hints.push(FieldHint {
+            hints.push(FieldError {
                 field: "plan_path".into(),
-                reason: "too_long".into(),
+                reason: "plan_path/too_long".into(),
             });
         }
 
         if let Some(ref id) = self.id {
             if id.trim().is_empty() {
-                hints.push(FieldHint {
+                hints.push(FieldError {
                     field: "id".into(),
-                    reason: "required".into(),
+                    reason: "job_id/required".into(),
                 });
             } else if id.len() > MAX_ID_LEN {
-                hints.push(FieldHint {
+                hints.push(FieldError {
                     field: "id".into(),
-                    reason: "too_long".into(),
+                    reason: "job_id/too_long".into(),
                 });
             }
         }
@@ -76,9 +76,9 @@ impl CreateJobRequest {
         // TaskId::parse is pure and cheap; duplicating the call avoids
         // carrying an Option that would require expect/unwrap.
         let task_id = domain::task::TaskId::parse(&self.task_id).map_err(|e| {
-            vec![FieldHint {
+            vec![FieldError {
                 field: "task_id".into(),
-                reason: e.reason_key().into(),
+                reason: e.reason_key(),
             }]
         })?;
 

@@ -10,9 +10,9 @@ fn row_to_task_row(row: &rusqlite::Row) -> rusqlite::Result<TaskRow> {
     let status = crate::lookup::task_status_from_id(status_id).map_err(id_conversion_error)?;
     Ok(TaskRow {
         id: TaskId::parse(row.get::<_, String>("id")?)
-            .map_err(|e| id_conversion_error(e.reason_key().into()))?,
+            .map_err(|e| id_conversion_error(e.reason_key()))?,
         workflow_id: WorkflowId::parse(row.get::<_, String>("workflow_id")?)
-            .map_err(|e| id_conversion_error(e.reason_key().into()))?,
+            .map_err(|e| id_conversion_error(e.reason_key()))?,
         status,
     })
 }

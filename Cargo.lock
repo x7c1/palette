@@ -959,6 +959,7 @@ name = "palette-domain"
 version = "0.1.0"
 dependencies = [
  "chrono",
+ "palette-macros",
  "uuid",
 ]
 
@@ -967,10 +968,20 @@ name = "palette-fs"
 version = "0.1.0"
 dependencies = [
  "palette-domain",
+ "palette-macros",
  "palette-usecase",
  "serde",
  "serde_yaml",
  "tempfile",
+]
+
+[[package]]
+name = "palette-macros"
+version = "0.1.0"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
 ]
 
 [[package]]

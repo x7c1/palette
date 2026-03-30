@@ -6,6 +6,7 @@ members = [
     "crates/palette-docker",
     "crates/palette-domain",
     "crates/palette-fs",
+    "crates/palette-macros",
     "crates/palette-orchestrator",
     "crates/palette-server",
     "crates/palette-tmux",

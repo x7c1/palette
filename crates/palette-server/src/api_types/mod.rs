@@ -44,4 +44,4 @@ mod repository;
 pub use repository::Repository;
 
 mod error_response;
-pub use error_response::{ErrorCode, FieldHint, ResourceKind};
+pub use error_response::{ErrorCode, FieldError, ResourceKind};

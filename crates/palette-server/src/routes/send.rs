@@ -1,4 +1,4 @@
-use crate::api_types::{ErrorCode, FieldHint, ResourceKind, SendRequest, SendResponse};
+use crate::api_types::{ErrorCode, FieldError, ResourceKind, SendRequest, SendResponse};
 use crate::{AppState, Error, EventRecord};
 use axum::{Json, extract::State};
 use palette_domain::terminal::TerminalTarget;
@@ -37,9 +37,9 @@ pub async fn handle_send(
         }
         return Err(Error::BadRequest {
             code: ErrorCode::InputValidationFailed,
-            field_hints: vec![FieldHint {
+            errors: vec![FieldError {
                 field: "worker_id".into(),
-                reason: "required".into(),
+                reason: "worker_id/required".into(),
             }],
         });
     }
