@@ -40,8 +40,7 @@ pub(crate) fn into_job(row: JobRow) -> crate::Result<Job> {
     let repository = row
         .repository
         .map(|s| super::repository_row::repository_from_json(&s))
-        .transpose()?
-        .flatten();
+        .transpose()?;
 
     let task_id = TaskId::parse(row.task_id).map_err(corrupt_parse)?;
     let title = Title::parse(row.title).map_err(corrupt_parse)?;
