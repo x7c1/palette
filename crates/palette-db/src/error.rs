@@ -16,7 +16,7 @@ pub enum Error {
     /// Lock acquisition failed (Mutex poisoned).
     LockPoisoned,
     /// Generic internal error.
-    Internal(String),
+    Internal(Box<dyn std::fmt::Debug + Send + Sync>),
 }
 
 impl fmt::Display for Error {
@@ -26,7 +26,7 @@ impl fmt::Display for Error {
             Error::Job(e) => write!(f, "{e}"),
             Error::Review(e) => write!(f, "{e}"),
             Error::LockPoisoned => write!(f, "database lock poisoned"),
-            Error::Internal(msg) => write!(f, "internal error: {msg}"),
+            Error::Internal(cause) => write!(f, "internal error: {cause:?}"),
         }
     }
 }

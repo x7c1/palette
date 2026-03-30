@@ -1,5 +1,5 @@
-use crate::AppState;
-use axum::{Json, extract::State, http::StatusCode};
+use crate::{AppState, Error};
+use axum::{Json, extract::State};
 use std::sync::Arc;
 
 #[derive(serde::Serialize)]
@@ -16,12 +16,12 @@ pub struct WorkerResponse {
 
 pub async fn handle_list_workers(
     State(state): State<Arc<AppState>>,
-) -> Result<Json<Vec<WorkerResponse>>, (StatusCode, String)> {
+) -> crate::Result<Json<Vec<WorkerResponse>>> {
     let workers = state
         .interactor
         .data_store
         .list_all_workers()
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+        .map_err(Error::internal)?;
 
     let response: Vec<WorkerResponse> = workers
         .into_iter()

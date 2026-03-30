@@ -1,5 +1,6 @@
-use crate::AppState;
-use axum::{Json, extract::Query, extract::State, http::StatusCode};
+use crate::api_types::{ErrorCode, FieldHint};
+use crate::{AppState, Error};
+use axum::{Json, extract::Query, extract::State};
 use palette_domain::workflow::WorkflowStatus;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
@@ -20,17 +21,20 @@ pub struct WorkflowResponse {
 pub async fn handle_list_workflows(
     State(state): State<Arc<AppState>>,
     Query(query): Query<ListWorkflowsQuery>,
-) -> Result<Json<Vec<WorkflowResponse>>, (StatusCode, String)> {
+) -> crate::Result<Json<Vec<WorkflowResponse>>> {
     let status_filter = match query.status.as_deref() {
         Some("active") => Some(WorkflowStatus::Active),
         Some("suspending") => Some(WorkflowStatus::Suspending),
         Some("suspended") => Some(WorkflowStatus::Suspended),
         Some("completed") => Some(WorkflowStatus::Completed),
-        Some(unknown) => {
-            return Err((
-                StatusCode::BAD_REQUEST,
-                format!("unknown workflow status: {unknown}"),
-            ));
+        Some(_) => {
+            return Err(Error::BadRequest {
+                code: ErrorCode::InputValidationFailed,
+                field_hints: vec![FieldHint {
+                    field: "status".into(),
+                    reason: "invalid_format".into(),
+                }],
+            });
         }
         None => None,
     };
@@ -39,7 +43,7 @@ pub async fn handle_list_workflows(
         .interactor
         .data_store
         .list_workflows(status_filter)
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+        .map_err(Error::internal)?;
 
     let response: Vec<WorkflowResponse> = workflows
         .into_iter()

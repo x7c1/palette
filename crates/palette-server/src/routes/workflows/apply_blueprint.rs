@@ -1,5 +1,6 @@
-use super::task_activation::{activate_ready_children, internal_err};
-use crate::AppState;
+use super::task_activation::activate_ready_children;
+use crate::api_types::ResourceKind;
+use crate::{AppState, Error};
 use axum::{
     Json,
     extract::{Path, State},
@@ -33,7 +34,7 @@ pub struct ApplyBlueprintError {
 pub async fn handle_apply_blueprint(
     State(state): State<Arc<AppState>>,
     Path(id): Path<String>,
-) -> Result<Response, (StatusCode, String)> {
+) -> crate::Result<Response> {
     let workflow_id = WorkflowId::new(&id);
 
     // Look up the workflow to get its blueprint_path
@@ -41,36 +42,29 @@ pub async fn handle_apply_blueprint(
         .interactor
         .data_store
         .get_workflow(&workflow_id)
-        .map_err(internal_err)?
-        .ok_or_else(|| (StatusCode::NOT_FOUND, format!("workflow {id} not found")))?;
+        .map_err(Error::internal)?
+        .ok_or_else(|| Error::NotFound {
+            resource: ResourceKind::Workflow,
+            id: id.clone(),
+        })?;
 
     // Read Blueprint file content for hashing
     let blueprint_path = std::path::Path::new(&workflow.blueprint_path);
-    let blueprint_content = std::fs::read(blueprint_path).map_err(|e| {
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            format!("failed to read blueprint file: {e}"),
-        )
-    })?;
+    let blueprint_content = std::fs::read(blueprint_path).map_err(Error::internal)?;
 
     // Re-read Blueprint from disk (parsed into TaskTree)
     let tree = state
         .interactor
         .blueprint
         .read_blueprint(blueprint_path, &workflow_id)
-        .map_err(|e| {
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                format!("failed to parse blueprint: {e}"),
-            )
-        })?;
+        .map_err(Error::internal)?;
 
     // Get current task statuses from DB
     let db_statuses = state
         .interactor
         .data_store
         .get_task_statuses(&workflow_id)
-        .map_err(internal_err)?;
+        .map_err(Error::internal)?;
 
     // Compute diff
     let diff = reconciliation::compute_diff(&tree, &db_statuses);
@@ -82,7 +76,7 @@ pub async fn handle_apply_blueprint(
             .interactor
             .data_store
             .update_blueprint_hash(&workflow_id, Some(&hash))
-            .map_err(internal_err)?;
+            .map_err(Error::internal)?;
 
         tracing::info!(workflow_id = %workflow_id, "apply: no blueprint changes, hash saved");
 
@@ -125,7 +119,7 @@ pub async fn handle_apply_blueprint(
         &tree,
         &db_statuses,
     )
-    .map_err(internal_err)?;
+    .map_err(Error::internal)?;
 
     tracing::info!(
         workflow_id = %workflow_id,
@@ -140,7 +134,7 @@ pub async fn handle_apply_blueprint(
         .interactor
         .data_store
         .get_task_statuses(&workflow_id)
-        .map_err(internal_err)?;
+        .map_err(Error::internal)?;
 
     let task_store = TaskStore::new(
         state.interactor.data_store.as_ref(),
@@ -176,7 +170,7 @@ pub async fn handle_apply_blueprint(
         .interactor
         .data_store
         .update_blueprint_hash(&workflow_id, Some(&hash))
-        .map_err(internal_err)?;
+        .map_err(Error::internal)?;
 
     Ok((
         StatusCode::OK,

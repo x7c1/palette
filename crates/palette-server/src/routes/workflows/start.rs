@@ -1,5 +1,5 @@
-use super::task_activation::{HandlerResult, activate_ready_children, internal_err};
-use crate::AppState;
+use super::task_activation::activate_ready_children;
+use crate::{AppState, Error};
 use axum::{
     Json,
     extract::State,
@@ -31,13 +31,19 @@ pub struct StartWorkflowResponse {
 pub async fn handle_start_workflow(
     State(state): State<Arc<AppState>>,
     Json(req): Json<StartWorkflowRequest>,
-) -> Result<Response, (StatusCode, String)> {
+) -> crate::Result<Response> {
     let workflow_id = WorkflowId::generate();
     let tree = state
         .interactor
         .blueprint
         .read_blueprint(Path::new(&req.blueprint_path), &workflow_id)
-        .map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))?;
+        .map_err(|e| Error::BadRequest {
+            code: crate::api_types::ErrorCode::BlueprintInvalid,
+            field_hints: vec![crate::api_types::FieldHint {
+                field: "blueprint_path".into(),
+                reason: format!("{e}"),
+            }],
+        })?;
 
     let task_count = register_tasks(&state, &workflow_id, &tree, &req.blueprint_path)?;
 
@@ -70,12 +76,12 @@ fn register_tasks(
     workflow_id: &WorkflowId,
     tree: &TaskTree,
     blueprint_path: &str,
-) -> HandlerResult<usize> {
+) -> crate::Result<usize> {
     state
         .interactor
         .data_store
         .create_workflow(workflow_id, blueprint_path)
-        .map_err(internal_err)?;
+        .map_err(Error::internal)?;
 
     let mut count = 0;
     for task_id in tree.task_ids() {
@@ -86,7 +92,7 @@ fn register_tasks(
                 id: task_id.clone(),
                 workflow_id: workflow_id.clone(),
             })
-            .map_err(internal_err)?;
+            .map_err(Error::internal)?;
         count += 1;
     }
 
@@ -99,7 +105,7 @@ fn initialize_root(
     state: &AppState,
     tree: &TaskTree,
     workflow_id: &WorkflowId,
-) -> HandlerResult<Vec<RuleEffect>> {
+) -> crate::Result<Vec<RuleEffect>> {
     let statuses = tree
         .task_ids()
         .map(|id| (id.clone(), TaskStatus::Pending))
@@ -115,8 +121,8 @@ fn initialize_root(
     // Root task: spawn supervisor, then → InProgress
     let root = task_store
         .get_task(task_store.root_id())
-        .map_err(internal_err)?
-        .ok_or_else(|| internal_err("root task not found"))?;
+        .map_err(Error::internal)?
+        .ok_or_else(|| Error::internal("root task not found"))?;
 
     let mut effects = vec![RuleEffect::SpawnSupervisor {
         task_id: root.id.clone(),
@@ -125,7 +131,7 @@ fn initialize_root(
 
     task_store
         .update_task_status(&root.id, TaskStatus::InProgress)
-        .map_err(internal_err)?;
+        .map_err(Error::internal)?;
 
     // Resolve children recursively and create jobs
     let child_ids: Vec<TaskId> = root.children.iter().map(|c| c.id.clone()).collect();

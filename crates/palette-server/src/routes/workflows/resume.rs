@@ -1,4 +1,5 @@
-use crate::AppState;
+use crate::api_types::ResourceKind;
+use crate::{AppState, Error};
 use axum::{
     Json,
     extract::{Path, State},
@@ -20,7 +21,7 @@ pub struct ResumeWorkflowResponse {
 pub async fn handle_resume_workflow(
     State(state): State<Arc<AppState>>,
     Path(id): Path<String>,
-) -> Result<Response, (StatusCode, String)> {
+) -> crate::Result<Response> {
     let workflow_id = WorkflowId::new(&id);
 
     // Verify Blueprint hasn't changed since the last apply
@@ -31,7 +32,7 @@ pub async fn handle_resume_workflow(
         .interactor
         .data_store
         .list_all_workers()
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+        .map_err(Error::internal)?;
 
     let suspended: Vec<_> = workers
         .into_iter()
@@ -153,24 +154,15 @@ pub async fn handle_resume_workflow(
 /// - If no blueprint_hash is stored: check that the Blueprint on disk matches
 ///   what's in the DB (no diff). If there are changes, require an apply first.
 /// - If a blueprint_hash is stored: re-hash the file and compare.
-fn verify_blueprint_hash(
-    state: &AppState,
-    workflow_id: &WorkflowId,
-) -> Result<(), (StatusCode, String)> {
-    let internal = |e: Box<dyn std::error::Error + Send + Sync>| {
-        (StatusCode::INTERNAL_SERVER_ERROR, e.to_string())
-    };
-
+fn verify_blueprint_hash(state: &AppState, workflow_id: &WorkflowId) -> crate::Result<()> {
     let workflow = state
         .interactor
         .data_store
         .get_workflow(workflow_id)
-        .map_err(internal)?
-        .ok_or_else(|| {
-            (
-                StatusCode::NOT_FOUND,
-                format!("workflow {} not found", workflow_id),
-            )
+        .map_err(Error::internal)?
+        .ok_or_else(|| Error::NotFound {
+            resource: ResourceKind::Workflow,
+            id: workflow_id.to_string(),
         })?;
 
     let blueprint_path = std::path::Path::new(&workflow.blueprint_path);
@@ -178,17 +170,11 @@ fn verify_blueprint_hash(
     match &workflow.blueprint_hash {
         Some(stored_hash) => {
             // Apply was called — verify the file hasn't changed since
-            let content = std::fs::read(blueprint_path).map_err(|e| {
-                (
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    format!("failed to read blueprint: {e}"),
-                )
-            })?;
+            let content = std::fs::read(blueprint_path).map_err(Error::internal)?;
             let current_hash = hex_sha256(&content);
             if current_hash != *stored_hash {
-                return Err((
-                    StatusCode::BAD_REQUEST,
-                    "blueprint changed since last apply; run apply-blueprint again".to_string(),
+                return Err(Error::internal(
+                    "blueprint changed since last apply; run apply-blueprint again",
                 ));
             }
         }
@@ -198,23 +184,17 @@ fn verify_blueprint_hash(
                 .interactor
                 .blueprint
                 .read_blueprint(blueprint_path, workflow_id)
-                .map_err(|e| {
-                    (
-                        StatusCode::INTERNAL_SERVER_ERROR,
-                        format!("failed to read blueprint: {e}"),
-                    )
-                })?;
+                .map_err(Error::internal)?;
             let db_statuses = state
                 .interactor
                 .data_store
                 .get_task_statuses(workflow_id)
-                .map_err(internal)?;
+                .map_err(Error::internal)?;
 
             let diff = palette_usecase::reconciliation::compute_diff(&tree, &db_statuses);
             if !diff.added_tasks.is_empty() || !diff.removed_tasks.is_empty() {
-                return Err((
-                    StatusCode::BAD_REQUEST,
-                    "blueprint has unapplied changes; run apply-blueprint first".to_string(),
+                return Err(Error::internal(
+                    "blueprint has unapplied changes; run apply-blueprint first",
                 ));
             }
         }

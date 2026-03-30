@@ -16,3 +16,10 @@ impl fmt::Display for TransitionError {
 }
 
 impl std::error::Error for TransitionError {}
+
+impl TransitionError {
+    /// Machine-readable reason key for field hints.
+    pub fn reason_key(&self) -> &str {
+        "invalid_transition"
+    }
+}
