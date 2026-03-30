@@ -1,5 +1,4 @@
 use crate::models::WorkflowRow;
-use palette_domain::ReasonKey;
 use palette_domain::workflow::{Workflow, WorkflowId};
 
 use super::super::parse_datetime;
@@ -17,11 +16,9 @@ pub(super) fn read_workflow_row(row: &rusqlite::Row) -> rusqlite::Result<Workflo
 
 /// Convert a WorkflowRow to a domain Workflow.
 pub(super) fn into_workflow(row: WorkflowRow) -> crate::Result<Workflow> {
-    let status = crate::lookup::workflow_status_from_id(row.status_id)
-        .map_err(|e| crate::Error::DataCorruption { reason: e })?;
-    let id = WorkflowId::parse(row.id).map_err(|e| crate::Error::DataCorruption {
-        reason: e.reason_key(),
-    })?;
+    let status =
+        crate::lookup::workflow_status_from_id(row.status_id).map_err(crate::Error::corrupt)?;
+    let id = WorkflowId::parse(row.id).map_err(crate::Error::corrupt_parse)?;
 
     Ok(Workflow {
         id,

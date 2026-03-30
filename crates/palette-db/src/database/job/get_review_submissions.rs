@@ -1,6 +1,5 @@
 use super::super::*;
 use crate::models::ReviewSubmissionRow;
-use palette_domain::ReasonKey;
 
 impl Database {
     pub fn get_review_submissions(
@@ -30,16 +29,11 @@ fn read_review_submission_row(row: &rusqlite::Row) -> rusqlite::Result<ReviewSub
 }
 
 fn into_review_submission(row: ReviewSubmissionRow) -> crate::Result<ReviewSubmission> {
-    let verdict = crate::lookup::verdict_from_id(row.verdict_id)
-        .map_err(|e| crate::Error::DataCorruption { reason: e })?;
+    let verdict = crate::lookup::verdict_from_id(row.verdict_id).map_err(crate::Error::corrupt)?;
 
     Ok(ReviewSubmission {
         id: row.id,
-        review_job_id: JobId::parse(row.review_job_id).map_err(|e| {
-            crate::Error::DataCorruption {
-                reason: e.reason_key(),
-            }
-        })?,
+        review_job_id: JobId::parse(row.review_job_id).map_err(crate::Error::corrupt_parse)?,
         round: row.round as i32,
         verdict,
         summary: row.summary,

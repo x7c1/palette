@@ -25,6 +25,20 @@ pub enum Error {
     },
 }
 
+impl Error {
+    /// Convert a lookup error (unknown enum ID) into `DataCorruption`.
+    pub(crate) fn corrupt(reason: String) -> Self {
+        Error::DataCorruption { reason }
+    }
+
+    /// Convert a parse error (`ReasonKey` impl) into `DataCorruption`.
+    pub(crate) fn corrupt_parse(e: impl palette_domain::ReasonKey) -> Self {
+        Error::DataCorruption {
+            reason: e.reason_key(),
+        }
+    }
+}
+
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
