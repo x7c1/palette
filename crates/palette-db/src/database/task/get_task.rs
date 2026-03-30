@@ -1,4 +1,4 @@
-use super::super::{Database, lock};
+use super::super::{Database, corrupt, corrupt_parse, lock};
 use crate::models::TaskRow;
 use palette_domain::task::{TaskId, TaskState, TaskStatus};
 use palette_domain::workflow::WorkflowId;
@@ -43,10 +43,9 @@ fn read_task_row(row: &rusqlite::Row) -> rusqlite::Result<TaskRow> {
 }
 
 fn into_task_state(row: TaskRow) -> crate::Result<TaskState> {
-    let status =
-        crate::lookup::task_status_from_id(row.status_id).map_err(crate::Error::corrupt)?;
-    let id = TaskId::parse(row.id).map_err(crate::Error::corrupt_parse)?;
-    let workflow_id = WorkflowId::parse(row.workflow_id).map_err(crate::Error::corrupt_parse)?;
+    let status = crate::lookup::task_status_from_id(row.status_id).map_err(corrupt)?;
+    let id = TaskId::parse(row.id).map_err(corrupt_parse)?;
+    let workflow_id = WorkflowId::parse(row.workflow_id).map_err(corrupt_parse)?;
 
     Ok(TaskState {
         id,

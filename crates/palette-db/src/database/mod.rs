@@ -52,6 +52,18 @@ impl Database {
     }
 }
 
+/// Convert a lookup error (unknown enum ID) into `DataCorruption`.
+pub(crate) fn corrupt(reason: String) -> crate::Error {
+    crate::Error::DataCorruption { reason }
+}
+
+/// Convert a parse error (`ReasonKey` impl) into `DataCorruption`.
+pub(crate) fn corrupt_parse(e: impl palette_domain::ReasonKey) -> crate::Error {
+    crate::Error::DataCorruption {
+        reason: e.reason_key(),
+    }
+}
+
 /// Parse an RFC3339 datetime string from the database.
 pub(crate) fn parse_datetime(s: &str) -> DateTime<Utc> {
     DateTime::parse_from_rfc3339(s)

@@ -1,3 +1,4 @@
+use super::super::{corrupt, corrupt_parse};
 use crate::models::WorkerRow;
 use palette_domain::task::TaskId;
 use palette_domain::terminal::TerminalTarget;
@@ -24,11 +25,10 @@ pub(super) fn read_worker_row(row: &rusqlite::Row) -> rusqlite::Result<WorkerRow
 
 /// Convert a WorkerRow to a domain WorkerState.
 pub(super) fn into_worker_state(row: WorkerRow) -> crate::Result<WorkerState> {
-    let role = crate::lookup::worker_role_from_id(row.role_id).map_err(crate::Error::corrupt)?;
-    let status =
-        crate::lookup::worker_status_from_id(row.status_id).map_err(crate::Error::corrupt)?;
-    let workflow_id = WorkflowId::parse(row.workflow_id).map_err(crate::Error::corrupt_parse)?;
-    let task_id = TaskId::parse(row.task_id).map_err(crate::Error::corrupt_parse)?;
+    let role = crate::lookup::worker_role_from_id(row.role_id).map_err(corrupt)?;
+    let status = crate::lookup::worker_status_from_id(row.status_id).map_err(corrupt)?;
+    let workflow_id = WorkflowId::parse(row.workflow_id).map_err(corrupt_parse)?;
+    let task_id = TaskId::parse(row.task_id).map_err(corrupt_parse)?;
 
     Ok(WorkerState {
         id: WorkerId::new(row.id),

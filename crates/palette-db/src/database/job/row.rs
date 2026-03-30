@@ -4,7 +4,7 @@ use palette_domain::task::TaskId;
 use palette_domain::worker::WorkerId;
 use rusqlite::{Connection, params};
 
-use super::super::parse_datetime;
+use super::super::{corrupt, corrupt_parse, parse_datetime};
 
 /// Extract a raw DB row into a JobRow (DB-native types only).
 pub(crate) fn read_job_row(row: &rusqlite::Row) -> rusqlite::Result<JobRow> {
@@ -28,26 +28,25 @@ pub(crate) fn read_job_row(row: &rusqlite::Row) -> rusqlite::Result<JobRow> {
 
 /// Convert a JobRow to a domain Job.
 pub(crate) fn into_job(row: JobRow) -> crate::Result<Job> {
-    let job_type = crate::lookup::job_type_from_id(row.type_id).map_err(crate::Error::corrupt)?;
+    let job_type = crate::lookup::job_type_from_id(row.type_id).map_err(corrupt)?;
 
-    let status = crate::lookup::job_status_from_id(row.status_id, job_type)
-        .map_err(crate::Error::corrupt)?;
+    let status = crate::lookup::job_status_from_id(row.status_id, job_type).map_err(corrupt)?;
 
     let priority = row
         .priority_id
-        .map(|id| crate::lookup::priority_from_id(id).map_err(crate::Error::corrupt))
+        .map(|id| crate::lookup::priority_from_id(id).map_err(corrupt))
         .transpose()?;
 
     let repository = row
         .repository
         .and_then(|s| super::repository_row::repository_from_json(&s));
 
-    let task_id = TaskId::parse(row.task_id).map_err(crate::Error::corrupt_parse)?;
-    let title = Title::parse(row.title).map_err(crate::Error::corrupt_parse)?;
-    let plan_path = PlanPath::parse(row.plan_path).map_err(crate::Error::corrupt_parse)?;
+    let task_id = TaskId::parse(row.task_id).map_err(corrupt_parse)?;
+    let title = Title::parse(row.title).map_err(corrupt_parse)?;
+    let plan_path = PlanPath::parse(row.plan_path).map_err(corrupt_parse)?;
 
     Ok(Job {
-        id: JobId::parse(row.id).map_err(crate::Error::corrupt_parse)?,
+        id: JobId::parse(row.id).map_err(corrupt_parse)?,
         task_id,
         job_type,
         title,
