@@ -31,21 +31,6 @@ impl BlueprintError {
     }
 }
 
-impl std::fmt::Display for BlueprintError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            BlueprintError::InvalidKey { key } => {
-                write!(f, "invalid task key '{key}': must match [a-z0-9-]+")
-            }
-            BlueprintError::MissingReviewChild { task_key } => {
-                write!(f, "craft task '{task_key}' has no review child")
-            }
-        }
-    }
-}
-
-impl std::error::Error for BlueprintError {}
-
 /// Validate that a task key matches `[a-z0-9-]+`.
 fn validate_key(key: &str) -> Result<TaskKey, BlueprintError> {
     if key.is_empty()

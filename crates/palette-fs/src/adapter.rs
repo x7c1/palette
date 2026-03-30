@@ -16,7 +16,10 @@ impl BlueprintReader for FsBlueprintReader {
     ) -> Result<TaskTree, Box<dyn std::error::Error + Send + Sync>> {
         let blueprint = crate::read_blueprint(path)?;
         let tree = blueprint.to_task_tree(workflow_id).map_err(|errors| {
-            let messages: Vec<String> = errors.iter().map(|e| e.to_string()).collect();
+            let messages: Vec<String> = errors
+                .iter()
+                .map(|e| format!("{}:{}", e.field_path(), e.reason_key()))
+                .collect();
             messages.join("; ")
         })?;
         Ok(tree)

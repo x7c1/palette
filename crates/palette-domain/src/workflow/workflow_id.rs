@@ -65,17 +65,3 @@ impl InvalidWorkflowId {
         }
     }
 }
-
-impl fmt::Display for InvalidWorkflowId {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            InvalidWorkflowId::Empty => write!(f, "workflow ID is empty"),
-            InvalidWorkflowId::TooLong { id } => {
-                write!(f, "workflow ID too long: {}", id.len())
-            }
-            InvalidWorkflowId::ForbiddenChar { id } => {
-                write!(f, "workflow ID contains ':' or '/': {id}")
-            }
-        }
-    }
-}

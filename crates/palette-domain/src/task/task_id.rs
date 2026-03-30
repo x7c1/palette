@@ -80,17 +80,3 @@ impl InvalidTaskId {
         }
     }
 }
-
-impl fmt::Display for InvalidTaskId {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            InvalidTaskId::Empty => write!(f, "task ID is empty"),
-            InvalidTaskId::TooLong { id } => {
-                write!(f, "task ID too long: {}", id.len())
-            }
-            InvalidTaskId::MissingColon { id } => {
-                write!(f, "task ID missing ':' separator: {id}")
-            }
-        }
-    }
-}
