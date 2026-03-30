@@ -27,9 +27,12 @@ mod tests {
         let db = test_db();
         insert_test_worker(&db, "member-1", WorkerRole::Member, "wf-1");
 
-        db.update_worker_status(&WorkerId::new("member-1"), WorkerStatus::Idle)
+        db.update_worker_status(&WorkerId::parse("member-1").unwrap(), WorkerStatus::Idle)
             .unwrap();
-        let worker = db.find_worker(&WorkerId::new("member-1")).unwrap().unwrap();
+        let worker = db
+            .find_worker(&WorkerId::parse("member-1").unwrap())
+            .unwrap()
+            .unwrap();
         assert_eq!(worker.status, WorkerStatus::Idle);
     }
 }

@@ -16,10 +16,10 @@ use palette_domain::workflow::WorkflowId;
 
 pub fn make_worker(id: &str, role: WorkerRole, status: WorkerStatus) -> WorkerState {
     WorkerState {
-        id: WorkerId::new(id),
+        id: WorkerId::parse(id).unwrap(),
         workflow_id: WorkflowId::parse("wf-test").unwrap(),
         role,
-        supervisor_id: Some(WorkerId::new("sup-1")),
+        supervisor_id: Some(WorkerId::parse("sup-1").unwrap()),
         container_id: ContainerId::new(format!("container-{id}")),
         terminal_target: TerminalTarget::new(format!("pane-{id}")),
         status,

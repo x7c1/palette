@@ -100,7 +100,7 @@ mod tests {
     fn make_supervisor(id: &str, role: WorkerRole) -> WorkerState {
         use crate::task::TaskId;
         WorkerState {
-            id: WorkerId::new(id),
+            id: WorkerId::parse(id).unwrap(),
             workflow_id: crate::workflow::WorkflowId::parse("wf-test").unwrap(),
             role,
             supervisor_id: None,
@@ -127,14 +127,14 @@ mod tests {
                 .find_supervisor_for_task(&TaskId::parse("wf-test:leader-1").unwrap())
                 .unwrap()
                 .id,
-            WorkerId::new("leader-1")
+            WorkerId::parse("leader-1").unwrap()
         );
         assert_eq!(
             state
                 .find_supervisor_for_task(&TaskId::parse("wf-test:ri-1").unwrap())
                 .unwrap()
                 .id,
-            WorkerId::new("ri-1")
+            WorkerId::parse("ri-1").unwrap()
         );
         assert!(
             state
@@ -153,14 +153,14 @@ mod tests {
             .supervisors
             .push(make_supervisor("ri-1", WorkerRole::ReviewIntegrator));
 
-        let removed = state.remove_supervisor(&WorkerId::new("leader-1"));
+        let removed = state.remove_supervisor(&WorkerId::parse("leader-1").unwrap());
         assert!(removed.is_some());
-        assert_eq!(removed.unwrap().id, WorkerId::new("leader-1"));
+        assert_eq!(removed.unwrap().id, WorkerId::parse("leader-1").unwrap());
         assert_eq!(state.supervisors.len(), 1);
 
         assert!(
             state
-                .remove_supervisor(&WorkerId::new("nonexistent"))
+                .remove_supervisor(&WorkerId::parse("nonexistent").unwrap())
                 .is_none()
         );
     }

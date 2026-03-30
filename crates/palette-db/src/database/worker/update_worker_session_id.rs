@@ -30,10 +30,13 @@ mod tests {
         insert_test_worker(&db, "member-1", WorkerRole::Member, "wf-1");
 
         let session_id = WorkerSessionId::new("session-abc");
-        db.update_worker_session_id(&WorkerId::new("member-1"), &session_id)
+        db.update_worker_session_id(&WorkerId::parse("member-1").unwrap(), &session_id)
             .unwrap();
 
-        let worker = db.find_worker(&WorkerId::new("member-1")).unwrap().unwrap();
+        let worker = db
+            .find_worker(&WorkerId::parse("member-1").unwrap())
+            .unwrap()
+            .unwrap();
         assert_eq!(worker.session_id, Some(session_id));
     }
 }

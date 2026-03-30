@@ -78,11 +78,11 @@ mod tests {
         let db = test_db();
         insert_test_worker(&db, "leader-1", WorkerRole::Leader, "wf-1");
         insert_test_worker(&db, "member-1", WorkerRole::Member, "wf-1");
-        db.update_worker_status(&WorkerId::new("member-1"), WorkerStatus::Idle)
+        db.update_worker_status(&WorkerId::parse("member-1").unwrap(), WorkerStatus::Idle)
             .unwrap();
 
         let booting = db.list_booting_workers().unwrap();
         assert_eq!(booting.len(), 1);
-        assert_eq!(booting[0].id, WorkerId::new("leader-1"));
+        assert_eq!(booting[0].id, WorkerId::parse("leader-1").unwrap());
     }
 }

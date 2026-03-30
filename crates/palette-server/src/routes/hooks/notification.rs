@@ -23,7 +23,13 @@ pub async fn handle_notification(
     Json(payload): Json<serde_json::Value>,
 ) -> StatusCode {
     let worker_id_str = query.worker_id.as_deref().unwrap_or("unknown");
-    let worker_id = WorkerId::new(worker_id_str);
+    let worker_id = match WorkerId::parse(worker_id_str) {
+        Ok(id) => id,
+        Err(e) => {
+            tracing::warn!(worker_id = worker_id_str, error = ?e, "invalid worker_id in notification hook");
+            return StatusCode::BAD_REQUEST;
+        }
+    };
     tracing::info!(worker_id = worker_id_str, payload = %payload, "received notification hook");
 
     let record = EventRecord {

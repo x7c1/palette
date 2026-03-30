@@ -31,11 +31,15 @@ pub(super) fn into_worker_state(row: WorkerRow) -> crate::Result<WorkerState> {
     let task_id = TaskId::parse(row.task_id).map_err(corrupt_parse)?;
 
     Ok(WorkerState {
-        id: WorkerId::new(row.id),
+        id: WorkerId::parse(row.id).map_err(corrupt_parse)?,
         workflow_id,
         role,
         status,
-        supervisor_id: row.supervisor_id.map(WorkerId::new),
+        supervisor_id: row
+            .supervisor_id
+            .map(WorkerId::parse)
+            .transpose()
+            .map_err(corrupt_parse)?,
         container_id: ContainerId::new(row.container_id),
         terminal_target: TerminalTarget::new(row.terminal_target),
         session_id: row.session_id.map(WorkerSessionId::new),

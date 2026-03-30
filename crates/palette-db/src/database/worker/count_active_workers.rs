@@ -30,7 +30,7 @@ mod tests {
         let wf_id = WorkflowId::parse("wf-test").unwrap();
         let _ = db.create_workflow(&wf_id, "test/blueprint.yaml");
         db.insert_worker(&InsertWorkerRequest {
-            id: WorkerId::new(id),
+            id: WorkerId::parse(id).unwrap(),
             workflow_id: wf_id,
             role,
             status,
@@ -96,7 +96,7 @@ mod tests {
         insert_worker(&db, "w-1", WorkerRole::Member, WorkerStatus::Working);
         assert_eq!(db.count_active_workers().unwrap(), 1);
 
-        db.remove_worker(&WorkerId::new("w-1")).unwrap();
+        db.remove_worker(&WorkerId::parse("w-1").unwrap()).unwrap();
         assert_eq!(db.count_active_workers().unwrap(), 0);
     }
 }

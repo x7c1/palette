@@ -66,10 +66,7 @@ mod tests {
                 PlanPath::parse("2026/feature-x/api-impl").unwrap(),
                 Some(wid("member-a")),
                 Some(Priority::High),
-                Some(Repository {
-                    name: "x7c1/palette".to_string(),
-                    branch: "feature/test".to_string(),
-                }),
+                Some(Repository::parse("x7c1/palette", "feature/test").unwrap()),
             ))
             .unwrap();
 

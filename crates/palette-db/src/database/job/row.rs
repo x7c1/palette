@@ -39,7 +39,9 @@ pub(crate) fn into_job(row: JobRow) -> crate::Result<Job> {
 
     let repository = row
         .repository
-        .and_then(|s| super::repository_row::repository_from_json(&s));
+        .map(|s| super::repository_row::repository_from_json(&s))
+        .transpose()?
+        .flatten();
 
     let task_id = TaskId::parse(row.task_id).map_err(corrupt_parse)?;
     let title = Title::parse(row.title).map_err(corrupt_parse)?;
@@ -51,7 +53,11 @@ pub(crate) fn into_job(row: JobRow) -> crate::Result<Job> {
         job_type,
         title,
         plan_path,
-        assignee_id: row.assignee_id.map(WorkerId::new),
+        assignee_id: row
+            .assignee_id
+            .map(WorkerId::parse)
+            .transpose()
+            .map_err(corrupt_parse)?,
         status,
         priority,
         repository,

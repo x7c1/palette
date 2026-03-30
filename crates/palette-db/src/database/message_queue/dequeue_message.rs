@@ -6,19 +6,33 @@ impl Database {
     /// Dequeue the next message for a target (FIFO). Returns None if empty.
     pub fn dequeue_message(&self, target_id: &WorkerId) -> crate::Result<Option<QueuedMessage>> {
         let conn = lock(&self.conn)?;
-        let msg = conn
+        let raw = conn
             .prepare(
                 "SELECT id, target_id, message, created_at FROM message_queue WHERE target_id = ?1 ORDER BY id LIMIT 1",
             )?
             .query_row(params![target_id.as_ref()], |row| {
-                Ok(QueuedMessage {
-                    id: row.get(0)?,
-                    target_id: WorkerId::new(row.get::<_, String>(1)?),
-                    message: row.get(2)?,
-                    created_at: parse_datetime(&row.get::<_, String>(3)?),
-                })
+                Ok((
+                    row.get::<_, i64>(0)?,
+                    row.get::<_, String>(1)?,
+                    row.get::<_, String>(2)?,
+                    row.get::<_, String>(3)?,
+                ))
             })
             .optional()?;
+
+        let msg = raw
+            .map(
+                |(id, tid, message, created_at)| -> crate::Result<QueuedMessage> {
+                    let target_id = WorkerId::parse(tid).map_err(corrupt_parse)?;
+                    Ok(QueuedMessage {
+                        id,
+                        target_id,
+                        message,
+                        created_at: parse_datetime(&created_at),
+                    })
+                },
+            )
+            .transpose()?;
 
         if let Some(ref msg) = msg {
             conn.execute("DELETE FROM message_queue WHERE id = ?1", params![msg.id])?;

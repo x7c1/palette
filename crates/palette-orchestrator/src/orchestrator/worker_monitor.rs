@@ -529,13 +529,13 @@ mod tests {
         orch.check_all_workers(true, &mut snapshots, &mut retries);
 
         // Crash should be detected and recovery attempted
-        assert_eq!(*retries.get(&WorkerId::new("m-1")).unwrap(), 1);
+        assert_eq!(*retries.get(&WorkerId::parse("m-1").unwrap()).unwrap(), 1);
 
         // Worker status should have been updated (Crashed then Booting)
         let worker = orch
             .interactor
             .data_store
-            .find_worker(&WorkerId::new("m-1"))
+            .find_worker(&WorkerId::parse("m-1").unwrap())
             .unwrap()
             .unwrap();
         assert_eq!(worker.status, WorkerStatus::Booting);
@@ -558,18 +558,18 @@ mod tests {
             let _ = orch
                 .interactor
                 .data_store
-                .update_worker_status(&WorkerId::new("m-1"), WorkerStatus::Working);
+                .update_worker_status(&WorkerId::parse("m-1").unwrap(), WorkerStatus::Working);
             orch.check_all_workers(true, &mut snapshots, &mut retries);
         }
 
         // After 4 attempts, retries should be 4 (> CRASH_RETRY_LIMIT of 3)
-        assert_eq!(*retries.get(&WorkerId::new("m-1")).unwrap(), 4);
+        assert_eq!(*retries.get(&WorkerId::parse("m-1").unwrap()).unwrap(), 4);
 
         // Escalation message should have been enqueued to supervisor
         let messages = orch
             .interactor
             .data_store
-            .has_pending_messages(&WorkerId::new("sup-1"))
+            .has_pending_messages(&WorkerId::parse("sup-1").unwrap())
             .unwrap();
         assert!(
             messages,
@@ -593,8 +593,12 @@ mod tests {
 
         // First check: establishes baseline
         orch.check_all_workers(false, &mut snapshots, &mut retries);
-        assert!(snapshots.contains_key(&WorkerId::new("m-1")));
-        assert!(snapshots[&WorkerId::new("m-1")].stall_alerted_at.is_none());
+        assert!(snapshots.contains_key(&WorkerId::parse("m-1").unwrap()));
+        assert!(
+            snapshots[&WorkerId::parse("m-1").unwrap()]
+                .stall_alerted_at
+                .is_none()
+        );
     }
 
     #[test]
@@ -614,13 +618,17 @@ mod tests {
 
         // Manually backdate the snapshot to simulate time passing
         snapshots
-            .get_mut(&WorkerId::new("m-1"))
+            .get_mut(&WorkerId::parse("m-1").unwrap())
             .unwrap()
             .last_changed = Instant::now() - STALL_TIMEOUT - Duration::from_secs(1);
 
         // Second check: same content + timeout exceeded → stall detected
         orch.check_all_workers(false, &mut snapshots, &mut retries);
-        assert!(snapshots[&WorkerId::new("m-1")].stall_alerted_at.is_some());
+        assert!(
+            snapshots[&WorkerId::parse("m-1").unwrap()]
+                .stall_alerted_at
+                .is_some()
+        );
     }
 
     #[test]
@@ -641,16 +649,20 @@ mod tests {
         // Backdate to trigger initial stall alert
         let stall_start = Instant::now() - STALL_REALERT_INTERVAL - STALL_TIMEOUT;
         snapshots
-            .get_mut(&WorkerId::new("m-1"))
+            .get_mut(&WorkerId::parse("m-1").unwrap())
             .unwrap()
             .last_changed = stall_start;
 
         orch.check_all_workers(false, &mut snapshots, &mut retries);
-        let first_alert = snapshots[&WorkerId::new("m-1")].stall_alerted_at.unwrap();
+        let first_alert = snapshots[&WorkerId::parse("m-1").unwrap()]
+            .stall_alerted_at
+            .unwrap();
 
         // Immediately check again — should NOT re-alert (interval not elapsed)
         orch.check_all_workers(false, &mut snapshots, &mut retries);
-        let same_alert = snapshots[&WorkerId::new("m-1")].stall_alerted_at.unwrap();
+        let same_alert = snapshots[&WorkerId::parse("m-1").unwrap()]
+            .stall_alerted_at
+            .unwrap();
         assert_eq!(
             first_alert, same_alert,
             "should not re-alert before interval elapses"
@@ -658,12 +670,14 @@ mod tests {
 
         // Backdate the alert time to simulate interval passing
         snapshots
-            .get_mut(&WorkerId::new("m-1"))
+            .get_mut(&WorkerId::parse("m-1").unwrap())
             .unwrap()
             .stall_alerted_at = Some(Instant::now() - STALL_REALERT_INTERVAL);
 
         orch.check_all_workers(false, &mut snapshots, &mut retries);
-        let second_alert = snapshots[&WorkerId::new("m-1")].stall_alerted_at.unwrap();
+        let second_alert = snapshots[&WorkerId::parse("m-1").unwrap()]
+            .stall_alerted_at
+            .unwrap();
         assert_ne!(
             first_alert, second_alert,
             "should re-alert after interval elapses"
@@ -685,18 +699,27 @@ mod tests {
         // Trigger a stall alert
         orch.check_all_workers(false, &mut snapshots, &mut retries);
         snapshots
-            .get_mut(&WorkerId::new("m-1"))
+            .get_mut(&WorkerId::parse("m-1").unwrap())
             .unwrap()
             .last_changed = Instant::now() - STALL_TIMEOUT - Duration::from_secs(1);
         orch.check_all_workers(false, &mut snapshots, &mut retries);
-        assert!(snapshots[&WorkerId::new("m-1")].stall_alerted_at.is_some());
+        assert!(
+            snapshots[&WorkerId::parse("m-1").unwrap()]
+                .stall_alerted_at
+                .is_some()
+        );
 
         // Simulate pane content change by altering the snapshot hash directly.
         // When check_stall captures a different hash, it resets the alert.
-        snapshots.get_mut(&WorkerId::new("m-1")).unwrap().hash = 0;
+        snapshots
+            .get_mut(&WorkerId::parse("m-1").unwrap())
+            .unwrap()
+            .hash = 0;
         orch.check_all_workers(false, &mut snapshots, &mut retries);
         assert!(
-            snapshots[&WorkerId::new("m-1")].stall_alerted_at.is_none(),
+            snapshots[&WorkerId::parse("m-1").unwrap()]
+                .stall_alerted_at
+                .is_none(),
             "alert should reset when pane content changes"
         );
     }
@@ -716,7 +739,7 @@ mod tests {
         orch.check_all_workers(false, &mut snapshots, &mut retries);
 
         // No snapshot created for idle worker
-        assert!(!snapshots.contains_key(&WorkerId::new("m-1")));
+        assert!(!snapshots.contains_key(&WorkerId::parse("m-1").unwrap()));
     }
 
     // -- All-idle detection tests --
@@ -726,11 +749,10 @@ mod tests {
         let member = make_worker("m-1", WorkerRole::Member, WorkerStatus::Idle);
         let data_store = MockDataStore::with_workers(vec![member]);
         // Pre-enqueue a message so has_pending_messages returns true
-        data_store
-            .messages
-            .lock()
-            .unwrap()
-            .insert(WorkerId::new("m-1"), vec!["pending work".to_string()]);
+        data_store.messages.lock().unwrap().insert(
+            WorkerId::parse("m-1").unwrap(),
+            vec!["pending work".to_string()],
+        );
 
         let container = MockContainerRuntime::with_running(&["container-m-1"]);
         let terminal = MockTerminalSession::new();
@@ -749,11 +771,10 @@ mod tests {
         let idle = make_worker("m-1", WorkerRole::Member, WorkerStatus::Idle);
         let working = make_worker("m-2", WorkerRole::Member, WorkerStatus::Working);
         let data_store = MockDataStore::with_workers(vec![idle, working]);
-        data_store
-            .messages
-            .lock()
-            .unwrap()
-            .insert(WorkerId::new("m-1"), vec!["pending work".to_string()]);
+        data_store.messages.lock().unwrap().insert(
+            WorkerId::parse("m-1").unwrap(),
+            vec!["pending work".to_string()],
+        );
 
         let container = MockContainerRuntime::with_running(&["container-m-1", "container-m-2"]);
         let terminal = MockTerminalSession::new();

@@ -30,7 +30,7 @@ mod priority;
 pub use priority::Priority;
 
 mod repository;
-pub use repository::Repository;
+pub use repository::{InvalidRepository, Repository};
 
 mod review_status;
 pub use review_status::ReviewStatus;

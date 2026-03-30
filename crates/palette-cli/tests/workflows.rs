@@ -698,7 +698,7 @@ task:
         .data_store
         .assign_job(
             &review_a_id,
-            &palette_domain::worker::WorkerId::new("reviewer-a"),
+            &palette_domain::worker::WorkerId::parse("reviewer-a").unwrap(),
             JobType::Review,
         )
         .unwrap();
@@ -819,7 +819,7 @@ task:
         .data_store
         .assign_job(
             &review_b_id,
-            &palette_domain::worker::WorkerId::new("reviewer-b"),
+            &palette_domain::worker::WorkerId::parse("reviewer-b").unwrap(),
             JobType::Review,
         )
         .unwrap();
@@ -970,7 +970,7 @@ task:
         .data_store
         .assign_job(
             &review_1_id,
-            &palette_domain::worker::WorkerId::new("reviewer-1"),
+            &palette_domain::worker::WorkerId::parse("reviewer-1").unwrap(),
             JobType::Review,
         )
         .unwrap();
@@ -1016,7 +1016,7 @@ task:
         .data_store
         .assign_job(
             &review_2_id,
-            &palette_domain::worker::WorkerId::new("reviewer-2"),
+            &palette_domain::worker::WorkerId::parse("reviewer-2").unwrap(),
             JobType::Review,
         )
         .unwrap();
@@ -1150,7 +1150,7 @@ task:
         .data_store
         .assign_job(
             &review_id,
-            &palette_domain::worker::WorkerId::new("reviewer-1"),
+            &palette_domain::worker::WorkerId::parse("reviewer-1").unwrap(),
             JobType::Review,
         )
         .unwrap();

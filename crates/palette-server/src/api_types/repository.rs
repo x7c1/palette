@@ -1,4 +1,5 @@
 use palette_domain as domain;
+use palette_domain::job::InvalidRepository;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -7,12 +8,10 @@ pub struct Repository {
     pub branch: String,
 }
 
-impl From<Repository> for domain::job::Repository {
-    fn from(r: Repository) -> Self {
-        Self {
-            name: r.name,
-            branch: r.branch,
-        }
+impl Repository {
+    /// Parse into a domain Repository, validating name and branch.
+    pub fn parse(self) -> Result<domain::job::Repository, InvalidRepository> {
+        domain::job::Repository::parse(self.name, self.branch)
     }
 }
 

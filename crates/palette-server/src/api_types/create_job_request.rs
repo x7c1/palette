@@ -26,12 +26,10 @@ impl CreateJobRequest {
             job_type: self.job_type.into(),
             title: Title::parse(&self.title),
             plan_path: PlanPath::parse(&self.plan_path),
-            #[plain]
-            assignee_id: self.assignee_id.as_deref().map(WorkerId::new),
+            assignee_id: self.assignee_id.as_deref().map(WorkerId::parse).transpose(),
             #[plain]
             priority: self.priority.map(palette_domain::job::Priority::from),
-            #[plain]
-            repository: self.repository.clone().map(Into::into),
+            repository: self.repository.clone().map(|r| r.parse()).transpose(),
         })
     }
 }

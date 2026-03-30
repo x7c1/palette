@@ -25,10 +25,12 @@ mod tests {
         let db = test_db();
         insert_test_worker(&db, "member-1", WorkerRole::Member, "wf-1");
 
-        let removed = db.remove_worker(&WorkerId::new("member-1")).unwrap();
+        let removed = db
+            .remove_worker(&WorkerId::parse("member-1").unwrap())
+            .unwrap();
         assert!(removed.is_some());
         assert!(
-            db.find_worker(&WorkerId::new("member-1"))
+            db.find_worker(&WorkerId::parse("member-1").unwrap())
                 .unwrap()
                 .is_none()
         );

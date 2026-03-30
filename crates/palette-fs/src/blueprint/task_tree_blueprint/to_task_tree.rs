@@ -12,6 +12,8 @@ pub enum BlueprintError {
     InvalidKey { key: String },
     /// Craft task has no review child.
     MissingReviewChild { task_key: String },
+    /// Repository has invalid name or branch.
+    InvalidRepository { task_key: String },
 }
 
 impl BlueprintError {
@@ -20,6 +22,9 @@ impl BlueprintError {
             BlueprintError::InvalidKey { key } => format!("tasks[key={key}].key"),
             BlueprintError::MissingReviewChild { task_key } => {
                 format!("tasks[key={task_key}].children")
+            }
+            BlueprintError::InvalidRepository { task_key } => {
+                format!("tasks[key={task_key}].repository")
             }
         }
     }
@@ -62,6 +67,13 @@ fn validate_all(node: &TaskNode, errors: &mut Vec<BlueprintError>) {
     }
     if let Err(e) = validate_craft_has_review(node) {
         errors.push(e);
+    }
+    if let Some(ref repo) = node.repository
+        && Repository::parse(&repo.name, &repo.branch).is_err()
+    {
+        errors.push(BlueprintError::InvalidRepository {
+            task_key: node.key.clone(),
+        });
     }
     for child in &node.children {
         validate_all(child, errors);
@@ -139,7 +151,7 @@ fn insert_node(
             plan_path,
             job_type: node.job_type.map(JobType::from),
             priority: node.priority.map(Priority::from),
-            repository: node.repository.clone().map(Repository::from),
+            repository: node.repository.clone().and_then(|r| r.parse().ok()),
             children: child_ids,
             depends_on,
         },

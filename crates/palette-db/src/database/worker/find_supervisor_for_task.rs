@@ -42,7 +42,7 @@ mod tests {
             .find_supervisor_for_task(&TaskId::parse("wf-1:leader-1").unwrap())
             .unwrap()
             .unwrap();
-        assert_eq!(sup.id, WorkerId::new("leader-1"));
+        assert_eq!(sup.id, WorkerId::parse("leader-1").unwrap());
 
         // Member should not be found
         assert!(

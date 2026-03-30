@@ -54,7 +54,7 @@ pub(crate) mod tests {
         let wf_id = WorkflowId::parse(workflow_id).unwrap();
         let _ = db.create_workflow(&wf_id, "test/blueprint.yaml");
         db.insert_worker(&InsertWorkerRequest {
-            id: WorkerId::new(id),
+            id: WorkerId::parse(id).unwrap(),
             workflow_id: wf_id,
             role,
             status: WorkerStatus::Booting,
@@ -72,8 +72,11 @@ pub(crate) mod tests {
         let db = test_db();
         insert_test_worker(&db, "leader-1", WorkerRole::Leader, "wf-1");
 
-        let worker = db.find_worker(&WorkerId::new("leader-1")).unwrap().unwrap();
-        assert_eq!(worker.id, WorkerId::new("leader-1"));
+        let worker = db
+            .find_worker(&WorkerId::parse("leader-1").unwrap())
+            .unwrap()
+            .unwrap();
+        assert_eq!(worker.id, WorkerId::parse("leader-1").unwrap());
         assert_eq!(worker.role, WorkerRole::Leader);
         assert_eq!(worker.status, WorkerStatus::Booting);
     }

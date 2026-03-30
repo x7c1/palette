@@ -52,7 +52,11 @@ async fn review_submit_and_get_submissions() {
     state
         .interactor
         .data_store
-        .assign_job(&review_job.id, &WorkerId::new("member-b"), JobType::Review)
+        .assign_job(
+            &review_job.id,
+            &WorkerId::parse("member-b").unwrap(),
+            JobType::Review,
+        )
         .unwrap();
 
     let client = reqwest::Client::new();
@@ -132,7 +136,11 @@ async fn review_approved_completes_review_job() {
     state
         .interactor
         .data_store
-        .assign_job(&review_job.id, &WorkerId::new("member-b"), JobType::Review)
+        .assign_job(
+            &review_job.id,
+            &WorkerId::parse("member-b").unwrap(),
+            JobType::Review,
+        )
         .unwrap();
 
     let client = reqwest::Client::new();

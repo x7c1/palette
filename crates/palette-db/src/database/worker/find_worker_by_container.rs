@@ -35,6 +35,6 @@ mod tests {
             .find_worker_by_container(&ContainerId::new("container-member-1"))
             .unwrap()
             .unwrap();
-        assert_eq!(worker.id, WorkerId::new("member-1"));
+        assert_eq!(worker.id, WorkerId::parse("member-1").unwrap());
     }
 }

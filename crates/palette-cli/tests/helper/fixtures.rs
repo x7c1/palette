@@ -3,7 +3,7 @@ use palette_domain::worker::WorkerId;
 use palette_server::api_types::{CreateJobRequest, JobStatus, JobType, UpdateJobRequest};
 
 pub fn wid(s: &str) -> WorkerId {
-    WorkerId::new(s)
+    WorkerId::parse(s).unwrap()
 }
 
 pub fn jid(s: &str) -> JobId {
@@ -21,7 +21,7 @@ pub fn setup_worker(db: &dyn palette_usecase::DataStore, worker_id: &str) {
     let wf_id = WorkflowId::parse("wf-test").unwrap();
     let _ = db.create_workflow(&wf_id, "test/blueprint.yaml");
     db.insert_worker(&InsertWorkerRequest {
-        id: WorkerId::new(worker_id),
+        id: WorkerId::parse(worker_id).unwrap(),
         workflow_id: wf_id,
         role: WorkerRole::Member,
         status: WorkerStatus::Booting,
