@@ -112,6 +112,15 @@ impl Orchestrator {
                 // Suspended workers are managed by suspend/resume API
                 WorkerStatus::Suspended => continue,
                 WorkerStatus::Working | WorkerStatus::Idle | WorkerStatus::WaitingPermission => {
+                    // Skip workers whose workflow is Suspending — their containers may be
+                    // stopped but DB status not yet updated to Suspended. Without this check,
+                    // the monitor would misinterpret the stopped container as a crash.
+                    if self
+                        .is_workflow_suspending(&worker.workflow_id)
+                        .unwrap_or(false)
+                    {
+                        continue;
+                    }
                     if check_liveness
                         && !self
                             .interactor
