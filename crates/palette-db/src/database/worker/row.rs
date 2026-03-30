@@ -26,13 +26,16 @@ pub(super) fn read_worker_row(row: &rusqlite::Row) -> rusqlite::Result<WorkerRow
 /// Convert a WorkerRow to a domain WorkerState.
 pub(super) fn into_worker_state(row: WorkerRow) -> crate::Result<WorkerState> {
     let role = crate::lookup::worker_role_from_id(row.role_id)
-        .map_err(|e| crate::Error::Internal(Box::new(e)))?;
+        .map_err(|e| crate::Error::DataCorruption { reason: e })?;
     let status = crate::lookup::worker_status_from_id(row.status_id)
-        .map_err(|e| crate::Error::Internal(Box::new(e)))?;
-    let workflow_id = WorkflowId::parse(row.workflow_id)
-        .map_err(|e| crate::Error::Internal(Box::new(e.reason_key())))?;
-    let task_id =
-        TaskId::parse(row.task_id).map_err(|e| crate::Error::Internal(Box::new(e.reason_key())))?;
+        .map_err(|e| crate::Error::DataCorruption { reason: e })?;
+    let workflow_id =
+        WorkflowId::parse(row.workflow_id).map_err(|e| crate::Error::DataCorruption {
+            reason: e.reason_key(),
+        })?;
+    let task_id = TaskId::parse(row.task_id).map_err(|e| crate::Error::DataCorruption {
+        reason: e.reason_key(),
+    })?;
 
     Ok(WorkerState {
         id: WorkerId::new(row.id),

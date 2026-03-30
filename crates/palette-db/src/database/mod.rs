@@ -34,9 +34,9 @@ mod workflow;
 impl Database {
     pub fn open(path: &Path) -> crate::Result<Self> {
         if let Some(parent) = path.parent() {
-            std::fs::create_dir_all(parent).map_err(|e| Error::Internal(Box::new(e)))?;
+            std::fs::create_dir_all(parent).map_err(Error::Io)?;
         }
-        let conn = Connection::open(path).map_err(|e| Error::Internal(Box::new(e)))?;
+        let conn = Connection::open(path)?;
         schema::initialize(&conn)?;
         Ok(Self {
             conn: Mutex::new(conn),

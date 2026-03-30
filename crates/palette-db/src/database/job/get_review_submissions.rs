@@ -15,12 +15,15 @@ fn read_review_submission_row(row: &rusqlite::Row) -> rusqlite::Result<ReviewSub
 
 fn into_review_submission(row: ReviewSubmissionRow) -> crate::Result<ReviewSubmission> {
     let verdict = crate::lookup::verdict_from_id(row.verdict_id)
-        .map_err(|e| crate::Error::Internal(Box::new(e)))?;
+        .map_err(|e| crate::Error::DataCorruption { reason: e })?;
 
     Ok(ReviewSubmission {
         id: row.id,
-        review_job_id: JobId::parse(row.review_job_id)
-            .map_err(|e| crate::Error::Internal(Box::new(e.reason_key())))?,
+        review_job_id: JobId::parse(row.review_job_id).map_err(|e| {
+            crate::Error::DataCorruption {
+                reason: e.reason_key(),
+            }
+        })?,
         round: row.round as i32,
         verdict,
         summary: row.summary,

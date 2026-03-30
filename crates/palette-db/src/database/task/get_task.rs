@@ -16,10 +16,14 @@ fn read_task_row(row: &rusqlite::Row) -> rusqlite::Result<TaskRow> {
 
 fn into_task_state(row: TaskRow) -> crate::Result<TaskState> {
     let status = crate::lookup::task_status_from_id(row.status_id)
-        .map_err(|e| crate::Error::Internal(Box::new(e)))?;
-    let id = TaskId::parse(row.id).map_err(|e| crate::Error::Internal(Box::new(e.reason_key())))?;
-    let workflow_id = WorkflowId::parse(row.workflow_id)
-        .map_err(|e| crate::Error::Internal(Box::new(e.reason_key())))?;
+        .map_err(|e| crate::Error::DataCorruption { reason: e })?;
+    let id = TaskId::parse(row.id).map_err(|e| crate::Error::DataCorruption {
+        reason: e.reason_key(),
+    })?;
+    let workflow_id =
+        WorkflowId::parse(row.workflow_id).map_err(|e| crate::Error::DataCorruption {
+            reason: e.reason_key(),
+        })?;
 
     Ok(TaskState {
         id,

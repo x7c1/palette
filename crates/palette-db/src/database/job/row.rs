@@ -30,15 +30,16 @@ pub(crate) fn read_job_row(row: &rusqlite::Row) -> rusqlite::Result<JobRow> {
 /// Convert a JobRow to a domain Job.
 pub(crate) fn into_job(row: JobRow) -> crate::Result<Job> {
     let job_type = crate::lookup::job_type_from_id(row.type_id)
-        .map_err(|e| crate::Error::Internal(Box::new(e)))?;
+        .map_err(|e| crate::Error::DataCorruption { reason: e })?;
 
     let status = crate::lookup::job_status_from_id(row.status_id, job_type)
-        .map_err(|e| crate::Error::Internal(Box::new(e)))?;
+        .map_err(|e| crate::Error::DataCorruption { reason: e })?;
 
     let priority = row
         .priority_id
         .map(|id| {
-            crate::lookup::priority_from_id(id).map_err(|e| crate::Error::Internal(Box::new(e)))
+            crate::lookup::priority_from_id(id)
+                .map_err(|e| crate::Error::DataCorruption { reason: e })
         })
         .transpose()?;
 
@@ -46,17 +47,22 @@ pub(crate) fn into_job(row: JobRow) -> crate::Result<Job> {
         .repository
         .and_then(|s| super::repository_row::repository_from_json(&s));
 
-    let task_id =
-        TaskId::parse(row.task_id).map_err(|e| crate::Error::Internal(Box::new(e.reason_key())))?;
+    let task_id = TaskId::parse(row.task_id).map_err(|e| crate::Error::DataCorruption {
+        reason: e.reason_key(),
+    })?;
 
-    let title =
-        Title::parse(row.title).map_err(|e| crate::Error::Internal(Box::new(e.reason_key())))?;
+    let title = Title::parse(row.title).map_err(|e| crate::Error::DataCorruption {
+        reason: e.reason_key(),
+    })?;
 
-    let plan_path = PlanPath::parse(row.plan_path)
-        .map_err(|e| crate::Error::Internal(Box::new(e.reason_key())))?;
+    let plan_path = PlanPath::parse(row.plan_path).map_err(|e| crate::Error::DataCorruption {
+        reason: e.reason_key(),
+    })?;
 
     Ok(Job {
-        id: JobId::parse(row.id).map_err(|e| crate::Error::Internal(Box::new(e.reason_key())))?,
+        id: JobId::parse(row.id).map_err(|e| crate::Error::DataCorruption {
+            reason: e.reason_key(),
+        })?,
         task_id,
         job_type,
         title,
