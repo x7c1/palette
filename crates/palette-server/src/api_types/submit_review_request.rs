@@ -15,21 +15,21 @@ pub struct SubmitReviewRequest {
 
 impl SubmitReviewRequest {
     pub fn validate(&self) -> Result<domain::review::SubmitReviewRequest, Vec<FieldError>> {
-        let mut hints = Vec::new();
+        let mut errors = Vec::new();
 
         if self.comments.len() > MAX_COMMENTS {
-            hints.push(FieldError {
+            errors.push(FieldError {
                 field: "comments".into(),
                 reason: "comments/too_many".into(),
             });
         } else {
             for (i, c) in self.comments.iter().enumerate() {
-                c.collect_hints(i, &mut hints);
+                c.collect_errors(i, &mut errors);
             }
         }
 
-        if !hints.is_empty() {
-            return Err(hints);
+        if !errors.is_empty() {
+            return Err(errors);
         }
 
         // All validations passed — parse again to build domain types.
