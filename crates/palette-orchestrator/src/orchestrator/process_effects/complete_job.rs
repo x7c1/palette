@@ -225,7 +225,9 @@ impl Orchestrator {
         &self,
         task: &palette_domain::task::Task,
     ) -> crate::Result<Vec<RuleEffect>> {
-        let job_type = task.job_type.expect("task must have job_type");
+        let job_type = task.job_type.ok_or_else(|| {
+            crate::Error::Internal(format!("task {} has no job_type", task.id))
+        })?;
         let job =
             self.interactor
                 .data_store
