@@ -1,5 +1,5 @@
 use super::super::*;
-use super::row::row_to_job;
+use super::row::{into_job, read_job_row};
 
 impl Database {
     /// Find jobs that are assignable: status = 'todo' with no assignee_id.
@@ -25,10 +25,10 @@ impl Database {
                  ELSE 3
                END",
         )?;
-        let rows = stmt.query_map(params![craft_todo, review_todo], row_to_job)?;
+        let rows = stmt.query_map(params![craft_todo, review_todo], read_job_row)?;
         let mut jobs = Vec::new();
         for row in rows {
-            jobs.push(row?);
+            jobs.push(into_job(row?)?);
         }
         Ok(jobs)
     }

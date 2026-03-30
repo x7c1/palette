@@ -1,11 +1,6 @@
-use palette_domain::task::{TaskId, TaskStatus};
-use palette_domain::workflow::WorkflowId;
-
-/// Flat representation of a Task as stored in the database.
-/// Contains only execution state — structural information comes from the Blueprint.
-#[derive(Debug, Clone)]
-pub struct TaskRow {
-    pub id: TaskId,
-    pub workflow_id: WorkflowId,
-    pub status: TaskStatus,
+/// Raw database representation of a task record.
+pub(crate) struct TaskRow {
+    pub id: String,
+    pub workflow_id: String,
+    pub status_id: i64,
 }

@@ -1,5 +1,5 @@
 use super::super::*;
-use super::row::row_to_job;
+use super::row::{into_job, read_job_row};
 
 impl Database {
     pub fn list_jobs(&self, filter: &JobFilter) -> crate::Result<Vec<Job>> {
@@ -24,11 +24,11 @@ impl Database {
         let mut stmt = conn.prepare(&sql)?;
         let params_ref: Vec<&dyn rusqlite::types::ToSql> =
             param_values.iter().map(|p| p.as_ref()).collect();
-        let rows = stmt.query_map(params_ref.as_slice(), row_to_job)?;
+        let rows = stmt.query_map(params_ref.as_slice(), read_job_row)?;
 
         let mut jobs = Vec::new();
         for row in rows {
-            jobs.push(row?);
+            jobs.push(into_job(row?)?);
         }
         Ok(jobs)
     }

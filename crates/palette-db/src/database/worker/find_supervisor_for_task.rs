@@ -1,5 +1,5 @@
 use super::super::{Database, lock};
-use super::row::{COLUMNS, row_to_worker_state};
+use super::row::{COLUMNS, into_worker_state, read_worker_row};
 use crate::lookup;
 use palette_domain::task::TaskId;
 use palette_domain::worker::*;
@@ -16,9 +16,12 @@ impl Database {
         let mut stmt = conn.prepare(&sql)?;
         let mut rows = stmt.query_map(
             params![task_id.as_ref(), role_leader, role_ri],
-            row_to_worker_state,
+            read_worker_row,
         )?;
-        rows.next().transpose().map_err(Into::into)
+        match rows.next().transpose()? {
+            Some(row) => into_worker_state(row).map(Some),
+            None => Ok(None),
+        }
     }
 }
 

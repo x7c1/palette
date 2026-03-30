@@ -59,13 +59,5 @@ pub(crate) fn parse_datetime(s: &str) -> DateTime<Utc> {
         .unwrap_or_else(|_| Utc::now())
 }
 
-pub(crate) fn id_conversion_error(e: String) -> rusqlite::Error {
-    rusqlite::Error::FromSqlConversionFailure(
-        0,
-        rusqlite::types::Type::Integer,
-        Box::new(std::io::Error::new(std::io::ErrorKind::InvalidData, e)),
-    )
-}
-
 #[cfg(test)]
 pub(crate) mod test_helpers;

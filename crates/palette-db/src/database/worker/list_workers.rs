@@ -1,5 +1,5 @@
 use super::super::{Database, lock};
-use super::row::{COLUMNS, row_to_worker_state};
+use super::row::{COLUMNS, into_worker_state, read_worker_row};
 use crate::lookup;
 use palette_domain::worker::*;
 use palette_domain::workflow::WorkflowId;
@@ -16,9 +16,13 @@ impl Database {
         let mut stmt = conn.prepare(&sql)?;
         let rows = stmt.query_map(
             params![workflow_id.as_ref(), role_leader, role_ri],
-            row_to_worker_state,
+            read_worker_row,
         )?;
-        rows.collect::<Result<Vec<_>, _>>().map_err(Into::into)
+        let mut results = Vec::new();
+        for row in rows {
+            results.push(into_worker_state(row?)?);
+        }
+        Ok(results)
     }
 
     /// List all members for a workflow.
@@ -27,11 +31,12 @@ impl Database {
         let role_member = lookup::worker_role_id(WorkerRole::Member);
         let sql = format!("SELECT {COLUMNS} FROM workers WHERE workflow_id = ?1 AND role_id = ?2");
         let mut stmt = conn.prepare(&sql)?;
-        let rows = stmt.query_map(
-            params![workflow_id.as_ref(), role_member],
-            row_to_worker_state,
-        )?;
-        rows.collect::<Result<Vec<_>, _>>().map_err(Into::into)
+        let rows = stmt.query_map(params![workflow_id.as_ref(), role_member], read_worker_row)?;
+        let mut results = Vec::new();
+        for row in rows {
+            results.push(into_worker_state(row?)?);
+        }
+        Ok(results)
     }
 
     /// List all workers (all workflows).
@@ -39,8 +44,12 @@ impl Database {
         let conn = lock(&self.conn)?;
         let sql = format!("SELECT {COLUMNS} FROM workers");
         let mut stmt = conn.prepare(&sql)?;
-        let rows = stmt.query_map([], row_to_worker_state)?;
-        rows.collect::<Result<Vec<_>, _>>().map_err(Into::into)
+        let rows = stmt.query_map([], read_worker_row)?;
+        let mut results = Vec::new();
+        for row in rows {
+            results.push(into_worker_state(row?)?);
+        }
+        Ok(results)
     }
 
     /// List all workers in Booting status (all workflows).
@@ -49,8 +58,12 @@ impl Database {
         let booting_id = lookup::worker_status_id(WorkerStatus::Booting);
         let sql = format!("SELECT {COLUMNS} FROM workers WHERE status_id = ?1");
         let mut stmt = conn.prepare(&sql)?;
-        let rows = stmt.query_map(params![booting_id], row_to_worker_state)?;
-        rows.collect::<Result<Vec<_>, _>>().map_err(Into::into)
+        let rows = stmt.query_map(params![booting_id], read_worker_row)?;
+        let mut results = Vec::new();
+        for row in rows {
+            results.push(into_worker_state(row?)?);
+        }
+        Ok(results)
     }
 
     /// List all workers that are idle or waiting for permission (all workflows).
@@ -60,8 +73,12 @@ impl Database {
         let waiting_id = lookup::worker_status_id(WorkerStatus::WaitingPermission);
         let sql = format!("SELECT {COLUMNS} FROM workers WHERE status_id IN (?1, ?2)");
         let mut stmt = conn.prepare(&sql)?;
-        let rows = stmt.query_map(params![idle_id, waiting_id], row_to_worker_state)?;
-        rows.collect::<Result<Vec<_>, _>>().map_err(Into::into)
+        let rows = stmt.query_map(params![idle_id, waiting_id], read_worker_row)?;
+        let mut results = Vec::new();
+        for row in rows {
+            results.push(into_worker_state(row?)?);
+        }
+        Ok(results)
     }
 }
 

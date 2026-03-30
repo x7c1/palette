@@ -1,5 +1,6 @@
-use super::super::{Database, lock, parse_datetime};
-use palette_domain::workflow::{Workflow, WorkflowId, WorkflowStatus};
+use super::super::{Database, lock};
+use super::row::{into_workflow, read_workflow_row};
+use palette_domain::workflow::{Workflow, WorkflowStatus};
 
 impl Database {
     pub fn list_workflows(&self, status: Option<WorkflowStatus>) -> crate::Result<Vec<Workflow>> {
@@ -19,20 +20,12 @@ impl Database {
         let params: Vec<&dyn rusqlite::types::ToSql> =
             param_values.iter().map(|b| b.as_ref()).collect();
         let mut stmt = conn.prepare(sql)?;
-        let rows = stmt.query_map(params.as_slice(), |row| {
-            let status_id: i64 = row.get("status_id")?;
-            let status = crate::lookup::workflow_status_from_id(status_id)
-                .map_err(super::super::id_conversion_error)?;
-            Ok(Workflow {
-                id: WorkflowId::parse(row.get::<_, String>("id")?)
-                    .map_err(|e| super::super::id_conversion_error(e.reason_key()))?,
-                blueprint_path: row.get("blueprint_path")?,
-                status,
-                started_at: parse_datetime(&row.get::<_, String>("started_at")?),
-                blueprint_hash: row.get("blueprint_hash")?,
-            })
-        })?;
+        let rows = stmt.query_map(params.as_slice(), read_workflow_row)?;
 
-        rows.collect::<Result<Vec<_>, _>>().map_err(Into::into)
+        let mut workflows = Vec::new();
+        for row in rows {
+            workflows.push(into_workflow(row?)?);
+        }
+        Ok(workflows)
     }
 }

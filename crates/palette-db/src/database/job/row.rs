@@ -1,46 +1,68 @@
-use crate::database::{id_conversion_error, parse_datetime};
-use crate::lookup;
+use crate::models::JobRow;
 use palette_domain::job::*;
 use palette_domain::task::TaskId;
 use palette_domain::worker::WorkerId;
 use rusqlite::{Connection, params};
 
-/// Map a database row to a Job domain object.
-pub(crate) fn row_to_job(row: &rusqlite::Row) -> rusqlite::Result<Job> {
-    let repos_str: Option<String> = row.get("repository")?;
-    let repository: Option<Repository> =
-        repos_str.and_then(|s| super::repository_row::repository_from_json(&s));
+use super::super::parse_datetime;
 
-    let type_id: i64 = row.get("type_id")?;
-    let job_type = lookup::job_type_from_id(type_id).map_err(id_conversion_error)?;
-
-    let status_id_val: i64 = row.get("status_id")?;
-    let status =
-        lookup::job_status_from_id(status_id_val, job_type).map_err(id_conversion_error)?;
-
-    Ok(Job {
-        id: JobId::new(row.get::<_, String>("id")?),
-        task_id: TaskId::parse(row.get::<_, String>("task_id")?)
-            .map_err(|e| id_conversion_error(e.reason_key()))?,
-        job_type,
+/// Extract a raw DB row into a JobRow (DB-native types only).
+pub(crate) fn read_job_row(row: &rusqlite::Row) -> rusqlite::Result<JobRow> {
+    Ok(JobRow {
+        id: row.get("id")?,
+        task_id: row.get("task_id")?,
+        type_id: row.get("type_id")?,
         title: row.get("title")?,
         plan_path: row.get("plan_path")?,
-        assignee_id: row
-            .get::<_, Option<String>>("assignee_id")?
-            .map(WorkerId::new),
-        status,
-        priority: row
-            .get::<_, Option<i64>>("priority_id")?
-            .map(|id| lookup::priority_from_id(id).map_err(id_conversion_error))
-            .transpose()?,
-        repository,
+        assignee_id: row.get("assignee_id")?,
+        status_id: row.get("status_id")?,
+        priority_id: row.get("priority_id")?,
+        repository: row.get("repository")?,
         pr_url: row.get("pr_url")?,
-        created_at: parse_datetime(&row.get::<_, String>("created_at")?),
-        updated_at: parse_datetime(&row.get::<_, String>("updated_at")?),
+        created_at: row.get("created_at")?,
+        updated_at: row.get("updated_at")?,
         notes: row.get("notes")?,
-        assigned_at: row
-            .get::<_, Option<String>>("assigned_at")?
-            .map(|s| parse_datetime(&s)),
+        assigned_at: row.get("assigned_at")?,
+    })
+}
+
+/// Convert a JobRow to a domain Job.
+pub(crate) fn into_job(row: JobRow) -> crate::Result<Job> {
+    let job_type = crate::lookup::job_type_from_id(row.type_id)
+        .map_err(|e| crate::Error::Internal(Box::new(e)))?;
+
+    let status = crate::lookup::job_status_from_id(row.status_id, job_type)
+        .map_err(|e| crate::Error::Internal(Box::new(e)))?;
+
+    let priority = row
+        .priority_id
+        .map(|id| {
+            crate::lookup::priority_from_id(id).map_err(|e| crate::Error::Internal(Box::new(e)))
+        })
+        .transpose()?;
+
+    let repository = row
+        .repository
+        .and_then(|s| super::repository_row::repository_from_json(&s));
+
+    let task_id =
+        TaskId::parse(row.task_id).map_err(|e| crate::Error::Internal(Box::new(e.reason_key())))?;
+
+    Ok(Job {
+        id: JobId::new(row.id),
+        task_id,
+        job_type,
+        title: row.title,
+        plan_path: row.plan_path,
+        assignee_id: row.assignee_id.map(WorkerId::new),
+        status,
+        priority,
+        repository,
+        pr_url: row.pr_url,
+        created_at: parse_datetime(&row.created_at),
+        updated_at: parse_datetime(&row.updated_at),
+        notes: row.notes,
+        assigned_at: row.assigned_at.map(|s| parse_datetime(&s)),
     })
 }
 
@@ -50,6 +72,9 @@ pub(crate) fn query_job(conn: &Connection, id: &JobId) -> crate::Result<Option<J
         "SELECT id, task_id, type_id, title, plan_path, assignee_id, status_id, priority_id, repository, pr_url, created_at, updated_at, notes, assigned_at
          FROM jobs WHERE id = ?1",
     )?;
-    let mut rows = stmt.query_map(params![id.as_ref()], row_to_job)?;
-    rows.next().transpose().map_err(Into::into)
+    let mut rows = stmt.query_map(params![id.as_ref()], read_job_row)?;
+    match rows.next().transpose()? {
+        Some(row) => into_job(row).map(Some),
+        None => Ok(None),
+    }
 }
