@@ -18,7 +18,12 @@ pub async fn handle_submit_review(
     Json(api_req): Json<SubmitReviewRequest>,
 ) -> crate::Result<(StatusCode, Json<ReviewSubmissionResponse>)> {
     let review_job_id = JobId::new(review_job_id);
-    let req: palette_domain::review::SubmitReviewRequest = api_req.into();
+    let req = api_req
+        .validate()
+        .map_err(|field_hints| Error::BadRequest {
+            code: ErrorCode::InputValidationFailed,
+            field_hints,
+        })?;
 
     // Verify the job exists and is a review
     let job = state

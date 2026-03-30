@@ -1,7 +1,8 @@
-use super::ReviewCommentInput;
-use super::Verdict;
+use super::{FieldHint, ReviewCommentInput, Verdict};
 use palette_domain as domain;
 use serde::{Deserialize, Serialize};
+
+const MAX_COMMENTS: usize = 200;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct SubmitReviewRequest {
@@ -11,13 +12,37 @@ pub struct SubmitReviewRequest {
     pub comments: Vec<ReviewCommentInput>,
 }
 
-// TODO: Replace From with TryFrom to validate external input (see plan 009-api-input-validation)
-impl From<SubmitReviewRequest> for domain::review::SubmitReviewRequest {
-    fn from(api: SubmitReviewRequest) -> Self {
-        Self {
-            verdict: api.verdict.into(),
-            summary: api.summary,
-            comments: api.comments.into_iter().map(Into::into).collect(),
+impl SubmitReviewRequest {
+    pub fn validate(&self) -> Result<domain::review::SubmitReviewRequest, Vec<FieldHint>> {
+        let mut hints = Vec::new();
+
+        if self.comments.len() > MAX_COMMENTS {
+            hints.push(FieldHint {
+                field: "comments".into(),
+                reason: "too_many".into(),
+            });
+        } else {
+            for (i, c) in self.comments.iter().enumerate() {
+                c.collect_hints(i, &mut hints);
+            }
         }
+
+        if !hints.is_empty() {
+            return Err(hints);
+        }
+
+        Ok(domain::review::SubmitReviewRequest {
+            verdict: self.verdict.into(),
+            summary: self.summary.clone(),
+            comments: self
+                .comments
+                .iter()
+                .map(|c| domain::review::ReviewCommentInput {
+                    file: c.file.clone(),
+                    line: c.line,
+                    body: c.body.clone(),
+                })
+                .collect(),
+        })
     }
 }

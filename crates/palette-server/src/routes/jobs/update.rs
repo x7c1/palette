@@ -1,7 +1,7 @@
 use crate::api_types::{ErrorCode, FieldHint, JobResponse, ResourceKind, UpdateJobRequest};
 use crate::{AppState, Error};
 use axum::{Json, extract::State};
-use palette_domain::job::{CraftStatus, JobId, JobStatus};
+use palette_domain::job::{CraftStatus, JobStatus};
 use palette_domain::rule::RuleEffect;
 use palette_domain::server::ServerEvent;
 use palette_usecase::RuleEngine;
@@ -11,7 +11,12 @@ pub async fn handle_update_job(
     State(state): State<Arc<AppState>>,
     Json(api_req): Json<UpdateJobRequest>,
 ) -> crate::Result<Json<JobResponse>> {
-    let job_id = JobId::new(&api_req.id);
+    let job_id = api_req
+        .validate_id()
+        .map_err(|field_hints| Error::BadRequest {
+            code: ErrorCode::InputValidationFailed,
+            field_hints,
+        })?;
     let current = state
         .interactor
         .data_store
