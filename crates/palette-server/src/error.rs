@@ -30,6 +30,27 @@ impl Error {
             cause: Box::new(cause),
         }
     }
+
+    pub fn invalid_path<E: palette_core::ReasonKey>(hint: &'static str) -> impl FnOnce(E) -> Self {
+        move |e| Error::BadRequest {
+            code: ErrorCode::InputValidationFailed,
+            errors: vec![InputError::path(hint, e)],
+        }
+    }
+
+    pub fn invalid_query<E: palette_core::ReasonKey>(hint: &'static str) -> impl FnOnce(E) -> Self {
+        move |e| Error::BadRequest {
+            code: ErrorCode::InputValidationFailed,
+            errors: vec![InputError::query(hint, e)],
+        }
+    }
+
+    pub fn invalid_body<E: palette_core::ReasonKey>(hint: &'static str) -> impl FnOnce(E) -> Self {
+        move |e| Error::BadRequest {
+            code: ErrorCode::InputValidationFailed,
+            errors: vec![InputError::body(hint, e)],
+        }
+    }
 }
 
 impl IntoResponse for Error {

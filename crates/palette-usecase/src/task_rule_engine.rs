@@ -39,15 +39,14 @@ impl<'a> TaskRuleEngine<'a> {
             .filter_map(|s| self.check_ready(&s.id))
             .collect();
 
-        if self.all_children_done(&siblings, task_id) {
-            if let Some(parent) = self.store.get_task(parent_id) {
-                if parent.status != TaskStatus::Completed {
-                    effects.push(TaskEffect::TaskStatusChanged {
-                        task_id: parent_id.clone(),
-                        new_status: TaskStatus::Completed,
-                    });
-                }
-            }
+        if self.all_children_done(&siblings, task_id)
+            && let Some(parent) = self.store.get_task(parent_id)
+            && parent.status != TaskStatus::Completed
+        {
+            effects.push(TaskEffect::TaskStatusChanged {
+                task_id: parent_id.clone(),
+                new_status: TaskStatus::Completed,
+            });
         }
 
         effects

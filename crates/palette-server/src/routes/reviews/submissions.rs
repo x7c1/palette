@@ -4,7 +4,6 @@ use axum::{
     Json,
     extract::{Path, State},
 };
-use palette_domain::ReasonKey;
 use palette_domain::job::JobId;
 use std::sync::Arc;
 
@@ -12,14 +11,8 @@ pub async fn handle_get_submissions(
     State(state): State<Arc<AppState>>,
     Path(review_job_id): Path<String>,
 ) -> crate::Result<Json<Vec<ReviewSubmissionResponse>>> {
-    let review_job_id = JobId::parse(review_job_id).map_err(|e| Error::BadRequest {
-        code: crate::api_types::ErrorCode::InputValidationFailed,
-        errors: vec![crate::api_types::InputError {
-            location: crate::api_types::Location::Path,
-            hint: "review_job_id".into(),
-            reason: e.reason_key(),
-        }],
-    })?;
+    let review_job_id =
+        JobId::parse(review_job_id).map_err(Error::invalid_path("review_job_id"))?;
     let submissions = state
         .interactor
         .data_store

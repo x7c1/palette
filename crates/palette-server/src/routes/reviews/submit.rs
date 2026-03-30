@@ -7,7 +7,6 @@ use axum::{
     extract::{Path, State},
     http::StatusCode,
 };
-use palette_domain::ReasonKey;
 use palette_domain::job::{JobId, JobType};
 use palette_domain::server::ServerEvent;
 use palette_usecase::RuleEngine;
@@ -18,14 +17,8 @@ pub async fn handle_submit_review(
     Path(review_job_id): Path<String>,
     Json(api_req): Json<SubmitReviewRequest>,
 ) -> crate::Result<(StatusCode, Json<ReviewSubmissionResponse>)> {
-    let review_job_id = JobId::parse(review_job_id).map_err(|e| Error::BadRequest {
-        code: crate::api_types::ErrorCode::InputValidationFailed,
-        errors: vec![crate::api_types::InputError {
-            location: crate::api_types::Location::Path,
-            hint: "review_job_id".into(),
-            reason: e.reason_key(),
-        }],
-    })?;
+    let review_job_id =
+        JobId::parse(review_job_id).map_err(Error::invalid_path("review_job_id"))?;
     let req = api_req.validate().map_err(|errors| Error::BadRequest {
         code: ErrorCode::InputValidationFailed,
         errors,

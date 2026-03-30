@@ -5,7 +5,6 @@ use axum::{
     http::StatusCode,
     response::{IntoResponse, Response},
 };
-use palette_domain::ReasonKey;
 use palette_domain::server::ServerEvent;
 use palette_domain::workflow::WorkflowId;
 use serde::Serialize;
@@ -20,14 +19,7 @@ pub async fn handle_suspend_workflow(
     State(state): State<Arc<AppState>>,
     Path(id): Path<String>,
 ) -> crate::Result<Response> {
-    let workflow_id = WorkflowId::parse(id).map_err(|e| crate::Error::BadRequest {
-        code: crate::api_types::ErrorCode::InputValidationFailed,
-        errors: vec![crate::api_types::InputError {
-            location: crate::api_types::Location::Path,
-            hint: "id".into(),
-            reason: e.reason_key(),
-        }],
-    })?;
+    let workflow_id = WorkflowId::parse(id).map_err(crate::Error::invalid_path("id"))?;
     let _ = state
         .event_tx
         .send(ServerEvent::SuspendWorkflow { workflow_id });

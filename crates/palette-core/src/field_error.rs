@@ -19,3 +19,29 @@ pub struct InputError {
     /// Machine-readable reason code in `{namespace}/{value}` format.
     pub reason: String,
 }
+
+impl InputError {
+    pub fn path(hint: impl Into<String>, reason: impl crate::ReasonKey) -> Self {
+        Self {
+            location: Location::Path,
+            hint: hint.into(),
+            reason: reason.reason_key(),
+        }
+    }
+
+    pub fn query(hint: impl Into<String>, reason: impl crate::ReasonKey) -> Self {
+        Self {
+            location: Location::Query,
+            hint: hint.into(),
+            reason: reason.reason_key(),
+        }
+    }
+
+    pub fn body(hint: impl Into<String>, reason: impl crate::ReasonKey) -> Self {
+        Self {
+            location: Location::Body,
+            hint: hint.into(),
+            reason: reason.reason_key(),
+        }
+    }
+}

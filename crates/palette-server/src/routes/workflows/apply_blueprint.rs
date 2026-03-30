@@ -7,7 +7,6 @@ use axum::{
     http::StatusCode,
     response::{IntoResponse, Response},
 };
-use palette_domain::ReasonKey;
 use palette_domain::server::ServerEvent;
 use palette_domain::task::TaskId;
 use palette_domain::workflow::WorkflowId;
@@ -36,14 +35,7 @@ pub async fn handle_apply_blueprint(
     State(state): State<Arc<AppState>>,
     Path(id): Path<String>,
 ) -> crate::Result<Response> {
-    let workflow_id = WorkflowId::parse(&id).map_err(|e| Error::BadRequest {
-        code: crate::api_types::ErrorCode::InputValidationFailed,
-        errors: vec![crate::api_types::InputError {
-            location: crate::api_types::Location::Path,
-            hint: "id".into(),
-            reason: e.reason_key(),
-        }],
-    })?;
+    let workflow_id = WorkflowId::parse(&id).map_err(Error::invalid_path("id"))?;
 
     // Look up the workflow to get its blueprint_path
     let workflow = state

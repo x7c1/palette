@@ -46,14 +46,8 @@ pub async fn handle_send(
     }
 
     let worker_id_str = req.worker_id.as_ref().unwrap();
-    let worker_id = WorkerId::parse(worker_id_str.as_str()).map_err(|e| Error::BadRequest {
-        code: ErrorCode::InputValidationFailed,
-        errors: vec![InputError {
-            location: Location::Body,
-            hint: "worker_id".into(),
-            reason: palette_domain::ReasonKey::reason_key(&e),
-        }],
-    })?;
+    let worker_id =
+        WorkerId::parse(worker_id_str.as_str()).map_err(Error::invalid_body("worker_id"))?;
 
     // Check if target can receive input — idle or waiting for permission
     let worker = state
