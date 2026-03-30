@@ -13,8 +13,14 @@ impl WorkflowId {
     /// and enforces a maximum length.
     pub fn parse(id: impl Into<String>) -> Result<Self, InvalidWorkflowId> {
         let id = id.into();
-        if id.is_empty() || id.len() > MAX_ID_LEN || id.contains(':') || id.contains('/') {
-            return Err(InvalidWorkflowId { id });
+        if id.is_empty() {
+            return Err(InvalidWorkflowId::Empty);
+        }
+        if id.len() > MAX_ID_LEN {
+            return Err(InvalidWorkflowId::TooLong { id });
+        }
+        if id.contains(':') || id.contains('/') {
+            return Err(InvalidWorkflowId::ForbiddenChar { id });
         }
         Ok(Self(id))
     }
@@ -39,18 +45,37 @@ impl AsRef<str> for WorkflowId {
 
 /// Invalid format for a workflow ID.
 #[derive(Debug)]
-pub struct InvalidWorkflowId {
-    pub id: String,
+pub enum InvalidWorkflowId {
+    Empty,
+    TooLong {
+        id: String,
+    },
+    /// Contains `:` or `/` which would collide with TaskId format.
+    ForbiddenChar {
+        id: String,
+    },
 }
 
 impl InvalidWorkflowId {
     pub fn reason_key(&self) -> &str {
-        "invalid_format"
+        match self {
+            InvalidWorkflowId::Empty => "required",
+            InvalidWorkflowId::TooLong { .. } => "too_long",
+            InvalidWorkflowId::ForbiddenChar { .. } => "forbidden_char",
+        }
     }
 }
 
 impl fmt::Display for InvalidWorkflowId {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "invalid workflow ID: {}", self.id)
+        match self {
+            InvalidWorkflowId::Empty => write!(f, "workflow ID is empty"),
+            InvalidWorkflowId::TooLong { id } => {
+                write!(f, "workflow ID too long: {}", id.len())
+            }
+            InvalidWorkflowId::ForbiddenChar { id } => {
+                write!(f, "workflow ID contains ':' or '/': {id}")
+            }
+        }
     }
 }

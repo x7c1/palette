@@ -16,8 +16,14 @@ impl TaskId {
     /// Requires the `{workflow_id}:{key_path}` format (must contain `:`).
     pub fn parse(id: impl Into<String>) -> Result<Self, InvalidTaskId> {
         let id = id.into();
-        if id.is_empty() || id.len() > MAX_ID_LEN || !id.contains(':') {
-            return Err(InvalidTaskId { id });
+        if id.is_empty() {
+            return Err(InvalidTaskId::Empty);
+        }
+        if id.len() > MAX_ID_LEN {
+            return Err(InvalidTaskId::TooLong { id });
+        }
+        if !id.contains(':') {
+            return Err(InvalidTaskId::MissingColon { id });
         }
         Ok(Self(id))
     }
@@ -54,18 +60,37 @@ impl AsRef<str> for TaskId {
 
 /// Invalid format for a task ID.
 #[derive(Debug)]
-pub struct InvalidTaskId {
-    pub id: String,
+pub enum InvalidTaskId {
+    Empty,
+    TooLong {
+        id: String,
+    },
+    /// Must contain `:` to separate `{workflow_id}:{key_path}`.
+    MissingColon {
+        id: String,
+    },
 }
 
 impl InvalidTaskId {
     pub fn reason_key(&self) -> &str {
-        "invalid_format"
+        match self {
+            InvalidTaskId::Empty => "required",
+            InvalidTaskId::TooLong { .. } => "too_long",
+            InvalidTaskId::MissingColon { .. } => "missing_colon",
+        }
     }
 }
 
 impl fmt::Display for InvalidTaskId {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "invalid task ID: {}", self.id)
+        match self {
+            InvalidTaskId::Empty => write!(f, "task ID is empty"),
+            InvalidTaskId::TooLong { id } => {
+                write!(f, "task ID too long: {}", id.len())
+            }
+            InvalidTaskId::MissingColon { id } => {
+                write!(f, "task ID missing ':' separator: {id}")
+            }
+        }
     }
 }
