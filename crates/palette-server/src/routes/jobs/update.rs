@@ -34,7 +34,7 @@ pub async fn handle_update_job(
             code: ErrorCode::InvalidStateTransition,
             errors: vec![FieldError {
                 field: "status".into(),
-                reason: e.reason_key().into(),
+                reason: e.reason_key(),
             }],
         }
     })?;
