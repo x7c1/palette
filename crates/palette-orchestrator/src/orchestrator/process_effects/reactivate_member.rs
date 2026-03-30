@@ -5,7 +5,7 @@ use palette_domain::server::PendingDelivery;
 use palette_domain::worker::WorkerId;
 
 impl Orchestrator {
-    /// Reactivate an existing member for re-review (same container, new instruction).
+    /// Reactivate an idle member with a new instruction (same container, preserving context).
     pub(super) fn reactivate_member(
         &self,
         job_id: &JobId,
@@ -39,7 +39,7 @@ impl Orchestrator {
         tracing::info!(
             job_id = %job_id,
             member_id = %member_id,
-            "reactivated member for re-review"
+            "reactivated member"
         );
         Ok(())
     }
