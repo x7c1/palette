@@ -38,7 +38,7 @@ impl From<CommentBody> for String {
 }
 
 #[derive(Debug, palette_macros::ReasonKey)]
-#[reason_namespace = "body"]
+#[reason_namespace = "comment_body"]
 pub enum InvalidCommentBody {
     Empty,
     TooLong { len: usize },
