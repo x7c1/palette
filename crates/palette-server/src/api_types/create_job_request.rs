@@ -17,17 +17,26 @@ pub struct CreateJobRequest {
 
 impl CreateJobRequest {
     pub fn validate(&self) -> Result<domain::job::CreateJobRequest, Vec<FieldError>> {
-        palette_macros::validate! {
-            domain::job::CreateJobRequest::new(
-                "id" => self.id.as_deref().map(domain::job::JobId::parse).transpose(),
-                "task_id" => domain::task::TaskId::parse(&self.task_id),
-                job_type = self.job_type.into(),
-                "title" => domain::job::Title::parse(&self.title),
-                "plan_path" => domain::job::PlanPath::parse(&self.plan_path),
-                assignee_id = self.assignee_id.as_deref().map(domain::worker::WorkerId::new),
-                priority = self.priority.map(domain::job::Priority::from),
-                repository = self.repository.clone().map(Into::into),
-            )
-        }
+        palette_macros::validate!(domain::job::CreateJobRequest::new {
+            id: self
+                .id
+                .as_deref()
+                .map(domain::job::JobId::parse)
+                .transpose(),
+            task_id: domain::task::TaskId::parse(&self.task_id),
+            #[plain]
+            job_type: self.job_type.into(),
+            title: domain::job::Title::parse(&self.title),
+            plan_path: domain::job::PlanPath::parse(&self.plan_path),
+            #[plain]
+            assignee_id: self
+                .assignee_id
+                .as_deref()
+                .map(domain::worker::WorkerId::new),
+            #[plain]
+            priority: self.priority.map(domain::job::Priority::from),
+            #[plain]
+            repository: self.repository.clone().map(Into::into),
+        })
     }
 }
