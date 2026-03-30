@@ -2,6 +2,22 @@ use super::super::*;
 use crate::models::ReviewSubmissionRow;
 use palette_domain::ReasonKey;
 
+impl Database {
+    pub fn get_review_submissions(
+        &self,
+        review_job_id: &JobId,
+    ) -> crate::Result<Vec<ReviewSubmission>> {
+        let conn = lock(&self.conn)?;
+        let mut stmt = conn.prepare(
+            "SELECT id, review_job_id, round, verdict_id, summary, created_at
+             FROM review_submissions WHERE review_job_id = ?1 ORDER BY round",
+        )?;
+        stmt.query_map(params![review_job_id.as_ref()], read_review_submission_row)?
+            .map(|row| into_review_submission(row?))
+            .collect::<crate::Result<Vec<_>>>()
+    }
+}
+
 fn read_review_submission_row(row: &rusqlite::Row) -> rusqlite::Result<ReviewSubmissionRow> {
     Ok(ReviewSubmissionRow {
         id: row.get("id")?,
@@ -29,20 +45,4 @@ fn into_review_submission(row: ReviewSubmissionRow) -> crate::Result<ReviewSubmi
         summary: row.summary,
         created_at: parse_datetime(&row.created_at),
     })
-}
-
-impl Database {
-    pub fn get_review_submissions(
-        &self,
-        review_job_id: &JobId,
-    ) -> crate::Result<Vec<ReviewSubmission>> {
-        let conn = lock(&self.conn)?;
-        let mut stmt = conn.prepare(
-            "SELECT id, review_job_id, round, verdict_id, summary, created_at
-             FROM review_submissions WHERE review_job_id = ?1 ORDER BY round",
-        )?;
-        stmt.query_map(params![review_job_id.as_ref()], read_review_submission_row)?
-            .map(|row| into_review_submission(row?))
-            .collect::<crate::Result<Vec<_>>>()
-    }
 }
