@@ -1,4 +1,4 @@
-use crate::api_types::{ErrorCode, InputError, Location, ResourceKind, SendRequest, SendResponse};
+use crate::api_types::{ResourceKind, SendRequest, SendResponse};
 use crate::{AppState, Error, EventRecord};
 use axum::{Json, extract::State};
 use palette_domain::terminal::TerminalTarget;
@@ -11,43 +11,33 @@ pub async fn handle_send(
     State(state): State<Arc<AppState>>,
     Json(req): Json<SendRequest>,
 ) -> crate::Result<Json<SendResponse>> {
-    // If using direct target (no worker_id), send immediately without queuing
-    if req.worker_id.is_none() {
-        if let Some(ref target) = req.target {
-            tracing::info!(target = %target, message = %req.message, "sending keys via tmux (direct)");
-            let record = EventRecord {
-                timestamp: now(),
-                event_type: "send".to_string(),
-                payload: serde_json::json!({
-                    "target": target,
-                    "message": req.message,
-                }),
-            };
-            state.event_log.lock().await.push(record);
+    // Direct target mode: send immediately without queuing
+    if let (None, Some(target)) = (&req.worker_id, &req.target) {
+        tracing::info!(target = %target, message = %req.message, "sending keys via tmux (direct)");
+        let record = EventRecord {
+            timestamp: now(),
+            event_type: "send".to_string(),
+            payload: serde_json::json!({
+                "target": target,
+                "message": req.message,
+            }),
+        };
+        state.event_log.lock().await.push(record);
 
-            let terminal_target = TerminalTarget::new(target);
-            send_tmux_keys(
-                state.interactor.terminal.as_ref(),
-                &terminal_target,
-                &req.message,
-                req.no_enter,
-            )
-            .map_err(Error::internal)?;
-            return Ok(Json(SendResponse { queued: false }));
-        }
-        return Err(Error::BadRequest {
-            code: ErrorCode::InputValidationFailed,
-            errors: vec![InputError {
-                location: Location::Body,
-                hint: "worker_id".into(),
-                reason: "worker_id/required".into(),
-            }],
-        });
+        let terminal_target = TerminalTarget::new(target);
+        send_tmux_keys(
+            state.interactor.terminal.as_ref(),
+            &terminal_target,
+            &req.message,
+            req.no_enter,
+        )
+        .map_err(Error::internal)?;
+        return Ok(Json(SendResponse { queued: false }));
     }
 
-    let worker_id_str = req.worker_id.as_ref().unwrap();
-    let worker_id =
-        WorkerId::parse(worker_id_str.as_str()).map_err(Error::invalid_body("worker_id"))?;
+    // Worker mode: parse worker_id (None → empty string → Empty error)
+    let worker_id = WorkerId::parse(req.worker_id.as_deref().unwrap_or(""))
+        .map_err(Error::invalid_body("worker_id"))?;
 
     // Check if target can receive input — idle or waiting for permission
     let worker = state
@@ -99,7 +89,7 @@ pub async fn handle_send(
             .data_store
             .update_worker_status(&worker_id, WorkerStatus::Working)
         {
-            tracing::error!(worker_id = worker_id_str.as_str(), error = %e, "failed to update worker status to Working");
+            tracing::error!(worker_id = worker_id.as_ref(), error = %e, "failed to update worker status to Working");
         }
 
         false
@@ -110,7 +100,7 @@ pub async fn handle_send(
             .data_store
             .enqueue_message(&worker_id, &req.message)
             .map_err(Error::internal)?;
-        tracing::info!(worker_id = worker_id_str.as_str(), "message queued");
+        tracing::info!(worker_id = worker_id.as_ref(), "message queued");
         true
     };
 
@@ -118,7 +108,7 @@ pub async fn handle_send(
         timestamp: now(),
         event_type: "send".to_string(),
         payload: serde_json::json!({
-            "worker_id": worker_id_str,
+            "worker_id": worker_id.as_ref(),
             "message": req.message,
             "queued": queued,
         }),
