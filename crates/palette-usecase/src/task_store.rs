@@ -38,15 +38,18 @@ impl<'a> TaskStore<'a> {
         blueprint: &dyn BlueprintReader,
         workflow_id: &WorkflowId,
     ) -> Result<Self, crate::TaskStoreError> {
-        let workflow = data_store.get_workflow(workflow_id)?.ok_or_else(|| {
-            crate::TaskStoreError::WorkflowNotFound {
+        let workflow = data_store
+            .get_workflow(workflow_id)
+            .map_err(crate::TaskStoreError::DataStore)?
+            .ok_or_else(|| crate::TaskStoreError::WorkflowNotFound {
                 workflow_id: workflow_id.clone(),
-            }
-        })?;
+            })?;
 
         let tree = blueprint
             .read_blueprint(std::path::Path::new(&workflow.blueprint_path), workflow_id)?;
-        let statuses = data_store.get_task_statuses(workflow_id)?;
+        let statuses = data_store
+            .get_task_statuses(workflow_id)
+            .map_err(crate::TaskStoreError::DataStore)?;
 
         Ok(Self::new(data_store, tree, workflow_id.clone(), statuses))
     }
@@ -111,7 +114,9 @@ impl TaskStore<'_> {
         id: &TaskId,
         status: TaskStatus,
     ) -> Result<(), crate::TaskStoreError> {
-        self.data_store.update_task_status(id, status)?;
+        self.data_store
+            .update_task_status(id, status)
+            .map_err(crate::TaskStoreError::DataStore)?;
         self.statuses.borrow_mut().insert(id.clone(), status);
         Ok(())
     }

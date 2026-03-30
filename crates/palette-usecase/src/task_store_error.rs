@@ -34,12 +34,6 @@ impl std::error::Error for TaskStoreError {
     }
 }
 
-impl From<Box<dyn std::error::Error + Send + Sync>> for TaskStoreError {
-    fn from(e: Box<dyn std::error::Error + Send + Sync>) -> Self {
-        TaskStoreError::DataStore(e)
-    }
-}
-
 impl From<ReadBlueprintError> for TaskStoreError {
     fn from(e: ReadBlueprintError) -> Self {
         TaskStoreError::Blueprint(e)
