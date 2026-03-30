@@ -4,9 +4,10 @@ use axum::{
     extract::{Query, State},
     http::StatusCode,
 };
-use palette_domain::job::{CraftTransition, JobFilter};
+use palette_domain::job::{CraftTransition, Job, JobStatus, JobType};
+use palette_domain::rule::RuleEffect;
 use palette_domain::server::ServerEvent;
-use palette_domain::worker::{WorkerId, WorkerStatus};
+use palette_domain::worker::{WorkerId, WorkerRole, WorkerStatus};
 use std::sync::Arc;
 
 use super::HookQuery;
@@ -33,137 +34,15 @@ pub async fn handle_stop(
 
     super::save_session_id(state.interactor.data_store.as_ref(), &worker_id, &payload);
 
-    // Update worker status to Idle and resolve supervisor ID.
-    // Only transition workers that were actively working. A Booting
-    // worker that fires a stop hook means its startup failed (e.g.
-    // `--resume` "No conversation found") — leave it in Booting so
-    // the readiness watcher can detect the failure and fall back to
-    // a fresh start.
-    let supervisor_id = {
-        match state.interactor.data_store.find_worker(&worker_id) {
-            Ok(Some(worker)) => {
-                let should_idle = matches!(
-                    worker.status,
-                    WorkerStatus::Working | WorkerStatus::WaitingPermission | WorkerStatus::Idle
-                );
-                if should_idle {
-                    if let Err(e) = state
-                        .interactor
-                        .data_store
-                        .update_worker_status(&worker_id, WorkerStatus::Idle)
-                    {
-                        tracing::error!(error = %e, "failed to update worker status to idle");
-                    }
-                } else {
-                    tracing::info!(
-                        worker_id = worker_id_str,
-                        status = ?worker.status,
-                        "stop hook ignored: worker not in active state"
-                    );
-                }
-                if should_idle && worker.role == palette_domain::worker::WorkerRole::Member {
-                    worker.supervisor_id.clone()
-                } else {
-                    None
-                }
-            }
-            _ => None,
-        }
-    };
+    let supervisor_id = transition_worker_to_idle(&state, &worker_id);
 
-    // Transition worker's in_progress jobs and notify supervisors
     if let Some(ref supervisor_id) = supervisor_id {
-        let worker_jobs = match state.interactor.data_store.list_jobs(&JobFilter {
-            assignee_id: Some(worker_id.clone()),
-            ..Default::default()
-        }) {
-            Ok(jobs) => jobs,
-            Err(e) => {
-                tracing::error!(worker_id = worker_id_str, error = %e, "failed to list jobs for stop transition");
-                vec![]
-            }
-        };
-
         let last_message = payload
             .get("last_assistant_message")
             .and_then(|v| v.as_str())
             .unwrap_or("(work completed)");
 
-        for job in &worker_jobs {
-            match job.job_type {
-                palette_domain::job::JobType::Craft => {
-                    let palette_domain::job::JobStatus::Craft(current) = job.status else {
-                        continue;
-                    };
-                    let in_review = match CraftTransition::SubmitForReview.validate(current) {
-                        Ok(status) => status,
-                        Err(_) => {
-                            tracing::info!(
-                                job_id = %job.id,
-                                status = ?job.status,
-                                "skipping craft stop transition (invalid transition)"
-                            );
-                            continue;
-                        }
-                    };
-                    if let Err(e) = state
-                        .interactor
-                        .data_store
-                        .update_job_status(&job.id, in_review)
-                    {
-                        tracing::error!(job_id = %job.id, error = %e, "failed to transition job to in_review");
-                        continue;
-                    }
-                    let effects = vec![palette_domain::rule::RuleEffect::CraftReadyForReview {
-                        craft_job_id: job.id.clone(),
-                    }];
-                    let _ = state.event_tx.send(ServerEvent::ProcessEffects { effects });
-                }
-                palette_domain::job::JobType::Review => {
-                    // Only notify ReviewIntegrator supervisors (for multi-review aggregation).
-                    // Single-review results are handled mechanically by the orchestrator.
-                    let is_review_integrator = match state
-                        .interactor
-                        .data_store
-                        .find_worker(supervisor_id)
-                    {
-                        Ok(Some(s)) => {
-                            s.role == palette_domain::worker::WorkerRole::ReviewIntegrator
-                        }
-                        Ok(None) => false,
-                        Err(e) => {
-                            tracing::error!(error = %e, supervisor_id = %supervisor_id, "failed to find supervisor for review notification");
-                            false
-                        }
-                    };
-                    if is_review_integrator {
-                        let report_msg = format!(
-                            "[review] member={} job={} type=review_complete message: {}",
-                            worker_id, job.id, last_message,
-                        );
-                        if let Err(e) = state
-                            .interactor
-                            .data_store
-                            .enqueue_message(supervisor_id, &report_msg)
-                        {
-                            tracing::error!(error = %e, "failed to enqueue review report");
-                        }
-                    }
-                }
-            }
-        }
-
-        if worker_jobs.is_empty() {
-            // No jobs to transition; just send a stop event
-            let notification = format!("[event] member={worker_id} type=stop");
-            if let Err(e) = state
-                .interactor
-                .data_store
-                .enqueue_message(supervisor_id, &notification)
-            {
-                tracing::error!(error = %e, "failed to enqueue stop notification for supervisor");
-            }
-        }
+        process_member_jobs(&state, &worker_id, supervisor_id, last_message);
     }
 
     // Fire-and-forget: deliver queued messages to the now-idle worker
@@ -173,4 +52,153 @@ pub async fn handle_stop(
     let _ = state.event_tx.send(ServerEvent::NotifyDeliveryLoop);
 
     StatusCode::OK
+}
+
+/// Transition the worker to Idle and return its supervisor ID (if it's an active Member).
+///
+/// Only transitions workers that were actively working. A Booting worker that fires
+/// a stop hook means its startup failed (e.g. `--resume` "No conversation found") —
+/// leave it in Booting so the readiness watcher can detect the failure and fall back
+/// to a fresh start.
+fn transition_worker_to_idle(state: &AppState, worker_id: &WorkerId) -> Option<WorkerId> {
+    let worker = match state.interactor.data_store.find_worker(worker_id) {
+        Ok(Some(w)) => w,
+        _ => return None,
+    };
+
+    let should_idle = matches!(
+        worker.status,
+        WorkerStatus::Working | WorkerStatus::WaitingPermission | WorkerStatus::Idle
+    );
+
+    if !should_idle {
+        tracing::info!(
+            worker_id = %worker_id,
+            status = ?worker.status,
+            "stop hook ignored: worker not in active state"
+        );
+        return None;
+    }
+
+    if let Err(e) = state
+        .interactor
+        .data_store
+        .update_worker_status(worker_id, WorkerStatus::Idle)
+    {
+        tracing::error!(error = %e, "failed to update worker status to idle");
+    }
+
+    if worker.role == WorkerRole::Member {
+        worker.supervisor_id
+    } else {
+        None
+    }
+}
+
+/// Transition the member's in-progress jobs and notify the supervisor.
+fn process_member_jobs(
+    state: &AppState,
+    worker_id: &WorkerId,
+    supervisor_id: &WorkerId,
+    last_message: &str,
+) {
+    let jobs = match state
+        .interactor
+        .data_store
+        .list_jobs(&palette_domain::job::JobFilter {
+            assignee_id: Some(worker_id.clone()),
+            ..Default::default()
+        }) {
+        Ok(jobs) => jobs,
+        Err(e) => {
+            tracing::error!(worker_id = %worker_id, error = %e, "failed to list jobs for stop transition");
+            return;
+        }
+    };
+
+    if jobs.is_empty() {
+        let notification = format!("[event] member={worker_id} type=stop");
+        if let Err(e) = state
+            .interactor
+            .data_store
+            .enqueue_message(supervisor_id, &notification)
+        {
+            tracing::error!(error = %e, "failed to enqueue stop notification for supervisor");
+        }
+        return;
+    }
+
+    for job in &jobs {
+        match job.job_type {
+            JobType::Craft => handle_craft_stop(state, job),
+            JobType::Review => {
+                handle_review_stop(state, job, worker_id, supervisor_id, last_message)
+            }
+        }
+    }
+}
+
+/// Transition a craft job to InReview on member stop.
+fn handle_craft_stop(state: &AppState, job: &Job) {
+    let JobStatus::Craft(current) = job.status else {
+        return;
+    };
+    let in_review = match CraftTransition::SubmitForReview.validate(current) {
+        Ok(status) => status,
+        Err(_) => {
+            tracing::info!(
+                job_id = %job.id,
+                status = ?job.status,
+                "skipping craft stop transition (invalid transition)"
+            );
+            return;
+        }
+    };
+    if let Err(e) = state
+        .interactor
+        .data_store
+        .update_job_status(&job.id, in_review)
+    {
+        tracing::error!(job_id = %job.id, error = %e, "failed to transition job to in_review");
+        return;
+    }
+    let _ = state.event_tx.send(ServerEvent::ProcessEffects {
+        effects: vec![RuleEffect::CraftReadyForReview {
+            craft_job_id: job.id.clone(),
+        }],
+    });
+}
+
+/// Notify the ReviewIntegrator supervisor that a review member has stopped.
+fn handle_review_stop(
+    state: &AppState,
+    job: &Job,
+    worker_id: &WorkerId,
+    supervisor_id: &WorkerId,
+    last_message: &str,
+) {
+    // Only notify ReviewIntegrator supervisors (for multi-review aggregation).
+    // Single-review results are handled mechanically by the orchestrator.
+    let is_review_integrator = match state.interactor.data_store.find_worker(supervisor_id) {
+        Ok(Some(s)) => s.role == WorkerRole::ReviewIntegrator,
+        Ok(None) => false,
+        Err(e) => {
+            tracing::error!(error = %e, supervisor_id = %supervisor_id, "failed to find supervisor for review notification");
+            false
+        }
+    };
+    if !is_review_integrator {
+        return;
+    }
+    let report_msg = format!(
+        "[review] member={} job={} type=review_complete message: {}",
+        worker_id, job.id, last_message,
+    );
+    if let Err(e) = state
+        .interactor
+        .data_store
+        .enqueue_message(supervisor_id, &report_msg)
+    {
+        tracing::error!(error = %e, "failed to enqueue review report");
+    }
 }
