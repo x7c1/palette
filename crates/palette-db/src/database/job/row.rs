@@ -1,4 +1,5 @@
 use crate::models::JobRow;
+use palette_domain::ReasonKey;
 use palette_domain::job::*;
 use palette_domain::task::TaskId;
 use palette_domain::worker::WorkerId;

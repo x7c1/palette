@@ -1,5 +1,6 @@
 use super::{FieldError, JobType, Priority, Repository};
 use palette_domain as domain;
+use palette_domain::ReasonKey;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize)]

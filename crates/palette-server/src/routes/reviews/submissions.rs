@@ -4,6 +4,7 @@ use axum::{
     Json,
     extract::{Path, State},
 };
+use palette_domain::ReasonKey;
 use palette_domain::job::JobId;
 use std::sync::Arc;
 

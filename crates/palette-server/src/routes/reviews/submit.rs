@@ -7,6 +7,7 @@ use axum::{
     extract::{Path, State},
     http::StatusCode,
 };
+use palette_domain::ReasonKey;
 use palette_domain::job::{JobId, JobType};
 use palette_domain::server::ServerEvent;
 use palette_usecase::RuleEngine;

@@ -932,6 +932,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "palette-core"
+version = "0.1.0"
+
+[[package]]
 name = "palette-db"
 version = "0.1.0"
 dependencies = [
@@ -959,6 +963,7 @@ name = "palette-domain"
 version = "0.1.0"
 dependencies = [
  "chrono",
+ "palette-core",
  "palette-macros",
  "uuid",
 ]
@@ -967,6 +972,7 @@ dependencies = [
 name = "palette-fs"
 version = "0.1.0"
 dependencies = [
+ "palette-core",
  "palette-domain",
  "palette-macros",
  "palette-usecase",

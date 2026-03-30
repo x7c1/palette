@@ -1,5 +1,6 @@
 use super::super::{Database, lock};
 use crate::models::TaskRow;
+use palette_domain::ReasonKey;
 use palette_domain::task::{TaskId, TaskState, TaskStatus};
 use palette_domain::workflow::WorkflowId;
 use rusqlite::params;

@@ -1,4 +1,5 @@
 use crate::models::WorkerRow;
+use palette_domain::ReasonKey;
 use palette_domain::task::TaskId;
 use palette_domain::terminal::TerminalTarget;
 use palette_domain::worker::*;

@@ -2,6 +2,7 @@
 resolver = "2"
 members = [
     "crates/palette-cli",
+    "crates/palette-core",
     "crates/palette-db",
     "crates/palette-docker",
     "crates/palette-domain",

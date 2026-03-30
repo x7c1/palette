@@ -54,19 +54,15 @@ pub fn derive_reason_key(input: TokenStream) -> TokenStream {
         .collect();
 
     let expanded = quote! {
-        impl #name {
-            pub fn namespace(&self) -> &str {
+        impl ::palette_core::ReasonKey for #name {
+            fn namespace(&self) -> &str {
                 #namespace
             }
 
-            pub fn value(&self) -> &str {
+            fn value(&self) -> &str {
                 match self {
                     #(#value_arms,)*
                 }
-            }
-
-            pub fn reason_key(&self) -> String {
-                format!("{}/{}", self.namespace(), self.value())
             }
         }
     };

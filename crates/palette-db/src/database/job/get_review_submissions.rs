@@ -1,5 +1,6 @@
 use super::super::*;
 use crate::models::ReviewSubmissionRow;
+use palette_domain::ReasonKey;
 
 fn read_review_submission_row(row: &rusqlite::Row) -> rusqlite::Result<ReviewSubmissionRow> {
     Ok(ReviewSubmissionRow {

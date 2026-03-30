@@ -6,5 +6,6 @@ license.workspace = true
 
 [dependencies]
 chrono.workspace = true
+palette-core = { path = "../palette-core" }
 palette-macros = { path = "../palette-macros" }
 uuid.workspace = true

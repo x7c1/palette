@@ -7,6 +7,7 @@ use axum::{
     http::StatusCode,
     response::{IntoResponse, Response},
 };
+use palette_domain::ReasonKey;
 use palette_domain::server::ServerEvent;
 use palette_domain::task::TaskId;
 use palette_domain::workflow::WorkflowId;

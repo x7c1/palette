@@ -1,5 +1,6 @@
 use super::{FieldError, ReviewCommentInput, Verdict};
 use palette_domain as domain;
+use palette_domain::ReasonKey;
 use serde::{Deserialize, Serialize};
 
 const MAX_COMMENTS: usize = 200;

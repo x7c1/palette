@@ -17,9 +17,12 @@ impl fmt::Display for TransitionError {
 
 impl std::error::Error for TransitionError {}
 
-impl TransitionError {
-    /// Machine-readable reason key for field hints.
-    pub fn reason_key(&self) -> &str {
-        "job_status/invalid_transition"
+impl palette_core::ReasonKey for TransitionError {
+    fn namespace(&self) -> &str {
+        "job_status"
+    }
+
+    fn value(&self) -> &str {
+        "invalid_transition"
     }
 }
