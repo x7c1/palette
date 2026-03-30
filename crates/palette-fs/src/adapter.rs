@@ -1,4 +1,4 @@
-use palette_core::{FieldError, ReasonKey};
+use palette_core::{InputError, Location, ReasonKey};
 use palette_domain::task::TaskTree;
 use palette_domain::workflow::WorkflowId;
 use palette_usecase::BlueprintReader;
@@ -22,8 +22,9 @@ impl BlueprintReader for FsBlueprintReader {
             ReadBlueprintError::Validation(
                 errors
                     .iter()
-                    .map(|e| FieldError {
-                        field: e.field_path(),
+                    .map(|e| InputError {
+                        location: Location::Body,
+                        hint: e.field_path(),
                         reason: e.reason_key(),
                     })
                     .collect(),

@@ -1,4 +1,4 @@
-use super::{FieldError, JobType, Priority, Repository};
+use super::{InputError, JobType, Priority, Repository};
 use palette_domain::job::{CreateJobRequest as DomainCreateJobRequest, JobId, PlanPath, Title};
 use palette_domain::task::TaskId;
 use palette_domain::worker::WorkerId;
@@ -18,7 +18,7 @@ pub struct CreateJobRequest {
 }
 
 impl CreateJobRequest {
-    pub fn validate(&self) -> Result<DomainCreateJobRequest, Vec<FieldError>> {
+    pub fn validate(&self) -> Result<DomainCreateJobRequest, Vec<InputError>> {
         palette_macros::validate!(DomainCreateJobRequest::new {
             id: self.id.as_deref().map(JobId::parse).transpose(),
             task_id: TaskId::parse(&self.task_id),

@@ -1,4 +1,4 @@
-use super::{FieldError, ReviewCommentInput, Verdict};
+use super::{InputError, Location, ReviewCommentInput, Verdict};
 use palette_domain as domain;
 use palette_domain::ReasonKey;
 use serde::{Deserialize, Serialize};
@@ -14,12 +14,13 @@ pub struct SubmitReviewRequest {
 }
 
 impl SubmitReviewRequest {
-    pub fn validate(&self) -> Result<domain::review::SubmitReviewRequest, Vec<FieldError>> {
+    pub fn validate(&self) -> Result<domain::review::SubmitReviewRequest, Vec<InputError>> {
         let mut errors = Vec::new();
 
         if self.comments.len() > MAX_COMMENTS {
-            errors.push(FieldError {
-                field: "comments".into(),
+            errors.push(InputError {
+                location: Location::Body,
+                hint: "comments".into(),
                 reason: "comments/too_many".into(),
             });
         } else {
@@ -39,26 +40,29 @@ impl SubmitReviewRequest {
             .map(|c| {
                 Ok(domain::review::ReviewCommentInput {
                     file: domain::review::FilePath::parse(&c.file).map_err(|e| {
-                        vec![FieldError {
-                            field: "file".into(),
+                        vec![InputError {
+                            location: Location::Body,
+                            hint: "file".into(),
                             reason: e.reason_key(),
                         }]
                     })?,
                     line: domain::review::LineNumber::parse(c.line).map_err(|e| {
-                        vec![FieldError {
-                            field: "line".into(),
+                        vec![InputError {
+                            location: Location::Body,
+                            hint: "line".into(),
                             reason: e.reason_key(),
                         }]
                     })?,
                     body: domain::review::CommentBody::parse(&c.body).map_err(|e| {
-                        vec![FieldError {
-                            field: "body".into(),
+                        vec![InputError {
+                            location: Location::Body,
+                            hint: "body".into(),
                             reason: e.reason_key(),
                         }]
                     })?,
                 })
             })
-            .collect::<Result<Vec<_>, Vec<FieldError>>>()?;
+            .collect::<Result<Vec<_>, Vec<InputError>>>()?;
 
         Ok(domain::review::SubmitReviewRequest {
             verdict: self.verdict.into(),

@@ -1,4 +1,4 @@
-use crate::api_types::{ErrorCode, FieldError};
+use crate::api_types::{ErrorCode, InputError, Location};
 use crate::{AppState, Error};
 use axum::{Json, extract::Query, extract::State};
 use palette_domain::workflow::WorkflowStatus;
@@ -30,8 +30,9 @@ pub async fn handle_list_workflows(
         Some(_) => {
             return Err(Error::BadRequest {
                 code: ErrorCode::InputValidationFailed,
-                errors: vec![FieldError {
-                    field: "status".into(),
+                errors: vec![InputError {
+                    location: Location::Query,
+                    hint: "status".into(),
                     reason: "workflow_status/invalid_format".into(),
                 }],
             });

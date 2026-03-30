@@ -14,8 +14,9 @@ pub async fn handle_get_submissions(
 ) -> crate::Result<Json<Vec<ReviewSubmissionResponse>>> {
     let review_job_id = JobId::parse(review_job_id).map_err(|e| Error::BadRequest {
         code: crate::api_types::ErrorCode::InputValidationFailed,
-        errors: vec![crate::api_types::FieldError {
-            field: "review_job_id".into(),
+        errors: vec![crate::api_types::InputError {
+            location: crate::api_types::Location::Path,
+            hint: "review_job_id".into(),
             reason: e.reason_key(),
         }],
     })?;

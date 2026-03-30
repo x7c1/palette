@@ -1,4 +1,4 @@
-use palette_core::FieldError;
+use palette_core::InputError;
 use palette_domain::task::TaskTree;
 use palette_domain::workflow::WorkflowId;
 use std::path::Path;
@@ -21,7 +21,7 @@ pub enum ReadBlueprintError {
     /// Blueprint file could not be read or parsed.
     Read(Box<dyn std::error::Error + Send + Sync>),
     /// Blueprint content violates structural constraints.
-    Validation(Vec<FieldError>),
+    Validation(Vec<InputError>),
 }
 
 impl std::fmt::Display for ReadBlueprintError {

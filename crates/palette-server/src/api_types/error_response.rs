@@ -22,4 +22,4 @@ pub enum ResourceKind {
     ReviewSubmission,
 }
 
-pub use palette_core::FieldError;
+pub use palette_core::{InputError, Location};

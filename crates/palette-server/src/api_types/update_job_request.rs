@@ -1,4 +1,4 @@
-use super::{FieldError, JobStatus};
+use super::{InputError, JobStatus, Location};
 use palette_domain as domain;
 use palette_domain::ReasonKey;
 use serde::{Deserialize, Serialize};
@@ -10,10 +10,11 @@ pub struct UpdateJobRequest {
 }
 
 impl UpdateJobRequest {
-    pub fn validate_id(&self) -> Result<domain::job::JobId, Vec<FieldError>> {
+    pub fn validate_id(&self) -> Result<domain::job::JobId, Vec<InputError>> {
         domain::job::JobId::parse(&self.id).map_err(|e| {
-            vec![FieldError {
-                field: "id".into(),
+            vec![InputError {
+                location: Location::Body,
+                hint: "id".into(),
                 reason: e.reason_key(),
             }]
         })

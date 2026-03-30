@@ -1,4 +1,6 @@
-use crate::api_types::{ErrorCode, FieldError, JobResponse, ResourceKind, UpdateJobRequest};
+use crate::api_types::{
+    ErrorCode, InputError, JobResponse, Location, ResourceKind, UpdateJobRequest,
+};
 use crate::{AppState, Error};
 use axum::{Json, extract::State};
 use palette_domain::ReasonKey;
@@ -32,8 +34,9 @@ pub async fn handle_update_job(
     palette_domain::rule::validate_transition(current.status, new_status).map_err(|e| {
         Error::BadRequest {
             code: ErrorCode::InvalidStateTransition,
-            errors: vec![FieldError {
-                field: "status".into(),
+            errors: vec![InputError {
+                location: Location::Body,
+                hint: "status".into(),
                 reason: e.reason_key(),
             }],
         }

@@ -1,4 +1,4 @@
-use crate::api_types::{ErrorCode, FieldError, ResourceKind, SendRequest, SendResponse};
+use crate::api_types::{ErrorCode, InputError, Location, ResourceKind, SendRequest, SendResponse};
 use crate::{AppState, Error, EventRecord};
 use axum::{Json, extract::State};
 use palette_domain::terminal::TerminalTarget;
@@ -37,8 +37,9 @@ pub async fn handle_send(
         }
         return Err(Error::BadRequest {
             code: ErrorCode::InputValidationFailed,
-            errors: vec![FieldError {
-                field: "worker_id".into(),
+            errors: vec![InputError {
+                location: Location::Body,
+                hint: "worker_id".into(),
                 reason: "worker_id/required".into(),
             }],
         });
@@ -47,8 +48,9 @@ pub async fn handle_send(
     let worker_id_str = req.worker_id.as_ref().unwrap();
     let worker_id = WorkerId::parse(worker_id_str.as_str()).map_err(|e| Error::BadRequest {
         code: ErrorCode::InputValidationFailed,
-        errors: vec![FieldError {
-            field: "worker_id".into(),
+        errors: vec![InputError {
+            location: Location::Body,
+            hint: "worker_id".into(),
             reason: palette_domain::ReasonKey::reason_key(&e),
         }],
     })?;

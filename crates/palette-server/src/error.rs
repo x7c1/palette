@@ -2,7 +2,7 @@ use axum::Json;
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 
-use crate::api_types::{ErrorCode, FieldError, ResourceKind};
+use crate::api_types::{ErrorCode, InputError, ResourceKind};
 
 pub type Result<T> = std::result::Result<T, Error>;
 
@@ -14,7 +14,7 @@ pub enum Error {
     /// `code` identifies the error kind; `errors` indicates which fields are problematic.
     BadRequest {
         code: ErrorCode,
-        errors: Vec<FieldError>,
+        errors: Vec<InputError>,
     },
     /// Resource not found (404).
     NotFound { resource: ResourceKind, id: String },
@@ -67,6 +67,7 @@ impl IntoResponse for Error {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::api_types::Location;
     use axum::body::to_bytes;
     use axum::response::IntoResponse;
 
@@ -79,8 +80,9 @@ mod tests {
     async fn bad_request_returns_400_with_code_and_errors() {
         let error = Error::BadRequest {
             code: ErrorCode::InputValidationFailed,
-            errors: vec![FieldError {
-                field: "title".into(),
+            errors: vec![InputError {
+                location: Location::Body,
+                hint: "title".into(),
                 reason: "title/required".into(),
             }],
         };
@@ -89,7 +91,8 @@ mod tests {
 
         let body = response_body(resp).await;
         assert_eq!(body["code"], "input_validation_failed");
-        assert_eq!(body["errors"][0]["field"], "title");
+        assert_eq!(body["errors"][0]["location"], "body");
+        assert_eq!(body["errors"][0]["hint"], "title");
         assert_eq!(body["errors"][0]["reason"], "title/required");
     }
 

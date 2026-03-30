@@ -16,7 +16,7 @@ mod apply_blueprint;
 pub use apply_blueprint::handle_apply_blueprint;
 
 use crate::Error;
-use crate::api_types::{ErrorCode, FieldError};
+use crate::api_types::{ErrorCode, InputError, Location};
 use palette_usecase::ReadBlueprintError;
 
 /// Convert a `ReadBlueprintError` into a server error.
@@ -24,8 +24,9 @@ fn blueprint_read_error_to_server_error(e: ReadBlueprintError) -> Error {
     match e {
         ReadBlueprintError::Read(cause) => Error::BadRequest {
             code: ErrorCode::BlueprintInvalid,
-            errors: vec![FieldError {
-                field: "blueprint_path".into(),
+            errors: vec![InputError {
+                location: Location::Body,
+                hint: "blueprint_path".into(),
                 reason: format!("{cause}"),
             }],
         },

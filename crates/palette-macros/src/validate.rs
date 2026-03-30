@@ -95,8 +95,9 @@ pub fn expand(input: TokenStream) -> TokenStream {
                     let #var = match #expr {
                         Ok(v) => Some(v),
                         Err(e) => {
-                            __errors.push(::palette_core::FieldError {
-                                field: #field_str.into(),
+                            __errors.push(::palette_core::InputError {
+                                location: ::palette_core::Location::Body,
+                                hint: #field_str.into(),
                                 reason: ::palette_core::ReasonKey::reason_key(&e),
                             });
                             None
@@ -117,7 +118,7 @@ pub fn expand(input: TokenStream) -> TokenStream {
     };
 
     let expanded = quote! {{
-        let mut __errors: Vec<::palette_core::FieldError> = Vec::new();
+        let mut __errors: Vec<::palette_core::InputError> = Vec::new();
         #(#bindings)*
         if !__errors.is_empty() {
             Err(__errors)
