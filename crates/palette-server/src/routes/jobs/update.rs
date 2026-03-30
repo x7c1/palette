@@ -2,7 +2,7 @@ use crate::AppState;
 use crate::api_types::{JobResponse, UpdateJobRequest};
 use axum::{Json, extract::State, http::StatusCode};
 use palette_domain::job::{CraftStatus, JobId, JobStatus};
-use palette_domain::rule::{RuleEffect, validate_transition};
+use palette_domain::rule::RuleEffect;
 use palette_domain::server::ServerEvent;
 use palette_usecase::RuleEngine;
 use std::sync::Arc;
@@ -22,7 +22,7 @@ pub async fn handle_update_job(
     // Convert API status to domain status using the job's type
     let new_status = api_req.status.to_domain(current.job_type);
 
-    validate_transition(current.status, new_status)
+    palette_domain::rule::validate_transition(current.status, new_status)
         .map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))?;
 
     let job = state

@@ -27,12 +27,12 @@ A Job's `plan_path` might be `2026/feature-x/api-impl`, resolving to `docs/plans
 
 ## Splitting work
 
-When a Task turns out to be larger than expected, the Worker completes it at a natural stopping point (e.g., where the build and tests pass) and the remaining work is broken down into child Tasks with their own Plans.
+When a Task turns out to be larger than expected, the [Operator](../operator/) suspends the [Workflow](../workflow/), edits the [Blueprint](../blueprint/) to break the Task into child Tasks, and resumes. Each child Task has its own Plan.
 
 For example, if Task `api-impl` is too large:
 
-1. The Worker finishes `api-impl` at a clean boundary
-2. The remaining work is broken down into child Tasks (e.g., `api-impl-auth`, `api-impl-endpoints`)
+1. The Operator suspends the Workflow
+2. The Operator edits the Blueprint, breaking `api-impl` into child Tasks (e.g., `api-impl-auth`, `api-impl-endpoints`)
 3. Each child Task has its own `plan_path`, which can nest under the original Plan's directory:
 
 ```
