@@ -87,6 +87,14 @@ pub async fn handle_submit_review(
         );
     }
 
+    // Validate review artifact exists
+    if let Some(ref assignee) = job.assignee_id {
+        let _ = state.event_tx.send(ServerEvent::ValidateReviewArtifact {
+            job_id: review_job_id.clone(),
+            worker_id: assignee.clone(),
+        });
+    }
+
     // Fire-and-forget: orchestrator processes effects and delivers messages
     if !effects.is_empty() {
         let _ = state.event_tx.send(ServerEvent::ProcessEffects { effects });

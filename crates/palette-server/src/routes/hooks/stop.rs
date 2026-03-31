@@ -150,12 +150,7 @@ fn process_member_jobs(
         match job.job_type {
             JobType::Craft => handle_craft_stop(state, job),
             JobType::Review => {
-                handle_review_stop(state, job, worker_id, supervisor_id, last_message);
-                // Trigger artifact validation on the orchestrator side
-                let _ = state.event_tx.send(ServerEvent::ValidateReviewArtifact {
-                    job_id: job.id.clone(),
-                    worker_id: worker_id.clone(),
-                });
+                handle_review_stop(state, job, worker_id, supervisor_id, last_message)
             }
             // Orchestrator and Operator jobs don't have workers, so stop is a no-op
             JobType::Orchestrator | JobType::Operator => {}

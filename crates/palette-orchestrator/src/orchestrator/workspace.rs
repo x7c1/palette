@@ -74,8 +74,8 @@ impl WorkspaceManager {
             )?;
         }
         // Return absolute path so callers don't depend on CWD
-        let abs_cache = std::fs::canonicalize(&cache_path)
-            .map_err(|e| crate::Error::External(Box::new(e)))?;
+        let abs_cache =
+            std::fs::canonicalize(&cache_path).map_err(|e| crate::Error::External(Box::new(e)))?;
         Ok(abs_cache)
     }
 
