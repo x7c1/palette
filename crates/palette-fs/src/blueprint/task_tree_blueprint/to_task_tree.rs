@@ -29,6 +29,11 @@ impl BlueprintError {
     }
 }
 
+/// Result of validating a Blueprint node tree.
+struct Validated<'a> {
+    keys: HashMap<&'a str, TaskKey>,
+}
+
 impl TaskTreeBlueprint {
     /// Convert this Blueprint into a domain TaskTree.
     ///
@@ -38,42 +43,46 @@ impl TaskTreeBlueprint {
     /// Validates all constraints first (collecting all errors), then builds
     /// the tree using the validated keys.
     pub fn to_task_tree(&self, workflow_id: &WorkflowId) -> Result<TaskTree, Vec<BlueprintError>> {
-        // Phase 1: Validate and collect all parsed keys
-        let mut errors = Vec::new();
-        let mut keys = HashMap::new();
-        validate_all(&self.task, &mut errors, &mut keys);
-        if !errors.is_empty() {
-            return Err(errors);
-        }
+        let validated = validate_tree(&self.task)?;
 
-        // Phase 2: Build tree using validated keys
         let root = &self.task;
-        let root_key = &keys[root.key.as_str()];
+        let root_key = &validated.keys[root.key.as_str()];
         let root_id = TaskId::root(workflow_id, root_key);
         let mut nodes = HashMap::new();
 
-        insert_node(&root_id, None, None, root, &mut nodes, &keys);
+        insert_node(&root_id, None, None, root, &mut nodes, &validated.keys);
         collect_nodes(
             &root_id,
             root.plan_path.as_deref(),
             &root.children,
             &mut nodes,
-            &keys,
+            &validated.keys,
         );
 
         Ok(TaskTree::new(root_id, nodes))
     }
 }
 
-/// Validate all nodes recursively, collecting errors and parsed TaskKeys.
-fn validate_all<'a>(
-    node: &'a TaskNode,
-    errors: &mut Vec<BlueprintError>,
-    keys: &mut HashMap<&'a str, TaskKey>,
-) {
+/// Validate all nodes recursively. Returns parsed keys on success,
+/// or all collected errors on failure.
+fn validate_tree(root: &TaskNode) -> Result<Validated<'_>, Vec<BlueprintError>> {
+    let (errors, keys) = validate_node(root);
+    if errors.is_empty() {
+        Ok(Validated { keys })
+    } else {
+        Err(errors)
+    }
+}
+
+/// Validate a single node and all its descendants.
+/// Returns (errors, parsed_keys) so callers can aggregate.
+fn validate_node(node: &TaskNode) -> (Vec<BlueprintError>, HashMap<&str, TaskKey>) {
+    let mut errors = Vec::new();
+    let mut keys = HashMap::new();
+
     match TaskKey::parse(&node.key) {
         Ok(k) => {
-            keys.insert(&node.key, k);
+            keys.insert(node.key.as_str(), k);
         }
         Err(_) => {
             errors.push(BlueprintError::InvalidKey {
@@ -84,16 +93,14 @@ fn validate_all<'a>(
 
     if let Some(job_type) = node.job_type
         && matches!(JobType::from(job_type), JobType::Craft)
-    {
-        let has_review = node.children.iter().any(|c| {
+        && !node.children.iter().any(|c| {
             c.job_type
                 .is_some_and(|jt| matches!(JobType::from(jt), JobType::Review))
+        })
+    {
+        errors.push(BlueprintError::MissingReviewChild {
+            task_key: node.key.clone(),
         });
-        if !has_review {
-            errors.push(BlueprintError::MissingReviewChild {
-                task_key: node.key.clone(),
-            });
-        }
     }
 
     if let Some(ref repo) = node.repository
@@ -104,12 +111,11 @@ fn validate_all<'a>(
         });
     }
 
-    // Also validate depends_on keys
     for dep in &node.depends_on {
         if !keys.contains_key(dep.as_str()) {
             match TaskKey::parse(dep) {
                 Ok(k) => {
-                    keys.insert(dep, k);
+                    keys.insert(dep.as_str(), k);
                 }
                 Err(_) => {
                     errors.push(BlueprintError::InvalidKey { key: dep.clone() });
@@ -119,13 +125,12 @@ fn validate_all<'a>(
     }
 
     for child in &node.children {
-        validate_all(child, errors, keys);
+        let (child_errors, child_keys) = validate_node(child);
+        errors.extend(child_errors);
+        keys.extend(child_keys);
     }
-}
 
-/// Look up a validated key. Panics if key was not validated (programming error).
-fn get_key<'a>(raw: &str, keys: &'a HashMap<&str, TaskKey>) -> &'a TaskKey {
-    &keys[raw]
+    (errors, keys)
 }
 
 fn insert_node(
@@ -136,18 +141,18 @@ fn insert_node(
     nodes: &mut HashMap<TaskId, TaskTreeNode>,
     keys: &HashMap<&str, TaskKey>,
 ) {
-    let key = get_key(&node.key, keys).clone();
+    let key = keys[node.key.as_str()].clone();
 
     let child_ids: Vec<TaskId> = node
         .children
         .iter()
-        .map(|c| task_id.child(get_key(&c.key, keys)))
+        .map(|c| task_id.child(&keys[c.key.as_str()]))
         .collect();
 
     let depends_on: Vec<TaskId> = if let Some(parent) = parent_id {
         node.depends_on
             .iter()
-            .map(|dep| parent.child(get_key(dep, keys)))
+            .map(|dep| parent.child(&keys[dep.as_str()]))
             .collect()
     } else {
         vec![]
@@ -182,7 +187,7 @@ fn collect_nodes(
     keys: &HashMap<&str, TaskKey>,
 ) {
     for child in children {
-        let child_task_id = parent_task_id.child(get_key(&child.key, keys));
+        let child_task_id = parent_task_id.child(&keys[child.key.as_str()]);
         let child_plan_path = child.plan_path.as_deref().or(parent_plan_path);
 
         insert_node(
