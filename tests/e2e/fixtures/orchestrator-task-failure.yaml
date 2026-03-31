@@ -1,0 +1,15 @@
+task:
+  key: orchestrator-task-failure
+  children:
+    - key: implement
+      type: craft
+      plan_path: implement
+      priority: high
+      repository:
+        name: x7c1/palette
+        branch: e2e-orchestrator
+    - key: automated-checks
+      type: orchestrator
+      depends_on: [implement]
+      plan_path: automated-checks
+      command: "echo 'check failed' >&2; exit 1"

@@ -1,0 +1,13 @@
+task:
+  key: workspace-shared-clone
+  children:
+    - key: implement
+      type: craft
+      plan_path: implement
+      priority: high
+      repository:
+        name: x7c1/palette
+        branch: e2e-workspace
+      children:
+        - key: review
+          type: review

@@ -1,0 +1,19 @@
+task:
+  key: orchestrator-task-success
+  children:
+    - key: implement
+      type: craft
+      plan_path: implement
+      priority: high
+      repository:
+        name: x7c1/palette
+        branch: e2e-orchestrator
+    - key: automated-checks
+      type: orchestrator
+      depends_on: [implement]
+      plan_path: automated-checks
+      command: "echo 'checks passed'"
+    - key: review
+      type: review
+      depends_on: [automated-checks]
+      plan_path: review

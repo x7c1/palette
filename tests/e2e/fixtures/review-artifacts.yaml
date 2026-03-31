@@ -1,0 +1,15 @@
+task:
+  key: review-artifacts
+  children:
+    - key: implement
+      type: craft
+      plan_path: implement
+      priority: high
+      repository:
+        name: x7c1/palette
+        branch: e2e-review-artifacts
+      children:
+        - key: review-a
+          type: review
+        - key: review-b
+          type: review
