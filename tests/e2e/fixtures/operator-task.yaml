@@ -1,14 +1,16 @@
 task:
   key: operator-task
   children:
-    - key: implement
+    - key: craft-phase
       type: craft
       plan_path: implement
       priority: high
       repository:
         name: x7c1/palette
         branch: e2e-operator
-    - key: human-approval
-      type: operator
-      depends_on: [implement]
-      plan_path: human-approval
+      children:
+        - key: human-approval
+          type: operator
+        - key: review
+          type: review
+          depends_on: [human-approval]
