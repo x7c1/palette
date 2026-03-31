@@ -2,11 +2,13 @@ use super::{DockerManager, run_docker};
 use crate::Error;
 use palette_domain::worker::{ContainerId, WorkerRole};
 
-/// Workspace volume to mount in the container.
+/// Workspace bind mount configuration for the container.
 pub struct WorkspaceVolume {
-    /// Docker named volume name (e.g., "palette-workspace-C-a3f2b7e1").
-    pub name: String,
-    /// If true, mount as read-only.
+    /// Absolute path on the host to the workspace directory.
+    pub host_path: String,
+    /// Absolute path on the host to the bare repository cache.
+    pub repo_cache_path: String,
+    /// If true, mount workspace as read-only (for reviewers).
     pub read_only: bool,
 }
 
@@ -95,11 +97,14 @@ impl DockerManager {
         args.push("-v".to_string());
         args.push(format!("{transcript_volume}:/home/agent/.claude/projects"));
 
-        // Workspace volume: shared between worker and reviewer for the same task
-        if let Some(ws) = workspace {
+        // Workspace: bind mount from host directory
+        if let Some(ws) = &workspace {
             let suffix = if ws.read_only { ":ro" } else { "" };
             args.push("-v".to_string());
-            args.push(format!("{}:/home/agent/workspace{suffix}", ws.name));
+            args.push(format!("{}:/home/agent/workspace{suffix}", ws.host_path));
+            // Bare repository cache: always read-only inside the container
+            args.push("-v".to_string());
+            args.push(format!("{}:/home/agent/repo-cache:ro", ws.repo_cache_path));
         }
 
         // Plan directory: bind mount from host for shared plan documents
@@ -111,8 +116,8 @@ impl DockerManager {
 
         args.push(image.to_string());
 
-        // Fix workspace ownership then idle; named volumes may mount as root
-        // even though Dockerfile.base pre-creates the directory as agent user.
+        // Fix workspace ownership then idle; bind mounts inherit host
+        // ownership which may differ from the container's agent user.
         // Use semicolon (not &&) because chown fails on read-only mounts,
         // which is expected for reviewer containers.
         args.push("sh".to_string());

@@ -55,6 +55,7 @@ pub async fn spawn_server(
         plan_dir: String::new(),
         session_name: session_name.to_string(),
         cancel_token: tokio_util::sync::CancellationToken::new(),
+        workspace_manager: palette_orchestrator::workspace::WorkspaceManager::new("data"),
     });
     let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel();
     let _ = orchestrator.start(event_rx, shutdown_rx);

@@ -15,7 +15,8 @@ impl ContainerRuntime for DockerManager {
         plan_dir: Option<PlanDirMount>,
     ) -> Result<ContainerId, Box<dyn std::error::Error + Send + Sync>> {
         let ws = workspace.map(|w| crate::WorkspaceVolume {
-            name: w.name,
+            host_path: w.host_path,
+            repo_cache_path: w.repo_cache_path,
             read_only: w.read_only,
         });
         let pd = plan_dir.map(|p| crate::PlanDirMount {

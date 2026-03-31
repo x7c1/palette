@@ -83,9 +83,20 @@ pub trait ContainerRuntime: Send + Sync {
     ) -> String;
 }
 
-/// Workspace volume configuration for container creation.
+/// Workspace bind mount configuration for container creation.
+///
+/// Each workspace is a `git clone --shared` of a bare cache on the host.
+/// The container sees:
+///   - `/home/agent/workspace`  — the working tree (bind mount of `host_path`)
+///   - `/home/agent/repo-cache` — the bare cache (read-only bind mount of `repo_cache_path`)
 pub struct WorkspaceVolume {
-    pub name: String,
+    /// Absolute path on the host to the workspace directory
+    /// (e.g., "data/workspace/{job_id}").
+    pub host_path: String,
+    /// Absolute path on the host to the bare repository cache
+    /// (e.g., "data/repos/{org}/{repo}.git").
+    pub repo_cache_path: String,
+    /// If true, mount workspace as read-only (for reviewers).
     pub read_only: bool,
 }
 
