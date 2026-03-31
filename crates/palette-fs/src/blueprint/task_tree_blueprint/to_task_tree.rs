@@ -16,6 +16,10 @@ pub enum BlueprintError {
         task_key: String,
         cause: InvalidRepository,
     },
+    /// Task depends on itself.
+    SelfDependency { task_key: String },
+    /// Same dependency listed more than once.
+    DuplicateDependency { task_key: String, dep: String },
 }
 
 impl BlueprintError {
@@ -31,6 +35,12 @@ impl BlueprintError {
             BlueprintError::InvalidRepository { task_key, .. } => {
                 format!("tasks[key={task_key}].repository")
             }
+            BlueprintError::SelfDependency { task_key } => {
+                format!("tasks[key={task_key}].depends_on")
+            }
+            BlueprintError::DuplicateDependency { task_key, dep } => {
+                format!("tasks[key={task_key}].depends_on[{dep}]")
+            }
         }
     }
 
@@ -42,6 +52,10 @@ impl BlueprintError {
                 "blueprint/missing_review_child".to_string()
             }
             BlueprintError::InvalidRepository { cause, .. } => cause.reason_key(),
+            BlueprintError::SelfDependency { .. } => "blueprint/self_dependency".to_string(),
+            BlueprintError::DuplicateDependency { .. } => {
+                "blueprint/duplicate_dependency".to_string()
+            }
         }
     }
 }
@@ -97,6 +111,7 @@ fn validate_node(node: &TaskNode) -> (Vec<BlueprintError>, HashMap<&str, TaskKey
     let (key_errors, keys) = collect_keys(node);
     let structure_errors = check_craft_has_review(node);
     let repo_errors = check_repository(node);
+    let dep_errors = validate_depends_on(node);
 
     let (child_errors, child_keys) = node.children.iter().map(validate_node).fold(
         (Vec::new(), HashMap::new()),
@@ -111,6 +126,7 @@ fn validate_node(node: &TaskNode) -> (Vec<BlueprintError>, HashMap<&str, TaskKey
         .into_iter()
         .chain(structure_errors)
         .chain(repo_errors)
+        .chain(dep_errors)
         .chain(child_errors)
         .collect();
 
@@ -121,19 +137,17 @@ fn validate_node(node: &TaskNode) -> (Vec<BlueprintError>, HashMap<&str, TaskKey
 
 /// Parse the node's own key and depends_on keys.
 /// Returns (errors, parsed_keys).
-fn collect_keys<'a>(node: &'a TaskNode) -> (Vec<BlueprintError>, HashMap<&'a str, TaskKey>) {
+fn collect_keys(node: &TaskNode) -> (Vec<BlueprintError>, HashMap<&str, TaskKey>) {
     std::iter::once(node.key.as_str())
         .chain(node.depends_on.iter().map(String::as_str))
         .fold(
             (Vec::new(), HashMap::new()),
             |(mut errors, mut keys), raw| {
-                if !keys.contains_key(raw) {
-                    match TaskKey::parse(raw) {
-                        Ok(k) => {
-                            keys.insert(raw, k);
-                        }
-                        Err(e) => errors.push(BlueprintError::InvalidKey(e)),
+                match TaskKey::parse(raw) {
+                    Ok(k) => {
+                        keys.insert(raw, k);
                     }
+                    Err(e) => errors.push(BlueprintError::InvalidKey(e)),
                 }
                 (errors, keys)
             },
@@ -168,6 +182,31 @@ fn check_repository(node: &TaskNode) -> Option<BlueprintError> {
             task_key: node.key.clone(),
             cause,
         })
+}
+
+/// Check depends_on for self-dependency and duplicates.
+fn validate_depends_on(node: &TaskNode) -> Vec<BlueprintError> {
+    use std::collections::HashSet;
+
+    node.depends_on
+        .iter()
+        .fold(
+            (Vec::new(), HashSet::new()),
+            |(mut errors, mut seen), dep| {
+                if dep == &node.key {
+                    errors.push(BlueprintError::SelfDependency {
+                        task_key: node.key.clone(),
+                    });
+                } else if !seen.insert(dep.as_str()) {
+                    errors.push(BlueprintError::DuplicateDependency {
+                        task_key: node.key.clone(),
+                        dep: dep.clone(),
+                    });
+                }
+                (errors, seen)
+            },
+        )
+        .0
 }
 
 fn insert_node(
