@@ -94,6 +94,34 @@ fn validate_tree(root: &TaskNode) -> Result<Validated<'_>, Vec<BlueprintError>> 
 /// Validate a single node and all its descendants.
 /// Returns (errors, parsed_keys) so callers can aggregate.
 fn validate_node(node: &TaskNode) -> (Vec<BlueprintError>, HashMap<&str, TaskKey>) {
+    let (key_errors, keys) = collect_keys(node);
+    let structure_errors = check_craft_has_review(node);
+    let repo_errors = check_repository(node);
+
+    let (child_errors, child_keys) = node.children.iter().map(validate_node).fold(
+        (Vec::new(), HashMap::new()),
+        |(mut errs, mut keys), (ce, ck)| {
+            errs.extend(ce);
+            keys.extend(ck);
+            (errs, keys)
+        },
+    );
+
+    let errors = key_errors
+        .into_iter()
+        .chain(structure_errors)
+        .chain(repo_errors)
+        .chain(child_errors)
+        .collect();
+
+    let mut all_keys = keys;
+    all_keys.extend(child_keys);
+    (errors, all_keys)
+}
+
+/// Parse the node's own key and depends_on keys.
+/// Returns (errors, parsed_keys).
+fn collect_keys<'a>(node: &'a TaskNode) -> (Vec<BlueprintError>, HashMap<&'a str, TaskKey>) {
     let mut errors = Vec::new();
     let mut keys = HashMap::new();
 
@@ -101,30 +129,7 @@ fn validate_node(node: &TaskNode) -> (Vec<BlueprintError>, HashMap<&str, TaskKey
         Ok(k) => {
             keys.insert(node.key.as_str(), k);
         }
-        Err(e) => {
-            errors.push(BlueprintError::InvalidKey(e));
-        }
-    }
-
-    if let Some(job_type) = node.job_type
-        && matches!(JobType::from(job_type), JobType::Craft)
-        && !node.children.iter().any(|c| {
-            c.job_type
-                .is_some_and(|jt| matches!(JobType::from(jt), JobType::Review))
-        })
-    {
-        errors.push(BlueprintError::MissingReviewChild {
-            task_key: node.key.clone(),
-        });
-    }
-
-    if let Some(ref repo) = node.repository
-        && let Err(cause) = Repository::parse(&repo.name, &repo.branch)
-    {
-        errors.push(BlueprintError::InvalidRepository {
-            task_key: node.key.clone(),
-            cause,
-        });
+        Err(e) => errors.push(BlueprintError::InvalidKey(e)),
     }
 
     for dep in &node.depends_on {
@@ -133,20 +138,42 @@ fn validate_node(node: &TaskNode) -> (Vec<BlueprintError>, HashMap<&str, TaskKey
                 Ok(k) => {
                     keys.insert(dep.as_str(), k);
                 }
-                Err(e) => {
-                    errors.push(BlueprintError::InvalidKey(e));
-                }
+                Err(e) => errors.push(BlueprintError::InvalidKey(e)),
             }
         }
     }
 
-    for child in &node.children {
-        let (child_errors, child_keys) = validate_node(child);
-        errors.extend(child_errors);
-        keys.extend(child_keys);
-    }
-
     (errors, keys)
+}
+
+/// Check that craft tasks have at least one review child.
+fn check_craft_has_review(node: &TaskNode) -> Option<BlueprintError> {
+    let job_type = node.job_type?;
+    if !matches!(JobType::from(job_type), JobType::Craft) {
+        return None;
+    }
+    let has_review = node.children.iter().any(|c| {
+        c.job_type
+            .is_some_and(|jt| matches!(JobType::from(jt), JobType::Review))
+    });
+    if has_review {
+        None
+    } else {
+        Some(BlueprintError::MissingReviewChild {
+            task_key: node.key.clone(),
+        })
+    }
+}
+
+/// Check that the repository (if present) has valid name and branch.
+fn check_repository(node: &TaskNode) -> Option<BlueprintError> {
+    let repo = node.repository.as_ref()?;
+    Repository::parse(&repo.name, &repo.branch)
+        .err()
+        .map(|cause| BlueprintError::InvalidRepository {
+            task_key: node.key.clone(),
+            cause,
+        })
 }
 
 fn insert_node(
