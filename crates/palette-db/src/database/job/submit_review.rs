@@ -40,7 +40,12 @@ impl Database {
             tx.execute(
                 "INSERT INTO review_comments (submission_id, file, line, body)
                  VALUES (?1, ?2, ?3, ?4)",
-                params![submission_id, comment.file, comment.line, comment.body],
+                params![
+                    submission_id,
+                    comment.file.as_ref(),
+                    comment.line.value(),
+                    comment.body.as_ref()
+                ],
             )?;
         }
 
@@ -67,30 +72,30 @@ mod tests {
     #[test]
     fn submit_and_get_review() {
         let db = test_db();
-        let craft_task = setup_task(&db, "task-C-001");
-        db.create_job(&CreateJobRequest {
-            task_id: craft_task,
-            id: Some(jid("C-001")),
-            job_type: JobType::Craft,
-            title: "Craft".to_string(),
-            plan_path: "test/C-001".to_string(),
-            assignee_id: None,
-            priority: None,
-            repository: None,
-        })
+        let craft_task = setup_task(&db, "wf-test:task-C-001");
+        db.create_job(&CreateJobRequest::new(
+            Some(jid("C-001")),
+            craft_task,
+            JobType::Craft,
+            Title::parse("Craft").unwrap(),
+            PlanPath::parse("test/C-001").unwrap(),
+            None,
+            None,
+            None,
+        ))
         .unwrap();
 
-        let review_task = setup_task(&db, "task-R-001");
-        db.create_job(&CreateJobRequest {
-            task_id: review_task,
-            id: Some(jid("R-001")),
-            job_type: JobType::Review,
-            title: "Review".to_string(),
-            plan_path: "test/R-001".to_string(),
-            assignee_id: None,
-            priority: None,
-            repository: None,
-        })
+        let review_task = setup_task(&db, "wf-test:task-R-001");
+        db.create_job(&CreateJobRequest::new(
+            Some(jid("R-001")),
+            review_task,
+            JobType::Review,
+            Title::parse("Review").unwrap(),
+            PlanPath::parse("test/R-001").unwrap(),
+            None,
+            None,
+            None,
+        ))
         .unwrap();
 
         let sub = db
@@ -100,9 +105,9 @@ mod tests {
                     verdict: Verdict::ChangesRequested,
                     summary: Some("Needs fixes".to_string()),
                     comments: vec![ReviewCommentInput {
-                        file: "src/main.rs".to_string(),
-                        line: 10,
-                        body: "Fix this".to_string(),
+                        file: FilePath::parse("src/main.rs").unwrap(),
+                        line: LineNumber::parse(10).unwrap(),
+                        body: CommentBody::parse("Fix this").unwrap(),
                     }],
                 },
             )

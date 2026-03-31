@@ -37,11 +37,8 @@ impl Orchestrator {
                 let Some(task_state) = self.interactor.data_store.get_task_state(task_id)? else {
                     return Ok(None);
                 };
-                let task_store = self
-                    .interactor
-                    .create_task_store(&task_state.workflow_id)
-                    .map_err(|e| crate::Error::Internal(e.to_string()))?;
-                let Some(task) = task_store.get_task(task_id)? else {
+                let task_store = self.interactor.create_task_store(&task_state.workflow_id)?;
+                let Some(task) = task_store.get_task(task_id) else {
                     return Ok(None);
                 };
                 let Some(ref parent_id) = task.parent_id else {

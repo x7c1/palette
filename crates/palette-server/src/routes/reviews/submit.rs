@@ -1,5 +1,7 @@
-use crate::AppState;
-use crate::api_types::{ReviewSubmissionResponse, SubmitReviewRequest};
+use crate::api_types::{
+    ErrorCode, InputError, Location, ResourceKind, ReviewSubmissionResponse, SubmitReviewRequest,
+};
+use crate::{AppState, Error};
 use axum::{
     Json,
     extract::{Path, State},
@@ -14,35 +16,41 @@ pub async fn handle_submit_review(
     State(state): State<Arc<AppState>>,
     Path(review_job_id): Path<String>,
     Json(api_req): Json<SubmitReviewRequest>,
-) -> Result<(StatusCode, Json<ReviewSubmissionResponse>), (StatusCode, String)> {
-    let review_job_id = JobId::new(review_job_id);
-    let req: palette_domain::review::SubmitReviewRequest = api_req.into();
+) -> crate::Result<(StatusCode, Json<ReviewSubmissionResponse>)> {
+    let review_job_id =
+        JobId::parse(review_job_id).map_err(Error::invalid_path("review_job_id"))?;
+    let req = api_req.validate().map_err(|errors| Error::BadRequest {
+        code: ErrorCode::InputValidationFailed,
+        errors,
+    })?;
 
     // Verify the job exists and is a review
     let job = state
         .interactor
         .data_store
         .get_job(&review_job_id)
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
-        .ok_or_else(|| {
-            (
-                StatusCode::NOT_FOUND,
-                format!("review job not found: {review_job_id}"),
-            )
+        .map_err(Error::internal)?
+        .ok_or_else(|| Error::NotFound {
+            resource: ResourceKind::Job,
+            id: review_job_id.to_string(),
         })?;
 
     if job.job_type != JobType::Review {
-        return Err((
-            StatusCode::BAD_REQUEST,
-            format!("job {review_job_id} is not a review job"),
-        ));
+        return Err(Error::BadRequest {
+            code: ErrorCode::NotReviewJob,
+            errors: vec![InputError {
+                location: Location::Path,
+                hint: "review_job_id".into(),
+                reason: "job/not_review_job".into(),
+            }],
+        });
     }
 
     let submission = state
         .interactor
         .data_store
         .submit_review(&review_job_id, &req)
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+        .map_err(Error::internal)?;
 
     // Apply rule engine
     let effects = RuleEngine::new(
@@ -50,7 +58,7 @@ pub async fn handle_submit_review(
         state.max_review_rounds,
     )
     .on_review_submitted(&review_job_id, &submission)
-    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    .map_err(Error::internal)?;
 
     for effect in &effects {
         tracing::info!(?effect, "review rule engine effect");

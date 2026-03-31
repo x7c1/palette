@@ -1,5 +1,5 @@
 use super::super::*;
-use crate::models::QueuedMessage;
+use crate::models::{QueuedMessage, QueuedMessageRow};
 use rusqlite::OptionalExtension;
 
 impl Database {
@@ -10,21 +10,34 @@ impl Database {
             .prepare(
                 "SELECT id, target_id, message, created_at FROM message_queue WHERE target_id = ?1 ORDER BY id LIMIT 1",
             )?
-            .query_row(params![target_id.as_ref()], |row| {
-                Ok(QueuedMessage {
-                    id: row.get(0)?,
-                    target_id: WorkerId::new(row.get::<_, String>(1)?),
-                    message: row.get(2)?,
-                    created_at: parse_datetime(&row.get::<_, String>(3)?),
-                })
-            })
-            .optional()?;
+            .query_row(params![target_id.as_ref()], read_queued_message_row)
+            .optional()?
+            .map(into_queued_message)
+            .transpose()?;
 
         if let Some(ref msg) = msg {
             conn.execute("DELETE FROM message_queue WHERE id = ?1", params![msg.id])?;
         }
         Ok(msg)
     }
+}
+
+fn read_queued_message_row(row: &rusqlite::Row) -> rusqlite::Result<QueuedMessageRow> {
+    Ok(QueuedMessageRow {
+        id: row.get("id")?,
+        target_id: row.get("target_id")?,
+        message: row.get("message")?,
+        created_at: row.get("created_at")?,
+    })
+}
+
+fn into_queued_message(row: QueuedMessageRow) -> crate::Result<QueuedMessage> {
+    Ok(QueuedMessage {
+        id: row.id,
+        target_id: WorkerId::parse(row.target_id).map_err(corrupt_parse)?,
+        message: row.message,
+        created_at: parse_datetime(&row.created_at),
+    })
 }
 
 #[cfg(test)]

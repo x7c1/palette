@@ -1,5 +1,5 @@
 use super::super::{Database, lock};
-use super::row::{COLUMNS, row_to_worker_state};
+use super::row::{COLUMNS, into_worker_state, read_worker_row};
 use palette_domain::worker::*;
 use rusqlite::params;
 
@@ -12,8 +12,11 @@ impl Database {
         let conn = lock(&self.conn)?;
         let sql = format!("SELECT {COLUMNS} FROM workers WHERE container_id = ?1");
         let mut stmt = conn.prepare(&sql)?;
-        let mut rows = stmt.query_map(params![container_id.as_ref()], row_to_worker_state)?;
-        rows.next().transpose().map_err(Into::into)
+        stmt.query_map(params![container_id.as_ref()], read_worker_row)?
+            .next()
+            .transpose()?
+            .map(into_worker_state)
+            .transpose()
     }
 }
 
@@ -32,6 +35,6 @@ mod tests {
             .find_worker_by_container(&ContainerId::new("container-member-1"))
             .unwrap()
             .unwrap();
-        assert_eq!(worker.id, WorkerId::new("member-1"));
+        assert_eq!(worker.id, WorkerId::parse("member-1").unwrap());
     }
 }

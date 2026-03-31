@@ -27,10 +27,10 @@ mod tests {
         role: WorkerRole,
         status: WorkerStatus,
     ) {
-        let wf_id = WorkflowId::new("wf-test");
+        let wf_id = WorkflowId::parse("wf-test").unwrap();
         let _ = db.create_workflow(&wf_id, "test/blueprint.yaml");
         db.insert_worker(&InsertWorkerRequest {
-            id: WorkerId::new(id),
+            id: WorkerId::parse(id).unwrap(),
             workflow_id: wf_id,
             role,
             status,
@@ -38,7 +38,7 @@ mod tests {
             container_id: ContainerId::new(format!("container-{id}")),
             terminal_target: TerminalTarget::new(format!("pane-{id}")),
             session_id: None,
-            task_id: TaskId::new(format!("task-{id}")),
+            task_id: TaskId::parse(format!("wf-test:{id}")).unwrap(),
         })
         .unwrap();
     }
@@ -96,7 +96,7 @@ mod tests {
         insert_worker(&db, "w-1", WorkerRole::Member, WorkerStatus::Working);
         assert_eq!(db.count_active_workers().unwrap(), 1);
 
-        db.remove_worker(&WorkerId::new("w-1")).unwrap();
+        db.remove_worker(&WorkerId::parse("w-1").unwrap()).unwrap();
         assert_eq!(db.count_active_workers().unwrap(), 0);
     }
 }

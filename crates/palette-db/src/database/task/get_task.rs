@@ -1,32 +1,20 @@
-use super::super::{Database, id_conversion_error, lock};
+use super::super::{Database, corrupt, corrupt_parse, lock};
 use crate::models::TaskRow;
 use palette_domain::task::{TaskId, TaskState, TaskStatus};
 use palette_domain::workflow::WorkflowId;
 use rusqlite::params;
 use std::collections::HashMap;
 
-fn row_to_task_row(row: &rusqlite::Row) -> rusqlite::Result<TaskRow> {
-    let status_id: i64 = row.get("status_id")?;
-    let status = crate::lookup::task_status_from_id(status_id).map_err(id_conversion_error)?;
-    Ok(TaskRow {
-        id: TaskId::new(row.get::<_, String>("id")?),
-        workflow_id: WorkflowId::new(row.get::<_, String>("workflow_id")?),
-        status,
-    })
-}
-
 impl Database {
     pub fn get_task_state(&self, id: &TaskId) -> crate::Result<Option<TaskState>> {
         let conn = lock(&self.conn)?;
         let mut stmt =
             conn.prepare("SELECT id, workflow_id, status_id FROM tasks WHERE id = ?1")?;
-        let mut rows = stmt.query_map(params![id.as_ref()], row_to_task_row)?;
-        let row = rows.next().transpose()?;
-        Ok(row.map(|r| TaskState {
-            id: r.id,
-            workflow_id: r.workflow_id,
-            status: r.status,
-        }))
+        stmt.query_map(params![id.as_ref()], read_task_row)?
+            .next()
+            .transpose()?
+            .map(into_task_state)
+            .transpose()
     }
 
     /// Get all task statuses for a workflow, keyed by TaskId.
@@ -37,12 +25,31 @@ impl Database {
         let conn = lock(&self.conn)?;
         let mut stmt =
             conn.prepare("SELECT id, workflow_id, status_id FROM tasks WHERE workflow_id = ?1")?;
-        let rows = stmt.query_map(params![workflow_id.as_ref()], row_to_task_row)?;
-        let mut map = HashMap::new();
-        for row in rows {
-            let row = row?;
-            map.insert(row.id, row.status);
-        }
-        Ok(map)
+        stmt.query_map(params![workflow_id.as_ref()], read_task_row)?
+            .map(|row| {
+                let state = into_task_state(row?)?;
+                Ok((state.id, state.status))
+            })
+            .collect::<crate::Result<HashMap<_, _>>>()
     }
+}
+
+fn read_task_row(row: &rusqlite::Row) -> rusqlite::Result<TaskRow> {
+    Ok(TaskRow {
+        id: row.get("id")?,
+        workflow_id: row.get("workflow_id")?,
+        status_id: row.get("status_id")?,
+    })
+}
+
+fn into_task_state(row: TaskRow) -> crate::Result<TaskState> {
+    let status = crate::lookup::task_status_from_id(row.status_id).map_err(corrupt)?;
+    let id = TaskId::parse(row.id).map_err(corrupt_parse)?;
+    let workflow_id = WorkflowId::parse(row.workflow_id).map_err(corrupt_parse)?;
+
+    Ok(TaskState {
+        id,
+        workflow_id,
+        status,
+    })
 }

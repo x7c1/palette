@@ -1,19 +1,21 @@
-use crate::AppState;
-use crate::api_types::{CreateJobRequest, JobResponse};
+use crate::api_types::{CreateJobRequest, ErrorCode, JobResponse};
+use crate::{AppState, Error};
 use axum::{Json, extract::State, http::StatusCode};
-use palette_domain as domain;
 use std::sync::Arc;
 
 pub async fn handle_create_job(
     State(state): State<Arc<AppState>>,
     Json(api_req): Json<CreateJobRequest>,
-) -> Result<(StatusCode, Json<JobResponse>), (StatusCode, String)> {
-    let req: domain::job::CreateJobRequest = api_req.into();
+) -> crate::Result<(StatusCode, Json<JobResponse>)> {
+    let req = api_req.validate().map_err(|errors| Error::BadRequest {
+        code: ErrorCode::InputValidationFailed,
+        errors,
+    })?;
     let job = state
         .interactor
         .data_store
         .create_job(&req)
-        .map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))?;
+        .map_err(Error::internal)?;
     tracing::info!(job_id = %job.id, "created job");
     Ok((StatusCode::CREATED, Json(JobResponse::from(job))))
 }

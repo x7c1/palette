@@ -1,5 +1,5 @@
 mod worker_id;
-pub use worker_id::WorkerId;
+pub use worker_id::{InvalidWorkerId, WorkerId};
 
 mod worker_role;
 pub use worker_role::WorkerRole;

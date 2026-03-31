@@ -1,5 +1,5 @@
 use super::super::{Database, lock};
-use super::row::{COLUMNS, row_to_worker_state};
+use super::row::{COLUMNS, into_worker_state, read_worker_row};
 use crate::lookup;
 use palette_domain::task::TaskId;
 use palette_domain::worker::*;
@@ -14,11 +14,14 @@ impl Database {
         let sql =
             format!("SELECT {COLUMNS} FROM workers WHERE task_id = ?1 AND role_id IN (?2, ?3)");
         let mut stmt = conn.prepare(&sql)?;
-        let mut rows = stmt.query_map(
+        stmt.query_map(
             params![task_id.as_ref(), role_leader, role_ri],
-            row_to_worker_state,
-        )?;
-        rows.next().transpose().map_err(Into::into)
+            read_worker_row,
+        )?
+        .next()
+        .transpose()?
+        .map(into_worker_state)
+        .transpose()
     }
 }
 
@@ -36,14 +39,14 @@ mod tests {
         insert_test_worker(&db, "member-1", WorkerRole::Member, "wf-1");
 
         let sup = db
-            .find_supervisor_for_task(&TaskId::new("task-leader-1"))
+            .find_supervisor_for_task(&TaskId::parse("wf-1:leader-1").unwrap())
             .unwrap()
             .unwrap();
-        assert_eq!(sup.id, WorkerId::new("leader-1"));
+        assert_eq!(sup.id, WorkerId::parse("leader-1").unwrap());
 
         // Member should not be found
         assert!(
-            db.find_supervisor_for_task(&TaskId::new("task-member-1"))
+            db.find_supervisor_for_task(&TaskId::parse("wf-1:member-1").unwrap())
                 .unwrap()
                 .is_none()
         );

@@ -7,9 +7,10 @@ use palette_server::api_types::{ReviewCommentInput, SubmitReviewRequest, Verdict
 use palette_tmux::TmuxManager;
 use palette_usecase::data_store::CreateTaskRequest;
 
-fn setup_review_task(state: &palette_server::AppState, task_name: &str) -> TaskId {
-    let wf_id = WorkflowId::new(format!("wf-{task_name}"));
-    let task_id = TaskId::new(task_name);
+fn setup_review_task(state: &palette_server::AppState, task_id_str: &str) -> TaskId {
+    let task_id = TaskId::parse(task_id_str).unwrap();
+    let wf_part = task_id_str.split(':').next().unwrap();
+    let wf_id = WorkflowId::parse(wf_part).unwrap();
     let _ = state
         .interactor
         .data_store
@@ -32,26 +33,30 @@ async fn review_submit_and_get_submissions() {
     use palette_domain::job::{CreateJobRequest, JobId, JobStatus, JobType, ReviewStatus};
     use palette_domain::worker::WorkerId;
 
-    let task_id = setup_review_task(&state, "task-R-001");
+    let task_id = setup_review_task(&state, "wf-review:task-R-001");
     let review_job = state
         .interactor
         .data_store
-        .create_job(&CreateJobRequest {
+        .create_job(&CreateJobRequest::new(
+            Some(JobId::parse("R-001").unwrap()),
             task_id,
-            id: Some(JobId::new("R-001")),
-            job_type: JobType::Review,
-            title: "Review".to_string(),
-            plan_path: "test/R-001".to_string(),
-            assignee_id: None,
-            priority: None,
-            repository: None,
-        })
+            JobType::Review,
+            palette_domain::job::Title::parse("Review").unwrap(),
+            palette_domain::job::PlanPath::parse("test/R-001").unwrap(),
+            None,
+            None,
+            None,
+        ))
         .unwrap();
     helper::setup_worker(&*state.interactor.data_store, "member-b");
     state
         .interactor
         .data_store
-        .assign_job(&review_job.id, &WorkerId::new("member-b"), JobType::Review)
+        .assign_job(
+            &review_job.id,
+            &WorkerId::parse("member-b").unwrap(),
+            JobType::Review,
+        )
         .unwrap();
 
     let client = reqwest::Client::new();
@@ -81,7 +86,7 @@ async fn review_submit_and_get_submissions() {
     let review = state
         .interactor
         .data_store
-        .get_job(&JobId::new("R-001"))
+        .get_job(&JobId::parse("R-001").unwrap())
         .unwrap()
         .unwrap();
     assert_eq!(
@@ -112,26 +117,30 @@ async fn review_approved_completes_review_job() {
     use palette_domain::job::{CreateJobRequest, JobId, JobStatus, JobType, ReviewStatus};
     use palette_domain::worker::WorkerId;
 
-    let task_id = setup_review_task(&state, "task-R-001");
+    let task_id = setup_review_task(&state, "wf-review:task-R-001");
     let review_job = state
         .interactor
         .data_store
-        .create_job(&CreateJobRequest {
+        .create_job(&CreateJobRequest::new(
+            Some(JobId::parse("R-001").unwrap()),
             task_id,
-            id: Some(JobId::new("R-001")),
-            job_type: JobType::Review,
-            title: "Review".to_string(),
-            plan_path: "test/R-001".to_string(),
-            assignee_id: None,
-            priority: None,
-            repository: None,
-        })
+            JobType::Review,
+            palette_domain::job::Title::parse("Review").unwrap(),
+            palette_domain::job::PlanPath::parse("test/R-001").unwrap(),
+            None,
+            None,
+            None,
+        ))
         .unwrap();
     helper::setup_worker(&*state.interactor.data_store, "member-b");
     state
         .interactor
         .data_store
-        .assign_job(&review_job.id, &WorkerId::new("member-b"), JobType::Review)
+        .assign_job(
+            &review_job.id,
+            &WorkerId::parse("member-b").unwrap(),
+            JobType::Review,
+        )
         .unwrap();
 
     let client = reqwest::Client::new();
@@ -153,7 +162,7 @@ async fn review_approved_completes_review_job() {
     let review = state
         .interactor
         .data_store
-        .get_job(&JobId::new("R-001"))
+        .get_job(&JobId::parse("R-001").unwrap())
         .unwrap()
         .unwrap();
     assert_eq!(review.status, JobStatus::Review(ReviewStatus::Done));

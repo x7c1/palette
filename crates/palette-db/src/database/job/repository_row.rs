@@ -1,3 +1,4 @@
+use super::super::{corrupt, corrupt_parse};
 use palette_domain::job::Repository;
 use serde::{Deserialize, Serialize};
 
@@ -17,12 +18,9 @@ impl From<&Repository> for RepositoryRow {
     }
 }
 
-impl From<RepositoryRow> for Repository {
-    fn from(r: RepositoryRow) -> Self {
-        Self {
-            name: r.name,
-            branch: r.branch,
-        }
+impl RepositoryRow {
+    pub(crate) fn into_domain(self) -> Result<Repository, palette_domain::job::InvalidRepository> {
+        Repository::parse(self.name, self.branch)
     }
 }
 
@@ -31,7 +29,9 @@ pub(crate) fn repository_to_json(repo: &Repository) -> String {
     serde_json::to_string(&row).unwrap()
 }
 
-pub(crate) fn repository_from_json(json: &str) -> Option<Repository> {
-    let row: RepositoryRow = serde_json::from_str(json).ok()?;
-    Some(Repository::from(row))
+pub(crate) fn repository_from_json(json: &str) -> crate::Result<Repository> {
+    serde_json::from_str::<RepositoryRow>(json)
+        .map_err(|e| corrupt(format!("repository/{e}")))?
+        .into_domain()
+        .map_err(corrupt_parse)
 }

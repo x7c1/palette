@@ -1,5 +1,5 @@
 use super::super::*;
-use super::row::row_to_job;
+use super::row::{into_job, read_job_row};
 use palette_domain::job::Job;
 use palette_domain::task::TaskId;
 use rusqlite::params;
@@ -12,7 +12,10 @@ impl Database {
             "SELECT id, task_id, type_id, title, plan_path, assignee_id, status_id, priority_id, repository, pr_url, created_at, updated_at, notes, assigned_at
              FROM jobs WHERE task_id = ?1",
         )?;
-        let mut rows = stmt.query_map(params![task_id.as_ref()], row_to_job)?;
-        rows.next().transpose().map_err(Into::into)
+        stmt.query_map(params![task_id.as_ref()], read_job_row)?
+            .next()
+            .transpose()?
+            .map(into_job)
+            .transpose()
     }
 }

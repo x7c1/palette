@@ -100,15 +100,15 @@ mod tests {
     fn make_supervisor(id: &str, role: WorkerRole) -> WorkerState {
         use crate::task::TaskId;
         WorkerState {
-            id: WorkerId::new(id),
-            workflow_id: crate::workflow::WorkflowId::new("wf-test"),
+            id: WorkerId::parse(id).unwrap(),
+            workflow_id: crate::workflow::WorkflowId::parse("wf-test").unwrap(),
             role,
             supervisor_id: None,
             container_id: ContainerId::new(format!("container-{id}")),
             terminal_target: TerminalTarget::new(format!("pane-{id}")),
             status: WorkerStatus::Idle,
             session_id: None,
-            task_id: TaskId::new(format!("task-{id}")),
+            task_id: TaskId::parse(format!("wf-test:{id}")).unwrap(),
         }
     }
 
@@ -124,21 +124,21 @@ mod tests {
 
         assert_eq!(
             state
-                .find_supervisor_for_task(&TaskId::new("task-leader-1"))
+                .find_supervisor_for_task(&TaskId::parse("wf-test:leader-1").unwrap())
                 .unwrap()
                 .id,
-            WorkerId::new("leader-1")
+            WorkerId::parse("leader-1").unwrap()
         );
         assert_eq!(
             state
-                .find_supervisor_for_task(&TaskId::new("task-ri-1"))
+                .find_supervisor_for_task(&TaskId::parse("wf-test:ri-1").unwrap())
                 .unwrap()
                 .id,
-            WorkerId::new("ri-1")
+            WorkerId::parse("ri-1").unwrap()
         );
         assert!(
             state
-                .find_supervisor_for_task(&TaskId::new("nonexistent"))
+                .find_supervisor_for_task(&TaskId::parse("wf-test:nonexistent").unwrap())
                 .is_none()
         );
     }
@@ -153,14 +153,14 @@ mod tests {
             .supervisors
             .push(make_supervisor("ri-1", WorkerRole::ReviewIntegrator));
 
-        let removed = state.remove_supervisor(&WorkerId::new("leader-1"));
+        let removed = state.remove_supervisor(&WorkerId::parse("leader-1").unwrap());
         assert!(removed.is_some());
-        assert_eq!(removed.unwrap().id, WorkerId::new("leader-1"));
+        assert_eq!(removed.unwrap().id, WorkerId::parse("leader-1").unwrap());
         assert_eq!(state.supervisors.len(), 1);
 
         assert!(
             state
-                .remove_supervisor(&WorkerId::new("nonexistent"))
+                .remove_supervisor(&WorkerId::parse("nonexistent").unwrap())
                 .is_none()
         );
     }

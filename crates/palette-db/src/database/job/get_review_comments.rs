@@ -15,10 +15,7 @@ impl Database {
                 body: row.get(4)?,
             })
         })?;
-        let mut comments = Vec::new();
-        for row in rows {
-            comments.push(row?);
-        }
-        Ok(comments)
+        rows.collect::<rusqlite::Result<Vec<_>>>()
+            .map_err(Into::into)
     }
 }

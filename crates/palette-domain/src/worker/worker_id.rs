@@ -1,12 +1,21 @@
 use std::fmt;
 
+const MAX_LEN: usize = 256;
+
 /// Worker identifier for both leaders and members (e.g., "leader-1", "member-0-a3f2").
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct WorkerId(String);
 
 impl WorkerId {
-    pub fn new(id: impl Into<String>) -> Self {
-        Self(id.into())
+    pub fn parse(id: impl Into<String>) -> Result<Self, InvalidWorkerId> {
+        let id = id.into();
+        if id.is_empty() {
+            return Err(InvalidWorkerId::Empty);
+        }
+        if id.len() > MAX_LEN {
+            return Err(InvalidWorkerId::TooLong { id });
+        }
+        Ok(Self(id))
     }
 
     /// Generate a unique member ID with a sequence number and random suffix
@@ -41,6 +50,12 @@ impl AsRef<str> for WorkerId {
     fn as_ref(&self) -> &str {
         &self.0
     }
+}
+
+#[derive(Debug, palette_macros::ReasonKey)]
+pub enum InvalidWorkerId {
+    Empty,
+    TooLong { id: String },
 }
 
 fn random_hex(len: usize) -> String {

@@ -1,5 +1,5 @@
 use super::super::*;
-use super::row::row_to_job;
+use super::row::{into_job, read_job_row};
 
 impl Database {
     pub fn list_jobs(&self, filter: &JobFilter) -> crate::Result<Vec<Job>> {
@@ -24,13 +24,9 @@ impl Database {
         let mut stmt = conn.prepare(&sql)?;
         let params_ref: Vec<&dyn rusqlite::types::ToSql> =
             param_values.iter().map(|p| p.as_ref()).collect();
-        let rows = stmt.query_map(params_ref.as_slice(), row_to_job)?;
-
-        let mut jobs = Vec::new();
-        for row in rows {
-            jobs.push(row?);
-        }
-        Ok(jobs)
+        stmt.query_map(params_ref.as_slice(), read_job_row)?
+            .map(|row| into_job(row?))
+            .collect::<crate::Result<Vec<_>>>()
     }
 }
 
@@ -43,30 +39,30 @@ mod tests {
     #[test]
     fn list_jobs_with_filter() {
         let db = test_db();
-        let craft_task = setup_task(&db, "task-C-001");
-        db.create_job(&CreateJobRequest {
-            task_id: craft_task,
-            id: Some(jid("C-001")),
-            job_type: JobType::Craft,
-            title: "Craft 1".to_string(),
-            plan_path: "test/C-001".to_string(),
-            assignee_id: None,
-            priority: None,
-            repository: None,
-        })
+        let craft_task = setup_task(&db, "wf-test:task-C-001");
+        db.create_job(&CreateJobRequest::new(
+            Some(jid("C-001")),
+            craft_task,
+            JobType::Craft,
+            Title::parse("Craft 1").unwrap(),
+            PlanPath::parse("test/C-001").unwrap(),
+            None,
+            None,
+            None,
+        ))
         .unwrap();
 
-        let review_task = setup_task(&db, "task-R-001");
-        db.create_job(&CreateJobRequest {
-            task_id: review_task,
-            id: Some(jid("R-001")),
-            job_type: JobType::Review,
-            title: "Review 1".to_string(),
-            plan_path: "test/R-001".to_string(),
-            assignee_id: None,
-            priority: None,
-            repository: None,
-        })
+        let review_task = setup_task(&db, "wf-test:task-R-001");
+        db.create_job(&CreateJobRequest::new(
+            Some(jid("R-001")),
+            review_task,
+            JobType::Review,
+            Title::parse("Review 1").unwrap(),
+            PlanPath::parse("test/R-001").unwrap(),
+            None,
+            None,
+            None,
+        ))
         .unwrap();
 
         let all = db

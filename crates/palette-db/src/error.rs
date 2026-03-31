@@ -13,10 +13,16 @@ pub enum Error {
     Job(JobError),
     /// Domain review error.
     Review(ReviewError),
+    /// Filesystem I/O error (e.g., creating database directory).
+    Io(std::io::Error),
     /// Lock acquisition failed (Mutex poisoned).
     LockPoisoned,
-    /// Generic internal error.
-    Internal(String),
+    /// Stored data violates domain constraints (e.g., invalid ID format,
+    /// unknown enum value). Indicates data corruption or schema mismatch.
+    DataCorruption {
+        /// Machine-readable reason key identifying the violation.
+        reason: String,
+    },
 }
 
 impl fmt::Display for Error {
@@ -25,8 +31,9 @@ impl fmt::Display for Error {
             Error::Storage(e) => write!(f, "database error: {e}"),
             Error::Job(e) => write!(f, "{e}"),
             Error::Review(e) => write!(f, "{e}"),
+            Error::Io(e) => write!(f, "io error: {e}"),
             Error::LockPoisoned => write!(f, "database lock poisoned"),
-            Error::Internal(msg) => write!(f, "internal error: {msg}"),
+            Error::DataCorruption { reason } => write!(f, "data corruption: {reason}"),
         }
     }
 }
@@ -37,6 +44,7 @@ impl std::error::Error for Error {
             Error::Storage(e) => Some(e),
             Error::Job(e) => Some(e),
             Error::Review(e) => Some(e),
+            Error::Io(e) => Some(e),
             _ => None,
         }
     }

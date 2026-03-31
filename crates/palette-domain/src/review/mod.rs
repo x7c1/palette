@@ -1,3 +1,12 @@
+mod comment_body;
+pub use comment_body::{CommentBody, InvalidCommentBody};
+
+mod file_path;
+pub use file_path::{FilePath, InvalidFilePath};
+
+mod line_number;
+pub use line_number::{InvalidLineNumber, LineNumber};
+
 mod review_comment;
 pub use review_comment::ReviewComment;
 

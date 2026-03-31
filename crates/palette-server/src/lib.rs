@@ -1,5 +1,8 @@
 pub mod api_types;
 
+mod error;
+pub use error::{Error, Result};
+
 mod routes;
 
 use axum::Router;

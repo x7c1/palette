@@ -33,3 +33,6 @@ task:
           repository:
             name: x7c1/palette
             branch: e2e-dynamic-sup
+          children:
+            - key: review
+              type: review

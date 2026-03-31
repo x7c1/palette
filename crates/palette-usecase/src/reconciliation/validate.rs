@@ -137,15 +137,15 @@ mod tests {
     use palette_domain::task::{TaskKey, TaskTreeNode};
 
     fn wf() -> palette_domain::workflow::WorkflowId {
-        palette_domain::workflow::WorkflowId::new("wf-1")
+        palette_domain::workflow::WorkflowId::parse("wf-1").unwrap()
     }
 
     fn root_id() -> TaskId {
-        TaskId::root(&wf(), &TaskKey::new("root"))
+        TaskId::root(&wf(), &TaskKey::parse("root").unwrap())
     }
 
     fn child_id(key: &str) -> TaskId {
-        root_id().child(&TaskKey::new(key.to_string()))
+        root_id().child(&TaskKey::parse(key).unwrap())
     }
 
     fn make_tree_with_children(children: &[&str]) -> TaskTree {
@@ -157,27 +157,27 @@ mod tests {
             TaskTreeNode {
                 id: rid.clone(),
                 parent_id: None,
-                key: TaskKey::new("root"),
+                key: TaskKey::parse("root").unwrap(),
                 plan_path: None,
                 job_type: None,
                 priority: None,
                 repository: None,
                 children: children
                     .iter()
-                    .map(|k| rid.child(&TaskKey::new(*k)))
+                    .map(|k| rid.child(&TaskKey::parse(*k).unwrap()))
                     .collect(),
                 depends_on: vec![],
             },
         );
 
         for key in children {
-            let cid = rid.child(&TaskKey::new(*key));
+            let cid = rid.child(&TaskKey::parse(*key).unwrap());
             nodes.insert(
                 cid.clone(),
                 TaskTreeNode {
                     id: cid.clone(),
                     parent_id: Some(rid.clone()),
-                    key: TaskKey::new(*key),
+                    key: TaskKey::parse(*key).unwrap(),
                     plan_path: None,
                     job_type: None,
                     priority: None,

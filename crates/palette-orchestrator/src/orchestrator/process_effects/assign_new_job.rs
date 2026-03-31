@@ -25,7 +25,9 @@ impl Orchestrator {
             .interactor
             .data_store
             .get_task_state(&job.task_id)?
-            .ok_or_else(|| crate::Error::Internal(format!("task not found: {}", job.task_id)))?;
+            .ok_or_else(|| crate::Error::TaskNotFound {
+                task_id: job.task_id.clone(),
+            })?;
         if self.is_workflow_suspending(&task_state.workflow_id)? {
             tracing::warn!(job_id = %job_id, "suspend in progress, deferring job assignment");
             return Ok(());

@@ -4,14 +4,14 @@ use std::collections::HashMap;
 
 /// Static structure of a task hierarchy, extracted from a Blueprint.
 /// Contains no execution state (status) — only structural information.
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct TaskTree {
     root_id: TaskId,
     nodes: HashMap<TaskId, TaskTreeNode>,
 }
 
 /// A single node in the task tree.
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct TaskTreeNode {
     pub id: TaskId,
     pub parent_id: Option<TaskId>,

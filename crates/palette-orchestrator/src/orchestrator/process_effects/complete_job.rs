@@ -1,4 +1,5 @@
 use super::Orchestrator;
+use palette_core::ReasonKey;
 use palette_domain::job::{JobId, JobType};
 use palette_domain::rule::RuleEffect;
 use palette_domain::task::{TaskId, TaskStatus};
@@ -26,13 +27,10 @@ impl Orchestrator {
             return Ok(vec![]);
         };
 
-        let task_store = self
-            .interactor
-            .create_task_store(&task_state.workflow_id)
-            .map_err(|e| crate::Error::Internal(e.to_string()))?;
+        let task_store = self.interactor.create_task_store(&task_state.workflow_id)?;
 
         // Check if all children are Completed (if any)
-        let children = task_store.get_child_tasks(task_id)?;
+        let children = task_store.get_child_tasks(task_id);
         let all_children_completed = children.iter().all(|c| c.status == TaskStatus::Completed);
 
         if !all_children_completed && !children.is_empty() {
@@ -80,7 +78,7 @@ impl Orchestrator {
         use palette_usecase::TaskRuleEngine;
 
         let task_engine = TaskRuleEngine::new(task_store);
-        let mut pending = task_engine.on_task_completed(completed_task_id)?;
+        let mut pending = task_engine.on_task_completed(completed_task_id);
         let mut job_effects = Vec::new();
 
         while !pending.is_empty() {
@@ -132,7 +130,7 @@ impl Orchestrator {
                         }
 
                         // Check workflow completion
-                        if let Some(task) = task_store.get_task(task_id)?
+                        if let Some(task) = task_store.get_task(task_id)
                             && task.parent_id.is_none()
                         {
                             use palette_domain::workflow::WorkflowStatus;
@@ -145,7 +143,7 @@ impl Orchestrator {
                                 "workflow completed"
                             );
                         }
-                        let effects = task_engine.on_task_completed(task_id)?;
+                        let effects = task_engine.on_task_completed(task_id);
                         next.extend(effects);
                     }
                     _ => {}
@@ -165,18 +163,18 @@ impl Orchestrator {
         task_store: &TaskStore,
         task_engine: &palette_usecase::TaskRuleEngine<'_>,
     ) -> crate::Result<(Vec<palette_domain::rule::TaskEffect>, Vec<RuleEffect>)> {
-        let children = task_store.get_child_tasks(task_id)?;
+        let children = task_store.get_child_tasks(task_id);
 
         if children.is_empty() {
             // Leaf task: create a job if it has a job_type
-            let job_effects = if let Some(mut task) = task_store.get_task(task_id)?
+            let job_effects = if let Some(mut task) = task_store.get_task(task_id)
                 && task.job_type.is_some()
             {
                 // For review tasks, inherit plan_path from parent craft task
                 if task.job_type == Some(JobType::Review)
                     && task.plan_path.is_none()
                     && let Some(ref parent_id) = task.parent_id
-                    && let Some(parent) = task_store.get_task(parent_id)?
+                    && let Some(parent) = task_store.get_task(parent_id)
                 {
                     task.plan_path = parent.plan_path.clone();
                 }
@@ -191,7 +189,7 @@ impl Orchestrator {
             // If composite task has a job_type, create the job.
             // Craft composites: do NOT resolve children (activated on InReview).
             // Review composites (review-integrate): resolve children immediately.
-            if let Some(task) = task_store.get_task(task_id)?
+            if let Some(task) = task_store.get_task(task_id)
                 && task.job_type.is_some()
             {
                 task_store.update_task_status(task_id, TaskStatus::InProgress)?;
@@ -214,7 +212,7 @@ impl Orchestrator {
 
             // Resolve which children can become Ready
             let child_ids: Vec<TaskId> = children.iter().map(|c| c.id.clone()).collect();
-            let task_effects = task_engine.resolve_ready_tasks(&child_ids)?;
+            let task_effects = task_engine.resolve_ready_tasks(&child_ids);
             Ok((task_effects, job_effects))
         }
     }
@@ -224,30 +222,20 @@ impl Orchestrator {
         &self,
         task: &palette_domain::task::Task,
     ) -> crate::Result<Vec<RuleEffect>> {
-        let job_type = task.job_type.expect("task must have job_type");
-        let job =
-            self.interactor
-                .data_store
-                .create_job(&palette_domain::job::CreateJobRequest {
-                    id: Some(JobId::generate(job_type)),
-                    task_id: task.id.clone(),
-                    job_type,
-                    title: task.key.to_string(),
-                    plan_path: task.plan_path.clone().ok_or_else(|| {
-                        crate::Error::Internal(format!("task {} has no plan_path", task.id))
-                    })?,
-                    assignee_id: None,
-                    priority: task.priority,
-                    repository: task.repository.clone(),
-                })?;
-
-        let rules = RuleEngine::new(self.interactor.data_store.as_ref(), 0);
-        let effects = rules.on_job_created(&job.id)?;
+        let req = task
+            .to_create_job_request()
+            .map_err(|e| crate::Error::InvalidTaskState {
+                task_id: task.id.clone(),
+                detail: e.reason_key(),
+            })?;
+        let job = self.interactor.data_store.create_job(&req)?;
+        let effects =
+            RuleEngine::new(self.interactor.data_store.as_ref(), 0).on_job_created(&job.id)?;
 
         tracing::info!(
             job_id = %job.id,
             task_id = %task.id,
-            job_type = ?job_type,
+            job_type = ?job.job_type,
             "created job for ready task (cascade)"
         );
         Ok(effects)
@@ -262,11 +250,10 @@ impl Orchestrator {
             .interactor
             .data_store
             .get_task_state(task_id)?
-            .ok_or_else(|| crate::Error::Internal(format!("task not found: {task_id}")))?;
-        let task_store = self
-            .interactor
-            .create_task_store(&task_state.workflow_id)
-            .map_err(|e| crate::Error::Internal(e.to_string()))?;
+            .ok_or_else(|| crate::Error::TaskNotFound {
+                task_id: task_id.clone(),
+            })?;
+        let task_store = self.interactor.create_task_store(&task_state.workflow_id)?;
 
         let mut current_id = task_id.clone();
         loop {
@@ -277,16 +264,20 @@ impl Orchestrator {
             {
                 return Ok(sup.id.clone());
             }
-            let task = task_store
-                .get_task(&current_id)?
-                .ok_or_else(|| crate::Error::Internal(format!("task not found: {current_id}")))?;
+            let task =
+                task_store
+                    .get_task(&current_id)
+                    .ok_or_else(|| crate::Error::TaskNotFound {
+                        task_id: current_id.clone(),
+                    })?;
             match task.parent_id {
                 Some(ref pid) => current_id = pid.clone(),
                 None => break,
             }
         }
-        Err(crate::Error::Internal(format!(
-            "no supervisor found for task {task_id}"
-        )))
+        Err(crate::Error::InvalidTaskState {
+            task_id: task_id.clone(),
+            detail: "no supervisor found in task ancestry".into(),
+        })
     }
 }

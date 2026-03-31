@@ -1,3 +1,5 @@
+use super::{InputError, Location};
+use palette_core::ReasonKey;
 use palette_domain as domain;
 use serde::{Deserialize, Serialize};
 
@@ -8,13 +10,31 @@ pub struct ReviewCommentInput {
     pub body: String,
 }
 
-// TODO: Replace From with TryFrom to validate external input (see plan 009-api-input-validation)
-impl From<ReviewCommentInput> for domain::review::ReviewCommentInput {
-    fn from(c: ReviewCommentInput) -> Self {
-        Self {
-            file: c.file,
-            line: c.line,
-            body: c.body,
+impl ReviewCommentInput {
+    /// Collect validation errors for this comment at the given index.
+    pub fn collect_errors(&self, index: usize, errors: &mut Vec<InputError>) {
+        if let Err(e) = domain::review::FilePath::parse(&self.file) {
+            errors.push(InputError {
+                location: Location::Body,
+                hint: format!("comments[{index}].file"),
+                reason: e.reason_key(),
+            });
+        }
+
+        if let Err(e) = domain::review::LineNumber::parse(self.line) {
+            errors.push(InputError {
+                location: Location::Body,
+                hint: format!("comments[{index}].line"),
+                reason: e.reason_key(),
+            });
+        }
+
+        if let Err(e) = domain::review::CommentBody::parse(&self.body) {
+            errors.push(InputError {
+                location: Location::Body,
+                hint: format!("comments[{index}].body"),
+                reason: e.reason_key(),
+            });
         }
     }
 }

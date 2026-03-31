@@ -18,8 +18,8 @@ pub struct SuspendWorkflowResponse {
 pub async fn handle_suspend_workflow(
     State(state): State<Arc<AppState>>,
     Path(id): Path<String>,
-) -> Result<Response, (StatusCode, String)> {
-    let workflow_id = WorkflowId::new(id);
+) -> crate::Result<Response> {
+    let workflow_id = WorkflowId::parse(id).map_err(crate::Error::invalid_path("id"))?;
     let _ = state
         .event_tx
         .send(ServerEvent::SuspendWorkflow { workflow_id });

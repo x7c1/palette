@@ -18,7 +18,7 @@ async fn job_api_create_and_list() {
     let (base_url, state, _shutdown_tx) = spawn_server(tmux, &session).await;
 
     // Set up workflow and tasks for the jobs
-    let wf_id = WorkflowId::new("wf-jobapi");
+    let wf_id = WorkflowId::parse("wf-jobapi").unwrap();
     state
         .interactor
         .data_store
@@ -28,7 +28,7 @@ async fn job_api_create_and_list() {
         .interactor
         .data_store
         .create_task(&CreateTaskRequest {
-            id: TaskId::new("task-W-001"),
+            id: TaskId::parse("wf-jobapi:task-w-001").unwrap(),
             workflow_id: wf_id.clone(),
         })
         .unwrap();
@@ -36,7 +36,7 @@ async fn job_api_create_and_list() {
         .interactor
         .data_store
         .create_task(&CreateTaskRequest {
-            id: TaskId::new("task-R-001"),
+            id: TaskId::parse("wf-jobapi:task-r-001").unwrap(),
             workflow_id: wf_id,
         })
         .unwrap();
@@ -50,7 +50,7 @@ async fn job_api_create_and_list() {
         .post(format!("{base_url}/jobs/create"))
         .json(&CreateJobRequest {
             id: Some("W-001".to_string()),
-            task_id: "task-W-001".to_string(),
+            task_id: "wf-jobapi:task-w-001".to_string(),
             job_type: JobType::Craft,
             title: "Implement feature".to_string(),
             plan_path: "test/W-001".to_string(),
@@ -72,7 +72,7 @@ async fn job_api_create_and_list() {
         .post(format!("{base_url}/jobs/create"))
         .json(&CreateJobRequest {
             id: Some("R-001".to_string()),
-            task_id: "task-R-001".to_string(),
+            task_id: "wf-jobapi:task-r-001".to_string(),
             job_type: JobType::Review,
             title: "Review feature".to_string(),
             plan_path: "test/R-001".to_string(),
@@ -120,7 +120,7 @@ async fn job_api_update_with_rules() {
     let (base_url, state, _shutdown_tx) = spawn_server(tmux, &session).await;
 
     // Set up workflow and tasks
-    let wf_id = WorkflowId::new("wf-jobrules");
+    let wf_id = WorkflowId::parse("wf-jobrules").unwrap();
     state
         .interactor
         .data_store
@@ -130,7 +130,7 @@ async fn job_api_update_with_rules() {
         .interactor
         .data_store
         .create_task(&CreateTaskRequest {
-            id: TaskId::new("task-W-001"),
+            id: TaskId::parse("wf-jobrules:task-w-001").unwrap(),
             workflow_id: wf_id.clone(),
         })
         .unwrap();
@@ -138,7 +138,7 @@ async fn job_api_update_with_rules() {
         .interactor
         .data_store
         .create_task(&CreateTaskRequest {
-            id: TaskId::new("task-R-001"),
+            id: TaskId::parse("wf-jobrules:task-r-001").unwrap(),
             workflow_id: wf_id,
         })
         .unwrap();
@@ -148,14 +148,14 @@ async fn job_api_update_with_rules() {
     // Create craft + review
     client
         .post(format!("{base_url}/jobs/create"))
-        .json(&create_craft("W-001", "Craft", "task-W-001"))
+        .json(&create_craft("W-001", "Craft", "wf-jobrules:task-w-001"))
         .send()
         .await
         .unwrap();
 
     client
         .post(format!("{base_url}/jobs/create"))
-        .json(&create_review("R-001", "Review", "task-R-001"))
+        .json(&create_review("R-001", "Review", "wf-jobrules:task-r-001"))
         .send()
         .await
         .unwrap();

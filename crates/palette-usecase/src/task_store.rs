@@ -37,14 +37,19 @@ impl<'a> TaskStore<'a> {
         data_store: &'a dyn DataStore,
         blueprint: &dyn BlueprintReader,
         workflow_id: &WorkflowId,
-    ) -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
+    ) -> Result<Self, crate::TaskStoreError> {
         let workflow = data_store
-            .get_workflow(workflow_id)?
-            .ok_or_else(|| format!("workflow not found: {workflow_id}"))?;
+            .get_workflow(workflow_id)
+            .map_err(crate::TaskStoreError::DataStore)?
+            .ok_or_else(|| crate::TaskStoreError::WorkflowNotFound {
+                workflow_id: workflow_id.clone(),
+            })?;
 
         let tree = blueprint
             .read_blueprint(std::path::Path::new(&workflow.blueprint_path), workflow_id)?;
-        let statuses = data_store.get_task_statuses(workflow_id)?;
+        let statuses = data_store
+            .get_task_statuses(workflow_id)
+            .map_err(crate::TaskStoreError::DataStore)?;
 
         Ok(Self::new(data_store, tree, workflow_id.clone(), statuses))
     }
@@ -88,34 +93,30 @@ impl<'a> TaskStore<'a> {
 }
 
 impl TaskStore<'_> {
-    pub fn get_task(
-        &self,
-        id: &TaskId,
-    ) -> Result<Option<Task>, Box<dyn std::error::Error + Send + Sync>> {
-        Ok(self.tree.get(id).map(|node| self.build_task(node)))
+    pub fn get_task(&self, id: &TaskId) -> Option<Task> {
+        self.tree.get(id).map(|node| self.build_task(node))
     }
 
-    pub fn get_child_tasks(
-        &self,
-        parent_id: &TaskId,
-    ) -> Result<Vec<Task>, Box<dyn std::error::Error + Send + Sync>> {
+    pub fn get_child_tasks(&self, parent_id: &TaskId) -> Vec<Task> {
         let Some(parent_node) = self.tree.get(parent_id) else {
-            return Ok(vec![]);
+            return vec![];
         };
-        Ok(parent_node
+        parent_node
             .children
             .iter()
             .filter_map(|child_id| self.tree.get(child_id))
             .map(|child_node| self.build_task(child_node))
-            .collect())
+            .collect()
     }
 
     pub fn update_task_status(
         &self,
         id: &TaskId,
         status: TaskStatus,
-    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-        self.data_store.update_task_status(id, status)?;
+    ) -> Result<(), crate::TaskStoreError> {
+        self.data_store
+            .update_task_status(id, status)
+            .map_err(crate::TaskStoreError::DataStore)?;
         self.statuses.borrow_mut().insert(id.clone(), status);
         Ok(())
     }

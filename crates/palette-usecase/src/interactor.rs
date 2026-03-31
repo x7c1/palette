@@ -23,7 +23,7 @@ impl Interactor {
     pub fn create_task_store(
         &self,
         workflow_id: &WorkflowId,
-    ) -> Result<TaskStore<'_>, Box<dyn std::error::Error + Send + Sync>> {
+    ) -> Result<TaskStore<'_>, crate::TaskStoreError> {
         TaskStore::from_interactor(
             self.data_store.as_ref(),
             self.blueprint.as_ref(),

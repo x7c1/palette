@@ -22,10 +22,9 @@ impl Orchestrator {
             .interactor
             .data_store
             .find_worker(&supervisor_id)?
-            .ok_or_else(|| {
-                crate::Error::Internal(
-                    "no supervisor found; cannot spawn member without a supervisor pane".into(),
-                )
+            .ok_or_else(|| crate::Error::InvalidTaskState {
+                task_id: task_id.clone(),
+                detail: "no supervisor found; cannot spawn member without a supervisor pane".into(),
             })?;
         let workflow_id = supervisor_state.workflow_id.clone();
 
@@ -36,7 +35,7 @@ impl Orchestrator {
 
         let member_id_str = member_id.as_ref();
         let plan_dir_abs = std::fs::canonicalize(&self.plan_dir)
-            .map_err(|e| crate::Error::Internal(format!("failed to resolve plan_dir: {e}")))?;
+            .map_err(|e| crate::Error::External(Box::new(e)))?;
         let plan_dir_mount = PlanDirMount {
             host_path: plan_dir_abs.to_string_lossy().to_string(),
             read_only: job_type == JobType::Review,

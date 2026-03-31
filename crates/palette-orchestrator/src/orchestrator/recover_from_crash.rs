@@ -153,7 +153,7 @@ mod tests {
             .messages
             .lock()
             .unwrap()
-            .insert(WorkerId::new("m-1"), vec!["do work".to_string()]);
+            .insert(WorkerId::parse("m-1").unwrap(), vec!["do work".to_string()]);
 
         let container = MockContainerRuntime::with_running(&["container-m-1"]);
         let terminal = MockTerminalSession::new();
@@ -165,7 +165,7 @@ mod tests {
         let w = orch
             .interactor
             .data_store
-            .find_worker(&WorkerId::new("m-1"))
+            .find_worker(&WorkerId::parse("m-1").unwrap())
             .unwrap()
             .unwrap();
         assert_eq!(w.status, WorkerStatus::Working);
@@ -175,7 +175,7 @@ mod tests {
             !orch
                 .interactor
                 .data_store
-                .has_pending_messages(&WorkerId::new("m-1"))
+                .has_pending_messages(&WorkerId::parse("m-1").unwrap())
                 .unwrap(),
             "message queue should be empty after delivery"
         );
@@ -187,7 +187,7 @@ mod tests {
         let data_store = MockDataStore::with_workers(vec![worker]);
 
         let mut job = make_job("C-1");
-        job.assignee_id = Some(WorkerId::new("m-1"));
+        job.assignee_id = Some(WorkerId::parse("m-1").unwrap());
         job.status = JobStatus::in_progress(JobType::Craft);
         *data_store.jobs.lock().unwrap() = vec![job];
 
@@ -209,7 +209,7 @@ mod tests {
         )];
 
         let mut job = make_job("C-1");
-        job.assignee_id = Some(WorkerId::new("m-1"));
+        job.assignee_id = Some(WorkerId::parse("m-1").unwrap());
         job.status = JobStatus::in_progress(JobType::Craft);
         *data_store.jobs.lock().unwrap() = vec![job];
 
@@ -226,7 +226,7 @@ mod tests {
         let data_store = MockDataStore::with_workers(vec![worker]);
 
         let mut job = make_job("C-1");
-        job.assignee_id = Some(WorkerId::new("m-1"));
+        job.assignee_id = Some(WorkerId::parse("m-1").unwrap());
         job.status = JobStatus::Craft(CraftStatus::Done);
         *data_store.jobs.lock().unwrap() = vec![job];
 
@@ -243,7 +243,7 @@ mod tests {
         let data_store = MockDataStore::with_workers(vec![worker]);
 
         let mut job = make_job("C-1");
-        job.assignee_id = Some(WorkerId::new("m-1"));
+        job.assignee_id = Some(WorkerId::parse("m-1").unwrap());
         job.status = JobStatus::in_progress(JobType::Craft);
         *data_store.jobs.lock().unwrap() = vec![job];
 

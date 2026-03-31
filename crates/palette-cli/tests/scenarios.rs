@@ -18,7 +18,7 @@ fn write_blueprint_file(yaml: &str) -> tempfile::NamedTempFile {
 }
 
 fn tid(wf_id: &str, key_path: &str) -> TaskId {
-    TaskId::new(format!("{wf_id}:{key_path}"))
+    TaskId::parse(format!("{wf_id}:{key_path}")).unwrap()
 }
 
 fn insert_worker(
@@ -43,7 +43,7 @@ fn insert_worker(
             container_id: ContainerId::new("stub"),
             terminal_target: terminal_target.clone(),
             session_id: None,
-            task_id: TaskId::new(task_id),
+            task_id: TaskId::parse(task_id).unwrap(),
         })
         .unwrap();
 }
@@ -63,15 +63,15 @@ async fn scenario3_message_queuing_to_leader() {
     let (base_url, state, _shutdown_tx) = spawn_server(tmux, &session).await;
 
     // Set up workflow and tasks for review jobs
-    let wf_id = WorkflowId::new("wf-scenario3");
+    let wf_id = WorkflowId::parse("wf-scenario3").unwrap();
     state
         .interactor
         .data_store
         .create_workflow(&wf_id, "test/blueprint.yaml")
         .unwrap();
-    let task_a = TaskId::new("task-R-A");
-    let task_b = TaskId::new("task-R-B");
-    let task_ri = TaskId::new("task-ri");
+    let task_a = TaskId::parse("wf-scenario3:task-R-A").unwrap();
+    let task_b = TaskId::parse("wf-scenario3:task-R-B").unwrap();
+    let task_ri = TaskId::parse("wf-scenario3:task-ri").unwrap();
     state
         .interactor
         .data_store
@@ -105,7 +105,7 @@ async fn scenario3_message_queuing_to_leader() {
         None,
         &ri_pane,
         WorkerStatus::Working,
-        "task-ri",
+        "wf-scenario3:task-ri",
         &wf_id,
     );
     insert_worker(
@@ -115,7 +115,7 @@ async fn scenario3_message_queuing_to_leader() {
         Some("review-integrator-1"),
         &member_a_pane,
         WorkerStatus::Working,
-        "task-R-A",
+        "wf-scenario3:task-R-A",
         &wf_id,
     );
     insert_worker(
@@ -125,7 +125,7 @@ async fn scenario3_message_queuing_to_leader() {
         Some("review-integrator-1"),
         &member_b_pane,
         WorkerStatus::Working,
-        "task-R-B",
+        "wf-scenario3:task-R-B",
         &wf_id,
     );
 
@@ -135,30 +135,30 @@ async fn scenario3_message_queuing_to_leader() {
     state
         .interactor
         .data_store
-        .create_job(&CreateJobRequest {
-            task_id: task_a,
-            id: Some(jid("R-A")),
-            job_type: JobType::Review,
-            title: "Review A".to_string(),
-            plan_path: "test/R-A".to_string(),
-            assignee_id: None,
-            priority: None,
-            repository: None,
-        })
+        .create_job(&CreateJobRequest::new(
+            Some(jid("R-A")),
+            task_a,
+            JobType::Review,
+            palette_domain::job::Title::parse("Review A").unwrap(),
+            palette_domain::job::PlanPath::parse("test/R-A").unwrap(),
+            None,
+            None,
+            None,
+        ))
         .unwrap();
     state
         .interactor
         .data_store
-        .create_job(&CreateJobRequest {
-            task_id: task_b,
-            id: Some(jid("R-B")),
-            job_type: JobType::Review,
-            title: "Review B".to_string(),
-            plan_path: "test/R-B".to_string(),
-            assignee_id: None,
-            priority: None,
-            repository: None,
-        })
+        .create_job(&CreateJobRequest::new(
+            Some(jid("R-B")),
+            task_b,
+            JobType::Review,
+            palette_domain::job::Title::parse("Review B").unwrap(),
+            palette_domain::job::PlanPath::parse("test/R-B").unwrap(),
+            None,
+            None,
+            None,
+        ))
         .unwrap();
 
     state
@@ -285,7 +285,7 @@ async fn scenario3_message_queuing_to_leader() {
 /// - Workflow completion destroys all supervisors
 #[tokio::test]
 async fn dynamic_supervisor_lifecycle() {
-    use palette_domain::job::{CraftStatus, JobFilter, JobStatus as JStatus};
+    use palette_domain::job::{CraftStatus, JobFilter, JobStatus as JStatus, JobType};
     use palette_domain::rule::RuleEffect;
     use palette_domain::server::ServerEvent;
     use palette_domain::task::TaskStatus;
@@ -300,12 +300,18 @@ task:
         - key: craft
           type: craft
           plan_path: test/a-craft
+          children:
+            - key: review
+              type: review
     - key: phase-b
       depends_on: [phase-a]
       children:
         - key: craft
           type: craft
           plan_path: test/b-craft
+          children:
+            - key: review
+              type: review
 "#;
 
     let (session, _guard) = test_session_name_with_guard("dyn-sup");
@@ -330,7 +336,7 @@ task:
     assert_eq!(resp.status(), 201);
     let body: serde_json::Value = resp.json().await.unwrap();
     let wf_id = body["workflow_id"].as_str().unwrap();
-    let workflow_id = palette_domain::workflow::WorkflowId::new(wf_id);
+    let workflow_id = palette_domain::workflow::WorkflowId::parse(wf_id).unwrap();
 
     wait().await;
 
@@ -402,7 +408,7 @@ task:
         );
     }
 
-    // --- Phase 2: Complete phase-a/craft ---
+    // --- Phase 2: Complete phase-a/craft through review ---
     let jobs = state
         .interactor
         .data_store
@@ -421,17 +427,51 @@ task:
         .data_store
         .update_job_status(&craft_a_id, JStatus::Craft(CraftStatus::InReview))
         .unwrap();
+
+    // CraftReadyForReview triggers review job creation
+    let _ = state.event_tx.send(ServerEvent::ProcessEffects {
+        effects: vec![RuleEffect::CraftReadyForReview {
+            craft_job_id: craft_a_id.clone(),
+        }],
+    });
+    wait().await;
+
+    // Approve the review to complete the craft
+    let all_jobs_a = state
+        .interactor
+        .data_store
+        .list_jobs(&JobFilter::default())
+        .unwrap();
+    let review_a = all_jobs_a
+        .iter()
+        .find(|j| j.task_id.as_ref() == tid(wf_id, "sup-test/phase-a/craft/review").to_string())
+        .expect("phase-a/craft/review job should exist");
+
+    helper::setup_worker(&*state.interactor.data_store, "reviewer-a");
     state
         .interactor
         .data_store
-        .update_job_status(&craft_a_id, JStatus::Craft(CraftStatus::Done))
+        .assign_job(&review_a.id, &wid("reviewer-a"), JobType::Review)
         .unwrap();
-
-    let _ = state.event_tx.send(ServerEvent::ProcessEffects {
-        effects: vec![RuleEffect::JobCompleted {
-            job_id: craft_a_id.clone(),
-        }],
-    });
+    let sub = state
+        .interactor
+        .data_store
+        .submit_review(
+            &review_a.id,
+            &palette_domain::review::SubmitReviewRequest {
+                verdict: palette_domain::review::Verdict::Approved,
+                summary: Some("LGTM".to_string()),
+                comments: vec![],
+            },
+        )
+        .unwrap();
+    let effects = palette_usecase::RuleEngine::new(
+        state.interactor.data_store.as_ref(),
+        state.max_review_rounds,
+    )
+    .on_review_submitted(&review_a.id, &sub)
+    .unwrap();
+    let _ = state.event_tx.send(ServerEvent::ProcessEffects { effects });
     wait().await;
 
     // phase-a should be Completed
@@ -493,7 +533,7 @@ task:
         );
     }
 
-    // --- Phase 3: Complete phase-b/craft ---
+    // --- Phase 3: Complete phase-b/craft through review ---
     let all_jobs = state
         .interactor
         .data_store
@@ -515,17 +555,50 @@ task:
         .data_store
         .update_job_status(&craft_b_id, JStatus::Craft(CraftStatus::InReview))
         .unwrap();
+
+    let _ = state.event_tx.send(ServerEvent::ProcessEffects {
+        effects: vec![RuleEffect::CraftReadyForReview {
+            craft_job_id: craft_b_id.clone(),
+        }],
+    });
+    wait().await;
+
+    // Approve the review
+    let all_jobs_b = state
+        .interactor
+        .data_store
+        .list_jobs(&JobFilter::default())
+        .unwrap();
+    let review_b = all_jobs_b
+        .iter()
+        .find(|j| j.task_id.as_ref() == tid(wf_id, "sup-test/phase-b/craft/review").to_string())
+        .expect("phase-b/craft/review job should exist");
+
+    helper::setup_worker(&*state.interactor.data_store, "reviewer-b");
     state
         .interactor
         .data_store
-        .update_job_status(&craft_b_id, JStatus::Craft(CraftStatus::Done))
+        .assign_job(&review_b.id, &wid("reviewer-b"), JobType::Review)
         .unwrap();
-
-    let _ = state.event_tx.send(ServerEvent::ProcessEffects {
-        effects: vec![RuleEffect::JobCompleted {
-            job_id: craft_b_id.clone(),
-        }],
-    });
+    let sub = state
+        .interactor
+        .data_store
+        .submit_review(
+            &review_b.id,
+            &palette_domain::review::SubmitReviewRequest {
+                verdict: palette_domain::review::Verdict::Approved,
+                summary: Some("LGTM".to_string()),
+                comments: vec![],
+            },
+        )
+        .unwrap();
+    let effects = palette_usecase::RuleEngine::new(
+        state.interactor.data_store.as_ref(),
+        state.max_review_rounds,
+    )
+    .on_review_submitted(&review_b.id, &sub)
+    .unwrap();
+    let _ = state.event_tx.send(ServerEvent::ProcessEffects { effects });
     wait().await;
 
     // All supervisors should be destroyed
@@ -611,7 +684,7 @@ task:
     assert_eq!(resp.status(), 201);
     let body: serde_json::Value = resp.json().await.unwrap();
     let wf_id = body["workflow_id"].as_str().unwrap();
-    let workflow_id = palette_domain::workflow::WorkflowId::new(wf_id);
+    let workflow_id = palette_domain::workflow::WorkflowId::parse(wf_id).unwrap();
 
     wait().await;
 

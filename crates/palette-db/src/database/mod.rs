@@ -34,16 +34,9 @@ mod workflow;
 impl Database {
     pub fn open(path: &Path) -> crate::Result<Self> {
         if let Some(parent) = path.parent() {
-            std::fs::create_dir_all(parent).map_err(|e| {
-                Error::Internal(format!(
-                    "failed to create db directory {}: {e}",
-                    parent.display()
-                ))
-            })?;
+            std::fs::create_dir_all(parent).map_err(Error::Io)?;
         }
-        let conn = Connection::open(path).map_err(|e| {
-            Error::Internal(format!("failed to open database {}: {e}", path.display()))
-        })?;
+        let conn = Connection::open(path)?;
         schema::initialize(&conn)?;
         Ok(Self {
             conn: Mutex::new(conn),
@@ -59,19 +52,23 @@ impl Database {
     }
 }
 
+/// Convert a lookup error (unknown enum ID) into `DataCorruption`.
+pub(crate) fn corrupt(reason: String) -> crate::Error {
+    crate::Error::DataCorruption { reason }
+}
+
+/// Convert a parse error (`ReasonKey` impl) into `DataCorruption`.
+pub(crate) fn corrupt_parse(e: impl palette_core::ReasonKey) -> crate::Error {
+    crate::Error::DataCorruption {
+        reason: e.reason_key(),
+    }
+}
+
 /// Parse an RFC3339 datetime string from the database.
 pub(crate) fn parse_datetime(s: &str) -> DateTime<Utc> {
     DateTime::parse_from_rfc3339(s)
         .map(|dt| dt.with_timezone(&Utc))
         .unwrap_or_else(|_| Utc::now())
-}
-
-pub(crate) fn id_conversion_error(e: String) -> rusqlite::Error {
-    rusqlite::Error::FromSqlConversionFailure(
-        0,
-        rusqlite::types::Type::Integer,
-        Box::new(std::io::Error::new(std::io::ErrorKind::InvalidData, e)),
-    )
 }
 
 #[cfg(test)]

@@ -1,6 +1,6 @@
-use crate::api_types::{SendRequest, SendResponse};
-use crate::{AppState, EventRecord};
-use axum::{Json, extract::State, http::StatusCode};
+use crate::api_types::{ResourceKind, SendRequest, SendResponse};
+use crate::{AppState, Error, EventRecord};
+use axum::{Json, extract::State};
 use palette_domain::terminal::TerminalTarget;
 use palette_domain::worker::{WorkerId, WorkerStatus};
 use std::sync::Arc;
@@ -10,46 +10,41 @@ use super::now;
 pub async fn handle_send(
     State(state): State<Arc<AppState>>,
     Json(req): Json<SendRequest>,
-) -> Result<Json<SendResponse>, (StatusCode, String)> {
-    // If using direct target (no worker_id), send immediately without queuing
-    if req.worker_id.is_none() {
-        if let Some(ref target) = req.target {
-            tracing::info!(target = %target, message = %req.message, "sending keys via tmux (direct)");
-            let record = EventRecord {
-                timestamp: now(),
-                event_type: "send".to_string(),
-                payload: serde_json::json!({
-                    "target": target,
-                    "message": req.message,
-                }),
-            };
-            state.event_log.lock().await.push(record);
+) -> crate::Result<Json<SendResponse>> {
+    // Direct target mode: send immediately without queuing
+    if let (None, Some(target)) = (&req.worker_id, &req.target) {
+        tracing::info!(target = %target, message = %req.message, "sending keys via tmux (direct)");
+        let record = EventRecord {
+            timestamp: now(),
+            event_type: "send".to_string(),
+            payload: serde_json::json!({
+                "target": target,
+                "message": req.message,
+            }),
+        };
+        state.event_log.lock().await.push(record);
 
-            let terminal_target = TerminalTarget::new(target);
-            send_tmux_keys(
-                state.interactor.terminal.as_ref(),
-                &terminal_target,
-                &req.message,
-                req.no_enter,
-            )
-            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-            return Ok(Json(SendResponse { queued: false }));
-        }
-        return Err((
-            StatusCode::BAD_REQUEST,
-            "either worker_id or target is required".to_string(),
-        ));
+        let terminal_target = TerminalTarget::new(target);
+        send_tmux_keys(
+            state.interactor.terminal.as_ref(),
+            &terminal_target,
+            &req.message,
+            req.no_enter,
+        )
+        .map_err(Error::internal)?;
+        return Ok(Json(SendResponse { queued: false }));
     }
 
-    let worker_id_str = req.worker_id.as_ref().unwrap();
-    let worker_id = WorkerId::new(worker_id_str.as_str());
+    // Worker mode: parse worker_id (None → empty string → Empty error)
+    let worker_id = WorkerId::parse(req.worker_id.as_deref().unwrap_or(""))
+        .map_err(Error::invalid_body("worker_id"))?;
 
     // Check if target can receive input — idle or waiting for permission
     let worker = state
         .interactor
         .data_store
         .find_worker(&worker_id)
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+        .map_err(Error::internal)?;
 
     let (can_receive, is_waiting_permission) = worker
         .as_ref()
@@ -68,18 +63,16 @@ pub async fn handle_send(
         .interactor
         .data_store
         .has_pending_messages(&worker_id)
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+        .map_err(Error::internal)?;
 
     let queued = if can_receive && (!has_pending || is_waiting_permission) {
         // Send directly
         let terminal_target = worker
             .as_ref()
             .map(|a| a.terminal_target.clone())
-            .ok_or_else(|| {
-                (
-                    StatusCode::NOT_FOUND,
-                    format!("worker not found: {worker_id}"),
-                )
+            .ok_or_else(|| Error::NotFound {
+                resource: ResourceKind::Worker,
+                id: worker_id.to_string(),
             })?;
 
         tracing::info!(target = %terminal_target, message = %req.message, no_enter = req.no_enter, "sending keys via tmux");
@@ -89,14 +82,14 @@ pub async fn handle_send(
             &req.message,
             req.no_enter,
         )
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+        .map_err(Error::internal)?;
 
         if let Err(e) = state
             .interactor
             .data_store
             .update_worker_status(&worker_id, WorkerStatus::Working)
         {
-            tracing::error!(worker_id = worker_id_str.as_str(), error = %e, "failed to update worker status to Working");
+            tracing::error!(worker_id = worker_id.as_ref(), error = %e, "failed to update worker status to Working");
         }
 
         false
@@ -106,8 +99,8 @@ pub async fn handle_send(
             .interactor
             .data_store
             .enqueue_message(&worker_id, &req.message)
-            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-        tracing::info!(worker_id = worker_id_str.as_str(), "message queued");
+            .map_err(Error::internal)?;
+        tracing::info!(worker_id = worker_id.as_ref(), "message queued");
         true
     };
 
@@ -115,7 +108,7 @@ pub async fn handle_send(
         timestamp: now(),
         event_type: "send".to_string(),
         payload: serde_json::json!({
-            "worker_id": worker_id_str,
+            "worker_id": worker_id.as_ref(),
             "message": req.message,
             "queued": queued,
         }),

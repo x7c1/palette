@@ -1,7 +1,7 @@
-use super::JobType;
-use super::Priority;
-use super::Repository;
-use palette_domain as domain;
+use super::{InputError, JobType, Priority, Repository};
+use palette_domain::job::{CreateJobRequest as DomainCreateJobRequest, JobId, PlanPath, Title};
+use palette_domain::task::TaskId;
+use palette_domain::worker::WorkerId;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -17,18 +17,19 @@ pub struct CreateJobRequest {
     pub repository: Option<Repository>,
 }
 
-// TODO: Replace From with TryFrom to validate external input (see plan 009-api-input-validation)
-impl From<CreateJobRequest> for domain::job::CreateJobRequest {
-    fn from(api: CreateJobRequest) -> Self {
-        Self {
-            id: api.id.map(domain::job::JobId::new),
-            task_id: domain::task::TaskId::new(api.task_id),
-            job_type: api.job_type.into(),
-            title: api.title,
-            plan_path: api.plan_path,
-            assignee_id: api.assignee_id.map(domain::worker::WorkerId::new),
-            priority: api.priority.map(domain::job::Priority::from),
-            repository: api.repository.map(Into::into),
-        }
+impl CreateJobRequest {
+    pub fn validate(&self) -> Result<DomainCreateJobRequest, Vec<InputError>> {
+        palette_macros::validate!(DomainCreateJobRequest::new {
+            id: self.id.as_deref().map(JobId::parse).transpose(),
+            task_id: TaskId::parse(&self.task_id),
+            #[plain]
+            job_type: self.job_type.into(),
+            title: Title::parse(&self.title),
+            plan_path: PlanPath::parse(&self.plan_path),
+            assignee_id: self.assignee_id.as_deref().map(WorkerId::parse).transpose(),
+            #[plain]
+            priority: self.priority.map(palette_domain::job::Priority::from),
+            repository: self.repository.clone().map(|r| r.parse()).transpose(),
+        })
     }
 }

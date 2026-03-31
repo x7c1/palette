@@ -1,12 +1,28 @@
 use std::fmt;
 
+const MAX_ID_LEN: usize = 256;
+
 /// Workflow identifier.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct WorkflowId(String);
 
 impl WorkflowId {
-    pub fn new(id: impl Into<String>) -> Self {
-        Self(id.into())
+    /// Parse and validate a WorkflowId from external input.
+    ///
+    /// Rejects `:` and `/` (which would collide with TaskId format)
+    /// and enforces a maximum length.
+    pub fn parse(id: impl Into<String>) -> Result<Self, InvalidWorkflowId> {
+        let id = id.into();
+        if id.is_empty() {
+            return Err(InvalidWorkflowId::Empty);
+        }
+        if id.len() > MAX_ID_LEN {
+            return Err(InvalidWorkflowId::TooLong { id });
+        }
+        if id.contains(':') || id.contains('/') {
+            return Err(InvalidWorkflowId::ForbiddenChar { id });
+        }
+        Ok(Self(id))
     }
 
     pub fn generate() -> Self {
@@ -25,4 +41,17 @@ impl AsRef<str> for WorkflowId {
     fn as_ref(&self) -> &str {
         &self.0
     }
+}
+
+/// Invalid format for a workflow ID.
+#[derive(Debug, palette_macros::ReasonKey)]
+pub enum InvalidWorkflowId {
+    Empty,
+    TooLong {
+        id: String,
+    },
+    /// Contains `:` or `/` which would collide with TaskId format.
+    ForbiddenChar {
+        id: String,
+    },
 }

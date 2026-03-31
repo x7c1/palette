@@ -6,6 +6,7 @@ license.workspace = true
 
 [dependencies]
 chrono.workspace = true
+palette-core = { path = "../palette-core" }
 palette-domain = { path = "../palette-domain" }
 palette-usecase = { path = "../palette-usecase" }
 rusqlite.workspace = true
