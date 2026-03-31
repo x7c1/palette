@@ -52,6 +52,18 @@ impl JobStatus {
     }
 }
 
+impl From<CraftStatus> for JobStatus {
+    fn from(s: CraftStatus) -> Self {
+        JobStatus::Craft(s)
+    }
+}
+
+impl From<ReviewStatus> for JobStatus {
+    fn from(s: ReviewStatus) -> Self {
+        JobStatus::Review(s)
+    }
+}
+
 impl fmt::Display for JobStatus {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         fmt::Display::fmt(self.as_str(), f)

@@ -9,8 +9,11 @@ pub enum TransitionError {
 }
 
 impl TransitionError {
-    pub fn invalid(from: JobStatus, to: JobStatus) -> Self {
-        Self::Invalid { from, to }
+    pub fn invalid(from: impl Into<JobStatus>, to: impl Into<JobStatus>) -> Self {
+        Self::Invalid {
+            from: from.into(),
+            to: to.into(),
+        }
     }
 }
 

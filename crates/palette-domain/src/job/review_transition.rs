@@ -49,10 +49,7 @@ impl ReviewTransition {
         if let Some(expected) = self.from_status()
             && current != expected
         {
-            return Err(TransitionError::invalid(
-                JobStatus::Review(current),
-                JobStatus::Review(self.to_status()),
-            ));
+            return Err(TransitionError::invalid(current, self.to_status()));
         }
         Ok(self.to_job_status())
     }

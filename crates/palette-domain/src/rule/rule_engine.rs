@@ -15,10 +15,7 @@ pub fn validate_craft_transition(
     );
 
     if !valid {
-        return Err(TransitionError::invalid(
-            JobStatus::Craft(from),
-            JobStatus::Craft(to),
-        ));
+        return Err(TransitionError::invalid(from, to));
     }
 
     Ok(())
@@ -39,10 +36,7 @@ pub fn validate_review_transition(
     );
 
     if !valid {
-        return Err(TransitionError::invalid(
-            JobStatus::Review(from),
-            JobStatus::Review(to),
-        ));
+        return Err(TransitionError::invalid(from, to));
     }
 
     Ok(())
