@@ -1,5 +1,5 @@
 mod task_key;
-pub use task_key::TaskKey;
+pub use task_key::{InvalidTaskKey, TaskKey};
 
 mod task_id;
 pub use task_id::{InvalidTaskId, TaskId};

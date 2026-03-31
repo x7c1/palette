@@ -35,64 +35,53 @@ impl TaskTreeBlueprint {
     /// Task IDs are built as `{workflow_id}:{key_path}` where key_path
     /// is the `/`-separated path of task keys from root to the node.
     ///
-    /// Validates key formats and structural constraints before building.
+    /// Validates all constraints first (collecting all errors), then builds
+    /// the tree using the validated keys.
     pub fn to_task_tree(&self, workflow_id: &WorkflowId) -> Result<TaskTree, Vec<BlueprintError>> {
+        // Phase 1: Validate and collect all parsed keys
         let mut errors = Vec::new();
-        validate_all(&self.task, &mut errors);
+        let mut keys = HashMap::new();
+        validate_all(&self.task, &mut errors, &mut keys);
         if !errors.is_empty() {
             return Err(errors);
         }
 
+        // Phase 2: Build tree using validated keys
         let root = &self.task;
-        let root_key = TaskKey::new(&root.key);
-        let root_id = TaskId::root(workflow_id, &root_key);
+        let root_key = &keys[root.key.as_str()];
+        let root_id = TaskId::root(workflow_id, root_key);
         let mut nodes = HashMap::new();
 
-        insert_node(&root_id, None, None, root, &mut nodes);
+        insert_node(&root_id, None, None, root, &mut nodes, &keys);
         collect_nodes(
             &root_id,
             root.plan_path.as_deref(),
             &root.children,
             &mut nodes,
+            &keys,
         );
 
         Ok(TaskTree::new(root_id, nodes))
     }
 }
 
-fn validate_all(node: &TaskNode, errors: &mut Vec<BlueprintError>) {
-    if let Err(e) = validate_key(&node.key) {
-        errors.push(e);
+/// Validate all nodes recursively, collecting errors and parsed TaskKeys.
+fn validate_all<'a>(
+    node: &'a TaskNode,
+    errors: &mut Vec<BlueprintError>,
+    keys: &mut HashMap<&'a str, TaskKey>,
+) {
+    match TaskKey::parse(&node.key) {
+        Ok(k) => {
+            keys.insert(&node.key, k);
+        }
+        Err(_) => {
+            errors.push(BlueprintError::InvalidKey {
+                key: node.key.clone(),
+            });
+        }
     }
-    if let Err(e) = validate_craft_has_review(node) {
-        errors.push(e);
-    }
-    if let Some(ref repo) = node.repository
-        && Repository::parse(&repo.name, &repo.branch).is_err()
-    {
-        errors.push(BlueprintError::InvalidRepository {
-            task_key: node.key.clone(),
-        });
-    }
-    for child in &node.children {
-        validate_all(child, errors);
-    }
-}
 
-fn validate_key(key: &str) -> Result<TaskKey, BlueprintError> {
-    if key.is_empty()
-        || !key
-            .bytes()
-            .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'-')
-    {
-        return Err(BlueprintError::InvalidKey {
-            key: key.to_string(),
-        });
-    }
-    Ok(TaskKey::new(key))
-}
-
-fn validate_craft_has_review(node: &TaskNode) -> Result<(), BlueprintError> {
     if let Some(job_type) = node.job_type
         && matches!(JobType::from(job_type), JobType::Craft)
     {
@@ -101,16 +90,42 @@ fn validate_craft_has_review(node: &TaskNode) -> Result<(), BlueprintError> {
                 .is_some_and(|jt| matches!(JobType::from(jt), JobType::Review))
         });
         if !has_review {
-            return Err(BlueprintError::MissingReviewChild {
+            errors.push(BlueprintError::MissingReviewChild {
                 task_key: node.key.clone(),
             });
         }
     }
-    Ok(())
+
+    if let Some(ref repo) = node.repository
+        && Repository::parse(&repo.name, &repo.branch).is_err()
+    {
+        errors.push(BlueprintError::InvalidRepository {
+            task_key: node.key.clone(),
+        });
+    }
+
+    // Also validate depends_on keys
+    for dep in &node.depends_on {
+        if !keys.contains_key(dep.as_str()) {
+            match TaskKey::parse(dep) {
+                Ok(k) => {
+                    keys.insert(dep, k);
+                }
+                Err(_) => {
+                    errors.push(BlueprintError::InvalidKey { key: dep.clone() });
+                }
+            }
+        }
+    }
+
+    for child in &node.children {
+        validate_all(child, errors, keys);
+    }
 }
 
-fn to_key(s: &str) -> TaskKey {
-    TaskKey::new(s)
+/// Look up a validated key. Panics if key was not validated (programming error).
+fn get_key<'a>(raw: &str, keys: &'a HashMap<&str, TaskKey>) -> &'a TaskKey {
+    &keys[raw]
 }
 
 fn insert_node(
@@ -119,23 +134,25 @@ fn insert_node(
     parent_plan_path: Option<&str>,
     node: &TaskNode,
     nodes: &mut HashMap<TaskId, TaskTreeNode>,
+    keys: &HashMap<&str, TaskKey>,
 ) {
+    let key = get_key(&node.key, keys).clone();
+
     let child_ids: Vec<TaskId> = node
         .children
         .iter()
-        .map(|c| task_id.child(&to_key(&c.key)))
+        .map(|c| task_id.child(get_key(&c.key, keys)))
         .collect();
 
     let depends_on: Vec<TaskId> = if let Some(parent) = parent_id {
         node.depends_on
             .iter()
-            .map(|dep| parent.child(&TaskKey::new(dep)))
+            .map(|dep| parent.child(get_key(dep, keys)))
             .collect()
     } else {
         vec![]
     };
 
-    // Inherit plan_path from parent if not explicitly set
     let plan_path = node
         .plan_path
         .clone()
@@ -146,7 +163,7 @@ fn insert_node(
         TaskTreeNode {
             id: task_id.clone(),
             parent_id: parent_id.cloned(),
-            key: to_key(&node.key),
+            key,
             plan_path,
             job_type: node.job_type.map(JobType::from),
             priority: node.priority.map(Priority::from),
@@ -162,9 +179,10 @@ fn collect_nodes(
     parent_plan_path: Option<&str>,
     children: &[TaskNode],
     nodes: &mut HashMap<TaskId, TaskTreeNode>,
+    keys: &HashMap<&str, TaskKey>,
 ) {
     for child in children {
-        let child_task_id = parent_task_id.child(&to_key(&child.key));
+        let child_task_id = parent_task_id.child(get_key(&child.key, keys));
         let child_plan_path = child.plan_path.as_deref().or(parent_plan_path);
 
         insert_node(
@@ -173,10 +191,17 @@ fn collect_nodes(
             parent_plan_path,
             child,
             nodes,
+            keys,
         );
 
         if !child.children.is_empty() {
-            collect_nodes(&child_task_id, child_plan_path, &child.children, nodes);
+            collect_nodes(
+                &child_task_id,
+                child_plan_path,
+                &child.children,
+                nodes,
+                keys,
+            );
         }
     }
 }
