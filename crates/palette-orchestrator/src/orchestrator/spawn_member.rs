@@ -64,6 +64,10 @@ impl Orchestrator {
         let prompt_path = match job_type {
             JobType::Craft => &self.docker_config.crafter_prompt,
             JobType::Review => &self.docker_config.reviewer_prompt,
+            // Orchestrator and Operator don't spawn members
+            JobType::Orchestrator | JobType::Operator => {
+                unreachable!("mechanized job types do not spawn members")
+            }
         };
         self.interactor.container.copy_file_to_container(
             &container_id,

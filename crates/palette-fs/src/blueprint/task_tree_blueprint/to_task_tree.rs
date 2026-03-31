@@ -249,6 +249,7 @@ fn insert_node(
             job_type: node.job_type.map(JobType::from),
             priority: node.priority.map(Priority::from),
             repository: node.repository.clone().and_then(|r| r.parse().ok()),
+            command: node.command.clone(),
             children: child_ids,
             depends_on,
         },

@@ -2,6 +2,7 @@ use std::fmt;
 
 use super::JobType;
 use super::craft_status::CraftStatus;
+use super::mechanized_status::MechanizedStatus;
 use super::review_status::ReviewStatus;
 
 /// Typed job status that pairs with the job type.
@@ -9,6 +10,8 @@ use super::review_status::ReviewStatus;
 pub enum JobStatus {
     Craft(CraftStatus),
     Review(ReviewStatus),
+    Orchestrator(MechanizedStatus),
+    Operator(MechanizedStatus),
 }
 
 impl JobStatus {
@@ -16,6 +19,7 @@ impl JobStatus {
         match self {
             JobStatus::Craft(s) => s.as_str(),
             JobStatus::Review(s) => s.as_str(),
+            JobStatus::Orchestrator(s) | JobStatus::Operator(s) => s.as_str(),
         }
     }
 
@@ -24,6 +28,8 @@ impl JobStatus {
         match job_type {
             JobType::Craft => JobStatus::Craft(CraftStatus::Todo),
             JobType::Review => JobStatus::Review(ReviewStatus::Todo),
+            JobType::Orchestrator => JobStatus::Orchestrator(MechanizedStatus::Todo),
+            JobType::Operator => JobStatus::Operator(MechanizedStatus::Todo),
         }
     }
 
@@ -32,14 +38,19 @@ impl JobStatus {
         match job_type {
             JobType::Craft => JobStatus::Craft(CraftStatus::InProgress),
             JobType::Review => JobStatus::Review(ReviewStatus::InProgress),
+            JobType::Orchestrator => JobStatus::Orchestrator(MechanizedStatus::InProgress),
+            JobType::Operator => JobStatus::Operator(MechanizedStatus::InProgress),
         }
     }
 
-    /// Returns true if the job is done (Craft::Done or Review::Done).
+    /// Returns true if the job is done.
     pub fn is_done(&self) -> bool {
         matches!(
             self,
-            JobStatus::Craft(CraftStatus::Done) | JobStatus::Review(ReviewStatus::Done)
+            JobStatus::Craft(CraftStatus::Done)
+                | JobStatus::Review(ReviewStatus::Done)
+                | JobStatus::Orchestrator(MechanizedStatus::Done)
+                | JobStatus::Operator(MechanizedStatus::Done)
         )
     }
 
@@ -47,7 +58,10 @@ impl JobStatus {
     pub fn is_in_progress(&self) -> bool {
         matches!(
             self,
-            JobStatus::Craft(CraftStatus::InProgress) | JobStatus::Review(ReviewStatus::InProgress)
+            JobStatus::Craft(CraftStatus::InProgress)
+                | JobStatus::Review(ReviewStatus::InProgress)
+                | JobStatus::Orchestrator(MechanizedStatus::InProgress)
+                | JobStatus::Operator(MechanizedStatus::InProgress)
         )
     }
 }
@@ -61,6 +75,13 @@ impl From<CraftStatus> for JobStatus {
 impl From<ReviewStatus> for JobStatus {
     fn from(s: ReviewStatus) -> Self {
         JobStatus::Review(s)
+    }
+}
+
+impl From<MechanizedStatus> for JobStatus {
+    fn from(s: MechanizedStatus) -> Self {
+        // Default to Orchestrator; callers should use the explicit variant
+        JobStatus::Orchestrator(s)
     }
 }
 

@@ -14,6 +14,9 @@ pub use priority::{priority_from_id, priority_id};
 mod job_type;
 pub use job_type::{job_type_from_id, job_type_id};
 
+mod mechanized_status;
+pub use mechanized_status::{mechanized_status_from_id, mechanized_status_id};
+
 mod review_status;
 pub use review_status::{review_status_from_id, review_status_id};
 

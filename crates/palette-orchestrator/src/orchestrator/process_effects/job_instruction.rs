@@ -50,6 +50,8 @@ impl Orchestrator {
                 };
                 (task_state.workflow_id, job.id.clone())
             }
+            // Orchestrator/Operator jobs don't have artifacts mounts
+            JobType::Orchestrator | JobType::Operator => return Ok(None),
             JobType::Review => {
                 let Some(task_state) = self.interactor.data_store.get_task_state(&job.task_id)?
                 else {
@@ -96,6 +98,8 @@ impl Orchestrator {
     /// Review jobs share the parent craft job's workspace as read-only.
     pub(super) fn resolve_workspace(&self, job: &Job) -> crate::Result<Option<WorkspaceVolume>> {
         match job.job_type {
+            // Orchestrator/Operator jobs don't have workspaces
+            JobType::Orchestrator | JobType::Operator => Ok(None),
             JobType::Craft => {
                 let Some(ref repo) = job.repository else {
                     return Ok(None);

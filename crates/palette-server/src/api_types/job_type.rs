@@ -6,6 +6,8 @@ use serde::{Deserialize, Serialize};
 pub enum JobType {
     Craft,
     Review,
+    Orchestrator,
+    Operator,
 }
 
 impl From<JobType> for domain::job::JobType {
@@ -13,6 +15,8 @@ impl From<JobType> for domain::job::JobType {
         match t {
             JobType::Craft => domain::job::JobType::Craft,
             JobType::Review => domain::job::JobType::Review,
+            JobType::Orchestrator => domain::job::JobType::Orchestrator,
+            JobType::Operator => domain::job::JobType::Operator,
         }
     }
 }
@@ -22,6 +26,8 @@ impl From<domain::job::JobType> for JobType {
         match t {
             domain::job::JobType::Craft => JobType::Craft,
             domain::job::JobType::Review => JobType::Review,
+            domain::job::JobType::Orchestrator => JobType::Orchestrator,
+            domain::job::JobType::Operator => JobType::Operator,
         }
     }
 }

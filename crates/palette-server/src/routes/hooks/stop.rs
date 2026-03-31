@@ -140,6 +140,8 @@ fn process_member_jobs(
             JobType::Review => {
                 handle_review_stop(state, job, worker_id, supervisor_id, last_message)
             }
+            // Orchestrator and Operator jobs don't have workers, so stop is a no-op
+            JobType::Orchestrator | JobType::Operator => {}
         }
     }
 }

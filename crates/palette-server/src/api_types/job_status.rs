@@ -12,6 +12,7 @@ pub enum JobStatus {
     ChangesRequested,
     Done,
     Escalated,
+    Failed,
 }
 
 impl JobStatus {
@@ -23,6 +24,7 @@ impl JobStatus {
             JobStatus::ChangesRequested => "changes_requested",
             JobStatus::Done => "done",
             JobStatus::Escalated => "escalated",
+            JobStatus::Failed => "failed",
         }
     }
 
@@ -36,8 +38,10 @@ impl JobStatus {
                     JobStatus::InReview => domain::job::CraftStatus::InReview,
                     JobStatus::Done => domain::job::CraftStatus::Done,
                     JobStatus::Escalated => domain::job::CraftStatus::Escalated,
-                    // ChangesRequested is not valid for craft, but map to Escalated as fallback
-                    JobStatus::ChangesRequested => domain::job::CraftStatus::Escalated,
+                    // ChangesRequested/Failed are not valid for craft, but map to Escalated as fallback
+                    JobStatus::ChangesRequested | JobStatus::Failed => {
+                        domain::job::CraftStatus::Escalated
+                    }
                 };
                 domain::job::JobStatus::Craft(craft)
             }
@@ -48,10 +52,27 @@ impl JobStatus {
                     JobStatus::ChangesRequested => domain::job::ReviewStatus::ChangesRequested,
                     JobStatus::Done => domain::job::ReviewStatus::Done,
                     JobStatus::Escalated => domain::job::ReviewStatus::Escalated,
-                    // InReview is not valid for review, but map to InProgress as fallback
-                    JobStatus::InReview => domain::job::ReviewStatus::InProgress,
+                    // InReview/Failed are not valid for review, but map to InProgress as fallback
+                    JobStatus::InReview | JobStatus::Failed => {
+                        domain::job::ReviewStatus::InProgress
+                    }
                 };
                 domain::job::JobStatus::Review(review)
+            }
+            domain::job::JobType::Orchestrator | domain::job::JobType::Operator => {
+                let ms = match self {
+                    JobStatus::Todo => domain::job::MechanizedStatus::Todo,
+                    JobStatus::InProgress | JobStatus::InReview | JobStatus::ChangesRequested => {
+                        domain::job::MechanizedStatus::InProgress
+                    }
+                    JobStatus::Done | JobStatus::Escalated => domain::job::MechanizedStatus::Done,
+                    JobStatus::Failed => domain::job::MechanizedStatus::Failed,
+                };
+                if job_type == domain::job::JobType::Orchestrator {
+                    domain::job::JobStatus::Orchestrator(ms)
+                } else {
+                    domain::job::JobStatus::Operator(ms)
+                }
             }
         }
     }
@@ -74,6 +95,14 @@ impl From<domain::job::JobStatus> for JobStatus {
                 domain::job::ReviewStatus::Done => JobStatus::Done,
                 domain::job::ReviewStatus::Escalated => JobStatus::Escalated,
             },
+            domain::job::JobStatus::Orchestrator(ms) | domain::job::JobStatus::Operator(ms) => {
+                match ms {
+                    domain::job::MechanizedStatus::Todo => JobStatus::Todo,
+                    domain::job::MechanizedStatus::InProgress => JobStatus::InProgress,
+                    domain::job::MechanizedStatus::Done => JobStatus::Done,
+                    domain::job::MechanizedStatus::Failed => JobStatus::Failed,
+                }
+            }
         }
     }
 }
