@@ -145,7 +145,7 @@ mod tests {
     }
 
     fn child_id(key: &str) -> TaskId {
-        root_id().child(&TaskKey::parse(key.to_string().unwrap()))
+        root_id().child(&TaskKey::parse(key).unwrap())
     }
 
     fn make_tree_with_children(children: &[&str]) -> TaskTree {
