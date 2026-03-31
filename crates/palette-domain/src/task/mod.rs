@@ -9,7 +9,7 @@ pub use task_status::TaskStatus;
 
 #[allow(clippy::module_inception)]
 mod task;
-pub use task::Task;
+pub use task::{Task, TaskToJobError};
 
 mod task_state;
 pub use task_state::TaskState;

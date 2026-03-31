@@ -1,6 +1,5 @@
 use crate::{AppState, Error};
-use palette_core::ReasonKey;
-use palette_domain::job::{CreateJobRequest, JobId, JobType};
+use palette_domain::job::JobType;
 use palette_domain::rule::{RuleEffect, TaskEffect};
 use palette_domain::task::{TaskId, TaskStatus};
 use palette_domain::worker::WorkerRole;
@@ -48,7 +47,7 @@ pub(super) fn activate_ready_children(
                     .update_task_status(task_id, TaskStatus::InProgress)
                     .map_err(Error::internal)?;
             }
-            let job_effects = create_job(state, &task, job_type)?;
+            let job_effects = create_job(state, &task)?;
             effects.extend(job_effects);
 
             // Review composites (review-integrate): resolve children immediately.
@@ -80,28 +79,13 @@ pub(super) fn activate_ready_children(
 pub(super) fn create_job(
     state: &AppState,
     task: &palette_domain::task::Task,
-    job_type: JobType,
 ) -> crate::Result<Vec<RuleEffect>> {
-    let job =
-        state
-            .interactor
-            .data_store
-            .create_job(&CreateJobRequest::new(
-                Some(JobId::generate(job_type)),
-                task.id.clone(),
-                job_type,
-                palette_domain::job::Title::parse(task.key.to_string())
-                    .map_err(|e| Error::internal(e.reason_key()))?,
-                palette_domain::job::PlanPath::parse(task.plan_path.clone().ok_or_else(|| {
-                    Error::internal(format!("task {} has no plan_path", task.id))
-                })?)
-                .map_err(|e| Error::internal(e.reason_key()))?,
-                None,
-                task.priority,
-                task.repository.clone(),
-            ))
-            .map_err(Error::internal)?;
-
+    let req = task.to_create_job_request().map_err(Error::internal)?;
+    let job = state
+        .interactor
+        .data_store
+        .create_job(&req)
+        .map_err(Error::internal)?;
     let effects = RuleEngine::new(state.interactor.data_store.as_ref(), 0)
         .on_job_created(&job.id)
         .map_err(Error::internal)?;
@@ -109,7 +93,7 @@ pub(super) fn create_job(
     tracing::info!(
         job_id = %job.id,
         task_id = %task.id,
-        job_type = ?job_type,
+        job_type = ?job.job_type,
         "created job for task"
     );
 
