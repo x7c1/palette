@@ -104,9 +104,16 @@ impl Orchestrator {
         exit_code: Option<i32>,
         duration_ms: u64,
     ) {
-        let Some(job) = self.interactor.data_store.get_job(job_id).ok().flatten() else {
-            tracing::error!(job_id = %job_id, "orchestrator task completed but job not found");
-            return;
+        let job = match self.interactor.data_store.get_job(job_id) {
+            Ok(Some(j)) => j,
+            Ok(None) => {
+                tracing::error!(job_id = %job_id, "orchestrator task completed but job not found");
+                return;
+            }
+            Err(e) => {
+                tracing::error!(job_id = %job_id, error = %e, "failed to get job after orchestrator task completed");
+                return;
+            }
         };
 
         // Save check-result.json
@@ -174,14 +181,13 @@ impl Orchestrator {
             if sibling.job_type != Some(palette_domain::job::JobType::Craft) {
                 continue;
             }
-            let Some(craft_job) = self
-                .interactor
-                .data_store
-                .get_job_by_task_id(&sibling.id)
-                .ok()
-                .flatten()
-            else {
-                continue;
+            let craft_job = match self.interactor.data_store.get_job_by_task_id(&sibling.id) {
+                Ok(Some(j)) => j,
+                Ok(None) => continue,
+                Err(e) => {
+                    tracing::error!(task_id = %sibling.id, error = %e, "failed to get craft job for revert");
+                    continue;
+                }
             };
 
             // Revert craft job to InProgress (same as ChangesRequested)
@@ -256,20 +262,23 @@ impl Orchestrator {
 
         // Find sibling craft job to get the correct artifacts path
         let siblings = task_store.get_child_tasks(parent_id);
-        let craft_job_id = siblings
+        let craft_sibling = siblings
             .iter()
-            .find(|s| s.job_type == Some(palette_domain::job::JobType::Craft))
-            .and_then(|s| {
-                self.interactor
-                    .data_store
-                    .get_job_by_task_id(&s.id)
-                    .ok()
-                    .flatten()
-            })
-            .map(|j| j.id);
-
-        let Some(craft_job_id) = craft_job_id else {
+            .find(|s| s.job_type == Some(palette_domain::job::JobType::Craft));
+        let Some(craft_sibling) = craft_sibling else {
             return;
+        };
+        let craft_job_id = match self
+            .interactor
+            .data_store
+            .get_job_by_task_id(&craft_sibling.id)
+        {
+            Ok(Some(j)) => j.id,
+            Ok(None) => return,
+            Err(e) => {
+                tracing::error!(task_id = %craft_sibling.id, error = %e, "failed to get craft job for check result");
+                return;
+            }
         };
 
         let artifacts_path = self
@@ -298,30 +307,40 @@ impl Orchestrator {
     /// Resolve the working directory for an orchestrator task command.
     /// Looks for the sibling craft task's workspace.
     fn resolve_orchestrator_work_dir(&self, job: &Job) -> Option<String> {
-        let task_state = self
-            .interactor
-            .data_store
-            .get_task_state(&job.task_id)
-            .ok()
-            .flatten()?;
-        let task_store = self
-            .interactor
-            .create_task_store(&task_state.workflow_id)
-            .ok()?;
+        let task_state = match self.interactor.data_store.get_task_state(&job.task_id) {
+            Ok(Some(s)) => s,
+            Ok(None) => return None,
+            Err(e) => {
+                tracing::error!(task_id = %job.task_id, error = %e, "failed to get task state for work dir");
+                return None;
+            }
+        };
+        let task_store = match self.interactor.create_task_store(&task_state.workflow_id) {
+            Ok(s) => s,
+            Err(e) => {
+                tracing::error!(error = %e, "failed to create task store for work dir");
+                return None;
+            }
+        };
         let task = task_store.get_task(&job.task_id)?;
         let parent_id = task.parent_id.as_ref()?;
 
         let siblings = task_store.get_child_tasks(parent_id);
-        let craft_job = siblings
+        let craft_sibling = siblings
             .iter()
-            .find(|s| s.job_type == Some(palette_domain::job::JobType::Craft))
-            .and_then(|s| {
-                self.interactor
-                    .data_store
-                    .get_job_by_task_id(&s.id)
-                    .ok()
-                    .flatten()
-            })?;
+            .find(|s| s.job_type == Some(palette_domain::job::JobType::Craft))?;
+        let craft_job = match self
+            .interactor
+            .data_store
+            .get_job_by_task_id(&craft_sibling.id)
+        {
+            Ok(Some(j)) => j,
+            Ok(None) => return None,
+            Err(e) => {
+                tracing::error!(task_id = %craft_sibling.id, error = %e, "failed to get craft job for work dir");
+                return None;
+            }
+        };
 
         let ws_path = self.workspace_manager.workspace_path(craft_job.id.as_ref());
         if ws_path.exists() {

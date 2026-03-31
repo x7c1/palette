@@ -127,17 +127,22 @@ impl Orchestrator {
             .iter()
             .filter(|c| c.job_type == Some(JobType::Review))
             .filter_map(|c| {
-                self.interactor
-                    .data_store
-                    .get_job_by_task_id(&c.id)
-                    .ok()
-                    .flatten()
+                match self.interactor.data_store.get_job_by_task_id(&c.id) {
+                    Ok(j) => j,
+                    Err(e) => {
+                        tracing::error!(task_id = %c.id, error = %e, "failed to get review job for round detection");
+                        None
+                    }
+                }
             })
             .filter_map(|j| {
-                self.interactor
-                    .data_store
-                    .get_review_submissions(&j.id)
-                    .ok()
+                match self.interactor.data_store.get_review_submissions(&j.id) {
+                    Ok(subs) => Some(subs),
+                    Err(e) => {
+                        tracing::error!(job_id = %j.id, error = %e, "failed to get review submissions for round detection");
+                        None
+                    }
+                }
             })
             .flat_map(|subs| subs.into_iter())
             .map(|s| s.round as u32)
