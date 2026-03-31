@@ -6,7 +6,6 @@ use std::collections::HashMap;
 
 /// Blueprint validation error.
 #[derive(Debug, palette_macros::ReasonKey)]
-#[reason_namespace = "blueprint"]
 pub enum BlueprintError {
     /// Task key contains invalid characters (must be `[a-z0-9-]+`).
     InvalidKey { key: String },

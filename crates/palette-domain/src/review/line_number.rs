@@ -29,7 +29,6 @@ impl fmt::Display for LineNumber {
 }
 
 #[derive(Debug, palette_macros::ReasonKey)]
-#[reason_namespace = "line_number"]
 pub enum InvalidLineNumber {
     Negative { value: i32 },
     TooLarge { value: i32 },

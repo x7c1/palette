@@ -18,7 +18,6 @@ pub fn validate(input: TokenStream) -> TokenStream {
 ///
 /// ```ignore
 /// #[derive(ReasonKey)]
-/// #[reason_namespace = "workflow_id"]
 /// pub enum InvalidWorkflowId {
 ///     Empty,
 ///     TooLong { id: String },
@@ -27,11 +26,13 @@ pub fn validate(input: TokenStream) -> TokenStream {
 /// ```
 ///
 /// Generates:
-/// - `namespace()` → `"workflow_id"` (from `#[reason_namespace]`)
+/// - `namespace()` → derived from type name: strip `Error` suffix, then snake_case
+///   (e.g. `InvalidWorkflowId` → `"invalid_workflow_id"`, `BlueprintError` → `"blueprint"`)
 /// - `value()` → variant name in snake_case (e.g. `TooLong` → `"too_long"`)
-/// - `reason_key()` → `"{namespace}/{value}"` (e.g. `"workflow_id/too_long"`)
+/// - `reason_key()` → `"{namespace}/{value}"` (e.g. `"invalid_workflow_id/too_long"`)
 ///
-/// Use `#[reason = "custom_name"]` on a variant to override the default snake_case value.
+/// Use `#[reason_namespace = "..."]` on the enum to override the derived namespace.
+/// Use `#[reason = "custom_name"]` on a variant to override the derived value.
 #[proc_macro_derive(ReasonKey, attributes(reason_namespace, reason))]
 pub fn derive_reason_key(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
@@ -81,6 +82,7 @@ pub fn derive_reason_key(input: TokenStream) -> TokenStream {
 }
 
 fn extract_namespace(input: &DeriveInput) -> String {
+    // Check for explicit override
     for attr in &input.attrs {
         if attr.path().is_ident("reason_namespace")
             && let Meta::NameValue(nv) = &attr.meta
@@ -90,7 +92,10 @@ fn extract_namespace(input: &DeriveInput) -> String {
             return s.value();
         }
     }
-    panic!("ReasonKey requires #[reason_namespace = \"...\"] attribute on the enum");
+    // Derive from type name: strip "Error" suffix, then snake_case
+    let name = input.ident.to_string();
+    let stripped = name.strip_suffix("Error").unwrap_or(&name);
+    to_snake_case(stripped)
 }
 
 fn extract_reason_override(variant: &syn::Variant) -> Option<String> {
@@ -132,5 +137,31 @@ mod tests {
         assert_eq!(to_snake_case("ForbiddenChar"), "forbidden_char");
         assert_eq!(to_snake_case("MissingColon"), "missing_colon");
         assert_eq!(to_snake_case("MissingReviewChild"), "missing_review_child");
+    }
+
+    #[test]
+    fn namespace_from_type_name() {
+        use syn::parse_quote;
+
+        // "Error" suffix stripped
+        let input: DeriveInput = parse_quote! { enum BlueprintError { A } };
+        assert_eq!(extract_namespace(&input), "blueprint");
+
+        let input: DeriveInput = parse_quote! { enum TransitionError { A } };
+        assert_eq!(extract_namespace(&input), "transition");
+
+        // No "Error" suffix — full name used
+        let input: DeriveInput = parse_quote! { enum InvalidWorkflowId { A } };
+        assert_eq!(extract_namespace(&input), "invalid_workflow_id");
+
+        let input: DeriveInput = parse_quote! { enum InvalidCommentBody { A } };
+        assert_eq!(extract_namespace(&input), "invalid_comment_body");
+
+        // Explicit override takes precedence
+        let input: DeriveInput = parse_quote! {
+            #[reason_namespace = "custom"]
+            enum Foo { A }
+        };
+        assert_eq!(extract_namespace(&input), "custom");
     }
 }

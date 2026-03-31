@@ -43,7 +43,6 @@ impl AsRef<str> for JobId {
 }
 
 #[derive(Debug, palette_macros::ReasonKey)]
-#[reason_namespace = "job_id"]
 pub enum InvalidJobId {
     Empty,
     TooLong { id: String },

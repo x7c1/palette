@@ -38,7 +38,6 @@ impl From<FilePath> for String {
 }
 
 #[derive(Debug, palette_macros::ReasonKey)]
-#[reason_namespace = "file_path"]
 pub enum InvalidFilePath {
     Empty,
     TooLong { len: usize },

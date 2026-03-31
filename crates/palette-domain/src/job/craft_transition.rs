@@ -49,10 +49,10 @@ impl CraftTransition {
         if let Some(expected) = self.from_status()
             && current != expected
         {
-            return Err(TransitionError {
-                from: JobStatus::Craft(current),
-                to: JobStatus::Craft(self.to_status()),
-            });
+            return Err(TransitionError::invalid(
+                JobStatus::Craft(current),
+                JobStatus::Craft(self.to_status()),
+            ));
         }
         Ok(self.to_job_status())
     }

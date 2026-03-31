@@ -60,7 +60,6 @@ impl AsRef<str> for TaskId {
 
 /// Invalid format for a task ID.
 #[derive(Debug, palette_macros::ReasonKey)]
-#[reason_namespace = "task_id"]
 pub enum InvalidTaskId {
     Empty,
     TooLong {

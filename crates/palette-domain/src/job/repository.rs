@@ -32,7 +32,6 @@ impl Repository {
 }
 
 #[derive(Debug, palette_macros::ReasonKey)]
-#[reason_namespace = "repository"]
 pub enum InvalidRepository {
     NameEmpty,
     NameTooLong { len: usize },

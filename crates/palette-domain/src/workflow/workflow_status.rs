@@ -44,7 +44,6 @@ impl fmt::Display for WorkflowStatus {
 }
 
 #[derive(Debug, palette_macros::ReasonKey)]
-#[reason_namespace = "workflow_status"]
 pub enum InvalidWorkflowStatus {
     Unknown { value: String },
 }

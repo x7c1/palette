@@ -2,27 +2,26 @@ use std::fmt;
 
 use super::JobStatus;
 
-/// Invalid status transition error.
-#[derive(Debug)]
-pub struct TransitionError {
-    pub from: JobStatus,
-    pub to: JobStatus,
+/// Status transition error.
+#[derive(Debug, palette_macros::ReasonKey)]
+pub enum TransitionError {
+    Invalid { from: JobStatus, to: JobStatus },
+}
+
+impl TransitionError {
+    pub fn invalid(from: JobStatus, to: JobStatus) -> Self {
+        Self::Invalid { from, to }
+    }
 }
 
 impl fmt::Display for TransitionError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "invalid status transition: {} -> {}", self.from, self.to)
+        match self {
+            TransitionError::Invalid { from, to } => {
+                write!(f, "invalid status transition: {from} -> {to}")
+            }
+        }
     }
 }
 
 impl std::error::Error for TransitionError {}
-
-impl palette_core::ReasonKey for TransitionError {
-    fn namespace(&self) -> &str {
-        "status_transition"
-    }
-
-    fn value(&self) -> &str {
-        "invalid_transition"
-    }
-}

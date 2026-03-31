@@ -38,7 +38,6 @@ impl From<PlanPath> for String {
 }
 
 #[derive(Debug, palette_macros::ReasonKey)]
-#[reason_namespace = "plan_path"]
 pub enum InvalidPlanPath {
     Empty,
     TooLong { len: usize },

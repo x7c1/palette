@@ -45,7 +45,6 @@ impl AsRef<str> for WorkflowId {
 
 /// Invalid format for a workflow ID.
 #[derive(Debug, palette_macros::ReasonKey)]
-#[reason_namespace = "workflow_id"]
 pub enum InvalidWorkflowId {
     Empty,
     TooLong {

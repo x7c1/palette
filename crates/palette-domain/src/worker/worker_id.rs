@@ -53,7 +53,6 @@ impl AsRef<str> for WorkerId {
 }
 
 #[derive(Debug, palette_macros::ReasonKey)]
-#[reason_namespace = "worker_id"]
 pub enum InvalidWorkerId {
     Empty,
     TooLong { id: String },

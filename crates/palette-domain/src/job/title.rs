@@ -38,7 +38,6 @@ impl From<Title> for String {
 }
 
 #[derive(Debug, palette_macros::ReasonKey)]
-#[reason_namespace = "title"]
 pub enum InvalidTitle {
     Empty,
     TooLong { len: usize },
