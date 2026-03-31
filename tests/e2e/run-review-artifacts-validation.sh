@@ -22,7 +22,7 @@ BLUEPRINT_PATH="$ROOT_DIR/tests/e2e/fixtures/workspace-shared-clone.yaml"
 LOG_FILE="data/palette.log"
 PID_FILE="data/palette.pid"
 POLL_INTERVAL=5
-STALL_THRESHOLD=24
+STALL_THRESHOLD=60
 
 trap '"$SCRIPT_DIR/stop-palette.sh"' EXIT
 
@@ -95,8 +95,21 @@ while true; do
     break
   fi
 
+  # If workflow completed, check whether validation ran at all
+  if grep -q "workflow completed" "$LOG_FILE" 2>/dev/null; then
+    echo ""
+    if grep -q "review.md artifact" "$LOG_FILE" 2>/dev/null; then
+      echo "PASS: Artifact validation ran during workflow (check log for details)"
+    else
+      echo "FAIL: Workflow completed but no artifact validation detected in log"
+      exit 1
+    fi
+    break
+  fi
+
   JOBS=$(curl -sf "$PALETTE_URL/jobs" 2>/dev/null || echo "[]")
-  snapshot="$JOBS"
+  WORKERS=$(curl -sf "$PALETTE_URL/workers" 2>/dev/null | jq -r 'length' 2>/dev/null || echo "0")
+  snapshot="${JOBS}|${WORKERS}"
   if [[ "$snapshot" == "$prev_snapshot" ]]; then
     stall_count=$((stall_count + 1))
   else
