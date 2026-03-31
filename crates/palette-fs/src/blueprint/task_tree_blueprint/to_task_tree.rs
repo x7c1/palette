@@ -118,13 +118,13 @@ fn validate_node(node: &TaskNode) -> (Vec<BlueprintError>, HashMap<&str, TaskKey
         });
     }
 
-    if let Some(ref repo) = node.repository {
-        if let Err(cause) = Repository::parse(&repo.name, &repo.branch) {
-            errors.push(BlueprintError::InvalidRepository {
-                task_key: node.key.clone(),
-                cause,
-            });
-        }
+    if let Some(ref repo) = node.repository
+        && let Err(cause) = Repository::parse(&repo.name, &repo.branch)
+    {
+        errors.push(BlueprintError::InvalidRepository {
+            task_key: node.key.clone(),
+            cause,
+        });
     }
 
     for dep in &node.depends_on {
