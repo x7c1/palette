@@ -35,6 +35,7 @@ worker_summary() {
 # --- Step 1: Reset and build ---
 echo "=== Step 1: Reset and build ==="
 scripts/reset.sh 2>&1
+rm -f "$LOG_FILE"
 mkdir -p data/plans
 cp -r tests/e2e/fixtures/plans/* data/plans/ 2>/dev/null || true
 cargo build 2>&1
@@ -109,6 +110,7 @@ while true; do
     echo ""
     echo "=== All operator-task checks passed ==="
     scripts/reset.sh 2>&1
+rm -f "$LOG_FILE"
     exit 0
   fi
 

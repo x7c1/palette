@@ -73,7 +73,10 @@ impl WorkspaceManager {
                 "set core.fileMode",
             )?;
         }
-        Ok(cache_path)
+        // Return absolute path so callers don't depend on CWD
+        let abs_cache = std::fs::canonicalize(&cache_path)
+            .map_err(|e| crate::Error::External(Box::new(e)))?;
+        Ok(abs_cache)
     }
 
     /// Create a workspace for a job using `git clone --shared`.

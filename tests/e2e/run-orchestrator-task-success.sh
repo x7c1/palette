@@ -35,6 +35,7 @@ worker_summary() {
 # --- Step 1: Reset and build ---
 echo "=== Step 1: Reset and build ==="
 scripts/reset.sh 2>&1
+rm -f "$LOG_FILE"
 mkdir -p data/plans
 cp -r tests/e2e/fixtures/plans/* data/plans/ 2>/dev/null || true
 cargo build 2>&1
@@ -100,7 +101,7 @@ while true; do
       echo "PASS: Orchestrator task status is 'done'"
 
       # Verify check-result.json exists
-      CRAFT_JOB=$(echo "$JOBS" | jq -r '.[] | select(.job_type == "craft") | .id' | head -1)
+      CRAFT_JOB=$(echo "$JOBS" | jq -r '.[] | select(.type == "craft") | .id' | head -1)
       CHECK_RESULT=$(find "data/artifacts/$WORKFLOW_ID/$CRAFT_JOB" -name "check-result.json" 2>/dev/null | head -1)
       if [[ -n "$CHECK_RESULT" ]]; then
         echo "PASS: check-result.json found at $CHECK_RESULT"
@@ -146,4 +147,5 @@ done
 echo ""
 echo "=== All orchestrator-task-success checks passed ==="
 scripts/reset.sh 2>&1
+rm -f "$LOG_FILE"
 exit 0

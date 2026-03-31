@@ -50,6 +50,7 @@ wait_for_log() {
 # --- Step 1: Reset and build ---
 echo "=== Step 1: Reset and build ==="
 scripts/reset.sh 2>&1
+rm -f "$LOG_FILE"
 mkdir -p data/plans
 cp -r tests/e2e/fixtures/plans/* data/plans/ 2>/dev/null || true
 cargo build 2>&1
@@ -108,7 +109,7 @@ while true; do
 
   # Check for round-1 artifacts after review jobs enter done/changes_requested
   if [[ "$round1_verified" == "false" ]]; then
-    CRAFT_JOB=$(echo "$JOBS" | jq -r '.[] | select(.job_type == "craft") | .id' | head -1)
+    CRAFT_JOB=$(echo "$JOBS" | jq -r '.[] | select(.type == "craft") | .id' | head -1)
     if [[ -n "$CRAFT_JOB" ]] && [[ -d "data/artifacts/$WORKFLOW_ID/$CRAFT_JOB/round-1" ]]; then
       echo ""
       echo "--- Checking round-1 artifacts ---"
@@ -161,7 +162,7 @@ done
 echo ""
 echo "=== Step 5: Verify final artifacts ==="
 
-CRAFT_JOB=$(curl -sf "$PALETTE_URL/jobs" | jq -r '.[] | select(.job_type == "craft") | .id' | head -1)
+CRAFT_JOB=$(curl -sf "$PALETTE_URL/jobs" | jq -r '.[] | select(.type == "craft") | .id' | head -1)
 ARTIFACTS_DIR="data/artifacts/$WORKFLOW_ID/$CRAFT_JOB"
 
 if [[ ! -d "$ARTIFACTS_DIR" ]]; then
@@ -185,4 +186,5 @@ fi
 echo ""
 echo "=== All review-artifacts checks passed ==="
 scripts/reset.sh 2>&1
+rm -f "$LOG_FILE"
 exit 0
