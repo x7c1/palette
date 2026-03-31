@@ -9,7 +9,10 @@ task:
         name: x7c1/palette
         branch: e2e-review-artifacts
       children:
-        - key: review-a
+        - key: review-integrate
           type: review
-        - key: review-b
-          type: review
+          children:
+            - key: review-a
+              type: review
+            - key: review-b
+              type: review
