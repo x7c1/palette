@@ -37,7 +37,7 @@ mod tests {
     use palette_domain::workflow::WorkflowId;
 
     fn make_tree(workflow_id: &WorkflowId, keys: &[&str]) -> TaskTree {
-        let root_key = TaskKey::new("root");
+        let root_key = TaskKey::parse("root").unwrap();
         let root_id = TaskId::root(workflow_id, &root_key);
         let mut nodes = HashMap::new();
 
@@ -53,20 +53,20 @@ mod tests {
                 repository: None,
                 children: keys
                     .iter()
-                    .map(|k| root_id.child(&TaskKey::new(*k)))
+                    .map(|k| root_id.child(&TaskKey::parse(*k).unwrap()))
                     .collect(),
                 depends_on: vec![],
             },
         );
 
         for key in keys {
-            let child_id = root_id.child(&TaskKey::new(*key));
+            let child_id = root_id.child(&TaskKey::parse(*key).unwrap());
             nodes.insert(
                 child_id.clone(),
                 TaskTreeNode {
                     id: child_id.clone(),
                     parent_id: Some(root_id.clone()),
-                    key: TaskKey::new(*key),
+                    key: TaskKey::parse(*key).unwrap(),
                     plan_path: None,
                     job_type: None,
                     priority: None,
@@ -84,15 +84,17 @@ mod tests {
     fn no_changes() {
         let wf = WorkflowId::parse("wf-1").unwrap();
         let tree = make_tree(&wf, &["a", "b"]);
-        let root_id = TaskId::root(&wf, &TaskKey::new("root"));
+        let root_id = TaskId::root(&wf, &TaskKey::parse("root").unwrap());
         let db: HashMap<_, _> = [
             (root_id, TaskStatus::InProgress),
             (
-                TaskId::root(&wf, &TaskKey::new("root")).child(&TaskKey::new("a")),
+                TaskId::root(&wf, &TaskKey::parse("root").unwrap())
+                    .child(&TaskKey::parse("a").unwrap()),
                 TaskStatus::Pending,
             ),
             (
-                TaskId::root(&wf, &TaskKey::new("root")).child(&TaskKey::new("b")),
+                TaskId::root(&wf, &TaskKey::parse("root").unwrap())
+                    .child(&TaskKey::parse("b").unwrap()),
                 TaskStatus::Pending,
             ),
         ]
@@ -107,15 +109,17 @@ mod tests {
     fn detects_added_tasks() {
         let wf = WorkflowId::parse("wf-1").unwrap();
         let tree = make_tree(&wf, &["a", "b", "c"]);
-        let root_id = TaskId::root(&wf, &TaskKey::new("root"));
+        let root_id = TaskId::root(&wf, &TaskKey::parse("root").unwrap());
         let db: HashMap<_, _> = [
             (root_id, TaskStatus::InProgress),
             (
-                TaskId::root(&wf, &TaskKey::new("root")).child(&TaskKey::new("a")),
+                TaskId::root(&wf, &TaskKey::parse("root").unwrap())
+                    .child(&TaskKey::parse("a").unwrap()),
                 TaskStatus::Pending,
             ),
             (
-                TaskId::root(&wf, &TaskKey::new("root")).child(&TaskKey::new("b")),
+                TaskId::root(&wf, &TaskKey::parse("root").unwrap())
+                    .child(&TaskKey::parse("b").unwrap()),
                 TaskStatus::Pending,
             ),
         ]
@@ -131,15 +135,17 @@ mod tests {
     fn detects_removed_tasks() {
         let wf = WorkflowId::parse("wf-1").unwrap();
         let tree = make_tree(&wf, &["a"]);
-        let root_id = TaskId::root(&wf, &TaskKey::new("root"));
+        let root_id = TaskId::root(&wf, &TaskKey::parse("root").unwrap());
         let db: HashMap<_, _> = [
             (root_id, TaskStatus::InProgress),
             (
-                TaskId::root(&wf, &TaskKey::new("root")).child(&TaskKey::new("a")),
+                TaskId::root(&wf, &TaskKey::parse("root").unwrap())
+                    .child(&TaskKey::parse("a").unwrap()),
                 TaskStatus::Pending,
             ),
             (
-                TaskId::root(&wf, &TaskKey::new("root")).child(&TaskKey::new("b")),
+                TaskId::root(&wf, &TaskKey::parse("root").unwrap())
+                    .child(&TaskKey::parse("b").unwrap()),
                 TaskStatus::Pending,
             ),
         ]
