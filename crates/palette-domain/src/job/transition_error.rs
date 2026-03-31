@@ -19,7 +19,7 @@ impl std::error::Error for TransitionError {}
 
 impl palette_core::ReasonKey for TransitionError {
     fn namespace(&self) -> &str {
-        "job_status"
+        "status_transition"
     }
 
     fn value(&self) -> &str {
