@@ -187,20 +187,26 @@ impl Orchestrator {
             let mut job_effects = Vec::new();
 
             // If composite task has a job_type, create the job.
-            // Craft composites: do NOT resolve children (activated on InReview).
-            // Review composites (review-integrate): resolve children immediately.
+            // Craft composites: create job + member, do NOT resolve children (activated on InReview).
+            // Review composites: create job (for integrator verdict anchor) but do NOT
+            // assign a member. The ReviewIntegrator supervisor handles integration.
             if let Some(task) = task_store.get_task(task_id)
                 && task.job_type.is_some()
             {
                 task_store.update_task_status(task_id, TaskStatus::InProgress)?;
                 let effects = self.create_job_for_ready_task(&task)?;
-                job_effects.extend(effects);
 
                 if task.job_type == Some(JobType::Craft) {
+                    job_effects.extend(effects);
                     return Ok((vec![], job_effects));
                 }
-                // Review composite: supervisor is spawned by activate_child_review_tasks,
-                // so skip the Leader spawn below and go directly to child resolution.
+                // Review composite: job is created but AssignNewJob effect is filtered
+                // out — no member should be spawned for this job.
+                let filtered: Vec<_> = effects
+                    .into_iter()
+                    .filter(|e| !matches!(e, RuleEffect::AssignNewJob { .. }))
+                    .collect();
+                job_effects.extend(filtered);
             } else {
                 // Pure composite task (no job_type): spawn Leader supervisor
                 job_effects.push(RuleEffect::SpawnSupervisor {
