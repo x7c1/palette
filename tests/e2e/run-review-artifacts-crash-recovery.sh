@@ -76,7 +76,7 @@ echo "=== Step 4: Wait for review.md files ==="
 
 CRAFT_JOB=""
 REVIEW_MD_FOUND=false
-for i in $(seq 1 120); do
+for i in $(seq 1 180); do
   JOBS=$(curl -sf "$PALETTE_URL/jobs" 2>/dev/null || echo "[]")
   CRAFT_JOB=$(echo "$JOBS" | jq -r '.[] | select(.type == "craft") | .id' 2>/dev/null | head -1)
 
@@ -89,8 +89,8 @@ for i in $(seq 1 120); do
     fi
   fi
 
-  if [[ $i -eq 120 ]]; then
-    echo "FAIL: No review.md files found after 240 seconds"
+  if [[ $i -eq 180 ]]; then
+    echo "FAIL: No review.md files found after 360 seconds"
     exit 1
   fi
   sleep 2

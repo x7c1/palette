@@ -42,6 +42,18 @@ impl Orchestrator {
             ServerEvent::ValidateIntegratedReviewArtifact { task_id, worker_id } => {
                 self.validate_integrated_review_artifact(&task_id, &worker_id);
             }
+            ServerEvent::ValidateIntegratorSubmission {
+                job_id,
+                pending_effects,
+            } => {
+                let valid = self.validate_all_reviewer_artifacts(&job_id);
+                if valid && !pending_effects.is_empty() {
+                    self.handle_process_effects(pending_effects).await;
+                }
+                // If invalid, effects are discarded. Missing reviewers are
+                // re-instructed. The integrator will need to re-submit after
+                // all review.md files are present.
+            }
             ServerEvent::OrchestratorTaskCompleted {
                 job_id,
                 success,

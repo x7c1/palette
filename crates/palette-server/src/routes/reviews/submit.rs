@@ -87,16 +87,39 @@ pub async fn handle_submit_review(
         );
     }
 
-    // Validate review artifact and conditionally process effects.
-    // If review.md is missing, effects are held back and the reviewer is re-instructed.
-    if let Some(ref assignee) = job.assignee_id {
+    // Determine if this is an integrator submission (composite review task with children)
+    // or a regular reviewer submission.
+    let is_integrator = match state.interactor.data_store.get_task_state(&job.task_id) {
+        Ok(Some(ts)) => match state.interactor.create_task_store(&ts.workflow_id) {
+            Ok(task_store) => !task_store.get_child_tasks(&job.task_id).is_empty(),
+            Err(e) => {
+                tracing::error!(error = %e, "failed to create task store for integrator check");
+                false
+            }
+        },
+        Ok(None) => false,
+        Err(e) => {
+            tracing::error!(error = %e, "failed to get task state for integrator check");
+            false
+        }
+    };
+
+    if is_integrator {
+        // Integrator submission: validate all child reviewers' review.md files
+        let _ = state
+            .event_tx
+            .send(ServerEvent::ValidateIntegratorSubmission {
+                job_id: review_job_id.clone(),
+                pending_effects: effects,
+            });
+    } else if let Some(ref assignee) = job.assignee_id {
+        // Regular reviewer: validate this reviewer's review.md
         let _ = state.event_tx.send(ServerEvent::ValidateReviewArtifact {
             job_id: review_job_id.clone(),
             worker_id: assignee.clone(),
             pending_effects: effects,
         });
     } else if !effects.is_empty() {
-        // No assignee to validate against — process effects directly
         let _ = state.event_tx.send(ServerEvent::ProcessEffects { effects });
     }
     let _ = state.event_tx.send(ServerEvent::NotifyDeliveryLoop);

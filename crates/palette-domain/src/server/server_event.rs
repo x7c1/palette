@@ -30,6 +30,13 @@ pub enum ServerEvent {
         task_id: crate::task::TaskId,
         worker_id: crate::worker::WorkerId,
     },
+    /// Validate an integrator's review submission: check that all child
+    /// reviewers have written review.md before processing effects.
+    /// If any review.md is missing, re-instruct the reviewer and hold effects.
+    ValidateIntegratorSubmission {
+        job_id: JobId,
+        pending_effects: Vec<crate::rule::RuleEffect>,
+    },
     /// An orchestrator task's command has completed.
     OrchestratorTaskCompleted {
         job_id: JobId,

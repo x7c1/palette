@@ -93,6 +93,140 @@ impl Orchestrator {
         }
     }
 
+    /// Validate that all child reviewers under an integrator's task have
+    /// written their review.md files.
+    ///
+    /// Returns `true` if all review.md files are present.
+    /// For each missing file, enqueues a re-instruction to the reviewer.
+    pub(super) fn validate_all_reviewer_artifacts(&self, integrator_job_id: &JobId) -> bool {
+        let job = match self.interactor.data_store.get_job(integrator_job_id) {
+            Ok(Some(j)) => j,
+            Ok(None) => return true,
+            Err(e) => {
+                tracing::error!(job_id = %integrator_job_id, error = %e, "failed to get integrator job");
+                return true;
+            }
+        };
+        let task_state = match self.interactor.data_store.get_task_state(&job.task_id) {
+            Ok(Some(s)) => s,
+            Ok(None) => return true,
+            Err(e) => {
+                tracing::error!(error = %e, "failed to get task state for integrator validation");
+                return true;
+            }
+        };
+        let task_store = match self.interactor.create_task_store(&task_state.workflow_id) {
+            Ok(s) => s,
+            Err(e) => {
+                tracing::error!(error = %e, "failed to create task store for integrator validation");
+                return true;
+            }
+        };
+
+        // Find parent craft job for artifacts path
+        let task = match task_store.get_task(&job.task_id) {
+            Some(t) => t,
+            None => return true,
+        };
+        let parent_id = match task.parent_id.as_ref() {
+            Some(id) => id,
+            None => return true,
+        };
+        let craft_job = match self.interactor.data_store.get_job_by_task_id(parent_id) {
+            Ok(Some(j)) => j,
+            Ok(None) => return true,
+            Err(e) => {
+                tracing::error!(error = %e, "failed to get craft job for integrator validation");
+                return true;
+            }
+        };
+
+        // Determine current round
+        let submissions = match self
+            .interactor
+            .data_store
+            .get_review_submissions(integrator_job_id)
+        {
+            Ok(s) => s,
+            Err(e) => {
+                tracing::error!(error = %e, "failed to get submissions for round detection");
+                return true;
+            }
+        };
+        let round = submissions.last().map(|s| s.round as u32).unwrap_or(1);
+
+        let artifacts_base = self
+            .workspace_manager
+            .artifacts_path(task_state.workflow_id.as_ref(), craft_job.id.as_ref());
+
+        // Check each child reviewer's review.md
+        let children = task_store.get_child_tasks(&job.task_id);
+        let mut all_present = true;
+
+        for child in &children {
+            if child.job_type != Some(JobType::Review) {
+                continue;
+            }
+            let child_job = match self.interactor.data_store.get_job_by_task_id(&child.id) {
+                Ok(Some(j)) => j,
+                Ok(None) => continue,
+                Err(e) => {
+                    tracing::error!(task_id = %child.id, error = %e, "failed to get child review job");
+                    continue;
+                }
+            };
+
+            let review_md = artifacts_base
+                .join(format!("round-{round}"))
+                .join(child_job.id.to_string())
+                .join("review.md");
+
+            if !review_md.exists() {
+                all_present = false;
+                tracing::warn!(
+                    job_id = %child_job.id,
+                    path = %review_md.display(),
+                    "review.md missing for child reviewer, sending re-instruction"
+                );
+
+                // Re-instruct the reviewer
+                if let Some(ref assignee) = child_job.assignee_id {
+                    let msg = format!(
+                        "## Missing Artifact\n\n\
+                         Your review.md file was not found at the expected location.\n\
+                         Please write your review to: /home/agent/artifacts/round-{round}/{}/review.md\n\n\
+                         Write the file first, then re-submit your review.",
+                        child_job.id,
+                    );
+                    if let Err(e) = self.interactor.data_store.enqueue_message(assignee, &msg) {
+                        tracing::error!(error = %e, "failed to enqueue re-instruction for reviewer");
+                    }
+                    let _ =
+                        self.event_tx
+                            .send(palette_domain::server::ServerEvent::DeliverMessages {
+                                target_id: assignee.clone(),
+                            });
+                }
+            }
+        }
+
+        if all_present {
+            tracing::info!(
+                job_id = %integrator_job_id,
+                round,
+                "all reviewer artifacts validated for integrator submission"
+            );
+        } else {
+            tracing::warn!(
+                job_id = %integrator_job_id,
+                round,
+                "integrator submission blocked: missing reviewer artifacts"
+            );
+        }
+
+        all_present
+    }
+
     /// Validate that a ReviewIntegrator wrote integrated-review.md.
     ///
     /// Called after a ReviewIntegrator's stop hook fires. The task_id is the
