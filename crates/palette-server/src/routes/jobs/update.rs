@@ -3,7 +3,7 @@ use crate::api_types::{
 };
 use crate::{AppState, Error};
 use axum::{Json, extract::State};
-use palette_domain::ReasonKey;
+use palette_core::ReasonKey;
 use palette_domain::job::{CraftStatus, JobStatus};
 use palette_domain::rule::RuleEffect;
 use palette_domain::server::ServerEvent;

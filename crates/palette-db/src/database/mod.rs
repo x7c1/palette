@@ -58,7 +58,7 @@ pub(crate) fn corrupt(reason: String) -> crate::Error {
 }
 
 /// Convert a parse error (`ReasonKey` impl) into `DataCorruption`.
-pub(crate) fn corrupt_parse(e: impl palette_domain::ReasonKey) -> crate::Error {
+pub(crate) fn corrupt_parse(e: impl palette_core::ReasonKey) -> crate::Error {
     crate::Error::DataCorruption {
         reason: e.reason_key(),
     }

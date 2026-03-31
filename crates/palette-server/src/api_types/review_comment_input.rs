@@ -1,6 +1,6 @@
 use super::{InputError, Location};
+use palette_core::ReasonKey;
 use palette_domain as domain;
-use palette_domain::ReasonKey;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize)]

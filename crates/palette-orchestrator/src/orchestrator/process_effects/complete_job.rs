@@ -1,5 +1,5 @@
 use super::Orchestrator;
-use palette_domain::ReasonKey;
+use palette_core::ReasonKey;
 use palette_domain::job::{JobId, JobType};
 use palette_domain::rule::RuleEffect;
 use palette_domain::task::{TaskId, TaskStatus};

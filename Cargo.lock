@@ -943,6 +943,7 @@ name = "palette-db"
 version = "0.1.0"
 dependencies = [
  "chrono",
+ "palette-core",
  "palette-domain",
  "palette-usecase",
  "rusqlite",
@@ -998,6 +999,7 @@ name = "palette-orchestrator"
 version = "0.1.0"
 dependencies = [
  "chrono",
+ "palette-core",
  "palette-domain",
  "palette-usecase",
  "serde",
