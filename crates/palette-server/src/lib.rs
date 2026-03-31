@@ -3,6 +3,9 @@ pub mod api_types;
 mod error;
 pub use error::{Error, Result};
 
+mod extract;
+pub use extract::ValidJson;
+
 mod routes;
 
 use axum::Router;

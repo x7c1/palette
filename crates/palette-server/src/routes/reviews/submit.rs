@@ -1,7 +1,7 @@
 use crate::api_types::{
     ErrorCode, InputError, Location, ResourceKind, ReviewSubmissionResponse, SubmitReviewRequest,
 };
-use crate::{AppState, Error};
+use crate::{AppState, Error, ValidJson};
 use axum::{
     Json,
     extract::{Path, State},
@@ -15,7 +15,7 @@ use std::sync::Arc;
 pub async fn handle_submit_review(
     State(state): State<Arc<AppState>>,
     Path(review_job_id): Path<String>,
-    Json(api_req): Json<SubmitReviewRequest>,
+    ValidJson(api_req): ValidJson<SubmitReviewRequest>,
 ) -> crate::Result<(StatusCode, Json<ReviewSubmissionResponse>)> {
     let review_job_id =
         JobId::parse(review_job_id).map_err(Error::invalid_path("review_job_id"))?;

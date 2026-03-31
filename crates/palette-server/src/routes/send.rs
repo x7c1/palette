@@ -1,5 +1,5 @@
 use crate::api_types::{ResourceKind, SendRequest, SendResponse};
-use crate::{AppState, Error, EventRecord};
+use crate::{AppState, Error, EventRecord, ValidJson};
 use axum::{Json, extract::State};
 use palette_domain::terminal::TerminalTarget;
 use palette_domain::worker::{WorkerId, WorkerStatus};
@@ -9,7 +9,7 @@ use super::now;
 
 pub async fn handle_send(
     State(state): State<Arc<AppState>>,
-    Json(req): Json<SendRequest>,
+    ValidJson(req): ValidJson<SendRequest>,
 ) -> crate::Result<Json<SendResponse>> {
     // Direct target mode: send immediately without queuing
     if let (None, Some(target)) = (&req.worker_id, &req.target) {

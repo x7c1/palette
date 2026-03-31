@@ -1,5 +1,5 @@
 use super::task_activation::activate_ready_children;
-use crate::{AppState, Error};
+use crate::{AppState, Error, ValidJson};
 use axum::{
     Json,
     extract::State,
@@ -30,7 +30,7 @@ pub struct StartWorkflowResponse {
 
 pub async fn handle_start_workflow(
     State(state): State<Arc<AppState>>,
-    Json(req): Json<StartWorkflowRequest>,
+    ValidJson(req): ValidJson<StartWorkflowRequest>,
 ) -> crate::Result<Response> {
     let workflow_id = WorkflowId::generate();
     let tree = state
