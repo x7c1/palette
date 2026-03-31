@@ -1,3 +1,4 @@
+use crate::job::JobId;
 use crate::rule::RuleEffect;
 use crate::worker::WorkerId;
 use crate::workflow::WorkflowId;
@@ -16,4 +17,13 @@ pub enum ServerEvent {
     ResumeWorkers { worker_ids: Vec<WorkerId> },
     /// Suspend workers belonging to the specified workflow.
     SuspendWorkflow { workflow_id: WorkflowId },
+    /// An orchestrator task's command has completed.
+    OrchestratorTaskCompleted {
+        job_id: JobId,
+        success: bool,
+        stdout: String,
+        stderr: String,
+        exit_code: Option<i32>,
+        duration_ms: u64,
+    },
 }

@@ -46,6 +46,7 @@ async fn review_submit_and_get_submissions() {
             None,
             None,
             None,
+            None,
         ))
         .unwrap();
     helper::setup_worker(&*state.interactor.data_store, "member-b");
@@ -127,6 +128,7 @@ async fn review_approved_completes_review_job() {
             JobType::Review,
             palette_domain::job::Title::parse("Review").unwrap(),
             palette_domain::job::PlanPath::parse("test/R-001").unwrap(),
+            None,
             None,
             None,
             None,

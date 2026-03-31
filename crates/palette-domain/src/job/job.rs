@@ -15,6 +15,8 @@ pub struct Job {
     pub status: JobStatus,
     pub priority: Option<Priority>,
     pub repository: Option<Repository>,
+    /// Command for orchestrator tasks.
+    pub command: Option<String>,
     pub pr_url: Option<String>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,

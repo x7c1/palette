@@ -66,6 +66,7 @@ pub fn create_craft(db: &Database, id: &str, priority: Option<Priority>) {
         None,
         priority,
         None,
+        None,
     ))
     .unwrap();
 }
@@ -78,6 +79,7 @@ pub fn create_review(db: &Database, id: &str) {
         JobType::Review,
         Title::parse(format!("Review {id}")).unwrap(),
         PlanPath::parse(format!("test/{id}")).unwrap(),
+        None,
         None,
         None,
         None,

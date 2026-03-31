@@ -1003,6 +1003,7 @@ dependencies = [
  "palette-domain",
  "palette-usecase",
  "serde",
+ "serde_json",
  "tokio",
  "tokio-util",
  "tracing",

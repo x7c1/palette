@@ -43,6 +43,11 @@ impl Orchestrator {
             return Ok(());
         }
 
+        // Mechanized jobs (Orchestrator/Operator) don't spawn worker containers
+        if !job.job_type.needs_worker() {
+            return self.handle_mechanized_job(&job);
+        }
+
         // Determine workspace volume based on job type
         let workspace = self.resolve_workspace(&job)?;
 
@@ -107,6 +112,30 @@ impl Orchestrator {
             terminal_target,
         });
 
+        Ok(())
+    }
+
+    /// Handle a mechanized job (Orchestrator or Operator).
+    /// These jobs don't spawn worker containers.
+    fn handle_mechanized_job(&self, job: &palette_domain::job::Job) -> crate::Result<()> {
+        match job.job_type {
+            palette_domain::job::JobType::Orchestrator => {
+                tracing::info!(job_id = %job.id, command = ?job.command, "executing orchestrator task");
+                self.execute_orchestrator_task(job, &self.event_tx);
+            }
+            palette_domain::job::JobType::Operator => {
+                // Operator jobs wait for human input via the API.
+                // Mark as in-progress (waiting) — the API will complete it.
+                self.interactor.data_store.update_job_status(
+                    &job.id,
+                    palette_domain::job::JobStatus::Operator(
+                        palette_domain::job::MechanizedStatus::InProgress,
+                    ),
+                )?;
+                tracing::info!(job_id = %job.id, "operator task waiting for human input");
+            }
+            _ => {}
+        }
         Ok(())
     }
 }

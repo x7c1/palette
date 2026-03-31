@@ -52,7 +52,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         interactor: Arc::clone(&interactor),
         max_review_rounds: config.rules.max_review_rounds,
         event_log: tokio::sync::Mutex::new(Vec::new()),
-        event_tx,
+        event_tx: event_tx.clone(),
     });
 
     // Ensure plan_dir exists on the host
@@ -67,6 +67,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         session_name: config.tmux.session_name.clone(),
         cancel_token: tokio_util::sync::CancellationToken::new(),
         workspace_manager,
+        event_tx,
     });
 
     // Clean up orphan containers from previous crash/forced exit

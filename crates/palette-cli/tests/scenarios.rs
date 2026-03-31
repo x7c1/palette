@@ -144,6 +144,7 @@ async fn scenario3_message_queuing_to_leader() {
             None,
             None,
             None,
+            None,
         ))
         .unwrap();
     state
@@ -155,6 +156,7 @@ async fn scenario3_message_queuing_to_leader() {
             JobType::Review,
             palette_domain::job::Title::parse("Review B").unwrap(),
             palette_domain::job::PlanPath::parse("test/R-B").unwrap(),
+            None,
             None,
             None,
             None,

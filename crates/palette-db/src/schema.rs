@@ -66,6 +66,7 @@ CREATE TABLE IF NOT EXISTS jobs (
     status_id INTEGER NOT NULL,
     priority_id INTEGER,
     repository TEXT,
+    command TEXT,
     pr_url TEXT,
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL,
@@ -147,6 +148,8 @@ pub(crate) const SEED: &str = r#"
 -- Job types
 INSERT OR IGNORE INTO job_types (id, name) VALUES (1, 'craft');
 INSERT OR IGNORE INTO job_types (id, name) VALUES (2, 'review');
+INSERT OR IGNORE INTO job_types (id, name) VALUES (3, 'orchestrator');
+INSERT OR IGNORE INTO job_types (id, name) VALUES (4, 'operator');
 
 -- Craft statuses (job_type_id = 1)
 INSERT OR IGNORE INTO job_statuses (id, job_type_id, name) VALUES (1, 1, 'todo');
@@ -161,6 +164,18 @@ INSERT OR IGNORE INTO job_statuses (id, job_type_id, name) VALUES (7, 2, 'in_pro
 INSERT OR IGNORE INTO job_statuses (id, job_type_id, name) VALUES (8, 2, 'changes_requested');
 INSERT OR IGNORE INTO job_statuses (id, job_type_id, name) VALUES (9, 2, 'done');
 INSERT OR IGNORE INTO job_statuses (id, job_type_id, name) VALUES (10, 2, 'escalated');
+
+-- Orchestrator statuses (job_type_id = 3)
+INSERT OR IGNORE INTO job_statuses (id, job_type_id, name) VALUES (11, 3, 'todo');
+INSERT OR IGNORE INTO job_statuses (id, job_type_id, name) VALUES (12, 3, 'in_progress');
+INSERT OR IGNORE INTO job_statuses (id, job_type_id, name) VALUES (13, 3, 'done');
+INSERT OR IGNORE INTO job_statuses (id, job_type_id, name) VALUES (14, 3, 'failed');
+
+-- Operator statuses (job_type_id = 4)
+INSERT OR IGNORE INTO job_statuses (id, job_type_id, name) VALUES (15, 4, 'todo');
+INSERT OR IGNORE INTO job_statuses (id, job_type_id, name) VALUES (16, 4, 'in_progress');
+INSERT OR IGNORE INTO job_statuses (id, job_type_id, name) VALUES (17, 4, 'done');
+INSERT OR IGNORE INTO job_statuses (id, job_type_id, name) VALUES (18, 4, 'failed');
 
 -- Task statuses
 INSERT OR IGNORE INTO task_statuses (id, name) VALUES (1, 'pending');

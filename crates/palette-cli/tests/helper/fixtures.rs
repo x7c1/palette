@@ -44,6 +44,7 @@ pub fn create_craft(id: &str, title: &str, task_id: &str) -> CreateJobRequest {
         assignee_id: None,
         priority: None,
         repository: None,
+        command: None,
     }
 }
 
@@ -57,6 +58,7 @@ pub fn create_review(id: &str, title: &str, task_id: &str) -> CreateJobRequest {
         assignee_id: None,
         priority: None,
         repository: None,
+        command: None,
     }
 }
 

@@ -27,10 +27,28 @@ impl Orchestrator {
                 let this = Arc::clone(self);
                 tokio::task::spawn_blocking(move || this.suspend(&workflow_id));
             }
+            ServerEvent::OrchestratorTaskCompleted {
+                job_id,
+                success,
+                stdout,
+                stderr,
+                exit_code,
+                duration_ms,
+            } => {
+                self.handle_orchestrator_task_completed(
+                    &job_id,
+                    success,
+                    &stdout,
+                    &stderr,
+                    exit_code,
+                    duration_ms,
+                )
+                .await;
+            }
         }
     }
 
-    async fn handle_process_effects(self: &Arc<Self>, effects: Vec<RuleEffect>) {
+    pub(super) async fn handle_process_effects(self: &Arc<Self>, effects: Vec<RuleEffect>) {
         let result = match self.process_effects(&effects) {
             Ok(result) => result,
             Err(e) => {

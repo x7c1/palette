@@ -57,6 +57,7 @@ async fn job_api_create_and_list() {
             assignee_id: Some("member-a".to_string()),
             priority: Some(palette_server::api_types::Priority::High),
             repository: None,
+            command: None,
         })
         .send()
         .await
@@ -79,6 +80,7 @@ async fn job_api_create_and_list() {
             assignee_id: None,
             priority: None,
             repository: None,
+            command: None,
         })
         .send()
         .await

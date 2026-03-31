@@ -18,6 +18,8 @@ pub struct Task {
     pub job_type: Option<JobType>,
     pub priority: Option<Priority>,
     pub repository: Option<Repository>,
+    /// Command for orchestrator tasks (e.g., "docker compose run --rm check").
+    pub command: Option<String>,
     pub status: TaskStatus,
     pub children: Vec<Task>,
     pub depends_on: Vec<TaskId>,
@@ -65,6 +67,7 @@ impl Task {
             None,
             self.priority,
             self.repository.clone(),
+            self.command.clone(),
         ))
     }
 }
@@ -91,6 +94,7 @@ mod tests {
             job_type,
             priority: Some(Priority::High),
             repository: None,
+            command: None,
             status: TaskStatus::Ready,
             children: vec![],
             depends_on: vec![],
