@@ -1,4 +1,5 @@
 use palette_domain::job::{JobId, JobType};
+use palette_domain::task::TaskId;
 use palette_domain::worker::WorkerId;
 
 use super::Orchestrator;
@@ -82,6 +83,96 @@ impl Orchestrator {
                 tracing::error!(error = %e, "failed to enqueue review artifact re-instruction");
             }
             // Deliver the message to the idle worker
+            let _ = self
+                .event_tx
+                .send(palette_domain::server::ServerEvent::DeliverMessages {
+                    target_id: worker_id.clone(),
+                });
+        }
+    }
+
+    /// Validate that a ReviewIntegrator wrote integrated-review.md.
+    ///
+    /// Called after a ReviewIntegrator's stop hook fires. The task_id is the
+    /// review composite task whose parent is the craft task.
+    pub(super) fn validate_integrated_review_artifact(
+        &self,
+        task_id: &TaskId,
+        worker_id: &WorkerId,
+    ) {
+        let task_state = match self.interactor.data_store.get_task_state(task_id) {
+            Ok(Some(s)) => s,
+            _ => return,
+        };
+        let task_store = match self.interactor.create_task_store(&task_state.workflow_id) {
+            Ok(s) => s,
+            Err(_) => return,
+        };
+        let task = match task_store.get_task(task_id) {
+            Some(t) => t,
+            None => return,
+        };
+        let parent_id = match task.parent_id.as_ref() {
+            Some(id) => id,
+            None => return,
+        };
+        let craft_job = match self.interactor.data_store.get_job_by_task_id(parent_id) {
+            Ok(Some(j)) => j,
+            _ => return,
+        };
+
+        // Find the latest round from any child review job's submissions
+        let children = task_store.get_child_tasks(task_id);
+        let round = children
+            .iter()
+            .filter(|c| c.job_type == Some(JobType::Review))
+            .filter_map(|c| {
+                self.interactor
+                    .data_store
+                    .get_job_by_task_id(&c.id)
+                    .ok()
+                    .flatten()
+            })
+            .filter_map(|j| {
+                self.interactor
+                    .data_store
+                    .get_review_submissions(&j.id)
+                    .ok()
+            })
+            .flat_map(|subs| subs.into_iter())
+            .map(|s| s.round as u32)
+            .max()
+            .unwrap_or(1);
+
+        let artifacts_base = self
+            .workspace_manager
+            .artifacts_path(task_state.workflow_id.as_ref(), craft_job.id.as_ref());
+        let integrated_md = artifacts_base
+            .join(format!("round-{round}"))
+            .join("integrated-review.md");
+
+        if integrated_md.exists() {
+            tracing::debug!(
+                task_id = %task_id,
+                path = %integrated_md.display(),
+                "integrated-review.md artifact validated"
+            );
+        } else {
+            tracing::warn!(
+                task_id = %task_id,
+                worker_id = %worker_id,
+                path = %integrated_md.display(),
+                "integrated-review.md artifact missing after integrator stop"
+            );
+            let msg = format!(
+                "## Missing Artifact\n\n\
+                 Your integrated-review.md file was not found at the expected location.\n\
+                 Please write the integrated review to: /home/agent/artifacts/round-{round}/integrated-review.md\n\n\
+                 Follow the format described in your prompt.",
+            );
+            if let Err(e) = self.interactor.data_store.enqueue_message(worker_id, &msg) {
+                tracing::error!(error = %e, "failed to enqueue integrator artifact re-instruction");
+            }
             let _ = self
                 .event_tx
                 .send(palette_domain::server::ServerEvent::DeliverMessages {

@@ -40,6 +40,18 @@ pub async fn handle_stop(
 
     super::save_session_id(state.interactor.data_store.as_ref(), &worker_id, &payload);
 
+    // If the stopping worker is a ReviewIntegrator, validate integrated-review.md
+    if let Ok(Some(worker)) = state.interactor.data_store.find_worker(&worker_id)
+        && worker.role == WorkerRole::ReviewIntegrator
+    {
+        let _ = state
+            .event_tx
+            .send(ServerEvent::ValidateIntegratedReviewArtifact {
+                task_id: worker.task_id.clone(),
+                worker_id: worker_id.clone(),
+            });
+    }
+
     let supervisor_id = transition_worker_to_idle(&state, &worker_id);
 
     if let Some(ref supervisor_id) = supervisor_id {

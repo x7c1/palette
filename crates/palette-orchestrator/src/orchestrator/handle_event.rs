@@ -30,6 +30,9 @@ impl Orchestrator {
             ServerEvent::ValidateReviewArtifact { job_id, worker_id } => {
                 self.validate_review_artifact(&job_id, &worker_id);
             }
+            ServerEvent::ValidateIntegratedReviewArtifact { task_id, worker_id } => {
+                self.validate_integrated_review_artifact(&task_id, &worker_id);
+            }
             ServerEvent::OrchestratorTaskCompleted {
                 job_id,
                 success,

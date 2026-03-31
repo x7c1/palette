@@ -22,6 +22,11 @@ pub enum ServerEvent {
         job_id: JobId,
         worker_id: crate::worker::WorkerId,
     },
+    /// Validate that integrated-review.md exists after a ReviewIntegrator stops.
+    ValidateIntegratedReviewArtifact {
+        task_id: crate::task::TaskId,
+        worker_id: crate::worker::WorkerId,
+    },
     /// An orchestrator task's command has completed.
     OrchestratorTaskCompleted {
         job_id: JobId,
