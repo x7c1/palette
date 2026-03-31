@@ -7,44 +7,44 @@ use super::Orchestrator;
 impl Orchestrator {
     /// Validate that a reviewer wrote their review.md artifact.
     ///
-    /// Called after a reviewer's stop hook fires. If the file is missing,
-    /// enqueue a re-instruction message to the reviewer.
-    pub(super) fn validate_review_artifact(&self, job_id: &JobId, worker_id: &WorkerId) {
+    /// Returns `true` if the artifact exists, `false` if missing.
+    /// When missing, enqueues a re-instruction message to the reviewer.
+    pub(super) fn validate_review_artifact(&self, job_id: &JobId, worker_id: &WorkerId) -> bool {
         let job = match self.interactor.data_store.get_job(job_id) {
             Ok(Some(j)) => j,
-            _ => return,
+            _ => return true, // Can't validate, assume OK
         };
         if job.job_type != JobType::Review {
-            return;
+            return true;
         }
 
         let task_state = match self.interactor.data_store.get_task_state(&job.task_id) {
             Ok(Some(s)) => s,
-            _ => return,
+            _ => return true,
         };
 
         // Find the parent craft job to determine the artifacts path
         let task_store = match self.interactor.create_task_store(&task_state.workflow_id) {
             Ok(s) => s,
-            Err(_) => return,
+            Err(_) => return true,
         };
         let task = match task_store.get_task(&job.task_id) {
             Some(t) => t,
-            None => return,
+            None => return true,
         };
         let parent_id = match task.parent_id.as_ref() {
             Some(id) => id,
-            None => return,
+            None => return true,
         };
         let craft_job = match self.interactor.data_store.get_job_by_task_id(parent_id) {
             Ok(Some(j)) => j,
-            _ => return,
+            _ => return true,
         };
 
         // Determine the round number
         let submissions = match self.interactor.data_store.get_review_submissions(job_id) {
             Ok(s) => s,
-            Err(_) => return,
+            Err(_) => return true,
         };
         // After a successful review stop, the submission was already recorded,
         // so the current round is the latest submission's round.
@@ -64,19 +64,20 @@ impl Orchestrator {
                 path = %review_md.display(),
                 "review.md artifact validated"
             );
+            true
         } else {
             tracing::warn!(
                 job_id = %job_id,
                 worker_id = %worker_id,
                 path = %review_md.display(),
-                "review.md artifact missing after reviewer stop"
+                "review.md artifact missing, re-instructing reviewer"
             );
             // Enqueue a re-instruction message to the reviewer
             let msg = format!(
                 "## Missing Artifact\n\n\
                  Your review.md file was not found at the expected location.\n\
                  Please write your review to: /home/agent/artifacts/round-{round}/{}/review.md\n\n\
-                 Follow the format described in your prompt.",
+                 Write the file first, then re-submit your review.",
                 job.id,
             );
             if let Err(e) = self.interactor.data_store.enqueue_message(worker_id, &msg) {
@@ -88,6 +89,7 @@ impl Orchestrator {
                 .send(palette_domain::server::ServerEvent::DeliverMessages {
                     target_id: worker_id.clone(),
                 });
+            false
         }
     }
 

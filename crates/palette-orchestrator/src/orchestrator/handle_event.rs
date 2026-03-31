@@ -27,8 +27,17 @@ impl Orchestrator {
                 let this = Arc::clone(self);
                 tokio::task::spawn_blocking(move || this.suspend(&workflow_id));
             }
-            ServerEvent::ValidateReviewArtifact { job_id, worker_id } => {
-                self.validate_review_artifact(&job_id, &worker_id);
+            ServerEvent::ValidateReviewArtifact {
+                job_id,
+                worker_id,
+                pending_effects,
+            } => {
+                let valid = self.validate_review_artifact(&job_id, &worker_id);
+                if valid && !pending_effects.is_empty() {
+                    self.handle_process_effects(pending_effects).await;
+                }
+                // If invalid, effects are discarded and reviewer is re-instructed.
+                // The reviewer will re-submit after writing review.md.
             }
             ServerEvent::ValidateIntegratedReviewArtifact { task_id, worker_id } => {
                 self.validate_integrated_review_artifact(&task_id, &worker_id);

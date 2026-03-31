@@ -17,10 +17,13 @@ pub enum ServerEvent {
     ResumeWorkers { worker_ids: Vec<WorkerId> },
     /// Suspend workers belonging to the specified workflow.
     SuspendWorkflow { workflow_id: WorkflowId },
-    /// Validate that a review artifact exists after a reviewer stops.
+    /// Validate that a review artifact exists after a review is submitted.
+    /// If validation passes, the `pending_effects` are processed.
+    /// If validation fails, the reviewer is re-instructed and effects are discarded.
     ValidateReviewArtifact {
         job_id: JobId,
         worker_id: crate::worker::WorkerId,
+        pending_effects: Vec<crate::rule::RuleEffect>,
     },
     /// Validate that integrated-review.md exists after a ReviewIntegrator stops.
     ValidateIntegratedReviewArtifact {

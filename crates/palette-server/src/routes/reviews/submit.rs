@@ -87,16 +87,16 @@ pub async fn handle_submit_review(
         );
     }
 
-    // Validate review artifact exists
+    // Validate review artifact and conditionally process effects.
+    // If review.md is missing, effects are held back and the reviewer is re-instructed.
     if let Some(ref assignee) = job.assignee_id {
         let _ = state.event_tx.send(ServerEvent::ValidateReviewArtifact {
             job_id: review_job_id.clone(),
             worker_id: assignee.clone(),
+            pending_effects: effects,
         });
-    }
-
-    // Fire-and-forget: orchestrator processes effects and delivers messages
-    if !effects.is_empty() {
+    } else if !effects.is_empty() {
+        // No assignee to validate against — process effects directly
         let _ = state.event_tx.send(ServerEvent::ProcessEffects { effects });
     }
     let _ = state.event_tx.send(ServerEvent::NotifyDeliveryLoop);
