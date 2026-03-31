@@ -1,11 +1,11 @@
 use crate::api_types::{CreateJobRequest, ErrorCode, JobResponse};
-use crate::{AppState, Error};
+use crate::{AppState, Error, ValidJson};
 use axum::{Json, extract::State, http::StatusCode};
 use std::sync::Arc;
 
 pub async fn handle_create_job(
     State(state): State<Arc<AppState>>,
-    Json(api_req): Json<CreateJobRequest>,
+    ValidJson(api_req): ValidJson<CreateJobRequest>,
 ) -> crate::Result<(StatusCode, Json<JobResponse>)> {
     let req = api_req.validate().map_err(|errors| Error::BadRequest {
         code: ErrorCode::InputValidationFailed,

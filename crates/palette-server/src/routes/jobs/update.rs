@@ -1,7 +1,7 @@
 use crate::api_types::{
     ErrorCode, InputError, JobResponse, Location, ResourceKind, UpdateJobRequest,
 };
-use crate::{AppState, Error};
+use crate::{AppState, Error, ValidJson};
 use axum::{Json, extract::State};
 use palette_core::ReasonKey;
 use palette_domain::job::{CraftStatus, JobStatus};
@@ -12,7 +12,7 @@ use std::sync::Arc;
 
 pub async fn handle_update_job(
     State(state): State<Arc<AppState>>,
-    Json(api_req): Json<UpdateJobRequest>,
+    ValidJson(api_req): ValidJson<UpdateJobRequest>,
 ) -> crate::Result<Json<JobResponse>> {
     let job_id = api_req.validate_id().map_err(|errors| Error::BadRequest {
         code: ErrorCode::InputValidationFailed,
