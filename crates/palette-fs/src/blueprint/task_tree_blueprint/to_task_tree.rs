@@ -1,30 +1,47 @@
 use super::{TaskNode, TaskTreeBlueprint};
-use palette_domain::job::{JobType, Priority, Repository};
-use palette_domain::task::{TaskId, TaskKey, TaskTree, TaskTreeNode};
+use palette_domain::job::{InvalidRepository, JobType, Priority, Repository};
+use palette_domain::task::{InvalidTaskKey, TaskId, TaskKey, TaskTree, TaskTreeNode};
 use palette_domain::workflow::WorkflowId;
 use std::collections::HashMap;
 
 /// Blueprint validation error.
-#[derive(Debug, palette_macros::ReasonKey)]
+#[derive(Debug)]
 pub enum BlueprintError {
-    /// Task key contains invalid characters (must be `[a-z0-9-]+`).
-    InvalidKey { key: String },
+    /// Task key is invalid.
+    InvalidKey(InvalidTaskKey),
     /// Craft task has no review child.
     MissingReviewChild { task_key: String },
     /// Repository has invalid name or branch.
-    InvalidRepository { task_key: String },
+    InvalidRepository {
+        task_key: String,
+        cause: InvalidRepository,
+    },
 }
 
 impl BlueprintError {
     pub fn field_path(&self) -> String {
         match self {
-            BlueprintError::InvalidKey { key } => format!("tasks[key={key}].key"),
+            BlueprintError::InvalidKey(e) => match e {
+                InvalidTaskKey::Empty => "tasks[].key".to_string(),
+                InvalidTaskKey::InvalidFormat { key } => format!("tasks[key={key}].key"),
+            },
             BlueprintError::MissingReviewChild { task_key } => {
                 format!("tasks[key={task_key}].children")
             }
-            BlueprintError::InvalidRepository { task_key } => {
+            BlueprintError::InvalidRepository { task_key, .. } => {
                 format!("tasks[key={task_key}].repository")
             }
+        }
+    }
+
+    pub fn reason_key(&self) -> String {
+        use palette_core::ReasonKey;
+        match self {
+            BlueprintError::InvalidKey(e) => e.reason_key(),
+            BlueprintError::MissingReviewChild { .. } => {
+                "blueprint/missing_review_child".to_string()
+            }
+            BlueprintError::InvalidRepository { cause, .. } => cause.reason_key(),
         }
     }
 }
@@ -84,10 +101,8 @@ fn validate_node(node: &TaskNode) -> (Vec<BlueprintError>, HashMap<&str, TaskKey
         Ok(k) => {
             keys.insert(node.key.as_str(), k);
         }
-        Err(_) => {
-            errors.push(BlueprintError::InvalidKey {
-                key: node.key.clone(),
-            });
+        Err(e) => {
+            errors.push(BlueprintError::InvalidKey(e));
         }
     }
 
@@ -103,12 +118,13 @@ fn validate_node(node: &TaskNode) -> (Vec<BlueprintError>, HashMap<&str, TaskKey
         });
     }
 
-    if let Some(ref repo) = node.repository
-        && Repository::parse(&repo.name, &repo.branch).is_err()
-    {
-        errors.push(BlueprintError::InvalidRepository {
-            task_key: node.key.clone(),
-        });
+    if let Some(ref repo) = node.repository {
+        if let Err(cause) = Repository::parse(&repo.name, &repo.branch) {
+            errors.push(BlueprintError::InvalidRepository {
+                task_key: node.key.clone(),
+                cause,
+            });
+        }
     }
 
     for dep in &node.depends_on {
@@ -117,8 +133,8 @@ fn validate_node(node: &TaskNode) -> (Vec<BlueprintError>, HashMap<&str, TaskKey
                 Ok(k) => {
                     keys.insert(dep.as_str(), k);
                 }
-                Err(_) => {
-                    errors.push(BlueprintError::InvalidKey { key: dep.clone() });
+                Err(e) => {
+                    errors.push(BlueprintError::InvalidKey(e));
                 }
             }
         }
@@ -301,7 +317,10 @@ task:
         let blueprint: TaskTreeBlueprint = serde_yaml::from_str(yaml).unwrap();
         let errors = blueprint.to_task_tree(&wf_id).unwrap_err();
         assert_eq!(errors.len(), 1);
-        assert!(matches!(&errors[0], BlueprintError::InvalidKey { key } if key == "Feature_X"));
+        assert!(matches!(
+            &errors[0],
+            BlueprintError::InvalidKey(InvalidTaskKey::InvalidFormat { key }) if key == "Feature_X"
+        ));
     }
 
     #[test]
