@@ -1,5 +1,5 @@
 use palette_domain::worker::{ContainerId, WorkerRole, WorkerSessionId};
-use palette_usecase::container_runtime::{PlanDirMount, WorkspaceVolume};
+use palette_usecase::container_runtime::ContainerMounts;
 
 /// Stub container runtime for integration tests.
 /// All container operations are no-ops; `is_claude_running` always returns
@@ -15,8 +15,7 @@ impl palette_usecase::ContainerRuntime for StubContainerRuntime {
         _: &str,
         _: WorkerRole,
         _: &str,
-        _: Option<WorkspaceVolume>,
-        _: Option<PlanDirMount>,
+        _: ContainerMounts,
     ) -> Result<ContainerId, BoxErr> {
         Ok(ContainerId::new("stub"))
     }

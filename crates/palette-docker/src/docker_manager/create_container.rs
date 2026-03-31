@@ -20,9 +20,18 @@ pub struct PlanDirMount {
     pub read_only: bool,
 }
 
+/// Artifacts directory bind mount configuration.
+pub struct ArtifactsMount {
+    /// Absolute path on the host to the artifacts directory.
+    pub host_path: String,
+    /// If true, mount as read-only.
+    pub read_only: bool,
+}
+
 impl DockerManager {
     /// Create and start a container for a worker.
     /// Returns the container ID.
+    #[allow(clippy::too_many_arguments)]
     pub fn create_container(
         &self,
         name: &str,
@@ -31,6 +40,7 @@ impl DockerManager {
         session_name: &str,
         workspace: Option<WorkspaceVolume>,
         plan_dir: Option<PlanDirMount>,
+        artifacts_dir: Option<ArtifactsMount>,
     ) -> crate::Result<ContainerId> {
         let role_str = role.as_str();
         let labels = [
@@ -112,6 +122,13 @@ impl DockerManager {
             let suffix = if pd.read_only { ":ro" } else { "" };
             args.push("-v".to_string());
             args.push(format!("{}:/home/agent/plans{suffix}", pd.host_path));
+        }
+
+        // Artifacts directory: review results and check outputs
+        if let Some(ad) = artifacts_dir {
+            let suffix = if ad.read_only { ":ro" } else { "" };
+            args.push("-v".to_string());
+            args.push(format!("{}:/home/agent/artifacts{suffix}", ad.host_path));
         }
 
         args.push(image.to_string());

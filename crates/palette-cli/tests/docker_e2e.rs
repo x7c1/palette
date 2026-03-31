@@ -128,6 +128,7 @@ fn launch() -> Result<()> {
         SESSION_NAME,
         None,
         None,
+        None,
     )?;
     guard.track("palette-test-leader");
     docker.start_container(&leader_id)?;
@@ -137,6 +138,7 @@ fn launch() -> Result<()> {
         &config.docker.member_image,
         WorkerRole::Member,
         SESSION_NAME,
+        None,
         None,
         None,
     )?;
@@ -334,6 +336,7 @@ fn claude_responds() -> Result<()> {
         &config.docker.leader_image,
         WorkerRole::Leader,
         SESSION_NAME,
+        None,
         None,
         None,
     )?;

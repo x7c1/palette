@@ -135,6 +135,15 @@ impl WorkspaceManager {
         })
     }
 
+    /// Return the host path to an artifacts directory for a craft job.
+    /// e.g., `data/artifacts/{workflow_id}/{craft_job_id}`
+    pub fn artifacts_path(&self, workflow_id: &str, craft_job_id: &str) -> PathBuf {
+        self.data_dir
+            .join("artifacts")
+            .join(workflow_id)
+            .join(craft_job_id)
+    }
+
     /// Remove a workspace directory.
     pub fn remove_workspace(&self, job_id: &str) {
         let ws_path = self.workspace_path(job_id);

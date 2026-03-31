@@ -1,6 +1,7 @@
 use super::Orchestrator;
 use palette_domain::task::TaskId;
 use palette_domain::worker::{ContainerId, WorkerId, WorkerRole, WorkerStatus};
+use palette_usecase::container_runtime::{ArtifactsMount, ContainerMounts};
 use palette_usecase::data_store::InsertWorkerRequest;
 
 impl Orchestrator {
@@ -47,13 +48,20 @@ impl Orchestrator {
             }
         };
 
+        // Review Integrators need artifacts access
+        let artifacts_dir = if role == WorkerRole::ReviewIntegrator {
+            self.resolve_supervisor_artifacts(task_id)?
+        } else {
+            None
+        };
+
         let container_id = self.spawn_supervisor_container(
             sup_name,
             image,
             prompt_path,
-            &self.session_name,
             &terminal_target,
             role,
+            artifacts_dir,
         )?;
 
         // Register in DB
@@ -81,22 +89,59 @@ impl Orchestrator {
         Ok(sup_id)
     }
 
+    /// Resolve the artifacts mount for a ReviewIntegrator supervisor.
+    /// The supervisor's task_id is the review composite task,
+    /// whose parent is the craft task.
+    fn resolve_supervisor_artifacts(
+        &self,
+        task_id: &TaskId,
+    ) -> crate::Result<Option<ArtifactsMount>> {
+        let Some(task_state) = self.interactor.data_store.get_task_state(task_id)? else {
+            return Ok(None);
+        };
+        let task_store = self.interactor.create_task_store(&task_state.workflow_id)?;
+        let Some(task) = task_store.get_task(task_id) else {
+            return Ok(None);
+        };
+        let Some(ref parent_id) = task.parent_id else {
+            return Ok(None);
+        };
+        let Some(craft_job) = self.interactor.data_store.get_job_by_task_id(parent_id)? else {
+            return Ok(None);
+        };
+
+        let artifacts_path = self
+            .workspace_manager
+            .artifacts_path(task_state.workflow_id.as_ref(), craft_job.id.as_ref());
+        std::fs::create_dir_all(&artifacts_path)
+            .map_err(|e| crate::Error::External(Box::new(e)))?;
+        let abs_path = std::fs::canonicalize(&artifacts_path)
+            .map_err(|e| crate::Error::External(Box::new(e)))?;
+
+        Ok(Some(ArtifactsMount {
+            host_path: abs_path.to_string_lossy().to_string(),
+            read_only: false,
+        }))
+    }
+
     fn spawn_supervisor_container(
         &self,
         name: &str,
         image: &str,
         prompt_path: &str,
-        session_name: &str,
         terminal_target: &palette_domain::terminal::TerminalTarget,
         role: WorkerRole,
+        artifacts_dir: Option<ArtifactsMount>,
     ) -> crate::Result<ContainerId> {
         let container_id = self.interactor.container.create_container(
             name,
             image,
             role,
-            session_name,
-            None,
-            None,
+            &self.session_name,
+            ContainerMounts {
+                artifacts_dir,
+                ..Default::default()
+            },
         )?;
         self.interactor.container.start_container(&container_id)?;
         self.interactor.container.write_settings(

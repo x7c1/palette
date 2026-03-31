@@ -1,7 +1,7 @@
 use crate::{DockerManager, is_container_running, read_container_file};
 use palette_domain::worker::{ContainerId, WorkerRole, WorkerSessionId};
 use palette_usecase::ContainerRuntime;
-use palette_usecase::container_runtime::{PlanDirMount, WorkspaceVolume};
+use palette_usecase::container_runtime::ContainerMounts;
 use std::path::Path;
 
 impl ContainerRuntime for DockerManager {
@@ -11,19 +11,22 @@ impl ContainerRuntime for DockerManager {
         image: &str,
         role: WorkerRole,
         session_name: &str,
-        workspace: Option<WorkspaceVolume>,
-        plan_dir: Option<PlanDirMount>,
+        mounts: ContainerMounts,
     ) -> Result<ContainerId, Box<dyn std::error::Error + Send + Sync>> {
-        let ws = workspace.map(|w| crate::WorkspaceVolume {
+        let ws = mounts.workspace.map(|w| crate::WorkspaceVolume {
             host_path: w.host_path,
             repo_cache_path: w.repo_cache_path,
             read_only: w.read_only,
         });
-        let pd = plan_dir.map(|p| crate::PlanDirMount {
+        let pd = mounts.plan_dir.map(|p| crate::PlanDirMount {
             host_path: p.host_path,
             read_only: p.read_only,
         });
-        Ok(self.create_container(name, image, role, session_name, ws, pd)?)
+        let ad = mounts.artifacts_dir.map(|a| crate::ArtifactsMount {
+            host_path: a.host_path,
+            read_only: a.read_only,
+        });
+        Ok(self.create_container(name, image, role, session_name, ws, pd, ad)?)
     }
 
     fn start_container(

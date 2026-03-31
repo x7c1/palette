@@ -1,13 +1,18 @@
 use palette_domain::job::{Job, JobType};
-use palette_usecase::container_runtime::WorkspaceVolume;
+use palette_usecase::container_runtime::{ArtifactsMount, WorkspaceVolume};
 
 use super::Orchestrator;
 
 /// Container-side mount point for the shared plan directory.
 const PLAN_DIR_MOUNT: &str = "/home/agent/plans";
 
+/// Container-side mount point for artifacts.
+const ARTIFACTS_MOUNT: &str = "/home/agent/artifacts";
+
 /// Format a job into an instruction message for a member.
-pub(super) fn format_job_instruction(job: &Job) -> String {
+///
+/// `round` is included for review jobs so the reviewer knows which round directory to use.
+pub(super) fn format_job_instruction(job: &Job, round: Option<u32>) -> String {
     let mut msg = format!(
         "## Task: {}\n\nID: {}\nPlan: {}/{}\n",
         job.title, job.id, PLAN_DIR_MOUNT, job.plan_path
@@ -18,11 +23,73 @@ pub(super) fn format_job_instruction(job: &Job) -> String {
             repo.name, repo.branch
         ));
     }
+    if let Some(round) = round {
+        msg.push_str(&format!(
+            "\nRound: {round}\nArtifacts: {ARTIFACTS_MOUNT}/round-{round}/{}/\n",
+            job.id
+        ));
+    }
     msg.push_str("\nPlease begin working on this task.");
     msg
 }
 
 impl Orchestrator {
+    /// Determine the artifacts mount for a job.
+    ///
+    /// Review jobs get a read-write mount of the artifacts directory.
+    /// Craft jobs get a read-only mount (to read review feedback).
+    pub(super) fn resolve_artifacts_mount(
+        &self,
+        job: &Job,
+    ) -> crate::Result<Option<ArtifactsMount>> {
+        let (workflow_id, craft_job_id) = match job.job_type {
+            JobType::Craft => {
+                let Some(task_state) = self.interactor.data_store.get_task_state(&job.task_id)?
+                else {
+                    return Ok(None);
+                };
+                (task_state.workflow_id, job.id.clone())
+            }
+            JobType::Review => {
+                let Some(task_state) = self.interactor.data_store.get_task_state(&job.task_id)?
+                else {
+                    return Ok(None);
+                };
+                let task_store = self.interactor.create_task_store(&task_state.workflow_id)?;
+                let Some(task) = task_store.get_task(&job.task_id) else {
+                    return Ok(None);
+                };
+                let Some(ref parent_id) = task.parent_id else {
+                    return Ok(None);
+                };
+                let Some(craft_job) = self.interactor.data_store.get_job_by_task_id(parent_id)?
+                else {
+                    return Ok(None);
+                };
+                (task_state.workflow_id, craft_job.id)
+            }
+        };
+
+        let artifacts_path = self
+            .workspace_manager
+            .artifacts_path(workflow_id.as_ref(), craft_job_id.as_ref());
+        std::fs::create_dir_all(&artifacts_path)
+            .map_err(|e| crate::Error::External(Box::new(e)))?;
+        let abs_path = std::fs::canonicalize(&artifacts_path)
+            .map_err(|e| crate::Error::External(Box::new(e)))?;
+
+        Ok(Some(ArtifactsMount {
+            host_path: abs_path.to_string_lossy().to_string(),
+            read_only: job.job_type == JobType::Craft,
+        }))
+    }
+
+    /// Get the current review round for a review job.
+    pub(super) fn current_review_round(&self, job: &Job) -> crate::Result<u32> {
+        let submissions = self.interactor.data_store.get_review_submissions(&job.id)?;
+        Ok(submissions.len() as u32 + 1)
+    }
+
     /// Determine the workspace volume for a job.
     ///
     /// Craft jobs get a new workspace via `git clone --shared` from the bare cache.

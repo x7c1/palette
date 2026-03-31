@@ -2,7 +2,9 @@ use super::Orchestrator;
 use palette_domain::job::JobType;
 use palette_domain::task::TaskId;
 use palette_domain::worker::{WorkerId, WorkerRole, WorkerState, WorkerStatus};
-use palette_usecase::container_runtime::{PlanDirMount, WorkspaceVolume};
+use palette_usecase::container_runtime::{
+    ArtifactsMount, ContainerMounts, PlanDirMount, WorkspaceVolume,
+};
 
 impl Orchestrator {
     /// Spawn a member container. Returns the WorkerState for DB registration.
@@ -13,6 +15,7 @@ impl Orchestrator {
         supervisor_id: &WorkerId,
         task_id: &TaskId,
         workspace: Option<WorkspaceVolume>,
+        artifacts_dir: Option<ArtifactsMount>,
     ) -> crate::Result<WorkerState> {
         let session_name = &self.session_name;
         let supervisor_id = supervisor_id.clone();
@@ -46,8 +49,11 @@ impl Orchestrator {
             &self.docker_config.member_image,
             WorkerRole::Member,
             session_name,
-            workspace,
-            Some(plan_dir_mount),
+            ContainerMounts {
+                workspace,
+                plan_dir: Some(plan_dir_mount),
+                artifacts_dir,
+            },
         )?;
         self.interactor.container.start_container(&container_id)?;
         self.interactor.container.write_settings(

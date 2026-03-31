@@ -19,7 +19,12 @@ impl Orchestrator {
             return Ok(());
         };
 
-        let instruction = format_job_instruction(&job);
+        let round = if job.job_type == palette_domain::job::JobType::Review {
+            Some(self.current_review_round(&job)?)
+        } else {
+            None
+        };
+        let instruction = format_job_instruction(&job, round);
         self.interactor
             .data_store
             .enqueue_message(member_id, &instruction)?;

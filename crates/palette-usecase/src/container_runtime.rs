@@ -12,8 +12,7 @@ pub trait ContainerRuntime: Send + Sync {
         image: &str,
         role: WorkerRole,
         session_name: &str,
-        workspace: Option<WorkspaceVolume>,
-        plan_dir: Option<PlanDirMount>,
+        mounts: ContainerMounts,
     ) -> Result<ContainerId, Box<dyn std::error::Error + Send + Sync>>;
 
     fn start_container(
@@ -83,6 +82,14 @@ pub trait ContainerRuntime: Send + Sync {
     ) -> String;
 }
 
+/// All bind mount configurations for a container.
+#[derive(Default)]
+pub struct ContainerMounts {
+    pub workspace: Option<WorkspaceVolume>,
+    pub plan_dir: Option<PlanDirMount>,
+    pub artifacts_dir: Option<ArtifactsMount>,
+}
+
 /// Workspace bind mount configuration for container creation.
 ///
 /// Each workspace is a `git clone --shared` of a bare cache on the host.
@@ -103,5 +110,18 @@ pub struct WorkspaceVolume {
 /// Plan directory mount configuration for container creation.
 pub struct PlanDirMount {
     pub host_path: String,
+    pub read_only: bool,
+}
+
+/// Artifacts directory bind mount configuration for container creation.
+///
+/// Mounted at `/home/agent/artifacts` inside the container.
+/// Reviewers and Review Integrators write review results here;
+/// Crafters read feedback from here.
+pub struct ArtifactsMount {
+    /// Absolute path on the host to the artifacts directory
+    /// (e.g., "data/artifacts/{workflow_id}/{craft_job_id}").
+    pub host_path: String,
+    /// If true, mount as read-only.
     pub read_only: bool,
 }

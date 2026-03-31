@@ -46,6 +46,9 @@ impl Orchestrator {
         // Determine workspace volume based on job type
         let workspace = self.resolve_workspace(&job)?;
 
+        // Determine artifacts mount for review jobs
+        let artifacts_dir = self.resolve_artifacts_mount(&job)?;
+
         // Spawn a new member with supervisor from the task tree
         let supervisor_id = self.find_supervisor_for_job(&job.task_id)?;
         let seq = self
@@ -59,6 +62,7 @@ impl Orchestrator {
             &supervisor_id,
             &job.task_id,
             workspace,
+            artifacts_dir,
         )?;
         let terminal_target = member.terminal_target.clone();
 
@@ -88,7 +92,12 @@ impl Orchestrator {
         );
 
         // Build job instruction message
-        let instruction = format_job_instruction(&job);
+        let round = if job.job_type == palette_domain::job::JobType::Review {
+            Some(self.current_review_round(&job)?)
+        } else {
+            None
+        };
+        let instruction = format_job_instruction(&job, round);
         self.interactor
             .data_store
             .enqueue_message(&member_id, &instruction)?;
