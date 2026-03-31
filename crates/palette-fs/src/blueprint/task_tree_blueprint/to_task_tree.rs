@@ -122,28 +122,22 @@ fn validate_node(node: &TaskNode) -> (Vec<BlueprintError>, HashMap<&str, TaskKey
 /// Parse the node's own key and depends_on keys.
 /// Returns (errors, parsed_keys).
 fn collect_keys<'a>(node: &'a TaskNode) -> (Vec<BlueprintError>, HashMap<&'a str, TaskKey>) {
-    let mut errors = Vec::new();
-    let mut keys = HashMap::new();
-
-    match TaskKey::parse(&node.key) {
-        Ok(k) => {
-            keys.insert(node.key.as_str(), k);
-        }
-        Err(e) => errors.push(BlueprintError::InvalidKey(e)),
-    }
-
-    for dep in &node.depends_on {
-        if !keys.contains_key(dep.as_str()) {
-            match TaskKey::parse(dep) {
-                Ok(k) => {
-                    keys.insert(dep.as_str(), k);
+    std::iter::once(node.key.as_str())
+        .chain(node.depends_on.iter().map(String::as_str))
+        .fold(
+            (Vec::new(), HashMap::new()),
+            |(mut errors, mut keys), raw| {
+                if !keys.contains_key(raw) {
+                    match TaskKey::parse(raw) {
+                        Ok(k) => {
+                            keys.insert(raw, k);
+                        }
+                        Err(e) => errors.push(BlueprintError::InvalidKey(e)),
+                    }
                 }
-                Err(e) => errors.push(BlueprintError::InvalidKey(e)),
-            }
-        }
-    }
-
-    (errors, keys)
+                (errors, keys)
+            },
+        )
 }
 
 /// Check that craft tasks have at least one review child.
