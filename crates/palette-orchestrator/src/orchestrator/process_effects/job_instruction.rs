@@ -77,6 +77,18 @@ impl Orchestrator {
             .artifacts_path(workflow_id.as_ref(), craft_job_id.as_ref());
         std::fs::create_dir_all(&artifacts_path)
             .map_err(|e| crate::Error::External(Box::new(e)))?;
+
+        // For review jobs, pre-create the round and reviewer subdirectories
+        // so the container (which may run as a different user) can write there.
+        if job.job_type == JobType::Review {
+            let round = self.current_review_round(job)?;
+            let reviewer_dir = artifacts_path
+                .join(format!("round-{round}"))
+                .join(job.id.to_string());
+            std::fs::create_dir_all(&reviewer_dir)
+                .map_err(|e| crate::Error::External(Box::new(e)))?;
+        }
+
         let abs_path = std::fs::canonicalize(&artifacts_path)
             .map_err(|e| crate::Error::External(Box::new(e)))?;
 

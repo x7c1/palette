@@ -13,6 +13,7 @@ mod spawn_readiness_watcher;
 mod spawn_supervisor;
 mod start;
 mod suspend;
+mod validate_artifacts;
 mod worker_monitor;
 pub mod workspace;
 

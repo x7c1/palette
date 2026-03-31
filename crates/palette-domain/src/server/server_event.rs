@@ -17,6 +17,11 @@ pub enum ServerEvent {
     ResumeWorkers { worker_ids: Vec<WorkerId> },
     /// Suspend workers belonging to the specified workflow.
     SuspendWorkflow { workflow_id: WorkflowId },
+    /// Validate that a review artifact exists after a reviewer stops.
+    ValidateReviewArtifact {
+        job_id: JobId,
+        worker_id: crate::worker::WorkerId,
+    },
     /// An orchestrator task's command has completed.
     OrchestratorTaskCompleted {
         job_id: JobId,
