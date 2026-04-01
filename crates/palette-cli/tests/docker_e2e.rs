@@ -128,6 +128,7 @@ fn launch() -> Result<()> {
         SESSION_NAME,
         None,
         None,
+        None,
     )?;
     guard.track("palette-test-leader");
     docker.start_container(&leader_id)?;
@@ -137,6 +138,7 @@ fn launch() -> Result<()> {
         &config.docker.member_image,
         WorkerRole::Member,
         SESSION_NAME,
+        None,
         None,
         None,
     )?;
@@ -232,6 +234,7 @@ fn launch() -> Result<()> {
         &leader_id,
         "/home/agent/prompt.md",
         WorkerRole::Leader,
+        None,
     );
     let leader_target = format!("{SESSION_NAME}:leader");
     let output = Command::new("tmux")
@@ -247,6 +250,7 @@ fn launch() -> Result<()> {
         &member_id,
         "/home/agent/prompt.md",
         WorkerRole::Member,
+        None,
     );
     let member_target = format!("{SESSION_NAME}:member-a");
     let output = Command::new("tmux")
@@ -336,6 +340,7 @@ fn claude_responds() -> Result<()> {
         SESSION_NAME,
         None,
         None,
+        None,
     )?;
     guard.track("palette-test-claude");
     docker.start_container(&container_id)?;
@@ -358,6 +363,7 @@ fn claude_responds() -> Result<()> {
         &container_id,
         "/home/agent/prompt.md",
         WorkerRole::Leader,
+        None,
     );
     let _ = Command::new("tmux")
         .args(["send-keys", "-t", &target, "-l", &cmd])

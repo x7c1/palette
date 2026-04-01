@@ -12,6 +12,7 @@ impl Database {
         let in_progress = match job_type {
             JobType::Craft => CraftTransition::Start.to_job_status(),
             JobType::Review => ReviewTransition::Start.to_job_status(),
+            JobType::Orchestrator | JobType::Operator => JobStatus::in_progress(job_type),
         };
         let conn = lock(&self.conn)?;
         let now = Utc::now().to_rfc3339();

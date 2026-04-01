@@ -2,7 +2,9 @@ use super::Orchestrator;
 use palette_domain::job::JobType;
 use palette_domain::task::TaskId;
 use palette_domain::worker::{WorkerId, WorkerRole, WorkerState, WorkerStatus};
-use palette_usecase::container_runtime::{PlanDirMount, WorkspaceVolume};
+use palette_usecase::container_runtime::{
+    ArtifactsMount, ContainerMounts, PlanDirMount, WorkspaceVolume,
+};
 
 impl Orchestrator {
     /// Spawn a member container. Returns the WorkerState for DB registration.
@@ -13,6 +15,7 @@ impl Orchestrator {
         supervisor_id: &WorkerId,
         task_id: &TaskId,
         workspace: Option<WorkspaceVolume>,
+        artifacts_dir: Option<ArtifactsMount>,
     ) -> crate::Result<WorkerState> {
         let session_name = &self.session_name;
         let supervisor_id = supervisor_id.clone();
@@ -34,6 +37,7 @@ impl Orchestrator {
             .create_pane(&supervisor_state.terminal_target)?;
 
         let member_id_str = member_id.as_ref();
+        let has_workspace = workspace.is_some();
         let plan_dir_abs = std::fs::canonicalize(&self.plan_dir)
             .map_err(|e| crate::Error::External(Box::new(e)))?;
         let plan_dir_mount = PlanDirMount {
@@ -46,8 +50,11 @@ impl Orchestrator {
             &self.docker_config.member_image,
             WorkerRole::Member,
             session_name,
-            workspace,
-            Some(plan_dir_mount),
+            ContainerMounts {
+                workspace,
+                plan_dir: Some(plan_dir_mount),
+                artifacts_dir,
+            },
         )?;
         self.interactor.container.start_container(&container_id)?;
         self.interactor.container.write_settings(
@@ -58,6 +65,10 @@ impl Orchestrator {
         let prompt_path = match job_type {
             JobType::Craft => &self.docker_config.crafter_prompt,
             JobType::Review => &self.docker_config.reviewer_prompt,
+            // Orchestrator and Operator don't spawn members
+            JobType::Orchestrator | JobType::Operator => {
+                unreachable!("mechanized job types do not spawn members")
+            }
         };
         self.interactor.container.copy_file_to_container(
             &container_id,
@@ -69,11 +80,22 @@ impl Orchestrator {
             std::path::Path::new("claude-code-plugin"),
             "/home/agent/claude-code-plugin",
         )?;
+        self.interactor.container.copy_file_to_container(
+            &container_id,
+            std::path::Path::new("config/hooks/guard-cd-chain.sh"),
+            "/home/agent/.claude/hooks/guard-cd-chain.sh",
+        )?;
 
+        let workdir = if has_workspace {
+            Some("/home/agent/workspace")
+        } else {
+            None
+        };
         let cmd = self.interactor.container.claude_exec_command(
             &container_id,
             "/home/agent/prompt.md",
             WorkerRole::Member,
+            workdir,
         );
         self.interactor.terminal.send_keys(&terminal_target, &cmd)?;
         tracing::info!(member_id = %member_id, "spawned member");

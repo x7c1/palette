@@ -6,6 +6,8 @@ use serde::Deserialize;
 pub enum JobTypeYaml {
     Craft,
     Review,
+    Orchestrator,
+    Operator,
 }
 
 impl From<JobTypeYaml> for JobType {
@@ -13,6 +15,8 @@ impl From<JobTypeYaml> for JobType {
         match t {
             JobTypeYaml::Craft => JobType::Craft,
             JobTypeYaml::Review => JobType::Review,
+            JobTypeYaml::Orchestrator => JobType::Orchestrator,
+            JobTypeYaml::Operator => JobType::Operator,
         }
     }
 }

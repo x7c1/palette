@@ -24,6 +24,8 @@ impl JobId {
         let prefix = match job_type {
             JobType::Craft => 'C',
             JobType::Review => 'R',
+            JobType::Orchestrator => 'O',
+            JobType::Operator => 'P',
         };
         let suffix = &uuid::Uuid::new_v4().as_simple().to_string()[..8];
         Self(format!("{prefix}-{suffix}"))

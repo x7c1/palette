@@ -10,13 +10,20 @@ impl Database {
     /// Returns jobs ordered by priority (high > medium > low > null).
     pub fn find_assignable_jobs(&self) -> crate::Result<Vec<Job>> {
         let conn = lock(&self.conn)?;
-        // Craft Todo = 1, Review Todo = 6
+        // Todo status IDs for each job type
         let craft_todo = crate::lookup::craft_status_id(palette_domain::job::CraftStatus::Todo);
         let review_todo = crate::lookup::review_status_id(palette_domain::job::ReviewStatus::Todo);
+        let orchestrator_todo =
+            crate::lookup::job_status_id(palette_domain::job::JobStatus::Orchestrator(
+                palette_domain::job::MechanizedStatus::Todo,
+            ));
+        let operator_todo = crate::lookup::job_status_id(palette_domain::job::JobStatus::Operator(
+            palette_domain::job::MechanizedStatus::Todo,
+        ));
         let mut stmt = conn.prepare(
-            "SELECT t.id, t.task_id, t.type_id, t.title, t.plan_path, t.assignee_id, t.status_id, t.priority_id, t.repository, t.pr_url, t.created_at, t.updated_at, t.notes, t.assigned_at
+            "SELECT t.id, t.task_id, t.type_id, t.title, t.plan_path, t.assignee_id, t.status_id, t.priority_id, t.repository, t.command, t.pr_url, t.created_at, t.updated_at, t.notes, t.assigned_at
              FROM jobs t
-             WHERE t.status_id IN (?1, ?2) AND t.assignee_id IS NULL
+             WHERE t.status_id IN (?1, ?2, ?3, ?4) AND t.assignee_id IS NULL
              ORDER BY
                CASE t.priority_id
                  WHEN 1 THEN 0
@@ -25,9 +32,12 @@ impl Database {
                  ELSE 3
                END",
         )?;
-        stmt.query_map(params![craft_todo, review_todo], read_job_row)?
-            .map(|row| into_job(row?))
-            .collect::<crate::Result<Vec<_>>>()
+        stmt.query_map(
+            params![craft_todo, review_todo, orchestrator_todo, operator_todo],
+            read_job_row,
+        )?
+        .map(|row| into_job(row?))
+        .collect::<crate::Result<Vec<_>>>()
     }
 }
 

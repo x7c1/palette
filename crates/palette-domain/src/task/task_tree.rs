@@ -20,6 +20,8 @@ pub struct TaskTreeNode {
     pub job_type: Option<JobType>,
     pub priority: Option<Priority>,
     pub repository: Option<Repository>,
+    /// Command for orchestrator tasks (e.g., "docker compose run --rm check").
+    pub command: Option<String>,
     pub children: Vec<TaskId>,
     pub depends_on: Vec<TaskId>,
 }

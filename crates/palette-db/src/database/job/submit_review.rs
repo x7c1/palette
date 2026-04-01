@@ -82,6 +82,7 @@ mod tests {
             None,
             None,
             None,
+            None,
         ))
         .unwrap();
 
@@ -92,6 +93,7 @@ mod tests {
             JobType::Review,
             Title::parse("Review").unwrap(),
             PlanPath::parse("test/R-001").unwrap(),
+            None,
             None,
             None,
             None,

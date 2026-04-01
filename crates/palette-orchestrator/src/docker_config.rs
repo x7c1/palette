@@ -25,7 +25,7 @@ pub struct DockerConfig {
 }
 
 fn default_max_workers() -> usize {
-    3
+    50
 }
 
 fn default_leader_image() -> String {

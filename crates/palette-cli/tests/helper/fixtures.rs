@@ -1,6 +1,10 @@
 use palette_domain::job::JobId;
-use palette_domain::worker::WorkerId;
+use palette_domain::task::TaskId;
+use palette_domain::terminal::TerminalTarget;
+use palette_domain::worker::{ContainerId, WorkerId, WorkerRole, WorkerStatus};
+use palette_domain::workflow::WorkflowId;
 use palette_server::api_types::{CreateJobRequest, JobStatus, JobType, UpdateJobRequest};
+use palette_usecase::data_store::InsertWorkerRequest;
 
 pub fn wid(s: &str) -> WorkerId {
     WorkerId::parse(s).unwrap()
@@ -10,14 +14,19 @@ pub fn jid(s: &str) -> JobId {
     JobId::parse(s).unwrap()
 }
 
+pub fn tid(wf_id: &str, key_path: &str) -> TaskId {
+    TaskId::parse(format!("{wf_id}:{key_path}")).unwrap()
+}
+
+pub fn write_blueprint_file(yaml: &str) -> tempfile::NamedTempFile {
+    use std::io::Write;
+    let mut f = tempfile::NamedTempFile::new().unwrap();
+    f.write_all(yaml.as_bytes()).unwrap();
+    f
+}
+
 /// Insert a worker record to satisfy FK constraints.
 pub fn setup_worker(db: &dyn palette_usecase::DataStore, worker_id: &str) {
-    use palette_domain::task::TaskId;
-    use palette_domain::terminal::TerminalTarget;
-    use palette_domain::worker::*;
-    use palette_domain::workflow::WorkflowId;
-    use palette_usecase::data_store::InsertWorkerRequest;
-
     let wf_id = WorkflowId::parse("wf-test").unwrap();
     let _ = db.create_workflow(&wf_id, "test/blueprint.yaml");
     db.insert_worker(&InsertWorkerRequest {
@@ -34,6 +43,35 @@ pub fn setup_worker(db: &dyn palette_usecase::DataStore, worker_id: &str) {
     .unwrap();
 }
 
+/// Insert a worker with full control over all fields.
+#[allow(clippy::too_many_arguments)]
+pub fn insert_worker(
+    state: &palette_server::AppState,
+    id: &str,
+    role: WorkerRole,
+    supervisor_id: Option<&str>,
+    terminal_target: &TerminalTarget,
+    status: WorkerStatus,
+    task_id: &str,
+    workflow_id: &WorkflowId,
+) {
+    state
+        .interactor
+        .data_store
+        .insert_worker(&InsertWorkerRequest {
+            id: wid(id),
+            workflow_id: workflow_id.clone(),
+            role,
+            status,
+            supervisor_id: supervisor_id.map(wid),
+            container_id: ContainerId::new("stub"),
+            terminal_target: terminal_target.clone(),
+            session_id: None,
+            task_id: TaskId::parse(task_id).unwrap(),
+        })
+        .unwrap();
+}
+
 pub fn create_craft(id: &str, title: &str, task_id: &str) -> CreateJobRequest {
     CreateJobRequest {
         id: Some(id.to_string()),
@@ -44,6 +82,7 @@ pub fn create_craft(id: &str, title: &str, task_id: &str) -> CreateJobRequest {
         assignee_id: None,
         priority: None,
         repository: None,
+        command: None,
     }
 }
 
@@ -57,6 +96,7 @@ pub fn create_review(id: &str, title: &str, task_id: &str) -> CreateJobRequest {
         assignee_id: None,
         priority: None,
         repository: None,
+        command: None,
     }
 }
 

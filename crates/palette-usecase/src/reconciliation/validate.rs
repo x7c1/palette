@@ -162,6 +162,7 @@ mod tests {
                 job_type: None,
                 priority: None,
                 repository: None,
+                command: None,
                 children: children
                     .iter()
                     .map(|k| rid.child(&TaskKey::parse(*k).unwrap()))
@@ -182,6 +183,7 @@ mod tests {
                     job_type: None,
                     priority: None,
                     repository: None,
+                    command: None,
                     children: vec![],
                     depends_on: vec![],
                 },

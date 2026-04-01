@@ -130,6 +130,8 @@ mod tests {
             plan_dir: String::new(),
             session_name: String::new(),
             cancel_token: tokio_util::sync::CancellationToken::new(),
+            workspace_manager: crate::orchestrator::workspace::WorkspaceManager::new("data"),
+            event_tx: tokio::sync::mpsc::unbounded_channel().0,
         })
     }
 

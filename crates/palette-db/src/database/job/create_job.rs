@@ -21,8 +21,8 @@ impl Database {
         let tx = conn.transaction()?;
 
         tx.execute(
-            "INSERT INTO jobs (id, task_id, type_id, title, plan_path, assignee_id, status_id, priority_id, repository, pr_url, created_at, updated_at, notes, assigned_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, NULL, ?10, ?11, NULL, NULL)",
+            "INSERT INTO jobs (id, task_id, type_id, title, plan_path, assignee_id, status_id, priority_id, repository, command, pr_url, created_at, updated_at, notes, assigned_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, NULL, ?11, ?12, NULL, NULL)",
             params![
                 id.as_ref(),
                 req.task_id.as_ref(),
@@ -33,6 +33,7 @@ impl Database {
                 crate::lookup::job_status_id(initial_status),
                 req.priority.map(crate::lookup::priority_id),
                 repos_json,
+                req.command.as_deref(),
                 now_str,
                 now_str,
             ],
@@ -67,6 +68,7 @@ mod tests {
                 Some(wid("member-a")),
                 Some(Priority::High),
                 Some(Repository::parse("x7c1/palette", "feature/test").unwrap()),
+                None,
             ))
             .unwrap();
 

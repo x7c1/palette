@@ -15,6 +15,7 @@ pub struct CreateJobRequest {
     pub assignee_id: Option<String>,
     pub priority: Option<Priority>,
     pub repository: Option<Repository>,
+    pub command: Option<String>,
 }
 
 impl CreateJobRequest {
@@ -30,6 +31,8 @@ impl CreateJobRequest {
             #[plain]
             priority: self.priority.map(palette_domain::job::Priority::from),
             repository: self.repository.clone().map(|r| r.parse()).transpose(),
+            #[plain]
+            command: self.command.clone(),
         })
     }
 }

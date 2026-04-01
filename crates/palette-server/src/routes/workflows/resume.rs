@@ -73,12 +73,14 @@ pub async fn handle_resume_workflow(
                 &worker.container_id,
                 session_id,
                 worker.role,
+                None,
             )
         } else {
             state.interactor.container.claude_exec_command(
                 &worker.container_id,
                 "/home/agent/prompt.md",
                 worker.role,
+                None,
             )
         };
 

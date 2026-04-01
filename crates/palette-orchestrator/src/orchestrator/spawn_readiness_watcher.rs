@@ -90,6 +90,7 @@ impl Orchestrator {
                 &worker.container_id,
                 "/home/agent/prompt.md",
                 worker.role,
+                None,
             );
             if let Err(e) = self
                 .interactor

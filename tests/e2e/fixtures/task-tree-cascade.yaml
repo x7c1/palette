@@ -7,7 +7,7 @@ task:
       priority: high
       repository:
         name: x7c1/palette
-        branch: e2e-cascade
+        branch: plan/2026-999-e2e-cascade
       children:
         - key: review
           type: review
@@ -19,7 +19,7 @@ task:
       priority: medium
       repository:
         name: x7c1/palette
-        branch: e2e-cascade
+        branch: plan/2026-999-e2e-cascade
       children:
         - key: review
           type: review

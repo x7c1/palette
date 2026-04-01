@@ -41,6 +41,7 @@ pub fn make_job(id: &str) -> Job {
         status: JobStatus::todo(JobType::Review),
         priority: None,
         repository: None,
+        command: None,
         pr_url: None,
         created_at: now,
         updated_at: now,

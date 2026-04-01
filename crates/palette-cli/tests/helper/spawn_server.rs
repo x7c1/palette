@@ -45,8 +45,9 @@ pub async fn spawn_server(
     let state = Arc::new(AppState {
         interactor: Arc::clone(&interactor),
         max_review_rounds: 5,
+        data_dir: std::path::PathBuf::from("data"),
         event_log: tokio::sync::Mutex::new(Vec::new()),
-        event_tx,
+        event_tx: event_tx.clone(),
     });
 
     let orchestrator = Arc::new(Orchestrator {
@@ -55,6 +56,8 @@ pub async fn spawn_server(
         plan_dir: String::new(),
         session_name: session_name.to_string(),
         cancel_token: tokio_util::sync::CancellationToken::new(),
+        workspace_manager: palette_orchestrator::workspace::WorkspaceManager::new("data"),
+        event_tx,
     });
     let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel();
     let _ = orchestrator.start(event_rx, shutdown_rx);

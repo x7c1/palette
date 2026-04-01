@@ -85,6 +85,7 @@ impl<'a> TaskStore<'a> {
             job_type: node.job_type,
             priority: node.priority,
             repository: node.repository.clone(),
+            command: node.command.clone(),
             status,
             children,
             depends_on: node.depends_on.clone(),

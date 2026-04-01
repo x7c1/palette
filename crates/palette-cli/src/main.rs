@@ -51,12 +51,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let state = Arc::new(AppState {
         interactor: Arc::clone(&interactor),
         max_review_rounds: config.rules.max_review_rounds,
+        data_dir: std::path::PathBuf::from("data"),
         event_log: tokio::sync::Mutex::new(Vec::new()),
-        event_tx,
+        event_tx: event_tx.clone(),
     });
 
     // Ensure plan_dir exists on the host
     std::fs::create_dir_all(&config.plan_dir)?;
+
+    let workspace_manager = palette_orchestrator::workspace::WorkspaceManager::new("data");
 
     let orchestrator = Arc::new(Orchestrator {
         interactor: Arc::clone(&interactor),
@@ -64,6 +67,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         plan_dir: config.plan_dir.clone(),
         session_name: config.tmux.session_name.clone(),
         cancel_token: tokio_util::sync::CancellationToken::new(),
+        workspace_manager,
+        event_tx,
     });
 
     // Clean up orphan containers from previous crash/forced exit

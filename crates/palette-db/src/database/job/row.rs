@@ -18,6 +18,7 @@ pub(crate) fn read_job_row(row: &rusqlite::Row) -> rusqlite::Result<JobRow> {
         status_id: row.get("status_id")?,
         priority_id: row.get("priority_id")?,
         repository: row.get("repository")?,
+        command: row.get("command")?,
         pr_url: row.get("pr_url")?,
         created_at: row.get("created_at")?,
         updated_at: row.get("updated_at")?,
@@ -60,6 +61,7 @@ pub(crate) fn into_job(row: JobRow) -> crate::Result<Job> {
         status,
         priority,
         repository,
+        command: row.command,
         pr_url: row.pr_url,
         created_at: parse_datetime(&row.created_at),
         updated_at: parse_datetime(&row.updated_at),
@@ -71,7 +73,7 @@ pub(crate) fn into_job(row: JobRow) -> crate::Result<Job> {
 /// Query a single job by ID.
 pub(crate) fn query_job(conn: &Connection, id: &JobId) -> crate::Result<Option<Job>> {
     let mut stmt = conn.prepare(
-        "SELECT id, task_id, type_id, title, plan_path, assignee_id, status_id, priority_id, repository, pr_url, created_at, updated_at, notes, assigned_at
+        "SELECT id, task_id, type_id, title, plan_path, assignee_id, status_id, priority_id, repository, command, pr_url, created_at, updated_at, notes, assigned_at
          FROM jobs WHERE id = ?1",
     )?;
     stmt.query_map(params![id.as_ref()], read_job_row)?

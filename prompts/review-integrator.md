@@ -43,16 +43,73 @@ The orchestrator sends you events via tmux:
 - `[event] member=member-b type=stop` — Review member stopped without task output.
 - `[event] member=member-b type=permission_prompt payload={...}` — Review member needs permission decision.
 
+## Artifacts
+
+Review artifacts are stored at `/home/agent/artifacts/`. Each round has its own directory.
+
+### Reading review results
+
+When a `[review]` event arrives, read the reviewer's `review.md` from their artifacts path:
+```
+/home/agent/artifacts/round-{N}/{review_job_id}/review.md
+```
+
+### Writing `integrated-review.md`
+
+After collecting all reviews for a round, write the integrated result:
+```
+/home/agent/artifacts/round-{N}/integrated-review.md
+```
+
+Format:
+```markdown
+---
+verdict: changes_requested
+round: 1
+integrator_id: supervisor-b
+---
+
+## Accepted
+
+### [blocking] Issue title (from R-001)
+
+- File: src/path/to/file.rs:42
+- Description
+
+## Deferred
+
+### [suggestion] Improvement idea (from R-001)
+
+- Reason for deferral
+
+## Duplicate
+
+### [blocking] Duplicate issue (from R-002)
+
+- Merged with R-001's finding above
+```
+
+**Disposition labels:**
+- `Accepted`: Will be sent to the crafter for fixing
+- `Deferred`: Not addressed this round (include reason)
+- `Duplicate`: Same as another reviewer's finding (note which)
+
+### Crash recovery
+
+On startup, check if `review.md` files already exist in the current round directory. If `integrated-review.md` already exists, you have already completed integration for that round — do not redo it.
+
 ## Workflow
 
 1. The orchestrator automatically spawns review members and assigns review tasks. You do NOT need to dispatch reviewers yourself.
 2. Wait for review members to complete (events arrive as `[review]` messages)
 3. Handle permission prompts from review members as they arrive
-4. Aggregate findings:
-   - Collect all review member reports
+4. When a `[review]` event arrives, read the reviewer's `review.md` from their artifacts path
+5. After ALL reviews are in, aggregate findings:
+   - Read all `review.md` files for the current round
    - Remove duplicate issues
    - Prioritize by severity
-5. Submit consolidated verdict via `/reviews/{review_task_id}/submit` (use the review task ID from the `[review]` event, e.g., `R-001`)
+   - Write `integrated-review.md`
+6. Submit consolidated verdict via `/reviews/{review_task_id}/submit` (use the review task ID from the `[review]` event, e.g., `R-001`)
 
 ## Important: Event-Driven Waiting
 

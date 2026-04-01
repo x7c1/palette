@@ -13,6 +13,8 @@ pub struct CreateJobRequest {
     pub assignee_id: Option<WorkerId>,
     pub priority: Option<Priority>,
     pub repository: Option<Repository>,
+    /// Command for orchestrator tasks.
+    pub command: Option<String>,
 }
 
 impl CreateJobRequest {
@@ -26,6 +28,7 @@ impl CreateJobRequest {
         assignee_id: Option<WorkerId>,
         priority: Option<Priority>,
         repository: Option<Repository>,
+        command: Option<String>,
     ) -> Self {
         Self {
             id,
@@ -36,6 +39,7 @@ impl CreateJobRequest {
             assignee_id,
             priority,
             repository,
+            command,
         }
     }
 }

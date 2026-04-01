@@ -27,10 +27,55 @@ impl Orchestrator {
                 let this = Arc::clone(self);
                 tokio::task::spawn_blocking(move || this.suspend(&workflow_id));
             }
+            ServerEvent::ValidateReviewArtifact {
+                job_id,
+                worker_id,
+                pending_effects,
+            } => {
+                let valid = self.validate_review_artifact(&job_id, &worker_id);
+                if valid && !pending_effects.is_empty() {
+                    self.handle_process_effects(pending_effects).await;
+                }
+                // If invalid, effects are discarded and reviewer is re-instructed.
+                // The reviewer will re-submit after writing review.md.
+            }
+            ServerEvent::ValidateIntegratedReviewArtifact { task_id, worker_id } => {
+                self.validate_integrated_review_artifact(&task_id, &worker_id);
+            }
+            ServerEvent::ValidateIntegratorSubmission {
+                job_id,
+                pending_effects,
+            } => {
+                let valid = self.validate_all_reviewer_artifacts(&job_id);
+                if valid && !pending_effects.is_empty() {
+                    self.handle_process_effects(pending_effects).await;
+                }
+                // If invalid, effects are discarded. Missing reviewers are
+                // re-instructed. The integrator will need to re-submit after
+                // all review.md files are present.
+            }
+            ServerEvent::OrchestratorTaskCompleted {
+                job_id,
+                success,
+                stdout,
+                stderr,
+                exit_code,
+                duration_ms,
+            } => {
+                self.handle_orchestrator_task_completed(
+                    &job_id,
+                    success,
+                    &stdout,
+                    &stderr,
+                    exit_code,
+                    duration_ms,
+                )
+                .await;
+            }
         }
     }
 
-    async fn handle_process_effects(self: &Arc<Self>, effects: Vec<RuleEffect>) {
+    pub(super) async fn handle_process_effects(self: &Arc<Self>, effects: Vec<RuleEffect>) {
         let result = match self.process_effects(&effects) {
             Ok(result) => result,
             Err(e) => {
