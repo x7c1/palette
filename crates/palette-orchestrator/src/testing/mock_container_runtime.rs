@@ -56,6 +56,7 @@ impl ContainerRuntime for MockContainerRuntime {
         container_id: &ContainerId,
         prompt_file: &str,
         _role: WorkerRole,
+        _workdir: Option<&str>,
     ) -> String {
         format!("mock-exec {container_id} {prompt_file}")
     }
@@ -65,6 +66,7 @@ impl ContainerRuntime for MockContainerRuntime {
         container_id: &ContainerId,
         session_id: &WorkerSessionId,
         _role: WorkerRole,
+        _workdir: Option<&str>,
     ) -> String {
         format!("mock-resume {container_id} {session_id}")
     }

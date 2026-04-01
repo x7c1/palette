@@ -51,6 +51,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let state = Arc::new(AppState {
         interactor: Arc::clone(&interactor),
         max_review_rounds: config.rules.max_review_rounds,
+        data_dir: std::path::PathBuf::from("data"),
         event_log: tokio::sync::Mutex::new(Vec::new()),
         event_tx: event_tx.clone(),
     });

@@ -72,6 +72,7 @@ pub trait ContainerRuntime: Send + Sync {
         container_id: &ContainerId,
         prompt_file: &str,
         role: WorkerRole,
+        workdir: Option<&str>,
     ) -> String;
 
     fn claude_resume_command(
@@ -79,6 +80,7 @@ pub trait ContainerRuntime: Send + Sync {
         container_id: &ContainerId,
         session_id: &WorkerSessionId,
         role: WorkerRole,
+        workdir: Option<&str>,
     ) -> String;
 }
 

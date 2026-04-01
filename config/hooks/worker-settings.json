@@ -8,6 +8,7 @@
       "Bash(cat *)",
       "Bash(cd *)",
       "Bash(cp *)",
+      "Bash(curl *)",
       "Bash(echo)",
       "Bash(echo *)",
       "Bash(find *)",
@@ -25,17 +26,32 @@
       "Bash(git checkout *)",
       "Bash(git clone *)",
       "Bash(git commit *)",
+      "Bash(git diff)",
       "Bash(git diff *)",
+      "Bash(git log)",
       "Bash(git log *)",
       "Bash(git push *)",
+      "Bash(git status)",
       "Bash(git status *)",
-      "Read(*)",
-      "Edit(*)",
-      "Write(*)",
-      "Glob(*)"
+      "Read(/home/agent/**)",
+      "Edit(/home/agent/**)",
+      "Write(/home/agent/**)",
+      "Glob(/home/agent/**)",
+      "Grep(/home/agent/**)"
     ]
   },
   "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/home/agent/.claude/hooks/guard-cd-chain.sh"
+          }
+        ]
+      }
+    ],
     "SessionStart": [
       {
         "hooks": [

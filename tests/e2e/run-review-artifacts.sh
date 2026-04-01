@@ -24,7 +24,7 @@ BLUEPRINT_PATH="$ROOT_DIR/tests/e2e/fixtures/review-artifacts.yaml"
 LOG_FILE="data/palette.log"
 PID_FILE="data/palette.pid"
 POLL_INTERVAL=5
-STALL_THRESHOLD=24
+STALL_THRESHOLD="${STALL_THRESHOLD:-24}"
 
 trap '"$SCRIPT_DIR/stop-palette.sh"' EXIT
 

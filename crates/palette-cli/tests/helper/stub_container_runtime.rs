@@ -59,10 +59,22 @@ impl palette_usecase::ContainerRuntime for StubContainerRuntime {
     fn read_container_file(&self, _: &ContainerId, _: &str, _: usize) -> Result<String, BoxErr> {
         Ok(String::new())
     }
-    fn claude_exec_command(&self, _: &ContainerId, _: &str, _: WorkerRole) -> String {
+    fn claude_exec_command(
+        &self,
+        _: &ContainerId,
+        _: &str,
+        _: WorkerRole,
+        _: Option<&str>,
+    ) -> String {
         String::new()
     }
-    fn claude_resume_command(&self, _: &ContainerId, _: &WorkerSessionId, _: WorkerRole) -> String {
+    fn claude_resume_command(
+        &self,
+        _: &ContainerId,
+        _: &WorkerSessionId,
+        _: WorkerRole,
+        _: Option<&str>,
+    ) -> String {
         String::new()
     }
 }

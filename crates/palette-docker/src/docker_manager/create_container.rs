@@ -102,10 +102,17 @@ impl DockerManager {
             args.push("/var/run/docker.sock:/var/run/docker.sock".to_string());
         }
 
-        // Transcript volume: all workers write their transcripts here
-        let transcript_volume = format!("palette-transcripts-{session_name}");
+        // Transcript directory: bind mount to host for persistence after container removal.
+        // Each worker gets its own subdirectory under data/transcripts/{worker_name}/.
+        let transcript_host_dir = format!("data/transcripts/{name}");
+        std::fs::create_dir_all(&transcript_host_dir).ok();
+        let transcript_abs = std::fs::canonicalize(&transcript_host_dir)
+            .unwrap_or_else(|_| std::path::PathBuf::from(&transcript_host_dir));
         args.push("-v".to_string());
-        args.push(format!("{transcript_volume}:/home/agent/.claude/projects"));
+        args.push(format!(
+            "{}:/home/agent/.claude/projects",
+            transcript_abs.display()
+        ));
 
         // Workspace: bind mount from host directory
         if let Some(ws) = &workspace {

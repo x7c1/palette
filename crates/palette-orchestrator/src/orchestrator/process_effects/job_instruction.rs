@@ -58,15 +58,9 @@ impl Orchestrator {
                     return Ok(None);
                 };
                 let task_store = self.interactor.create_task_store(&task_state.workflow_id)?;
-                let Some(task) = task_store.get_task(&job.task_id) else {
-                    return Ok(None);
-                };
-                let Some(ref parent_id) = task.parent_id else {
-                    return Ok(None);
-                };
-                let Some(craft_job) = self.interactor.data_store.get_job_by_task_id(parent_id)?
-                else {
-                    return Ok(None);
+                let craft_job = match self.find_ancestor_craft_job(&task_store, &job.task_id) {
+                    Some(j) => j,
+                    None => return Ok(None),
                 };
                 (task_state.workflow_id, craft_job.id)
             }
@@ -126,21 +120,16 @@ impl Orchestrator {
                 }))
             }
             JobType::Review => {
-                // Review is a child of craft, so find the parent task's craft job
+                // Review may be nested: reviewer → composite review → craft.
+                // Walk up the task tree to find the ancestor craft job.
                 let task_id = &job.task_id;
                 let Some(task_state) = self.interactor.data_store.get_task_state(task_id)? else {
                     return Ok(None);
                 };
                 let task_store = self.interactor.create_task_store(&task_state.workflow_id)?;
-                let Some(task) = task_store.get_task(task_id) else {
-                    return Ok(None);
-                };
-                let Some(ref parent_id) = task.parent_id else {
-                    return Ok(None);
-                };
-                let Some(craft_job) = self.interactor.data_store.get_job_by_task_id(parent_id)?
-                else {
-                    return Ok(None);
+                let craft_job = match self.find_ancestor_craft_job(&task_store, task_id) {
+                    Some(j) => j,
+                    None => return Ok(None),
                 };
                 let Some(ref repo) = craft_job.repository else {
                     return Ok(None);

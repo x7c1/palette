@@ -169,3 +169,136 @@ async fn review_approved_completes_review_job() {
         .unwrap();
     assert_eq!(review.status, JobStatus::Review(ReviewStatus::Done));
 }
+
+/// Blueprint with composite review: craft → review-integrate → [review-a, review-b]
+const COMPOSITE_REVIEW_YAML: &str = r#"
+task:
+  key: comp
+  children:
+    - key: craft
+      type: craft
+      plan_path: test/craft
+      children:
+        - key: review-integrate
+          type: review
+          children:
+            - key: review-a
+              type: review
+            - key: review-b
+              type: review
+"#;
+
+/// Integrator submit is rejected when child reviewer jobs are not Done.
+#[tokio::test]
+async fn integrator_submit_rejected_when_children_incomplete() {
+    let (session, _guard) = test_session_name_with_guard("integ-reject");
+    let tmux = TmuxManager::new(session.clone());
+    tmux.create_session(&session).unwrap();
+
+    let (base_url, state, _shutdown_tx) = spawn_server(tmux, &session).await;
+    let client = reqwest::Client::new();
+
+    // Start workflow with composite review blueprint
+    let blueprint_file = {
+        let mut f = tempfile::NamedTempFile::new().unwrap();
+        std::io::Write::write_all(&mut f, COMPOSITE_REVIEW_YAML.as_bytes()).unwrap();
+        f
+    };
+    let resp = client
+        .post(format!("{base_url}/workflows/start"))
+        .json(&serde_json::json!({
+            "blueprint_path": blueprint_file.path().to_str().unwrap()
+        }))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), 201);
+    let body: serde_json::Value = resp.json().await.unwrap();
+    let _wf_id = body["workflow_id"].as_str().unwrap();
+
+    use palette_domain::job::{CraftStatus, JobFilter, JobStatus as JStatus, JobType};
+    use palette_domain::rule::RuleEffect;
+    use palette_domain::server::ServerEvent;
+    let wait = || tokio::time::sleep(tokio::time::Duration::from_millis(200));
+
+    // Craft → InReview to trigger review job creation
+    let jobs = state
+        .interactor
+        .data_store
+        .list_jobs(&JobFilter::default())
+        .unwrap();
+    let craft_id = jobs[0].id.clone();
+    state
+        .interactor
+        .data_store
+        .update_job_status(&craft_id, JStatus::Craft(CraftStatus::InProgress))
+        .unwrap();
+    state
+        .interactor
+        .data_store
+        .update_job_status(&craft_id, JStatus::Craft(CraftStatus::InReview))
+        .unwrap();
+    let _ = state.event_tx.send(ServerEvent::ProcessEffects {
+        effects: vec![RuleEffect::CraftReadyForReview {
+            craft_job_id: craft_id.clone(),
+        }],
+    });
+    wait().await;
+
+    // Find the integrator job (review-integrate) and child review jobs
+    let all_jobs = state
+        .interactor
+        .data_store
+        .list_jobs(&JobFilter::default())
+        .unwrap();
+    let integrate_job = all_jobs
+        .iter()
+        .find(|j| {
+            j.task_id.as_ref().contains("review-integrate")
+                && !j.task_id.as_ref().contains("review-a")
+                && !j.task_id.as_ref().contains("review-b")
+        })
+        .expect("review-integrate job should exist");
+
+    // Setup worker and assign the integrator job
+    helper::setup_worker(&*state.interactor.data_store, "integrator-1");
+    state
+        .interactor
+        .data_store
+        .assign_job(
+            &integrate_job.id,
+            &palette_domain::worker::WorkerId::parse("integrator-1").unwrap(),
+            JobType::Review,
+        )
+        .unwrap();
+
+    // Try to submit as integrator — should be rejected because child reviewers are not Done
+    let resp = client
+        .post(format!("{base_url}/reviews/{}/submit", integrate_job.id))
+        .json(&SubmitReviewRequest {
+            verdict: Verdict::Approved,
+            summary: Some("Approved".to_string()),
+            comments: vec![],
+        })
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(
+        resp.status(),
+        400,
+        "integrator submit should be rejected when child reviewers incomplete"
+    );
+    let err: serde_json::Value = resp.json().await.unwrap();
+    assert_eq!(err["code"], "child_reviewers_incomplete");
+
+    // Verify no submission was recorded
+    let submissions = state
+        .interactor
+        .data_store
+        .get_review_submissions(&integrate_job.id)
+        .unwrap();
+    assert!(
+        submissions.is_empty(),
+        "no submission should be recorded when rejected"
+    );
+}

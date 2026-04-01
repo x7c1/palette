@@ -197,6 +197,7 @@ impl Orchestrator {
                 &worker.container_id,
                 session_id,
                 worker.role,
+                None,
             )
         } else {
             // No session_id: start fresh with prompt file
@@ -210,6 +211,7 @@ impl Orchestrator {
                 &worker.container_id,
                 prompt_file,
                 worker.role,
+                None,
             )
         };
 

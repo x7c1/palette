@@ -45,7 +45,7 @@ impl DockerManager {
             "sh",
             "-c",
             &format!(
-                "mkdir -p /home/agent/.claude && cat > /home/agent/.claude/settings.json << 'PALETTE_EOF'\n{settings}\nPALETTE_EOF\nchown agent:agent /home/agent/.claude /home/agent/.claude/settings.json"
+                "mkdir -p /home/agent/.claude/hooks && cat > /home/agent/.claude/settings.json << 'PALETTE_EOF'\n{settings}\nPALETTE_EOF\nchown -R agent:agent /home/agent/.claude"
             ),
         ])?;
 

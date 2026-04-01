@@ -159,11 +159,17 @@ impl Orchestrator {
             std::path::Path::new("claude-code-plugin"),
             "/home/agent/claude-code-plugin",
         )?;
+        self.interactor.container.copy_file_to_container(
+            &container_id,
+            std::path::Path::new("config/hooks/guard-cd-chain.sh"),
+            "/home/agent/.claude/hooks/guard-cd-chain.sh",
+        )?;
 
         let cmd = self.interactor.container.claude_exec_command(
             &container_id,
             "/home/agent/prompt.md",
             role,
+            None,
         );
         self.interactor.terminal.send_keys(terminal_target, &cmd)?;
 

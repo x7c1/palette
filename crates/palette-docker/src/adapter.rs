@@ -113,8 +113,9 @@ impl ContainerRuntime for DockerManager {
         container_id: &ContainerId,
         prompt_file: &str,
         role: WorkerRole,
+        workdir: Option<&str>,
     ) -> String {
-        DockerManager::claude_exec_command(container_id, prompt_file, role)
+        DockerManager::claude_exec_command(container_id, prompt_file, role, workdir)
     }
 
     fn claude_resume_command(
@@ -122,7 +123,8 @@ impl ContainerRuntime for DockerManager {
         container_id: &ContainerId,
         session_id: &WorkerSessionId,
         role: WorkerRole,
+        workdir: Option<&str>,
     ) -> String {
-        DockerManager::claude_resume_command(container_id, session_id, role)
+        DockerManager::claude_resume_command(container_id, session_id, role, workdir)
     }
 }

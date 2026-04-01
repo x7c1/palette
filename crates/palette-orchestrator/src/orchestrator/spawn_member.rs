@@ -37,6 +37,7 @@ impl Orchestrator {
             .create_pane(&supervisor_state.terminal_target)?;
 
         let member_id_str = member_id.as_ref();
+        let has_workspace = workspace.is_some();
         let plan_dir_abs = std::fs::canonicalize(&self.plan_dir)
             .map_err(|e| crate::Error::External(Box::new(e)))?;
         let plan_dir_mount = PlanDirMount {
@@ -79,11 +80,22 @@ impl Orchestrator {
             std::path::Path::new("claude-code-plugin"),
             "/home/agent/claude-code-plugin",
         )?;
+        self.interactor.container.copy_file_to_container(
+            &container_id,
+            std::path::Path::new("config/hooks/guard-cd-chain.sh"),
+            "/home/agent/.claude/hooks/guard-cd-chain.sh",
+        )?;
 
+        let workdir = if has_workspace {
+            Some("/home/agent/workspace")
+        } else {
+            None
+        };
         let cmd = self.interactor.container.claude_exec_command(
             &container_id,
             "/home/agent/prompt.md",
             WorkerRole::Member,
+            workdir,
         );
         self.interactor.terminal.send_keys(&terminal_target, &cmd)?;
         tracing::info!(member_id = %member_id, "spawned member");

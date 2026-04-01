@@ -1,6 +1,7 @@
-use palette_domain::job::{JobId, JobType};
+use palette_domain::job::{Job, JobId, JobType};
 use palette_domain::task::TaskId;
 use palette_domain::worker::WorkerId;
+use palette_usecase::task_store::TaskStore;
 
 use super::Orchestrator;
 
@@ -23,22 +24,15 @@ impl Orchestrator {
             _ => return true,
         };
 
-        // Find the parent craft job to determine the artifacts path
+        // Traverse task tree to find the ancestor craft job.
+        // Reviewer task → composite review task → craft task.
         let task_store = match self.interactor.create_task_store(&task_state.workflow_id) {
             Ok(s) => s,
             Err(_) => return true,
         };
-        let task = match task_store.get_task(&job.task_id) {
-            Some(t) => t,
+        let craft_job = match self.find_ancestor_craft_job(&task_store, &job.task_id) {
+            Some(j) => j,
             None => return true,
-        };
-        let parent_id = match task.parent_id.as_ref() {
-            Some(id) => id,
-            None => return true,
-        };
-        let craft_job = match self.interactor.data_store.get_job_by_task_id(parent_id) {
-            Ok(Some(j)) => j,
-            _ => return true,
         };
 
         // Determine the round number
@@ -320,5 +314,28 @@ impl Orchestrator {
                     target_id: worker_id.clone(),
                 });
         }
+    }
+
+    /// Walk up the task tree from `task_id` to find the nearest ancestor with a
+    /// Craft job. Reviewer → composite review → craft, or composite review → craft.
+    pub(crate) fn find_ancestor_craft_job(
+        &self,
+        task_store: &TaskStore<'_>,
+        task_id: &TaskId,
+    ) -> Option<Job> {
+        let mut current_id = task_store.get_task(task_id)?.parent_id?;
+        // Walk up at most 5 levels to avoid infinite loops on malformed trees.
+        for _ in 0..5 {
+            let job = self
+                .interactor
+                .data_store
+                .get_job_by_task_id(&current_id)
+                .ok()??;
+            if job.job_type == JobType::Craft {
+                return Some(job);
+            }
+            current_id = task_store.get_task(&current_id)?.parent_id?;
+        }
+        None
     }
 }

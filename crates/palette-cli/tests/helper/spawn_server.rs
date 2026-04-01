@@ -45,6 +45,7 @@ pub async fn spawn_server(
     let state = Arc::new(AppState {
         interactor: Arc::clone(&interactor),
         max_review_rounds: 5,
+        data_dir: std::path::PathBuf::from("data"),
         event_log: tokio::sync::Mutex::new(Vec::new()),
         event_tx: event_tx.clone(),
     });

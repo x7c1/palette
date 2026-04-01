@@ -45,6 +45,7 @@ impl Orchestrator {
                 &container_id,
                 "/home/agent/prompt.md",
                 role,
+                None,
             );
             let _ = self.interactor.terminal.send_keys(&terminal_target, &cmd);
             self.interactor
