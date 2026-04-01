@@ -14,6 +14,10 @@ use palette_orchestrator::CallbackNetwork;
 #[derive(Debug, Deserialize)]
 pub struct Config {
     pub port: u16,
+    #[serde(default)]
+    pub operator_api_url: Option<String>,
+    #[serde(default)]
+    pub server_bind_addr: Option<String>,
     #[serde(default = "default_db_path")]
     pub db_path: String,
     #[serde(default = "default_plan_dir")]
@@ -39,6 +43,18 @@ impl Config {
             .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
         Ok(config)
     }
+
+    pub fn effective_operator_api_url(&self) -> String {
+        self.operator_api_url
+            .clone()
+            .unwrap_or_else(|| format!("http://127.0.0.1:{}", self.port))
+    }
+
+    pub fn effective_server_bind_addr(&self) -> String {
+        self.server_bind_addr
+            .clone()
+            .unwrap_or_else(|| format!("0.0.0.0:{}", self.port))
+    }
 }
 
 #[cfg(test)]
@@ -61,6 +77,14 @@ worker_callback_url = "http://127.0.0.1:7100"
         assert_eq!(config.tmux.session_name, "palette");
         assert_eq!(config.db_path, "data/palette.db");
         assert_eq!(config.rules.max_review_rounds, 5);
+        assert_eq!(
+            config.effective_operator_api_url(),
+            "http://127.0.0.1:7100".to_string()
+        );
+        assert_eq!(
+            config.effective_server_bind_addr(),
+            "0.0.0.0:7100".to_string()
+        );
         assert_eq!(config.docker.worker_callback_url, "http://127.0.0.1:7100");
         assert_eq!(config.docker.callback_network, CallbackNetwork::Auto);
         assert_eq!(config.docker.leader_image, "palette-leader:latest");
@@ -112,6 +136,8 @@ leader_image = "custom:latest"
     fn parse_full_config() {
         let toml = r#"
 port = 7100
+operator_api_url = "http://palette.local:7100"
+server_bind_addr = "127.0.0.1:7100"
 db_path = "custom/path.db"
 state_path = "custom/state.json"
 
@@ -128,6 +154,14 @@ callback_network = "bridge"
         let config: Config = toml::from_str(toml).unwrap();
         assert_eq!(config.db_path, "custom/path.db");
         assert_eq!(config.rules.max_review_rounds, 3);
+        assert_eq!(
+            config.effective_operator_api_url(),
+            "http://palette.local:7100".to_string()
+        );
+        assert_eq!(
+            config.effective_server_bind_addr(),
+            "127.0.0.1:7100".to_string()
+        );
         assert_eq!(config.docker.worker_callback_url, "http://localhost:8080");
         assert_eq!(config.docker.callback_network, CallbackNetwork::Bridge);
     }

@@ -11,7 +11,6 @@ use palette_orchestrator::Orchestrator;
 use palette_server::AppState;
 use palette_tmux::TmuxManager;
 use palette_usecase::Interactor;
-use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
@@ -30,6 +29,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let config = Config::load(&config_path)?;
     tracing::info!(?config, "loaded config");
+    let bind_addr = config.effective_server_bind_addr();
+    let operator_api_url = config.effective_operator_api_url();
 
     let session_name = TerminalSessionName::new(&config.tmux.session_name);
     let tmux = TmuxManager::new(session_name.clone());
@@ -91,10 +92,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Start HTTP server with graceful shutdown
     let app = palette_server::create_router(state);
-    let addr = SocketAddr::from(([0, 0, 0, 0], config.port));
-    tracing::info!(%addr, "starting server");
+    tracing::info!(%bind_addr, %operator_api_url, "starting server");
 
-    let listener = tokio::net::TcpListener::bind(addr).await?;
+    let listener = tokio::net::TcpListener::bind(&bind_addr).await?;
     axum::serve(listener, app)
         .with_graceful_shutdown(shutdown_signal())
         .await?;
