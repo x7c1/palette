@@ -5,6 +5,7 @@ RUN apt-get update && apt-get install -y \
     curl \
     jq \
     sudo \
+    xxd \
     zsh \
     && rm -rf /var/lib/apt/lists/*
 
