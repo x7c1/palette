@@ -7,7 +7,7 @@ task:
       priority: high
       repository:
         name: x7c1/palette
-        branch: e2e-orchestrator
+        branch: plan/2026-999-e2e-orchestrator
       children:
         - key: automated-checks
           type: orchestrator

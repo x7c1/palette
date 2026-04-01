@@ -7,7 +7,7 @@ task:
       priority: high
       repository:
         name: x7c1/palette
-        branch: e2e-operator
+        branch: plan/2026-999-e2e-operator
       children:
         - key: human-approval
           type: operator

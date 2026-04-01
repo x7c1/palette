@@ -18,13 +18,25 @@ impl Orchestrator {
 
         let worker = match worker {
             Some(ref m) if m.status == WorkerStatus::Idle => m,
-            _ => return Ok(false),
+            Some(ref m) => {
+                tracing::debug!(
+                    target_id = %target_id,
+                    status = ?m.status,
+                    "delivery skipped: worker not idle"
+                );
+                return Ok(false);
+            }
+            None => {
+                tracing::debug!(target_id = %target_id, "delivery skipped: worker not found");
+                return Ok(false);
+            }
         };
 
         // During suspend, block delivery to members (prevents new work) but
         // allow delivery to supervisors — they must stay active to approve
         // permission prompts so in-progress members can finish.
         if !worker.role.is_supervisor() && self.is_workflow_suspending(&worker.workflow_id)? {
+            tracing::debug!(target_id = %target_id, "delivery skipped: workflow suspending");
             return Ok(false);
         }
 
@@ -63,6 +75,7 @@ impl Orchestrator {
             tracing::info!(target_id = %target_id, "delivered queued message");
             Ok(true)
         } else {
+            tracing::debug!(target_id = %target_id, "delivery skipped: no queued messages");
             Ok(false)
         }
     }

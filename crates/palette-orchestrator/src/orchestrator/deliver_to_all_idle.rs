@@ -12,7 +12,16 @@ impl Orchestrator {
                 }
             };
 
+            if idle_targets.is_empty() {
+                tracing::debug!("delivery loop: no idle/waiting workers");
+                break;
+            }
+
             let target_ids: Vec<_> = idle_targets.iter().map(|a| a.id.clone()).collect();
+            tracing::debug!(
+                targets = ?target_ids.iter().map(|id| id.to_string()).collect::<Vec<_>>(),
+                "delivery loop: attempting delivery"
+            );
 
             let mut any_delivered = false;
             for target_id in &target_ids {
@@ -29,6 +38,7 @@ impl Orchestrator {
                 }
             }
             if !any_delivered {
+                tracing::debug!("delivery loop: no messages delivered, exiting");
                 break;
             }
         }

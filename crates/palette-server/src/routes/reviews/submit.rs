@@ -22,6 +22,7 @@ pub async fn handle_submit_review(
     let req = api_req.validate().map_err(|errors| Error::BadRequest {
         code: ErrorCode::InputValidationFailed,
         errors,
+        message: None,
     })?;
 
     // Verify the job exists and is a review
@@ -43,6 +44,7 @@ pub async fn handle_submit_review(
                 hint: "review_job_id".into(),
                 reason: "job/not_review_job".into(),
             }],
+            message: None,
         });
     }
 
@@ -97,8 +99,14 @@ pub async fn handle_submit_review(
                 errors: vec![InputError {
                     location: Location::Body,
                     hint: "verdict".into(),
-                    reason: format!("child reviewer jobs not done: {}", incomplete.join(", ")),
+                    reason: "review/child_reviewers_incomplete".into(),
                 }],
+                message: Some(format!(
+                    "Review members have not finished yet: {}. \
+                     Do NOT write review files yourself. \
+                     End your turn and wait for [review] events from the orchestrator.",
+                    incomplete.join(", "),
+                )),
             });
         }
     }
@@ -121,9 +129,13 @@ pub async fn handle_submit_review(
             errors: vec![InputError {
                 location: Location::Body,
                 hint: "verdict".into(),
-                reason: "review.md not found at expected path; write the file before submitting"
-                    .to_string(),
+                reason: "review/artifact_missing".into(),
             }],
+            message: Some(
+                "review.md not found at the expected path. \
+                 Write the file first, then re-submit your review."
+                    .into(),
+            ),
         });
     }
 

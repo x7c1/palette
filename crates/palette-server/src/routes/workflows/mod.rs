@@ -29,10 +29,12 @@ fn blueprint_read_error_to_server_error(e: ReadBlueprintError) -> Error {
                 hint: "blueprint_path".into(),
                 reason: format!("{cause}"),
             }],
+            message: None,
         },
         ReadBlueprintError::Validation(errors) => Error::BadRequest {
             code: ErrorCode::BlueprintInvalid,
             errors,
+            message: None,
         },
     }
 }

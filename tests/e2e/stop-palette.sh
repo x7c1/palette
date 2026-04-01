@@ -34,3 +34,12 @@ if [[ -n "$port_pid" ]]; then
   echo "found process on port 7100 (PID $port_pid), stopping..."
   kill_pid "$port_pid"
 fi
+
+# Stop and remove managed containers (same logic as reset.sh)
+container_ids=$(docker ps -aq --filter label=palette.managed=true 2>/dev/null || true)
+for cid in $container_ids; do
+  if [[ -n "$cid" ]]; then
+    echo "stopping container ${cid:0:12}..."
+    docker rm -f "$cid" &>/dev/null || true
+  fi
+done

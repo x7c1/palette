@@ -29,6 +29,7 @@ where
                     hint: String::new(),
                     reason: rejection_reason(&rejection),
                 }],
+                message: None,
             }),
         }
     }
