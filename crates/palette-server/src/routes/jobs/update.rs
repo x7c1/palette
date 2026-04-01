@@ -17,7 +17,6 @@ pub async fn handle_update_job(
     let job_id = api_req.validate_id().map_err(|errors| Error::BadRequest {
         code: ErrorCode::InputValidationFailed,
         errors,
-        message: None,
     })?;
     let current = state
         .interactor
@@ -40,8 +39,7 @@ pub async fn handle_update_job(
                 hint: "status".into(),
                 reason: e.reason_key(),
             }],
-            message: None,
-        }
+            }
     })?;
 
     let job = state

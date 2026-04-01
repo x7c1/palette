@@ -10,7 +10,6 @@ pub async fn handle_create_job(
     let req = api_req.validate().map_err(|errors| Error::BadRequest {
         code: ErrorCode::InputValidationFailed,
         errors,
-        message: None,
     })?;
     let job = state
         .interactor

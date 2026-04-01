@@ -12,12 +12,9 @@ pub type Result<T> = std::result::Result<T, Error>;
 pub enum Error {
     /// Client input error (400).
     /// `code` identifies the error kind; `errors` indicates which fields are problematic.
-    /// `message` is an optional human-readable explanation for AI agent consumers.
     BadRequest {
         code: ErrorCode,
         errors: Vec<InputError>,
-        #[allow(dead_code)]
-        message: Option<String>,
     },
     /// Resource not found (404).
     NotFound { resource: ResourceKind, id: String },
@@ -38,7 +35,6 @@ impl Error {
         move |e| Error::BadRequest {
             code: ErrorCode::InputValidationFailed,
             errors: vec![InputError::path(hint, e)],
-            message: None,
         }
     }
 
@@ -46,7 +42,6 @@ impl Error {
         move |e| Error::BadRequest {
             code: ErrorCode::InputValidationFailed,
             errors: vec![InputError::query(hint, e)],
-            message: None,
         }
     }
 
@@ -54,7 +49,6 @@ impl Error {
         move |e| Error::BadRequest {
             code: ErrorCode::InputValidationFailed,
             errors: vec![InputError::body(hint, e)],
-            message: None,
         }
     }
 }
@@ -62,20 +56,14 @@ impl Error {
 impl IntoResponse for Error {
     fn into_response(self) -> Response {
         match self {
-            Error::BadRequest {
-                code,
-                errors,
-                message,
-            } => {
-                let mut body = serde_json::json!({
+            Error::BadRequest { code, errors } => (
+                StatusCode::BAD_REQUEST,
+                Json(serde_json::json!({
                     "code": code,
                     "errors": errors,
-                });
-                if let Some(msg) = message {
-                    body["message"] = serde_json::Value::String(msg);
-                }
-                (StatusCode::BAD_REQUEST, Json(body)).into_response()
-            }
+                })),
+            )
+                .into_response(),
             Error::NotFound { resource, id } => (
                 StatusCode::NOT_FOUND,
                 Json(serde_json::json!({
@@ -118,7 +106,6 @@ mod tests {
                 hint: "title".into(),
                 reason: "title/required".into(),
             }],
-            message: None,
         };
         let resp = error.into_response();
         assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
@@ -135,7 +122,6 @@ mod tests {
         let error = Error::BadRequest {
             code: ErrorCode::InvalidStateTransition,
             errors: vec![],
-            message: None,
         };
         let resp = error.into_response();
         assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
@@ -173,26 +159,13 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn message_absent_when_none() {
+    async fn response_has_no_message_field() {
         let error = Error::BadRequest {
             code: ErrorCode::InputValidationFailed,
             errors: vec![],
-            message: None,
         };
         let resp = error.into_response();
         let body = response_body(resp).await;
         assert!(body.get("message").is_none());
-    }
-
-    #[tokio::test]
-    async fn message_present_when_some() {
-        let error = Error::BadRequest {
-            code: ErrorCode::ChildReviewersIncomplete,
-            errors: vec![],
-            message: Some("wait for reviewers".into()),
-        };
-        let resp = error.into_response();
-        let body = response_body(resp).await;
-        assert_eq!(body["message"], "wait for reviewers");
     }
 }
