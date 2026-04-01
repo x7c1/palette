@@ -208,7 +208,7 @@ INSERT OR IGNORE INTO priorities (id, name) VALUES (2, 'medium');
 INSERT OR IGNORE INTO priorities (id, name) VALUES (3, 'low');
 
 -- Worker roles
-INSERT OR IGNORE INTO worker_roles (id, name) VALUES (1, 'leader');
+INSERT OR IGNORE INTO worker_roles (id, name) VALUES (1, 'approver');
 INSERT OR IGNORE INTO worker_roles (id, name) VALUES (2, 'review_integrator');
 INSERT OR IGNORE INTO worker_roles (id, name) VALUES (3, 'member');
 

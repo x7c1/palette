@@ -12,7 +12,7 @@ An [Operator](operator/) tells Palette what to achieve — a [Task](task/). Pale
 
 Palette replaces the human-in-the-loop with a Supervisor-in-the-loop in two ways:
 
-1. **Supervised execution**: Instead of the Operator staying present to approve actions and make judgment calls, a Supervisor takes on that role. The [Permission Supervisor](worker/supervisor/permission-supervisor/) handles permission prompts from [Members](worker/member/) during execution, while the [Review Integrator](worker/review-integrator/) consolidates findings from multiple [Reviewers](worker/member/reviewer/) into a single verdict.
+1. **Supervised execution**: Instead of the Operator staying present to approve actions and make judgment calls, a Supervisor takes on that role. The [Approver](worker/supervisor/approver/) handles permission prompts from [Members](worker/member/) during execution, while the [Review Integrator](worker/review-integrator/) consolidates findings from multiple [Reviewers](worker/member/reviewer/) into a single verdict.
 2. **Automated review cycle**: Instead of the Operator reviewing work and requesting revisions, Reviewers review the [Crafter](worker/member/crafter/)'s work. The cycle of implementation and review repeats until quality criteria are met — all without human involvement.
 
 The Operator only intervenes when a Supervisor encounters a decision beyond its confidence — an [Escalation](escalation/).

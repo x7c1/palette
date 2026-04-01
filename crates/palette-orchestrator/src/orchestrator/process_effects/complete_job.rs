@@ -44,7 +44,7 @@ impl Orchestrator {
         let mut effects = Vec::new();
 
         // Destroy all supervisors for this task (e.g. review-integrate tasks
-        // may have both a PermissionSupervisor and a ReviewIntegrator)
+        // may have both an Approver and a ReviewIntegrator)
         if let Ok(sups) = self
             .interactor
             .data_store
@@ -241,10 +241,10 @@ impl Orchestrator {
                     }
                 }
             } else {
-                // Pure composite task (no job_type): spawn PermissionSupervisor
+                // Pure composite task (no job_type): spawn Approver
                 job_effects.push(RuleEffect::SpawnSupervisor {
                     task_id: task_id.clone(),
-                    role: WorkerRole::PermissionSupervisor,
+                    role: WorkerRole::Approver,
                 });
                 task_store.update_task_status(task_id, TaskStatus::InProgress)?;
             }

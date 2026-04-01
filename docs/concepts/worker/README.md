@@ -8,7 +8,7 @@ Worker is not a role — it describes the relationship to the Orchestrator. From
 
 ## Examples
 
-- A [Permission Supervisor](supervisor/permission-supervisor/) is a Worker that the Orchestrator spawns at the start of a [Task](../task/).
+- A [Approver](supervisor/approver/) is a Worker that the Orchestrator spawns at the start of a [Task](../task/).
 - A [Crafter](member/crafter/) is a Worker that the Orchestrator spawns when a Craft [Job](../job/) is ready.
 - A [Reviewer](member/reviewer/) is a Worker that the Orchestrator spawns when a Review Job is ready.
 - The Orchestrator checks whether all Workers are idle.

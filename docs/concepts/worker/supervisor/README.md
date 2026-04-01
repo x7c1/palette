@@ -4,7 +4,7 @@
 
 A Supervisor is a [Worker](../) that oversees [Members](../member/) on behalf of the [Operator](../../operator/). Supervisors make the runtime decisions that the Operator would otherwise need to make — approving permission prompts and raising [Escalations](../../escalation/) when a decision exceeds their confidence.
 
-[Permission Supervisor](permission-supervisor/) is the only Supervisor type. The [Review Integrator](../../review-integrator/) is not a Supervisor — it is a standalone Worker that reads review files and submits verdicts without receiving member events.
+[Approver](approver/) is the only Supervisor type. The [Review Integrator](../../review-integrator/) is not a Supervisor — it is a standalone Worker that reads review files and submits verdicts without receiving member events.
 
 ## Examples
 
@@ -23,4 +23,4 @@ A Supervisor is a [Worker](../) that oversees [Members](../member/) on behalf of
 - [Operator](../../operator/) — the Supervisor acts on behalf of the Operator
 - [Member](../member/) — the Worker that a Supervisor oversees
 - [Escalation](../../escalation/) — how the Supervisor reaches the Operator
-- [Permission Supervisor](permission-supervisor/) — the only kind of Supervisor
+- [Approver](approver/) — the only kind of Supervisor

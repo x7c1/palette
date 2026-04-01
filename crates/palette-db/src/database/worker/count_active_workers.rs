@@ -90,8 +90,8 @@ mod tests {
         insert_worker(&db, "member-1", WorkerRole::Member, WorkerStatus::Working);
         insert_worker(
             &db,
-            "supervisor-1",
-            WorkerRole::PermissionSupervisor,
+            "approver-1",
+            WorkerRole::Approver,
             WorkerStatus::Working,
         );
         insert_worker(

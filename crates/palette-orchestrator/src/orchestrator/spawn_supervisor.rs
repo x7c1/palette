@@ -32,9 +32,9 @@ impl Orchestrator {
 
         // Select Docker image and prompt based on role
         let (image, prompt_path) = match role {
-            WorkerRole::PermissionSupervisor => (
-                &self.docker_config.permission_supervisor_image,
-                &self.docker_config.permission_supervisor_prompt,
+            WorkerRole::Approver => (
+                &self.docker_config.approver_image,
+                &self.docker_config.approver_prompt,
             ),
             WorkerRole::ReviewIntegrator => (
                 &self.docker_config.review_integrator_image,

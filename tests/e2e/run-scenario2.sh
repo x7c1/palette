@@ -2,10 +2,10 @@
 # E2E Scenario 2: Dynamic Supervisor Spawn
 # Verify supervisors are dynamically spawned/destroyed per composite task.
 # Task tree:
-#   root (pure composite → Leader)
-#   ├── phase-a (pure composite → Leader)
+#   root (pure composite → Approver)
+#   ├── phase-a (pure composite → Approver)
 #   │   └── craft (leaf)
-#   └── phase-b (pure composite → Leader, depends_on: phase-a)
+#   └── phase-b (pure composite → Approver, depends_on: phase-a)
 #       └── craft (leaf)
 #
 # Exits with 0 on success, 1 on failure. Cleans up automatically.
@@ -27,13 +27,13 @@ trap '"$SCRIPT_DIR/stop-palette.sh"' EXIT
 # --- Helpers ---
 supervisor_count() {
   curl -sf "$PALETTE_URL/workers" 2>/dev/null \
-    | jq '[.[] | select(.role == "leader" or .role == "review_integrator")] | length' 2>/dev/null \
+    | jq '[.[] | select(.role == "approver" or .role == "review_integrator")] | length' 2>/dev/null \
     || echo 0
 }
 
 supervisor_task_ids() {
   curl -sf "$PALETTE_URL/workers" 2>/dev/null \
-    | jq -r '[.[] | select(.role == "leader" or .role == "review_integrator") | .task_id] | sort | join(", ")' 2>/dev/null \
+    | jq -r '[.[] | select(.role == "approver" or .role == "review_integrator") | .task_id] | sort | join(", ")' 2>/dev/null \
     || echo ""
 }
 

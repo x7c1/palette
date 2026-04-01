@@ -2,7 +2,7 @@ use super::super::*;
 use crate::models::QueuedMessage;
 
 impl Database {
-    /// Enqueue a message for a target (member or leader).
+    /// Enqueue a message for a target (member or supervisor).
     pub fn enqueue_message(
         &self,
         target_id: &WorkerId,

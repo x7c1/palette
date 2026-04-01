@@ -10,7 +10,7 @@ use palette_domain::workflow::WorkflowStatus;
 use palette_tmux::TmuxManager;
 
 /// Dynamic ReviewIntegrator lifecycle:
-/// - Craft InReview spawns PermissionSupervisor for review-integrate composite
+/// - Craft InReview spawns Approver for review-integrate composite
 /// - All reviews approved → ReviewIntegrator spawned → integrates → workflow complete
 #[tokio::test]
 async fn dynamic_review_integrator_lifecycle() {
@@ -62,7 +62,7 @@ task:
 
     wait().await;
 
-    // Phase 1: Only root PermissionSupervisor (craft composite doesn't get one)
+    // Phase 1: Only root Approver (craft composite doesn't get one)
     {
         let supervisors = state
             .interactor
@@ -80,7 +80,7 @@ task:
         );
     }
 
-    // Phase 2: Craft → InReview → should spawn PermissionSupervisor for review composite
+    // Phase 2: Craft → InReview → should spawn Approver for review composite
     let jobs = state
         .interactor
         .data_store
@@ -107,7 +107,7 @@ task:
     });
     wait().await;
 
-    // Verify: PermissionSupervisor spawned for review composite + review jobs created
+    // Verify: Approver spawned for review composite + review jobs created
     {
         let supervisors = state
             .interactor
@@ -117,7 +117,7 @@ task:
         assert_eq!(
             supervisors.len(),
             2,
-            "should have root PS + review PS, got: {:?}",
+            "should have root approver + review approver, got: {:?}",
             supervisors
                 .iter()
                 .map(|s| (&s.id, &s.task_id, &s.role))
@@ -129,7 +129,7 @@ task:
             .find_supervisor_for_task(&tid(wf_id, "ri-test/craft/review-integrate"))
             .unwrap()
             .expect("review composite supervisor should exist");
-        assert_eq!(review_sup.role, WorkerRole::PermissionSupervisor);
+        assert_eq!(review_sup.role, WorkerRole::Approver);
     }
 
     // review-1 and review-2 jobs should exist

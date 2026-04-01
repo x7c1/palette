@@ -31,7 +31,7 @@ impl WorkerId {
     /// The prefix is determined by the role (e.g., "supervisor-0-a3f2", "review-integrator-1-b7e1").
     pub fn next_supervisor(sequence: usize, role: super::WorkerRole) -> Self {
         let prefix = match role {
-            super::WorkerRole::PermissionSupervisor => "supervisor",
+            super::WorkerRole::Approver => "approver",
             super::WorkerRole::ReviewIntegrator => "review-integrator",
             super::WorkerRole::Member => "member",
         };

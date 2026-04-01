@@ -3,14 +3,14 @@ use serde::Deserialize;
 #[derive(Debug, Clone, Deserialize)]
 pub struct DockerConfig {
     pub palette_url: String,
-    #[serde(default = "default_permission_supervisor_image")]
-    pub permission_supervisor_image: String,
+    #[serde(default = "default_approver_image")]
+    pub approver_image: String,
     #[serde(default = "default_member_image")]
     pub member_image: String,
     #[serde(default = "default_settings_template")]
     pub settings_template: String,
-    #[serde(default = "default_permission_supervisor_prompt")]
-    pub permission_supervisor_prompt: String,
+    #[serde(default = "default_approver_prompt")]
+    pub approver_prompt: String,
     #[serde(default = "default_review_integrator_image")]
     pub review_integrator_image: String,
     #[serde(default = "default_review_integrator_prompt")]
@@ -28,7 +28,7 @@ fn default_max_workers() -> usize {
     50
 }
 
-fn default_permission_supervisor_image() -> String {
+fn default_approver_image() -> String {
     "palette-leader:latest".to_string()
 }
 
@@ -40,8 +40,8 @@ fn default_settings_template() -> String {
     "config/hooks/worker-settings.json".to_string()
 }
 
-fn default_permission_supervisor_prompt() -> String {
-    "prompts/permission-supervisor.md".to_string()
+fn default_approver_prompt() -> String {
+    "prompts/approver.md".to_string()
 }
 
 fn default_review_integrator_image() -> String {

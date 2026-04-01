@@ -59,21 +59,17 @@ mod tests {
     use palette_domain::worker::{ContainerId, WorkerRole, WorkerSessionId};
 
     #[test]
-    fn permission_supervisor_bypasses_permissions() {
+    fn approver_bypasses_permissions() {
         let cid = ContainerId::new("abc123");
         let cmd = DockerManager::claude_exec_command(
             &cid,
-            "/home/agent/prompts/permission-supervisor.md",
-            WorkerRole::PermissionSupervisor,
+            "/home/agent/prompts/approver.md",
+            WorkerRole::Approver,
             None,
         );
         assert!(cmd.contains("docker exec -it abc123 claude"));
         assert!(cmd.contains("--dangerously-skip-permissions"));
-        assert!(
-            cmd.contains(
-                "--append-system-prompt-file /home/agent/prompts/permission-supervisor.md"
-            )
-        );
+        assert!(cmd.contains("--append-system-prompt-file /home/agent/prompts/approver.md"));
         assert!(cmd.contains("--plugin-dir /home/agent/claude-code-plugin"));
     }
 
@@ -133,15 +129,10 @@ mod tests {
     }
 
     #[test]
-    fn resume_permission_supervisor_session() {
+    fn resume_approver_session() {
         let cid = ContainerId::new("abc123");
         let sid = WorkerSessionId::new("session-xyz");
-        let cmd = DockerManager::claude_resume_command(
-            &cid,
-            &sid,
-            WorkerRole::PermissionSupervisor,
-            None,
-        );
+        let cmd = DockerManager::claude_resume_command(&cid, &sid, WorkerRole::Approver, None);
         assert!(cmd.contains("--resume session-xyz"));
         assert!(cmd.contains("--dangerously-skip-permissions"));
     }

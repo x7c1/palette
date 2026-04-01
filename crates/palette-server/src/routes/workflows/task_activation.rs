@@ -61,7 +61,7 @@ pub(super) fn activate_ready_children(
             // Pure composite: spawn supervisor, then InProgress and recurse
             effects.push(RuleEffect::SpawnSupervisor {
                 task_id: task_id.clone(),
-                role: WorkerRole::PermissionSupervisor,
+                role: WorkerRole::Approver,
             });
             task_store
                 .update_task_status(task_id, TaskStatus::InProgress)

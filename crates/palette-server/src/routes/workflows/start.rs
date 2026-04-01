@@ -119,7 +119,7 @@ fn initialize_root(
 
     let mut effects = vec![RuleEffect::SpawnSupervisor {
         task_id: root.id.clone(),
-        role: palette_domain::worker::WorkerRole::PermissionSupervisor,
+        role: palette_domain::worker::WorkerRole::Approver,
     }];
 
     task_store

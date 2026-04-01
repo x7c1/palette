@@ -14,7 +14,7 @@ impl Database {
     /// Find all supervisors assigned to a specific task.
     pub fn find_supervisors_for_task(&self, task_id: &TaskId) -> crate::Result<Vec<WorkerState>> {
         let conn = lock(&self.conn)?;
-        let role_ps = lookup::worker_role_id(WorkerRole::PermissionSupervisor);
+        let role_ps = lookup::worker_role_id(WorkerRole::Approver);
         let role_ri = lookup::worker_role_id(WorkerRole::ReviewIntegrator);
         let sql =
             format!("SELECT {COLUMNS} FROM workers WHERE task_id = ?1 AND role_id IN (?2, ?3)");
@@ -38,19 +38,14 @@ mod tests {
     #[test]
     fn find_supervisor_for_task() {
         let db = test_db();
-        insert_test_worker(
-            &db,
-            "supervisor-1",
-            WorkerRole::PermissionSupervisor,
-            "wf-1",
-        );
+        insert_test_worker(&db, "approver-1", WorkerRole::Approver, "wf-1");
         insert_test_worker(&db, "member-1", WorkerRole::Member, "wf-1");
 
         let sup = db
-            .find_supervisor_for_task(&TaskId::parse("wf-1:supervisor-1").unwrap())
+            .find_supervisor_for_task(&TaskId::parse("wf-1:approver-1").unwrap())
             .unwrap()
             .unwrap();
-        assert_eq!(sup.id, WorkerId::parse("supervisor-1").unwrap());
+        assert_eq!(sup.id, WorkerId::parse("approver-1").unwrap());
 
         // Member should not be found
         assert!(

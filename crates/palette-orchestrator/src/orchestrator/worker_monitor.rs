@@ -202,7 +202,7 @@ impl Orchestrator {
         } else {
             // No session_id: start fresh with prompt file
             let prompt_file = if worker.role.is_supervisor() {
-                // Use leader prompt for recovery (the original prompt file path is not stored)
+                // Use supervisor prompt for recovery (the original prompt file path is not stored)
                 "/home/agent/prompt.md"
             } else {
                 "/home/agent/prompt.md"
@@ -489,10 +489,10 @@ mod tests {
             }),
             docker_config: crate::DockerConfig {
                 palette_url: String::new(),
-                permission_supervisor_image: String::new(),
+                approver_image: String::new(),
                 member_image: String::new(),
                 settings_template: String::new(),
-                permission_supervisor_prompt: String::new(),
+                approver_prompt: String::new(),
                 review_integrator_image: String::new(),
                 review_integrator_prompt: String::new(),
                 crafter_prompt: String::new(),
@@ -800,18 +800,10 @@ mod tests {
     #[test]
     fn deadlock_detected_when_all_slots_full_and_jobs_waiting() {
         // 3 workers (= max_workers), all idle, with an assignable job
-        let leader1 = make_worker(
-            "leader-1",
-            WorkerRole::PermissionSupervisor,
-            WorkerStatus::Idle,
-        );
-        let leader2 = make_worker(
-            "leader-2",
-            WorkerRole::PermissionSupervisor,
-            WorkerStatus::Idle,
-        );
+        let approver1 = make_worker("approver-1", WorkerRole::Approver, WorkerStatus::Idle);
+        let approver2 = make_worker("approver-2", WorkerRole::Approver, WorkerStatus::Idle);
         let member1 = make_worker("m-1", WorkerRole::Member, WorkerStatus::Idle);
-        let data_store = MockDataStore::with_workers(vec![leader1, leader2, member1]);
+        let data_store = MockDataStore::with_workers(vec![approver1, approver2, member1]);
         data_store
             .assignable_jobs
             .lock()
@@ -819,8 +811,8 @@ mod tests {
             .push(make_todo_job("R-1"));
 
         let container = MockContainerRuntime::with_running(&[
-            "container-leader-1",
-            "container-leader-2",
+            "container-approver-1",
+            "container-approver-2",
             "container-m-1",
         ]);
         let terminal = MockTerminalSession::new();
@@ -836,18 +828,10 @@ mod tests {
     #[test]
     fn deadlock_not_triggered_when_worker_is_making_progress() {
         // 3 workers (= max_workers), one is Working → no deadlock
-        let leader1 = make_worker(
-            "leader-1",
-            WorkerRole::PermissionSupervisor,
-            WorkerStatus::Idle,
-        );
-        let leader2 = make_worker(
-            "leader-2",
-            WorkerRole::PermissionSupervisor,
-            WorkerStatus::Idle,
-        );
+        let approver1 = make_worker("approver-1", WorkerRole::Approver, WorkerStatus::Idle);
+        let approver2 = make_worker("approver-2", WorkerRole::Approver, WorkerStatus::Idle);
         let member1 = make_worker("m-1", WorkerRole::Member, WorkerStatus::Working);
-        let data_store = MockDataStore::with_workers(vec![leader1, leader2, member1]);
+        let data_store = MockDataStore::with_workers(vec![approver1, approver2, member1]);
         data_store
             .assignable_jobs
             .lock()
@@ -855,8 +839,8 @@ mod tests {
             .push(make_todo_job("R-1"));
 
         let container = MockContainerRuntime::with_running(&[
-            "container-leader-1",
-            "container-leader-2",
+            "container-approver-1",
+            "container-approver-2",
             "container-m-1",
         ]);
         let terminal = MockTerminalSession::new();
@@ -872,13 +856,9 @@ mod tests {
     #[test]
     fn deadlock_not_triggered_when_slots_available() {
         // 2 workers but max_workers=3 → slot available
-        let leader1 = make_worker(
-            "leader-1",
-            WorkerRole::PermissionSupervisor,
-            WorkerStatus::Idle,
-        );
+        let approver1 = make_worker("approver-1", WorkerRole::Approver, WorkerStatus::Idle);
         let member1 = make_worker("m-1", WorkerRole::Member, WorkerStatus::Idle);
-        let data_store = MockDataStore::with_workers(vec![leader1, member1]);
+        let data_store = MockDataStore::with_workers(vec![approver1, member1]);
         data_store
             .assignable_jobs
             .lock()
@@ -886,7 +866,7 @@ mod tests {
             .push(make_todo_job("R-1"));
 
         let container =
-            MockContainerRuntime::with_running(&["container-leader-1", "container-m-1"]);
+            MockContainerRuntime::with_running(&["container-approver-1", "container-m-1"]);
         let terminal = MockTerminalSession::new();
 
         let orch = make_orchestrator(data_store, container, terminal);
