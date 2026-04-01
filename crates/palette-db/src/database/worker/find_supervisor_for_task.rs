@@ -19,12 +19,11 @@ impl Database {
         let sql =
             format!("SELECT {COLUMNS} FROM workers WHERE task_id = ?1 AND role_id IN (?2, ?3)");
         let mut stmt = conn.prepare(&sql)?;
-        let rows = stmt.query_map(params![task_id.as_ref(), role_ps, role_ri], read_worker_row)?;
-        let mut result = Vec::new();
-        for row in rows {
-            result.push(into_worker_state(row?)?);
-        }
-        Ok(result)
+        stmt.query_map(params![task_id.as_ref(), role_ps, role_ri], read_worker_row)?
+            .collect::<Result<Vec<_>, _>>()?
+            .into_iter()
+            .map(into_worker_state)
+            .collect()
     }
 }
 
