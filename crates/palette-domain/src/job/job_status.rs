@@ -78,13 +78,6 @@ impl From<ReviewStatus> for JobStatus {
     }
 }
 
-impl From<MechanizedStatus> for JobStatus {
-    fn from(s: MechanizedStatus) -> Self {
-        // Default to Orchestrator; callers should use the explicit variant
-        JobStatus::Orchestrator(s)
-    }
-}
-
 impl fmt::Display for JobStatus {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         fmt::Display::fmt(self.as_str(), f)
