@@ -2,7 +2,7 @@ mod activate_review;
 mod assign_new_job;
 mod complete_job;
 mod destroy_member;
-mod job_instruction;
+pub(crate) mod job_instruction;
 mod reactivate_member;
 mod review_verdict;
 

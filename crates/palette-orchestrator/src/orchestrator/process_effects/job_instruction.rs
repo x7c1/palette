@@ -12,7 +12,7 @@ const ARTIFACTS_MOUNT: &str = "/home/agent/artifacts";
 /// Format a job into an instruction message for a member.
 ///
 /// `round` is included for review jobs so the reviewer knows which round directory to use.
-pub(super) fn format_job_instruction(job: &Job, round: Option<u32>) -> String {
+pub(crate) fn format_job_instruction(job: &Job, round: Option<u32>) -> String {
     let mut msg = format!(
         "## Task: {}\n\nID: {}\nPlan: {}/{}\n",
         job.title, job.id, PLAN_DIR_MOUNT, job.plan_path
@@ -95,7 +95,7 @@ impl Orchestrator {
     }
 
     /// Get the current review round for a review job.
-    pub(super) fn current_review_round(&self, job: &Job) -> crate::Result<u32> {
+    pub(crate) fn current_review_round(&self, job: &Job) -> crate::Result<u32> {
         let submissions = self.interactor.data_store.get_review_submissions(&job.id)?;
         Ok(submissions.len() as u32 + 1)
     }

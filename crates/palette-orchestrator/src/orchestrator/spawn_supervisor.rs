@@ -86,7 +86,36 @@ impl Orchestrator {
             role = %role,
             "spawned dynamic supervisor"
         );
+
+        // ReviewIntegrator needs job instruction so it knows which job to submit
+        // and where to find review.md files.
+        if role == WorkerRole::ReviewIntegrator {
+            self.enqueue_ri_instruction(task_id, &sup_id)?;
+        }
+
         Ok(sup_id)
+    }
+
+    /// Enqueue a job instruction message for a ReviewIntegrator.
+    /// The RI needs the review-integrate job ID and round number to submit its verdict.
+    fn enqueue_ri_instruction(&self, task_id: &TaskId, ri_id: &WorkerId) -> crate::Result<()> {
+        let Some(job) = self.interactor.data_store.get_job_by_task_id(task_id)? else {
+            tracing::warn!(task_id = %task_id, "no job found for review-integrate task");
+            return Ok(());
+        };
+        let round = self.current_review_round(&job)?;
+        let instruction =
+            super::process_effects::job_instruction::format_job_instruction(&job, Some(round));
+        self.interactor
+            .data_store
+            .enqueue_message(ri_id, &instruction)?;
+        tracing::info!(
+            ri_id = %ri_id,
+            job_id = %job.id,
+            round = round,
+            "enqueued job instruction for ReviewIntegrator"
+        );
+        Ok(())
     }
 
     /// Resolve the artifacts mount for a ReviewIntegrator supervisor.
