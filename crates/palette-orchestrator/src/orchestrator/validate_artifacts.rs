@@ -324,8 +324,7 @@ impl Orchestrator {
         task_id: &TaskId,
     ) -> Option<Job> {
         let mut current_id = task_store.get_task(task_id)?.parent_id?;
-        // Walk up at most 5 levels to avoid infinite loops on malformed trees.
-        for _ in 0..5 {
+        loop {
             let job = self
                 .interactor
                 .data_store
@@ -336,6 +335,5 @@ impl Orchestrator {
             }
             current_id = task_store.get_task(&current_id)?.parent_id?;
         }
-        None
     }
 }

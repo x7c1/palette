@@ -39,7 +39,7 @@ pub async fn handle_update_job(
                 hint: "status".into(),
                 reason: e.reason_key(),
             }],
-            }
+        }
     })?;
 
     let job = state
