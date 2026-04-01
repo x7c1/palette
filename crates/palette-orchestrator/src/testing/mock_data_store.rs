@@ -121,6 +121,9 @@ impl DataStore for MockDataStore {
     fn find_supervisor_for_task(&self, _: &TaskId) -> Result<Option<WorkerState>, BoxErr> {
         unimplemented!()
     }
+    fn find_supervisors_for_task(&self, _: &TaskId) -> Result<Vec<WorkerState>, BoxErr> {
+        unimplemented!()
+    }
     fn create_job(&self, _: &CreateJobRequest) -> Result<Job, BoxErr> {
         unimplemented!()
     }

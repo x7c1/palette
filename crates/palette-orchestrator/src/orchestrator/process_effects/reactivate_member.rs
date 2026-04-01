@@ -33,8 +33,10 @@ impl Orchestrator {
         let reactivated_status = match job.job_type {
             palette_domain::job::JobType::Craft => CraftTransition::RequestChanges.to_job_status(),
             palette_domain::job::JobType::Review => ReviewTransition::Restart.to_job_status(),
-            // Orchestrator/Operator jobs don't have members to reactivate
-            palette_domain::job::JobType::Orchestrator | palette_domain::job::JobType::Operator => {
+            // ReviewIntegrate/Orchestrator/Operator jobs don't have members to reactivate
+            palette_domain::job::JobType::ReviewIntegrate
+            | palette_domain::job::JobType::Orchestrator
+            | palette_domain::job::JobType::Operator => {
                 return Ok(());
             }
         };

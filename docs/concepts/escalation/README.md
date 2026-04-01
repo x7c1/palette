@@ -7,12 +7,12 @@ An Escalation occurs when the system requires the [Operator](../operator/)'s jud
 An Escalation can be triggered in two ways:
 
 - **Automatic**: The [Orchestrator](../orchestrator/) raises an Escalation when a predefined rule is violated — for example, when the review cycle exceeds the maximum number of rounds.
-- **Voluntary**: A [Supervisor](../worker/supervisor/) raises an Escalation when it encounters a decision beyond its confidence — for example, when a [Leader](../worker/supervisor/leader/) cannot determine whether to accept or reject review feedback that conflicts with the Task's goals.
+- **Voluntary**: A [Supervisor](../worker/supervisor/) raises an Escalation when it encounters a decision beyond its confidence — for example, when a [Permission Supervisor](../worker/supervisor/permission-supervisor/) cannot determine whether a permission request is safe to approve.
 
 ## Examples
 
 - The review cycle for a Craft Job has gone through three rounds without approval. The Orchestrator raises an Escalation to notify the Operator.
-- The Leader is unsure whether a permission request from a [Crafter](../worker/member/crafter/) is safe. The Leader raises an Escalation rather than guessing.
+- The Permission Supervisor is unsure whether a permission request from a [Crafter](../worker/member/crafter/) is safe. The Permission Supervisor raises an Escalation rather than guessing.
 - The Operator responds to an Escalation, and the suspended Task resumes.
 
 ## Collocations

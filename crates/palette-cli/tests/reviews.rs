@@ -180,7 +180,7 @@ task:
       plan_path: test/craft
       children:
         - key: review-integrate
-          type: review
+          type: review_integrate
           children:
             - key: review-a
               type: review
@@ -268,7 +268,7 @@ async fn integrator_submit_rejected_when_children_incomplete() {
         .assign_job(
             &integrate_job.id,
             &palette_domain::worker::WorkerId::parse("integrator-1").unwrap(),
-            JobType::Review,
+            JobType::ReviewIntegrate,
         )
         .unwrap();
 

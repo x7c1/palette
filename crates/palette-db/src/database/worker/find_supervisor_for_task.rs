@@ -6,22 +6,25 @@ use palette_domain::worker::*;
 use rusqlite::params;
 
 impl Database {
-    /// Find the supervisor assigned to a specific task.
+    /// Find the first supervisor assigned to a specific task.
     pub fn find_supervisor_for_task(&self, task_id: &TaskId) -> crate::Result<Option<WorkerState>> {
+        Ok(self.find_supervisors_for_task(task_id)?.into_iter().next())
+    }
+
+    /// Find all supervisors assigned to a specific task.
+    pub fn find_supervisors_for_task(&self, task_id: &TaskId) -> crate::Result<Vec<WorkerState>> {
         let conn = lock(&self.conn)?;
-        let role_leader = lookup::worker_role_id(WorkerRole::Leader);
+        let role_ps = lookup::worker_role_id(WorkerRole::PermissionSupervisor);
         let role_ri = lookup::worker_role_id(WorkerRole::ReviewIntegrator);
         let sql =
             format!("SELECT {COLUMNS} FROM workers WHERE task_id = ?1 AND role_id IN (?2, ?3)");
         let mut stmt = conn.prepare(&sql)?;
-        stmt.query_map(
-            params![task_id.as_ref(), role_leader, role_ri],
-            read_worker_row,
-        )?
-        .next()
-        .transpose()?
-        .map(into_worker_state)
-        .transpose()
+        let rows = stmt.query_map(params![task_id.as_ref(), role_ps, role_ri], read_worker_row)?;
+        let mut result = Vec::new();
+        for row in rows {
+            result.push(into_worker_state(row?)?);
+        }
+        Ok(result)
     }
 }
 
@@ -35,14 +38,19 @@ mod tests {
     #[test]
     fn find_supervisor_for_task() {
         let db = test_db();
-        insert_test_worker(&db, "leader-1", WorkerRole::Leader, "wf-1");
+        insert_test_worker(
+            &db,
+            "supervisor-1",
+            WorkerRole::PermissionSupervisor,
+            "wf-1",
+        );
         insert_test_worker(&db, "member-1", WorkerRole::Member, "wf-1");
 
         let sup = db
-            .find_supervisor_for_task(&TaskId::parse("wf-1:leader-1").unwrap())
+            .find_supervisor_for_task(&TaskId::parse("wf-1:supervisor-1").unwrap())
             .unwrap()
             .unwrap();
-        assert_eq!(sup.id, WorkerId::parse("leader-1").unwrap());
+        assert_eq!(sup.id, WorkerId::parse("supervisor-1").unwrap());
 
         // Member should not be found
         assert!(

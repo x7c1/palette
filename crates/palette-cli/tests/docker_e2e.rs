@@ -123,8 +123,8 @@ fn launch() -> Result<()> {
 
     let leader_id = docker.create_container(
         "test-leader",
-        &config.docker.leader_image,
-        WorkerRole::Leader,
+        &config.docker.permission_supervisor_image,
+        WorkerRole::PermissionSupervisor,
         SESSION_NAME,
         None,
         None,
@@ -207,7 +207,7 @@ fn launch() -> Result<()> {
     // --- Copy prompt files ---
     palette_docker::DockerManager::copy_file_to_container(
         &leader_id,
-        &workspace_path(&config.docker.leader_prompt),
+        &workspace_path(&config.docker.permission_supervisor_prompt),
         "/home/agent/prompt.md",
     )?;
     palette_docker::DockerManager::copy_file_to_container(
@@ -217,10 +217,10 @@ fn launch() -> Result<()> {
     )?;
 
     // Verify prompt files exist
-    let leader_prompt = docker_exec("palette-test-leader", "cat /home/agent/prompt.md")?;
+    let supervisor_prompt = docker_exec("palette-test-leader", "cat /home/agent/prompt.md")?;
     assert!(
-        leader_prompt.contains("Leader Agent"),
-        "leader prompt should contain 'Leader Agent'"
+        supervisor_prompt.contains("Permission Supervisor"),
+        "supervisor prompt should contain 'Permission Supervisor'"
     );
 
     let crafter_prompt = docker_exec("palette-test-member-a", "cat /home/agent/prompt.md")?;
@@ -233,7 +233,7 @@ fn launch() -> Result<()> {
     let leader_cmd = palette_docker::DockerManager::claude_exec_command(
         &leader_id,
         "/home/agent/prompt.md",
-        WorkerRole::Leader,
+        WorkerRole::PermissionSupervisor,
         None,
     );
     let leader_target = format!("{SESSION_NAME}:leader");
@@ -335,8 +335,8 @@ fn claude_responds() -> Result<()> {
 
     let container_id = docker.create_container(
         "test-claude",
-        &config.docker.leader_image,
-        WorkerRole::Leader,
+        &config.docker.permission_supervisor_image,
+        WorkerRole::PermissionSupervisor,
         SESSION_NAME,
         None,
         None,
@@ -353,7 +353,7 @@ fn claude_responds() -> Result<()> {
     )?;
     palette_docker::DockerManager::copy_file_to_container(
         &container_id,
-        &workspace_path(&config.docker.leader_prompt),
+        &workspace_path(&config.docker.permission_supervisor_prompt),
         "/home/agent/prompt.md",
     )?;
 
@@ -362,7 +362,7 @@ fn claude_responds() -> Result<()> {
     let cmd = palette_docker::DockerManager::claude_exec_command(
         &container_id,
         "/home/agent/prompt.md",
-        WorkerRole::Leader,
+        WorkerRole::PermissionSupervisor,
         None,
     );
     let _ = Command::new("tmux")

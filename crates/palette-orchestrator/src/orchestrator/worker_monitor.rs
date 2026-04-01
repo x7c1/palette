@@ -489,10 +489,10 @@ mod tests {
             }),
             docker_config: crate::DockerConfig {
                 palette_url: String::new(),
-                leader_image: String::new(),
+                permission_supervisor_image: String::new(),
                 member_image: String::new(),
                 settings_template: String::new(),
-                leader_prompt: String::new(),
+                permission_supervisor_prompt: String::new(),
                 review_integrator_image: String::new(),
                 review_integrator_prompt: String::new(),
                 crafter_prompt: String::new(),
@@ -800,8 +800,16 @@ mod tests {
     #[test]
     fn deadlock_detected_when_all_slots_full_and_jobs_waiting() {
         // 3 workers (= max_workers), all idle, with an assignable job
-        let leader1 = make_worker("leader-1", WorkerRole::Leader, WorkerStatus::Idle);
-        let leader2 = make_worker("leader-2", WorkerRole::Leader, WorkerStatus::Idle);
+        let leader1 = make_worker(
+            "leader-1",
+            WorkerRole::PermissionSupervisor,
+            WorkerStatus::Idle,
+        );
+        let leader2 = make_worker(
+            "leader-2",
+            WorkerRole::PermissionSupervisor,
+            WorkerStatus::Idle,
+        );
         let member1 = make_worker("m-1", WorkerRole::Member, WorkerStatus::Idle);
         let data_store = MockDataStore::with_workers(vec![leader1, leader2, member1]);
         data_store
@@ -828,8 +836,16 @@ mod tests {
     #[test]
     fn deadlock_not_triggered_when_worker_is_making_progress() {
         // 3 workers (= max_workers), one is Working → no deadlock
-        let leader1 = make_worker("leader-1", WorkerRole::Leader, WorkerStatus::Idle);
-        let leader2 = make_worker("leader-2", WorkerRole::Leader, WorkerStatus::Idle);
+        let leader1 = make_worker(
+            "leader-1",
+            WorkerRole::PermissionSupervisor,
+            WorkerStatus::Idle,
+        );
+        let leader2 = make_worker(
+            "leader-2",
+            WorkerRole::PermissionSupervisor,
+            WorkerStatus::Idle,
+        );
         let member1 = make_worker("m-1", WorkerRole::Member, WorkerStatus::Working);
         let data_store = MockDataStore::with_workers(vec![leader1, leader2, member1]);
         data_store
@@ -856,7 +872,11 @@ mod tests {
     #[test]
     fn deadlock_not_triggered_when_slots_available() {
         // 2 workers but max_workers=3 → slot available
-        let leader1 = make_worker("leader-1", WorkerRole::Leader, WorkerStatus::Idle);
+        let leader1 = make_worker(
+            "leader-1",
+            WorkerRole::PermissionSupervisor,
+            WorkerStatus::Idle,
+        );
         let member1 = make_worker("m-1", WorkerRole::Member, WorkerStatus::Idle);
         let data_store = MockDataStore::with_workers(vec![leader1, member1]);
         data_store

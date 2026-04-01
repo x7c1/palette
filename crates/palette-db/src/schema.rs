@@ -150,6 +150,7 @@ INSERT OR IGNORE INTO job_types (id, name) VALUES (1, 'craft');
 INSERT OR IGNORE INTO job_types (id, name) VALUES (2, 'review');
 INSERT OR IGNORE INTO job_types (id, name) VALUES (3, 'orchestrator');
 INSERT OR IGNORE INTO job_types (id, name) VALUES (4, 'operator');
+INSERT OR IGNORE INTO job_types (id, name) VALUES (5, 'review_integrate');
 
 -- Craft statuses (job_type_id = 1)
 INSERT OR IGNORE INTO job_statuses (id, job_type_id, name) VALUES (1, 1, 'todo');
@@ -164,6 +165,13 @@ INSERT OR IGNORE INTO job_statuses (id, job_type_id, name) VALUES (7, 2, 'in_pro
 INSERT OR IGNORE INTO job_statuses (id, job_type_id, name) VALUES (8, 2, 'changes_requested');
 INSERT OR IGNORE INTO job_statuses (id, job_type_id, name) VALUES (9, 2, 'done');
 INSERT OR IGNORE INTO job_statuses (id, job_type_id, name) VALUES (10, 2, 'escalated');
+
+-- ReviewIntegrate statuses (job_type_id = 5, same lifecycle as review)
+INSERT OR IGNORE INTO job_statuses (id, job_type_id, name) VALUES (19, 5, 'todo');
+INSERT OR IGNORE INTO job_statuses (id, job_type_id, name) VALUES (20, 5, 'in_progress');
+INSERT OR IGNORE INTO job_statuses (id, job_type_id, name) VALUES (21, 5, 'changes_requested');
+INSERT OR IGNORE INTO job_statuses (id, job_type_id, name) VALUES (22, 5, 'done');
+INSERT OR IGNORE INTO job_statuses (id, job_type_id, name) VALUES (23, 5, 'escalated');
 
 -- Orchestrator statuses (job_type_id = 3)
 INSERT OR IGNORE INTO job_statuses (id, job_type_id, name) VALUES (11, 3, 'todo');

@@ -9,7 +9,7 @@ A Blueprint is a static definition of *what* should be done. A Workflow is the r
 ## Examples
 
 - The Operator starts a Workflow from a Blueprint for "add feature X." The Workflow tracks which Tasks are complete, which are in progress, and which are waiting.
-- A Workflow is suspended when a [Leader](../worker/supervisor/leader/) raises an [Escalation](../escalation/). The Operator responds, and the Workflow resumes.
+- A Workflow is suspended when a [Permission Supervisor](../worker/supervisor/permission-supervisor/) raises an [Escalation](../escalation/). The Operator responds, and the Workflow resumes.
 - The Operator suspends a Workflow to edit the [Blueprint](../blueprint/), applies the changes, and resumes the Workflow. New [Tasks](../task/) added to the Blueprint are picked up on resume.
 - A Workflow is complete when all Tasks in the Blueprint's Task tree are done.
 

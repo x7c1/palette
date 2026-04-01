@@ -4,6 +4,8 @@ use std::fmt;
 pub enum JobType {
     Craft,
     Review,
+    /// A composite review task that integrates child review results.
+    ReviewIntegrate,
     /// Orchestrator executes a command on the host (no container spawned).
     Orchestrator,
     /// Operator (human) decision point (no container spawned).
@@ -15,6 +17,7 @@ impl JobType {
         match self {
             JobType::Craft => "craft",
             JobType::Review => "review",
+            JobType::ReviewIntegrate => "review_integrate",
             JobType::Orchestrator => "orchestrator",
             JobType::Operator => "operator",
         }

@@ -24,6 +24,7 @@ impl JobId {
         let prefix = match job_type {
             JobType::Craft => 'C',
             JobType::Review => 'R',
+            JobType::ReviewIntegrate => 'I',
             JobType::Orchestrator => 'O',
             JobType::Operator => 'P',
         };

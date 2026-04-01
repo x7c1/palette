@@ -27,7 +27,7 @@ impl JobStatus {
     pub fn todo(job_type: JobType) -> Self {
         match job_type {
             JobType::Craft => JobStatus::Craft(CraftStatus::Todo),
-            JobType::Review => JobStatus::Review(ReviewStatus::Todo),
+            JobType::Review | JobType::ReviewIntegrate => JobStatus::Review(ReviewStatus::Todo),
             JobType::Orchestrator => JobStatus::Orchestrator(MechanizedStatus::Todo),
             JobType::Operator => JobStatus::Operator(MechanizedStatus::Todo),
         }
@@ -37,7 +37,9 @@ impl JobStatus {
     pub fn in_progress(job_type: JobType) -> Self {
         match job_type {
             JobType::Craft => JobStatus::Craft(CraftStatus::InProgress),
-            JobType::Review => JobStatus::Review(ReviewStatus::InProgress),
+            JobType::Review | JobType::ReviewIntegrate => {
+                JobStatus::Review(ReviewStatus::InProgress)
+            }
             JobType::Orchestrator => JobStatus::Orchestrator(MechanizedStatus::InProgress),
             JobType::Operator => JobStatus::Operator(MechanizedStatus::InProgress),
         }

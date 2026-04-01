@@ -11,10 +11,10 @@ use std::sync::Arc;
 fn test_docker_config() -> DockerConfig {
     DockerConfig {
         palette_url: "http://127.0.0.1:0".to_string(),
-        leader_image: "palette-leader:latest".to_string(),
+        permission_supervisor_image: "palette-leader:latest".to_string(),
         member_image: "palette-member:latest".to_string(),
         settings_template: "config/hooks/worker-settings.json".to_string(),
-        leader_prompt: "prompts/leader.md".to_string(),
+        permission_supervisor_prompt: "prompts/permission-supervisor.md".to_string(),
         review_integrator_image: "palette-leader:latest".to_string(),
         review_integrator_prompt: "prompts/review-integrator.md".to_string(),
         crafter_prompt: "prompts/crafter.md".to_string(),

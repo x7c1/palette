@@ -2,12 +2,9 @@
 
 ## Definition
 
-A Supervisor is a [Worker](../) that oversees [Members](../member/) on behalf of the [Operator](../../operator/). Supervisors make the runtime decisions that the Operator would otherwise need to make — approving actions, evaluating results, and raising [Escalations](../../escalation/) when a decision exceeds their confidence.
+A Supervisor is a [Worker](../) that oversees [Members](../member/) on behalf of the [Operator](../../operator/). Supervisors make the runtime decisions that the Operator would otherwise need to make — approving permission prompts and raising [Escalations](../../escalation/) when a decision exceeds their confidence.
 
-There are two kinds of Supervisors:
-
-- [Leader](leader/) — oversees [Crafters](../member/crafter/) and coordinates the overall [Task](../../task/).
-- [Review Integrator](review-integrator/) — consolidates findings from multiple [Reviewers](../member/reviewer/) into a single verdict.
+[Permission Supervisor](permission-supervisor/) is the only Supervisor type. The [Review Integrator](../../review-integrator/) is not a Supervisor — it is a standalone Worker that reads review files and submits verdicts without receiving member events.
 
 ## Examples
 
@@ -26,5 +23,4 @@ There are two kinds of Supervisors:
 - [Operator](../../operator/) — the Supervisor acts on behalf of the Operator
 - [Member](../member/) — the Worker that a Supervisor oversees
 - [Escalation](../../escalation/) — how the Supervisor reaches the Operator
-- [Leader](leader/) — a kind of Supervisor
-- [Review Integrator](review-integrator/) — a kind of Supervisor
+- [Permission Supervisor](permission-supervisor/) — the only kind of Supervisor
