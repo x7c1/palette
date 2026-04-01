@@ -13,8 +13,9 @@
 //!   inspection.
 
 use anyhow::{Context as _, Result};
+use palette_docker::CallbackNetworkMode;
 use palette_domain::worker::WorkerRole;
-use palette_orchestrator::DockerConfig;
+use palette_orchestrator::{CallbackNetwork, DockerConfig};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -31,6 +32,14 @@ impl TestConfig {
         let content = std::fs::read_to_string(path)?;
         let config: Self = toml::from_str(&content)?;
         Ok(config)
+    }
+}
+
+fn callback_network_mode(network: &CallbackNetwork) -> CallbackNetworkMode {
+    match network {
+        CallbackNetwork::Auto => CallbackNetworkMode::Auto,
+        CallbackNetwork::Host => CallbackNetworkMode::Host,
+        CallbackNetwork::Bridge => CallbackNetworkMode::Bridge,
     }
 }
 
@@ -119,7 +128,10 @@ fn launch() -> Result<()> {
 
     // --- Setup Docker containers ---
     let config = TestConfig::load(&workspace_path("config/palette.toml"))?;
-    let docker = palette_docker::DockerManager::new(config.docker.palette_url.clone());
+    let docker = palette_docker::DockerManager::new(
+        config.docker.worker_callback_url.clone(),
+        callback_network_mode(&config.docker.callback_network),
+    );
 
     let leader_id = docker.create_container(
         "test-leader",
@@ -174,11 +186,11 @@ fn launch() -> Result<()> {
     )?;
     let expected_leader_stop = format!(
         "{}/hooks/stop?worker_id=leader-1",
-        config.docker.palette_url
+        config.docker.worker_callback_url
     );
     let expected_leader_notif = format!(
         "{}/hooks/notification?worker_id=leader-1",
-        config.docker.palette_url
+        config.docker.worker_callback_url
     );
     assert!(
         leader_settings.contains(&expected_leader_stop),
@@ -195,7 +207,7 @@ fn launch() -> Result<()> {
     )?;
     let expected_member_stop = format!(
         "{}/hooks/stop?worker_id=member-a",
-        config.docker.palette_url
+        config.docker.worker_callback_url
     );
     assert!(
         member_settings.contains(&expected_member_stop),
@@ -327,7 +339,10 @@ fn claude_responds() -> Result<()> {
 
     // --- Setup container ---
     let config = TestConfig::load(&workspace_path("config/palette.toml"))?;
-    let docker = palette_docker::DockerManager::new(config.docker.palette_url.clone());
+    let docker = palette_docker::DockerManager::new(
+        config.docker.worker_callback_url.clone(),
+        callback_network_mode(&config.docker.callback_network),
+    );
 
     let container_id = docker.create_container(
         "test-claude",

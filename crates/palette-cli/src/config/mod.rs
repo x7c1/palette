@@ -8,6 +8,9 @@ use palette_orchestrator::DockerConfig;
 use serde::Deserialize;
 use std::path::Path;
 
+#[cfg(test)]
+use palette_orchestrator::CallbackNetwork;
+
 #[derive(Debug, Deserialize)]
 pub struct Config {
     pub port: u16,
@@ -51,14 +54,15 @@ port = 7100
 session_name = "palette"
 
 [docker]
-palette_url = "http://127.0.0.1:7100"
+worker_callback_url = "http://127.0.0.1:7100"
 "#;
         let config: Config = toml::from_str(toml).unwrap();
         assert_eq!(config.port, 7100);
         assert_eq!(config.tmux.session_name, "palette");
         assert_eq!(config.db_path, "data/palette.db");
         assert_eq!(config.rules.max_review_rounds, 5);
-        assert_eq!(config.docker.palette_url, "http://127.0.0.1:7100");
+        assert_eq!(config.docker.worker_callback_url, "http://127.0.0.1:7100");
+        assert_eq!(config.docker.callback_network, CallbackNetwork::Auto);
         assert_eq!(config.docker.leader_image, "palette-leader:latest");
         assert_eq!(config.docker.member_image, "palette-member:latest");
         assert_eq!(
@@ -87,7 +91,7 @@ session_name = "palette"
     }
 
     #[test]
-    fn missing_palette_url_is_error() {
+    fn missing_worker_callback_url_is_error() {
         let toml = r#"
 port = 7100
 
@@ -98,7 +102,10 @@ session_name = "palette"
 leader_image = "custom:latest"
 "#;
         let result: Result<Config, _> = toml::from_str(toml);
-        assert!(result.is_err(), "missing palette_url should be an error");
+        assert!(
+            result.is_err(),
+            "missing worker_callback_url should be an error"
+        );
     }
 
     #[test]
@@ -115,11 +122,28 @@ session_name = "palette"
 max_review_rounds = 3
 
 [docker]
-palette_url = "http://localhost:8080"
+worker_callback_url = "http://localhost:8080"
+callback_network = "bridge"
 "#;
         let config: Config = toml::from_str(toml).unwrap();
         assert_eq!(config.db_path, "custom/path.db");
         assert_eq!(config.rules.max_review_rounds, 3);
-        assert_eq!(config.docker.palette_url, "http://localhost:8080");
+        assert_eq!(config.docker.worker_callback_url, "http://localhost:8080");
+        assert_eq!(config.docker.callback_network, CallbackNetwork::Bridge);
+    }
+
+    #[test]
+    fn legacy_palette_url_is_still_accepted() {
+        let toml = r#"
+port = 7100
+
+[tmux]
+session_name = "palette"
+
+[docker]
+palette_url = "http://127.0.0.1:7100"
+"#;
+        let config: Config = toml::from_str(toml).unwrap();
+        assert_eq!(config.docker.worker_callback_url, "http://127.0.0.1:7100");
     }
 }

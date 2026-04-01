@@ -2,7 +2,7 @@ use super::StubContainerRuntime;
 use palette_db::Database;
 use palette_domain::terminal::TerminalSessionName;
 use palette_fs::FsBlueprintReader;
-use palette_orchestrator::{DockerConfig, Orchestrator};
+use palette_orchestrator::{CallbackNetwork, DockerConfig, Orchestrator};
 use palette_server::{AppState, create_router};
 use palette_tmux::TmuxManager;
 use palette_usecase::Interactor;
@@ -10,7 +10,8 @@ use std::sync::Arc;
 
 fn test_docker_config() -> DockerConfig {
     DockerConfig {
-        palette_url: "http://127.0.0.1:0".to_string(),
+        worker_callback_url: "http://127.0.0.1:0".to_string(),
+        callback_network: CallbackNetwork::Host,
         leader_image: "palette-leader:latest".to_string(),
         member_image: "palette-member:latest".to_string(),
         settings_template: "config/hooks/worker-settings.json".to_string(),

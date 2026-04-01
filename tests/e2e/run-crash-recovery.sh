@@ -17,6 +17,10 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
 cd "$ROOT_DIR"
 
+if [[ "$(uname -s)" == "Darwin" && "${PALETTE_E2E_PREFLIGHT:-1}" == "1" ]]; then
+  "$SCRIPT_DIR/check-macos-preflight.sh"
+fi
+
 PALETTE_URL="http://127.0.0.1:7100"
 BLUEPRINT_PATH="$ROOT_DIR/tests/e2e/fixtures/dynamic-supervisor.yaml"
 LOG_FILE="data/palette.log"

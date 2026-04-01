@@ -20,18 +20,21 @@ impl DockerManager {
                 "{{PALETTE_SESSION_START_URL}}",
                 &format!(
                     "{}/hooks/session-start?worker_id={worker_id}",
-                    self.palette_url
+                    self.worker_callback_url
                 ),
             )
             .replace(
                 "{{PALETTE_STOP_URL}}",
-                &format!("{}/hooks/stop?worker_id={worker_id}", self.palette_url),
+                &format!(
+                    "{}/hooks/stop?worker_id={worker_id}",
+                    self.worker_callback_url
+                ),
             )
             .replace(
                 "{{PALETTE_NOTIFICATION_URL}}",
                 &format!(
                     "{}/hooks/notification?worker_id={worker_id}",
-                    self.palette_url
+                    self.worker_callback_url
                 ),
             );
 
@@ -63,7 +66,7 @@ impl DockerManager {
 
 #[cfg(test)]
 mod tests {
-    use super::super::DockerManager;
+    use super::super::{CallbackNetworkMode, DockerManager};
 
     #[test]
     fn settings_template_expansion() {
@@ -81,31 +84,37 @@ mod tests {
         )
         .unwrap();
 
-        let palette_url = "http://localhost:9000";
-        let mgr = DockerManager::new(palette_url.to_string());
+        let callback_url = "http://localhost:9000";
+        let mgr = DockerManager::new(callback_url.to_string(), CallbackNetworkMode::Host);
 
         // We can't test docker exec, but we can test the template expansion logic
         let template = std::fs::read_to_string(&template_path).unwrap();
         let settings = template
             .replace(
                 "{{PALETTE_SESSION_START_URL}}",
-                &format!("{}/hooks/session-start?worker_id=worker-a", mgr.palette_url),
+                &format!(
+                    "{}/hooks/session-start?worker_id=worker-a",
+                    mgr.worker_callback_url
+                ),
             )
             .replace(
                 "{{PALETTE_STOP_URL}}",
-                &format!("{}/hooks/stop?worker_id=worker-a", mgr.palette_url),
+                &format!("{}/hooks/stop?worker_id=worker-a", mgr.worker_callback_url),
             )
             .replace(
                 "{{PALETTE_NOTIFICATION_URL}}",
-                &format!("{}/hooks/notification?worker_id=worker-a", mgr.palette_url),
+                &format!(
+                    "{}/hooks/notification?worker_id=worker-a",
+                    mgr.worker_callback_url
+                ),
             );
 
         assert!(settings.contains(&format!(
-            "{palette_url}/hooks/session-start?worker_id=worker-a"
+            "{callback_url}/hooks/session-start?worker_id=worker-a"
         )));
-        assert!(settings.contains(&format!("{palette_url}/hooks/stop?worker_id=worker-a")));
+        assert!(settings.contains(&format!("{callback_url}/hooks/stop?worker_id=worker-a")));
         assert!(settings.contains(&format!(
-            "{palette_url}/hooks/notification?worker_id=worker-a"
+            "{callback_url}/hooks/notification?worker_id=worker-a"
         )));
     }
 }

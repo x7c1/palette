@@ -2,7 +2,10 @@ use serde::Deserialize;
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct DockerConfig {
-    pub palette_url: String,
+    #[serde(alias = "palette_url")]
+    pub worker_callback_url: String,
+    #[serde(default = "default_callback_network")]
+    pub callback_network: CallbackNetwork,
     #[serde(default = "default_leader_image")]
     pub leader_image: String,
     #[serde(default = "default_member_image")]
@@ -22,6 +25,18 @@ pub struct DockerConfig {
     pub reviewer_prompt: String,
     #[serde(default = "default_max_workers")]
     pub max_workers: usize,
+}
+
+#[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum CallbackNetwork {
+    Auto,
+    Host,
+    Bridge,
+}
+
+fn default_callback_network() -> CallbackNetwork {
+    CallbackNetwork::Auto
 }
 
 fn default_max_workers() -> usize {

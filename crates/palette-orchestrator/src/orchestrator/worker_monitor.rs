@@ -486,7 +486,8 @@ mod tests {
                 blueprint: Box::new(MockBlueprintReader),
             }),
             docker_config: crate::DockerConfig {
-                palette_url: String::new(),
+                worker_callback_url: String::new(),
+                callback_network: crate::CallbackNetwork::Auto,
                 leader_image: String::new(),
                 member_image: String::new(),
                 settings_template: String::new(),

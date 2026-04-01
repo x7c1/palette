@@ -42,16 +42,17 @@ impl DockerManager {
             "create".to_string(),
             "--name".to_string(),
             format!("palette-{name}"),
-            // Use host network so 127.0.0.1 reaches the palette server
-            // (Claude Code blocks HTTP hooks to private IPs but allows loopback)
-            "--network".to_string(),
-            "host".to_string(),
             // Interactive TTY for Claude Code
             "-it".to_string(),
             // Pass Palette API URL as environment variable
             "-e".to_string(),
-            format!("PALETTE_URL={}", self.palette_url),
+            format!("PALETTE_URL={}", self.worker_callback_url),
         ];
+
+        if self.callback_network_mode == super::CallbackNetworkMode::Host {
+            args.push("--network".to_string());
+            args.push("host".to_string());
+        }
 
         for label in &labels {
             args.push("--label".to_string());
