@@ -35,7 +35,7 @@ pub async fn handle_submit_review(
             id: review_job_id.to_string(),
         })?;
 
-    if job.job_type != JobType::Review {
+    if !matches!(job.job_type, JobType::Review | JobType::ReviewIntegrate) {
         return Err(Error::BadRequest {
             code: ErrorCode::NotReviewJob,
             errors: vec![InputError {
@@ -46,25 +46,29 @@ pub async fn handle_submit_review(
         });
     }
 
-    // Determine if this is an integrator submission (composite review task with children)
+    // Determine if this is an integrator submission (ReviewIntegrate job)
     // or a regular reviewer submission. Must happen before submit_review so we can
     // reject integrator submissions when child reviewers are incomplete (preventing
     // the submission from being recorded and avoiding round number drift).
-    let child_tasks = match state.interactor.data_store.get_task_state(&job.task_id) {
-        Ok(Some(ts)) => match state.interactor.create_task_store(&ts.workflow_id) {
-            Ok(task_store) => task_store.get_child_tasks(&job.task_id),
+    let is_integrator = job.job_type == JobType::ReviewIntegrate;
+    let child_tasks = if is_integrator {
+        match state.interactor.data_store.get_task_state(&job.task_id) {
+            Ok(Some(ts)) => match state.interactor.create_task_store(&ts.workflow_id) {
+                Ok(task_store) => task_store.get_child_tasks(&job.task_id),
+                Err(e) => {
+                    tracing::error!(error = %e, "failed to create task store for integrator check");
+                    vec![]
+                }
+            },
+            Ok(None) => vec![],
             Err(e) => {
-                tracing::error!(error = %e, "failed to create task store for integrator check");
+                tracing::error!(error = %e, "failed to get task state for integrator check");
                 vec![]
             }
-        },
-        Ok(None) => vec![],
-        Err(e) => {
-            tracing::error!(error = %e, "failed to get task state for integrator check");
-            vec![]
         }
+    } else {
+        vec![]
     };
-    let is_integrator = !child_tasks.is_empty();
 
     // For integrator submissions, verify all child reviewer jobs are Done.
     // This prevents the integrator from finalizing before all reviews are in,

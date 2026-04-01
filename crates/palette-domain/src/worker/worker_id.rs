@@ -2,7 +2,7 @@ use std::fmt;
 
 const MAX_LEN: usize = 256;
 
-/// Worker identifier for both leaders and members (e.g., "leader-1", "member-0-a3f2").
+/// Worker identifier (e.g., "supervisor-1-a3f2", "member-0-a3f2").
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct WorkerId(String);
 
@@ -28,10 +28,10 @@ impl WorkerId {
     }
 
     /// Generate a unique supervisor ID with a sequence number and random suffix.
-    /// The prefix is determined by the role (e.g., "leader-0-a3f2", "review-integrator-1-b7e1").
+    /// The prefix is determined by the role (e.g., "supervisor-0-a3f2", "review-integrator-1-b7e1").
     pub fn next_supervisor(sequence: usize, role: super::WorkerRole) -> Self {
         let prefix = match role {
-            super::WorkerRole::Leader => "leader",
+            super::WorkerRole::Approver => "approver",
             super::WorkerRole::ReviewIntegrator => "review-integrator",
             super::WorkerRole::Member => "member",
         };

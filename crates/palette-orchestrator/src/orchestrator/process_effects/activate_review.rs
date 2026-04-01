@@ -57,16 +57,16 @@ impl Orchestrator {
                 tracing::info!(task_id = %task_id, status = ?new_status, "review task activated");
 
                 if *new_status == TaskStatus::Ready {
-                    // If this is a review-integrate composite (has children + job_type: review),
-                    // spawn a ReviewIntegrator supervisor before activation
-                    let grandchildren = task_store.get_child_tasks(task_id);
-                    if !grandchildren.is_empty()
-                        && let Some(child_task) = task_store.get_task(task_id)
-                        && child_task.job_type == Some(JobType::Review)
+                    // If this is a review-integrate composite, spawn a
+                    // Approver to handle reviewer permission prompts.
+                    // The ReviewIntegrator is spawned later when all reviewers complete.
+                    if let Some(child_task) = task_store.get_task(task_id)
+                        && child_task.job_type == Some(JobType::ReviewIntegrate)
                     {
+                        tracing::info!(task_id = %task_id, "spawning Approver for review-integrate composite");
                         job_effects.push(RuleEffect::SpawnSupervisor {
                             task_id: task_id.clone(),
-                            role: WorkerRole::ReviewIntegrator,
+                            role: WorkerRole::Approver,
                         });
                     }
 

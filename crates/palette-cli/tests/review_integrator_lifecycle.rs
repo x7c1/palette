@@ -10,8 +10,8 @@ use palette_domain::workflow::WorkflowStatus;
 use palette_tmux::TmuxManager;
 
 /// Dynamic ReviewIntegrator lifecycle:
-/// - Craft InReview spawns ReviewIntegrator for review-integrate composite
-/// - All reviews approved → ReviewIntegrator destroyed → workflow complete
+/// - Craft InReview spawns Approver for review-integrate composite
+/// - All reviews approved → ReviewIntegrator spawned → integrates → workflow complete
 #[tokio::test]
 async fn dynamic_review_integrator_lifecycle() {
     let yaml = r#"
@@ -23,7 +23,7 @@ task:
       plan_path: test/craft
       children:
         - key: review-integrate
-          type: review
+          type: review_integrate
           children:
             - key: review-1
               type: review
@@ -62,7 +62,7 @@ task:
 
     wait().await;
 
-    // Phase 1: Only root supervisor (craft composite doesn't get one)
+    // Phase 1: Only root Approver (craft composite doesn't get one)
     {
         let supervisors = state
             .interactor
@@ -80,7 +80,7 @@ task:
         );
     }
 
-    // Phase 2: Craft → InReview → should spawn ReviewIntegrator
+    // Phase 2: Craft → InReview → should spawn Approver for review composite
     let jobs = state
         .interactor
         .data_store
@@ -107,7 +107,7 @@ task:
     });
     wait().await;
 
-    // Verify: ReviewIntegrator spawned + review jobs created
+    // Verify: Approver spawned for review composite + review jobs created
     {
         let supervisors = state
             .interactor
@@ -117,19 +117,19 @@ task:
         assert_eq!(
             supervisors.len(),
             2,
-            "should have root Leader + ReviewIntegrator, got: {:?}",
+            "should have root approver + review approver, got: {:?}",
             supervisors
                 .iter()
                 .map(|s| (&s.id, &s.task_id, &s.role))
                 .collect::<Vec<_>>()
         );
-        let ri_sup = state
+        let review_sup = state
             .interactor
             .data_store
             .find_supervisor_for_task(&tid(wf_id, "ri-test/craft/review-integrate"))
             .unwrap()
-            .expect("ReviewIntegrator supervisor should exist");
-        assert_eq!(ri_sup.role, WorkerRole::ReviewIntegrator);
+            .expect("review composite supervisor should exist");
+        assert_eq!(review_sup.role, WorkerRole::Approver);
     }
 
     // review-1 and review-2 jobs should exist
@@ -142,7 +142,6 @@ task:
         .iter()
         .filter(|j| j.job_type == JobType::Review)
         .collect();
-    // review-integrate has a Review Job + review-1 + review-2
     assert!(
         review_jobs.len() >= 2,
         "at least review-1 and review-2 jobs should exist, got {} review jobs",
@@ -217,8 +216,29 @@ task:
     let _ = state.event_tx.send(ServerEvent::ProcessEffects { effects });
     wait().await;
 
-    // Simulate ReviewIntegrator's integration decision:
-    // In production, the RI agent aggregates child reviews and submits a verdict.
+    // Phase 4: All reviewers done → ReviewIntegrator should be spawned
+    {
+        let supervisors = state
+            .interactor
+            .data_store
+            .list_supervisors(&workflow_id)
+            .unwrap();
+        let ri_sups: Vec<_> = supervisors
+            .iter()
+            .filter(|s| s.role == WorkerRole::ReviewIntegrator)
+            .collect();
+        assert_eq!(
+            ri_sups.len(),
+            1,
+            "ReviewIntegrator should be spawned after all reviewers complete, got supervisors: {:?}",
+            supervisors
+                .iter()
+                .map(|s| (&s.id, &s.task_id, &s.role))
+                .collect::<Vec<_>>()
+        );
+    }
+
+    // Phase 5: Simulate ReviewIntegrator's integration decision
     let ri_job = all_jobs
         .iter()
         .find(|j| j.task_id.as_ref() == tid(wf_id, "ri-test/craft/review-integrate").to_string())
@@ -226,7 +246,7 @@ task:
     state
         .interactor
         .data_store
-        .assign_job(&ri_job.id, &wid("ri-agent"), JobType::Review)
+        .assign_job(&ri_job.id, &wid("ri-agent"), JobType::ReviewIntegrate)
         .unwrap();
     let sub = state
         .interactor

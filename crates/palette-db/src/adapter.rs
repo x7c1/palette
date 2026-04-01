@@ -105,6 +105,13 @@ impl DataStore for Database {
         Ok(Database::find_supervisor_for_task(self, task_id)?)
     }
 
+    fn find_supervisors_for_task(
+        &self,
+        task_id: &TaskId,
+    ) -> Result<Vec<WorkerState>, Box<dyn std::error::Error + Send + Sync>> {
+        Ok(Database::find_supervisors_for_task(self, task_id)?)
+    }
+
     // -- Job --
 
     fn create_job(

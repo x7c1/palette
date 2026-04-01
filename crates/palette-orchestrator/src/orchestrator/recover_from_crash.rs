@@ -117,10 +117,10 @@ mod tests {
             }),
             docker_config: crate::DockerConfig {
                 palette_url: String::new(),
-                leader_image: String::new(),
+                approver_image: String::new(),
                 member_image: String::new(),
                 settings_template: String::new(),
-                leader_prompt: String::new(),
+                approver_prompt: String::new(),
                 review_integrator_image: String::new(),
                 review_integrator_prompt: String::new(),
                 crafter_prompt: String::new(),

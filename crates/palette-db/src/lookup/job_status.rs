@@ -17,7 +17,9 @@ pub fn job_status_id(status: JobStatus) -> i64 {
 pub fn job_status_from_id(id: i64, job_type: JobType) -> Result<JobStatus, String> {
     match job_type {
         JobType::Craft => craft_status_from_id(id).map(JobStatus::Craft),
-        JobType::Review => review_status_from_id(id).map(JobStatus::Review),
+        JobType::Review | JobType::ReviewIntegrate => {
+            review_status_from_id(id).map(JobStatus::Review)
+        }
         JobType::Orchestrator => mechanized_status_from_id(id).map(JobStatus::Orchestrator),
         JobType::Operator => mechanized_status_from_id(id).map(JobStatus::Operator),
     }

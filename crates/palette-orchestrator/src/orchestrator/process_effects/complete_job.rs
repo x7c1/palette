@@ -43,11 +43,18 @@ impl Orchestrator {
 
         let mut effects = Vec::new();
 
-        // Destroy supervisor for this task if it had one
-        if let Ok(Some(sup)) = self.interactor.data_store.find_supervisor_for_task(task_id) {
-            effects.push(RuleEffect::DestroySupervisor {
-                supervisor_id: sup.id.clone(),
-            });
+        // Destroy all supervisors for this task (e.g. review-integrate tasks
+        // may have both an Approver and a ReviewIntegrator)
+        if let Ok(sups) = self
+            .interactor
+            .data_store
+            .find_supervisors_for_task(task_id)
+        {
+            for sup in sups {
+                effects.push(RuleEffect::DestroySupervisor {
+                    supervisor_id: sup.id.clone(),
+                });
+            }
         }
 
         let cascade = self.cascade_task_effects(task_id, &task_store)?;
@@ -110,23 +117,43 @@ impl Orchestrator {
                             .is_none_or(|j| j.status.is_done());
 
                         if !own_job_done {
-                            tracing::info!(
-                                task_id = %task_id,
-                                "all children completed but own job not done; deferring task completion"
-                            );
+                            // For review-integrate tasks: all child reviewers are done.
+                            // Spawn the ReviewIntegrator to read review.md files and
+                            // write integrated-review.md.
+                            if let Some(task) = task_store.get_task(task_id)
+                                && task.job_type == Some(JobType::ReviewIntegrate)
+                            {
+                                tracing::info!(
+                                    task_id = %task_id,
+                                    "all child reviewers completed; spawning ReviewIntegrator"
+                                );
+                                job_effects.push(RuleEffect::SpawnSupervisor {
+                                    task_id: task_id.clone(),
+                                    role: WorkerRole::ReviewIntegrator,
+                                });
+                            } else {
+                                tracing::info!(
+                                    task_id = %task_id,
+                                    "all children completed but own job not done; deferring task completion"
+                                );
+                            }
                             continue;
                         }
 
                         task_store.update_task_status(task_id, *new_status)?;
                         tracing::info!(task_id = %task_id, status = ?new_status, "task status cascaded");
 
-                        // Destroy dynamic supervisor if this composite task had one
-                        if let Ok(Some(sup)) =
-                            self.interactor.data_store.find_supervisor_for_task(task_id)
+                        // Destroy all supervisors for this composite task
+                        if let Ok(sups) = self
+                            .interactor
+                            .data_store
+                            .find_supervisors_for_task(task_id)
                         {
-                            job_effects.push(RuleEffect::DestroySupervisor {
-                                supervisor_id: sup.id.clone(),
-                            });
+                            for sup in sups {
+                                job_effects.push(RuleEffect::DestroySupervisor {
+                                    supervisor_id: sup.id.clone(),
+                                });
+                            }
                         }
 
                         // Check workflow completion
@@ -186,32 +213,38 @@ impl Orchestrator {
         } else {
             let mut job_effects = Vec::new();
 
-            // If composite task has a job_type, create the job.
-            // Craft composites: create job + member, do NOT resolve children (activated on InReview).
-            // Review composites: create job (for integrator verdict anchor) but do NOT
-            // assign a member. The ReviewIntegrator supervisor handles integration.
             if let Some(task) = task_store.get_task(task_id)
-                && task.job_type.is_some()
+                && let Some(job_type) = task.job_type
             {
                 task_store.update_task_status(task_id, TaskStatus::InProgress)?;
                 let effects = self.create_job_for_ready_task(&task)?;
 
-                if task.job_type == Some(JobType::Craft) {
-                    job_effects.extend(effects);
-                    return Ok((vec![], job_effects));
+                match job_type {
+                    // Craft composites: create job + member, do NOT resolve children
+                    // (activated later on InReview).
+                    JobType::Craft => {
+                        job_effects.extend(effects);
+                        return Ok((vec![], job_effects));
+                    }
+                    // ReviewIntegrate composites: create job (verdict anchor) but do NOT
+                    // assign a member. The ReviewIntegrator is spawned after all child
+                    // reviewers complete.
+                    JobType::ReviewIntegrate => {
+                        let filtered: Vec<_> = effects
+                            .into_iter()
+                            .filter(|e| !matches!(e, RuleEffect::AssignNewJob { .. }))
+                            .collect();
+                        job_effects.extend(filtered);
+                    }
+                    _ => {
+                        job_effects.extend(effects);
+                    }
                 }
-                // Review composite: job is created but AssignNewJob effect is filtered
-                // out — no member should be spawned for this job.
-                let filtered: Vec<_> = effects
-                    .into_iter()
-                    .filter(|e| !matches!(e, RuleEffect::AssignNewJob { .. }))
-                    .collect();
-                job_effects.extend(filtered);
             } else {
-                // Pure composite task (no job_type): spawn Leader supervisor
+                // Pure composite task (no job_type): spawn Approver
                 job_effects.push(RuleEffect::SpawnSupervisor {
                     task_id: task_id.clone(),
-                    role: WorkerRole::Leader,
+                    role: WorkerRole::Approver,
                 });
                 task_store.update_task_status(task_id, TaskStatus::InProgress)?;
             }

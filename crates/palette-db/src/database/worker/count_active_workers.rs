@@ -88,7 +88,12 @@ mod tests {
         let db = test_db();
 
         insert_worker(&db, "member-1", WorkerRole::Member, WorkerStatus::Working);
-        insert_worker(&db, "leader-1", WorkerRole::Leader, WorkerStatus::Working);
+        insert_worker(
+            &db,
+            "approver-1",
+            WorkerRole::Approver,
+            WorkerStatus::Working,
+        );
         insert_worker(
             &db,
             "review-integrator-1",

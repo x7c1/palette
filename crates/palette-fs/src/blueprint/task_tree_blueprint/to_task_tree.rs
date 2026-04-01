@@ -161,8 +161,12 @@ fn check_craft_has_review(node: &TaskNode) -> Option<BlueprintError> {
         return None;
     }
     let has_review = node.children.iter().any(|c| {
-        c.job_type
-            .is_some_and(|jt| matches!(JobType::from(jt), JobType::Review))
+        c.job_type.is_some_and(|jt| {
+            matches!(
+                JobType::from(jt),
+                JobType::Review | JobType::ReviewIntegrate
+            )
+        })
     });
     if has_review {
         None

@@ -42,7 +42,7 @@ impl Orchestrator {
             .map_err(|e| crate::Error::External(Box::new(e)))?;
         let plan_dir_mount = PlanDirMount {
             host_path: plan_dir_abs.to_string_lossy().to_string(),
-            read_only: job_type == JobType::Review,
+            read_only: matches!(job_type, JobType::Review | JobType::ReviewIntegrate),
         };
 
         let container_id = self.interactor.container.create_container(
@@ -65,8 +65,8 @@ impl Orchestrator {
         let prompt_path = match job_type {
             JobType::Craft => &self.docker_config.crafter_prompt,
             JobType::Review => &self.docker_config.reviewer_prompt,
-            // Orchestrator and Operator don't spawn members
-            JobType::Orchestrator | JobType::Operator => {
+            // ReviewIntegrate, Orchestrator, and Operator don't spawn members
+            JobType::ReviewIntegrate | JobType::Orchestrator | JobType::Operator => {
                 unreachable!("mechanized job types do not spawn members")
             }
         };

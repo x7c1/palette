@@ -93,6 +93,11 @@ pub trait DataStore: Send + Sync {
         task_id: &TaskId,
     ) -> Result<Option<WorkerState>, Box<dyn std::error::Error + Send + Sync>>;
 
+    fn find_supervisors_for_task(
+        &self,
+        task_id: &TaskId,
+    ) -> Result<Vec<WorkerState>, Box<dyn std::error::Error + Send + Sync>>;
+
     // -- Job --
 
     fn create_job(

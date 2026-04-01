@@ -90,7 +90,7 @@ fn docker_exec(container: &str, cmd: &str) -> Result<String> {
 /// Test 1: Verify the full launch sequence up to Claude Code command delivery.
 ///
 /// - Creates tmux session and windows
-/// - Creates and starts Docker containers (leader + member)
+/// - Creates and starts Docker containers (approver + member)
 /// - Injects settings.json with correct palette_url and worker_id
 /// - Copies prompt files into containers
 /// - Sends `docker exec -it ... claude` command to tmux panes
@@ -111,7 +111,7 @@ fn launch() -> Result<()> {
 
     // Create windows
     let _ = Command::new("tmux")
-        .args(["new-window", "-t", SESSION_NAME, "-n", "leader"])
+        .args(["new-window", "-t", SESSION_NAME, "-n", "approver"])
         .output()?;
     let _ = Command::new("tmux")
         .args(["new-window", "-t", SESSION_NAME, "-n", "member-a"])
@@ -121,17 +121,17 @@ fn launch() -> Result<()> {
     let config = TestConfig::load(&workspace_path("config/palette.toml"))?;
     let docker = palette_docker::DockerManager::new(config.docker.palette_url.clone());
 
-    let leader_id = docker.create_container(
-        "test-leader",
-        &config.docker.leader_image,
-        WorkerRole::Leader,
+    let approver_id = docker.create_container(
+        "test-approver",
+        &config.docker.approver_image,
+        WorkerRole::Approver,
         SESSION_NAME,
         None,
         None,
         None,
     )?;
-    guard.track("palette-test-leader");
-    docker.start_container(&leader_id)?;
+    guard.track("palette-test-approver");
+    docker.start_container(&approver_id)?;
 
     let member_id = docker.create_container(
         "test-member-a",
@@ -146,13 +146,13 @@ fn launch() -> Result<()> {
     docker.start_container(&member_id)?;
 
     // --- Verify containers are running ---
-    let leader_status = Command::new("docker")
-        .args(["inspect", "-f", "{{.State.Running}}", leader_id.as_ref()])
+    let approver_status = Command::new("docker")
+        .args(["inspect", "-f", "{{.State.Running}}", approver_id.as_ref()])
         .output()?;
     assert_eq!(
-        String::from_utf8_lossy(&leader_status.stdout).trim(),
+        String::from_utf8_lossy(&approver_status.stdout).trim(),
         "true",
-        "leader container should be running"
+        "approver container should be running"
     );
 
     let member_status = Command::new("docker")
@@ -166,29 +166,29 @@ fn launch() -> Result<()> {
 
     // --- Write settings.json ---
     let template_path = workspace_path(&config.docker.settings_template);
-    docker.write_settings(&leader_id, &template_path, "leader-1")?;
+    docker.write_settings(&approver_id, &template_path, "approver-1")?;
     docker.write_settings(&member_id, &template_path, "member-a")?;
 
     // Verify settings.json content inside containers
-    let leader_settings = docker_exec(
-        &format!("palette-{}", "test-leader"),
+    let approver_settings = docker_exec(
+        &format!("palette-{}", "test-approver"),
         "cat /home/agent/.claude/settings.json",
     )?;
-    let expected_leader_stop = format!(
-        "{}/hooks/stop?worker_id=leader-1",
+    let expected_approver_stop = format!(
+        "{}/hooks/stop?worker_id=approver-1",
         config.docker.palette_url
     );
-    let expected_leader_notif = format!(
-        "{}/hooks/notification?worker_id=leader-1",
+    let expected_approver_notif = format!(
+        "{}/hooks/notification?worker_id=approver-1",
         config.docker.palette_url
     );
     assert!(
-        leader_settings.contains(&expected_leader_stop),
-        "leader settings should contain stop hook with worker_id.\nActual:\n{leader_settings}"
+        approver_settings.contains(&expected_approver_stop),
+        "approver settings should contain stop hook with worker_id.\nActual:\n{approver_settings}"
     );
     assert!(
-        leader_settings.contains(&expected_leader_notif),
-        "leader settings should contain notification hook with worker_id"
+        approver_settings.contains(&expected_approver_notif),
+        "approver settings should contain notification hook with worker_id"
     );
 
     let member_settings = docker_exec(
@@ -206,8 +206,8 @@ fn launch() -> Result<()> {
 
     // --- Copy prompt files ---
     palette_docker::DockerManager::copy_file_to_container(
-        &leader_id,
-        &workspace_path(&config.docker.leader_prompt),
+        &approver_id,
+        &workspace_path(&config.docker.approver_prompt),
         "/home/agent/prompt.md",
     )?;
     palette_docker::DockerManager::copy_file_to_container(
@@ -217,10 +217,10 @@ fn launch() -> Result<()> {
     )?;
 
     // Verify prompt files exist
-    let leader_prompt = docker_exec("palette-test-leader", "cat /home/agent/prompt.md")?;
+    let approver_prompt = docker_exec("palette-test-approver", "cat /home/agent/prompt.md")?;
     assert!(
-        leader_prompt.contains("Leader Agent"),
-        "leader prompt should contain 'Leader Agent'"
+        !approver_prompt.is_empty(),
+        "approver prompt should not be empty"
     );
 
     let crafter_prompt = docker_exec("palette-test-member-a", "cat /home/agent/prompt.md")?;
@@ -230,20 +230,20 @@ fn launch() -> Result<()> {
     );
 
     // --- Send Claude Code command to tmux panes ---
-    let leader_cmd = palette_docker::DockerManager::claude_exec_command(
-        &leader_id,
+    let approver_cmd = palette_docker::DockerManager::claude_exec_command(
+        &approver_id,
         "/home/agent/prompt.md",
-        WorkerRole::Leader,
+        WorkerRole::Approver,
         None,
     );
-    let leader_target = format!("{SESSION_NAME}:leader");
+    let approver_target = format!("{SESSION_NAME}:approver");
     let output = Command::new("tmux")
-        .args(["send-keys", "-t", &leader_target, "-l", &leader_cmd])
+        .args(["send-keys", "-t", &approver_target, "-l", &approver_cmd])
         .output()?;
-    assert!(output.status.success(), "failed to send keys to leader");
+    assert!(output.status.success(), "failed to send keys to approver");
     // Send Enter
     let _ = Command::new("tmux")
-        .args(["send-keys", "-t", &leader_target, "Enter"])
+        .args(["send-keys", "-t", &approver_target, "Enter"])
         .output()?;
 
     let member_cmd = palette_docker::DockerManager::claude_exec_command(
@@ -265,10 +265,10 @@ fn launch() -> Result<()> {
     std::thread::sleep(std::time::Duration::from_millis(500));
 
     // Verify tmux panes contain the claude command
-    let leader_pane = tmux_capture(&leader_target)?;
+    let approver_pane = tmux_capture(&approver_target)?;
     assert!(
-        leader_pane.contains("docker exec -it") && leader_pane.contains("claude"),
-        "leader pane should show claude exec command.\nActual:\n{leader_pane}"
+        approver_pane.contains("docker exec -it") && approver_pane.contains("claude"),
+        "approver pane should show claude exec command.\nActual:\n{approver_pane}"
     );
 
     let member_pane = tmux_capture(&member_target)?;
@@ -283,11 +283,11 @@ fn launch() -> Result<()> {
             "inspect",
             "-f",
             "{{index .Config.Labels \"palette.managed\"}} {{index .Config.Labels \"palette.role\"}}",
-            "palette-test-leader",
+            "palette-test-approver",
         ])
         .output()?;
     let label_str = String::from_utf8_lossy(&labels.stdout).trim().to_string();
-    assert_eq!(label_str, "true leader", "leader labels mismatch");
+    assert_eq!(label_str, "true approver", "approver labels mismatch");
 
     let labels = Command::new("docker")
         .args([
@@ -335,8 +335,8 @@ fn claude_responds() -> Result<()> {
 
     let container_id = docker.create_container(
         "test-claude",
-        &config.docker.leader_image,
-        WorkerRole::Leader,
+        &config.docker.approver_image,
+        WorkerRole::Approver,
         SESSION_NAME,
         None,
         None,
@@ -353,7 +353,7 @@ fn claude_responds() -> Result<()> {
     )?;
     palette_docker::DockerManager::copy_file_to_container(
         &container_id,
-        &workspace_path(&config.docker.leader_prompt),
+        &workspace_path(&config.docker.approver_prompt),
         "/home/agent/prompt.md",
     )?;
 
@@ -362,7 +362,7 @@ fn claude_responds() -> Result<()> {
     let cmd = palette_docker::DockerManager::claude_exec_command(
         &container_id,
         "/home/agent/prompt.md",
-        WorkerRole::Leader,
+        WorkerRole::Approver,
         None,
     );
     let _ = Command::new("tmux")

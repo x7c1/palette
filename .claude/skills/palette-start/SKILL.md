@@ -19,7 +19,7 @@ Start Palette for local development and E2E testing. This launches the HTTP serv
 
 ## Notes
 
-- `cargo run` starts the server (port 7100), orchestrator, and bootstraps supervisor containers (leader + review integrator) via Docker
+- `cargo run` starts the server (port 7100), orchestrator, and bootstraps supervisor containers (approver + review integrator) via Docker
 - Configuration is in `config/palette.toml`
 - The working directory must be the Palette repository root
 - `data/palette.pid` is used by `palette-stop` to shut down the process

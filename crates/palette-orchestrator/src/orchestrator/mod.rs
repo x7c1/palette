@@ -4,7 +4,7 @@ mod deliver_queued_messages;
 mod deliver_to_all_idle;
 mod handle_event;
 mod orchestrator_task;
-mod process_effects;
+pub(crate) mod process_effects;
 mod recover_from_crash;
 mod resume_booting_watchers;
 mod shutdown;

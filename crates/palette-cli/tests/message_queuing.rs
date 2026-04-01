@@ -8,9 +8,9 @@ use palette_tmux::TmuxManager;
 use serde_json::json;
 
 /// Multiple review members stop while review integrator is working.
-/// Event notifications are queued and delivered one at a time on each leader stop.
+/// Event notifications are queued and delivered one at a time on each supervisor stop.
 #[tokio::test]
-async fn message_queuing_to_leader() {
+async fn message_queuing_to_supervisor() {
     let (session, _guard) = test_session_name_with_guard("scenario3");
     let tmux = TmuxManager::new(session.clone());
     tmux.create_session(&session).unwrap();

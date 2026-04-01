@@ -12,7 +12,7 @@ const ARTIFACTS_MOUNT: &str = "/home/agent/artifacts";
 /// Format a job into an instruction message for a member.
 ///
 /// `round` is included for review jobs so the reviewer knows which round directory to use.
-pub(super) fn format_job_instruction(job: &Job, round: Option<u32>) -> String {
+pub(crate) fn format_job_instruction(job: &Job, round: Option<u32>) -> String {
     let mut msg = format!(
         "## Task: {}\n\nID: {}\nPlan: {}/{}\n",
         job.title, job.id, PLAN_DIR_MOUNT, job.plan_path
@@ -50,8 +50,10 @@ impl Orchestrator {
                 };
                 (task_state.workflow_id, job.id.clone())
             }
-            // Orchestrator/Operator jobs don't have artifacts mounts
-            JobType::Orchestrator | JobType::Operator => return Ok(None),
+            // ReviewIntegrate/Orchestrator/Operator jobs don't have member artifacts mounts
+            JobType::ReviewIntegrate | JobType::Orchestrator | JobType::Operator => {
+                return Ok(None);
+            }
             JobType::Review => {
                 let Some(task_state) = self.interactor.data_store.get_task_state(&job.task_id)?
                 else {
@@ -93,7 +95,7 @@ impl Orchestrator {
     }
 
     /// Get the current review round for a review job.
-    pub(super) fn current_review_round(&self, job: &Job) -> crate::Result<u32> {
+    pub(crate) fn current_review_round(&self, job: &Job) -> crate::Result<u32> {
         let submissions = self.interactor.data_store.get_review_submissions(&job.id)?;
         Ok(submissions.len() as u32 + 1)
     }
@@ -104,8 +106,8 @@ impl Orchestrator {
     /// Review jobs share the parent craft job's workspace as read-only.
     pub(super) fn resolve_workspace(&self, job: &Job) -> crate::Result<Option<WorkspaceVolume>> {
         match job.job_type {
-            // Orchestrator/Operator jobs don't have workspaces
-            JobType::Orchestrator | JobType::Operator => Ok(None),
+            // ReviewIntegrate/Orchestrator/Operator jobs don't have workspaces
+            JobType::ReviewIntegrate | JobType::Orchestrator | JobType::Operator => Ok(None),
             JobType::Craft => {
                 let Some(ref repo) = job.repository else {
                     return Ok(None);

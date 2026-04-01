@@ -18,7 +18,7 @@ impl DockerManager {
             .map(|d| format!(" --workdir {d}"))
             .unwrap_or_default();
         let plugin_flag = " --plugin-dir /home/agent/claude-code-plugin";
-        if role.is_supervisor() {
+        if role.skip_permissions() {
             format!(
                 "docker exec -it{wd} {cid} claude --dangerously-skip-permissions --append-system-prompt-file {prompt_file}{plugin_flag}"
             )
@@ -43,7 +43,7 @@ impl DockerManager {
             .map(|d| format!(" --workdir {d}"))
             .unwrap_or_default();
         let plugin_flag = " --plugin-dir /home/agent/claude-code-plugin";
-        if role.is_supervisor() {
+        if role.skip_permissions() {
             format!(
                 "docker exec -it{wd} {cid} claude --resume {sid} --dangerously-skip-permissions{plugin_flag}"
             )
@@ -59,17 +59,17 @@ mod tests {
     use palette_domain::worker::{ContainerId, WorkerRole, WorkerSessionId};
 
     #[test]
-    fn leader_bypasses_permissions() {
+    fn approver_bypasses_permissions() {
         let cid = ContainerId::new("abc123");
         let cmd = DockerManager::claude_exec_command(
             &cid,
-            "/home/agent/prompts/leader.md",
-            WorkerRole::Leader,
+            "/home/agent/prompts/approver.md",
+            WorkerRole::Approver,
             None,
         );
         assert!(cmd.contains("docker exec -it abc123 claude"));
         assert!(cmd.contains("--dangerously-skip-permissions"));
-        assert!(cmd.contains("--append-system-prompt-file /home/agent/prompts/leader.md"));
+        assert!(cmd.contains("--append-system-prompt-file /home/agent/prompts/approver.md"));
         assert!(cmd.contains("--plugin-dir /home/agent/claude-code-plugin"));
     }
 
@@ -129,10 +129,10 @@ mod tests {
     }
 
     #[test]
-    fn resume_leader_session() {
+    fn resume_approver_session() {
         let cid = ContainerId::new("abc123");
         let sid = WorkerSessionId::new("session-xyz");
-        let cmd = DockerManager::claude_resume_command(&cid, &sid, WorkerRole::Leader, None);
+        let cmd = DockerManager::claude_resume_command(&cid, &sid, WorkerRole::Approver, None);
         assert!(cmd.contains("--resume session-xyz"));
         assert!(cmd.contains("--dangerously-skip-permissions"));
     }

@@ -10,7 +10,7 @@ Dependencies between Tasks are defined among siblings — Tasks that share the s
 
 ## Composite Task
 
-A Composite Task is a Task that has child Tasks. A [Leader](../worker/supervisor/leader/) can be assigned to a Composite Task to supervise its child Tasks, handle decisions that arise during execution, and raise [Escalations](../escalation/) when a decision exceeds its confidence.
+A Composite Task is a Task that has child Tasks. A [Approver](../worker/supervisor/approver/) can be assigned to a Composite Task to handle permission prompts from [Members](../worker/member/) during execution and raise [Escalations](../escalation/) when a decision exceeds its confidence.
 
 A Task can become a Composite Task through [Blueprint](../blueprint/) editing during a [Workflow](../workflow/) suspend — for example, when a Pending Task needs to be broken down into child Tasks before work begins.
 
@@ -44,5 +44,5 @@ A Task is complete when all of its child Tasks are complete and its Job (if any)
 - [Operator](../operator/) — defines the Task
 - [Job](../job/) — a work assignment on a Task
 - [Plan](../plan/) — describes the scope and approach for the Task
-- [Leader](../worker/supervisor/leader/) — supervises a Composite Task
+- [Approver](../worker/supervisor/approver/) — handles permission prompts for a Composite Task
 - [Blueprint](../blueprint/) — defines a Task tree

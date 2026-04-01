@@ -50,9 +50,9 @@ pub(super) fn activate_ready_children(
             let job_effects = create_job(state, &task)?;
             effects.extend(job_effects);
 
-            // Review composites (review-integrate): resolve children immediately.
+            // ReviewIntegrate composites: resolve children immediately.
             // Craft composites: children are activated later on InReview.
-            if !children.is_empty() && job_type == JobType::Review {
+            if !children.is_empty() && job_type == JobType::ReviewIntegrate {
                 let ids: Vec<TaskId> = children.iter().map(|c| c.id.clone()).collect();
                 let child_effects = activate_ready_children(state, task_store, task_engine, &ids)?;
                 effects.extend(child_effects);
@@ -61,7 +61,7 @@ pub(super) fn activate_ready_children(
             // Pure composite: spawn supervisor, then InProgress and recurse
             effects.push(RuleEffect::SpawnSupervisor {
                 task_id: task_id.clone(),
-                role: WorkerRole::Leader,
+                role: WorkerRole::Approver,
             });
             task_store
                 .update_task_status(task_id, TaskStatus::InProgress)

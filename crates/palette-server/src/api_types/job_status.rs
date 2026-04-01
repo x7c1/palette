@@ -45,7 +45,7 @@ impl JobStatus {
                 };
                 domain::job::JobStatus::Craft(craft)
             }
-            domain::job::JobType::Review => {
+            domain::job::JobType::Review | domain::job::JobType::ReviewIntegrate => {
                 let review = match self {
                     JobStatus::Todo => domain::job::ReviewStatus::Todo,
                     JobStatus::InProgress => domain::job::ReviewStatus::InProgress,
