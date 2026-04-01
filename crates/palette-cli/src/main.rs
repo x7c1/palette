@@ -29,8 +29,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let config = Config::load(&config_path)?;
     tracing::info!(?config, "loaded config");
-    let bind_addr = config.effective_server_bind_addr();
-    let operator_api_url = config.effective_operator_api_url();
+    let bind_addr = config.server_bind_addr.clone();
+    let operator_api_url = config.operator_api_url.clone();
 
     let session_name = TerminalSessionName::new(&config.tmux.session_name);
     let tmux = TmuxManager::new(session_name.clone());
