@@ -109,13 +109,12 @@ impl Orchestrator {
         let instruction =
             super::process_effects::job_instruction::format_job_instruction(&job, Some(round));
 
-        // Transition to InProgress before enqueuing the instruction.
-        // Supervisor jobs are not assigned through the normal member flow,
-        // so this is the only place where the status advances from Todo.
-        self.interactor.data_store.update_job_status(
-            &job.id,
-            palette_domain::job::JobStatus::in_progress(job.job_type),
-        )?;
+        // Assign the job to the RI (sets assignee_id and transitions to InProgress).
+        // The job was created earlier without an assignee because the RI
+        // didn't exist yet at job creation time.
+        self.interactor
+            .data_store
+            .assign_job(&job.id, ri_id, job.job_type)?;
 
         self.interactor
             .data_store
