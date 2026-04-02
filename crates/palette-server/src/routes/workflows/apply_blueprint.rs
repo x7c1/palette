@@ -1,4 +1,3 @@
-use super::task_activation::activate_ready_children;
 use crate::api_types::ResourceKind;
 use crate::{AppState, Error};
 use axum::{
@@ -8,11 +7,8 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use palette_domain::server::ServerEvent;
-use palette_domain::task::TaskId;
 use palette_domain::workflow::WorkflowId;
-use palette_usecase::TaskRuleEngine;
 use palette_usecase::reconciliation;
-use palette_usecase::task_store::TaskStore;
 use serde::Serialize;
 use sha2::{Digest, Sha256};
 use std::sync::Arc;
@@ -129,38 +125,10 @@ pub async fn handle_apply_blueprint(
         "reconciliation complete"
     );
 
-    // Activate newly Ready tasks
-    let updated_statuses = state
-        .interactor
-        .data_store
-        .get_task_statuses(&workflow_id)
-        .map_err(Error::internal)?;
-
-    let task_store = TaskStore::new(
-        state.interactor.data_store.as_ref(),
-        tree,
-        workflow_id.clone(),
-        updated_statuses,
-    );
-    let task_engine = TaskRuleEngine::new(&task_store);
-
-    let pending_ids: Vec<TaskId> = task_store
-        .tree()
-        .task_ids()
-        .filter(|id| {
-            task_store
-                .get_task(id)
-                .is_some_and(|t| t.status == palette_domain::task::TaskStatus::Pending)
-        })
-        .cloned()
-        .collect();
-
-    if !pending_ids.is_empty() {
-        let effects = activate_ready_children(&state, &task_store, &task_engine, &pending_ids)?;
-        if !effects.is_empty() {
-            let _ = state.event_tx.send(ServerEvent::ProcessEffects { effects });
-        }
-    }
+    // Send domain event — orchestrator handles task activation
+    let _ = state.event_tx.send(ServerEvent::ActivateNewTasks {
+        workflow_id: workflow_id.clone(),
+    });
 
     // Save Blueprint hash
     let hash = hex_sha256(&blueprint_content);

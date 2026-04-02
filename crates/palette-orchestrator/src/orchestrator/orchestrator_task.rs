@@ -1,7 +1,6 @@
 use std::time::Instant;
 
 use palette_domain::job::{Job, JobId, JobStatus, MechanizedStatus};
-use palette_domain::rule::RuleEffect;
 use palette_domain::server::ServerEvent;
 use std::sync::Arc;
 use tokio::sync::mpsc;
@@ -129,11 +128,12 @@ impl Orchestrator {
                 tracing::error!(job_id = %job_id, error = %e, "failed to mark orchestrator job as done");
                 return;
             }
-            // Emit JobCompleted to cascade through task tree
-            let effects = vec![RuleEffect::JobCompleted {
-                job_id: job_id.clone(),
-            }];
-            self.handle_process_effects(effects).await;
+            // Complete the job and cascade through task tree
+            let mut result = super::process_effects::EffectResult::new();
+            if let Err(e) = self.complete_job(job_id, &mut result) {
+                tracing::error!(error = %e, job_id = %job_id, "failed to complete orchestrator job");
+            }
+            self.dispatch_effect_result(result);
         } else {
             tracing::warn!(
                 job_id = %job_id,
@@ -217,12 +217,16 @@ impl Orchestrator {
                 let _ = self.interactor.data_store.enqueue_message(assignee, &msg);
 
                 // Reactivate the crafter
-                let effects = vec![RuleEffect::ReactivateMember {
-                    job_id: craft_job.id.clone(),
-                    member_id: assignee.clone(),
-                }];
-                if let Err(e) = self.process_effects(&effects) {
+                let mut deliveries = Vec::new();
+                if let Err(e) = self.reactivate_member(&craft_job.id, assignee, &mut deliveries) {
                     tracing::error!(error = %e, "failed to reactivate crafter after check failure");
+                }
+                for d in deliveries {
+                    let _ =
+                        self.event_tx
+                            .send(palette_domain::server::ServerEvent::DeliverMessages {
+                                target_id: d.target_id,
+                            });
                 }
             }
 

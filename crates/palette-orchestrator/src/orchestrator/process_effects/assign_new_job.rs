@@ -8,7 +8,7 @@ use palette_usecase::data_store::InsertWorkerRequest;
 impl Orchestrator {
     /// Assign a new job to a freshly spawned member.
     /// Skipped when the workflow is suspending (no new members during suspend).
-    pub(super) fn assign_new_job(
+    pub(in crate::orchestrator) fn assign_new_job(
         &self,
         job_id: &JobId,
         deliveries: &mut Vec<PendingDelivery>,

@@ -1,41 +1,47 @@
+use super::EffectResult;
 use super::Orchestrator;
 use palette_domain::job::{CraftStatus, CraftTransition, JobId, JobStatus, JobType};
 use palette_domain::review::Verdict;
-use palette_domain::rule::RuleEffect;
 
 impl Orchestrator {
     /// Handle a review verdict (Approved or ChangesRequested).
-    pub(super) fn handle_review_verdict(
+    pub(in crate::orchestrator) fn handle_review_verdict(
         &self,
         review_job_id: &JobId,
         verdict: Verdict,
-    ) -> crate::Result<Vec<RuleEffect>> {
+        result: &mut EffectResult,
+    ) -> crate::Result<()> {
         match verdict {
-            Verdict::Approved => self.handle_review_approved(review_job_id),
-            Verdict::ChangesRequested => self.handle_review_changes_requested(review_job_id),
+            Verdict::Approved => self.handle_review_approved(review_job_id, result),
+            Verdict::ChangesRequested => {
+                self.handle_review_changes_requested(review_job_id, result)
+            }
         }
     }
 
     /// When a review is approved: check if all sibling reviews are done,
     /// complete the parent craft job if so, and try to complete the task.
-    fn handle_review_approved(&self, review_job_id: &JobId) -> crate::Result<Vec<RuleEffect>> {
-        let mut effects = Vec::new();
-
+    fn handle_review_approved(
+        &self,
+        review_job_id: &JobId,
+        result: &mut EffectResult,
+    ) -> crate::Result<()> {
         // Try to complete the parent craft job (all reviews done → craft Done)
-        effects.extend(self.try_complete_parent_craft_job(review_job_id)?);
+        self.try_complete_parent_craft_job(review_job_id, result)?;
 
         // Try to complete the review task itself
-        effects.extend(self.try_complete_task_by_job(review_job_id)?);
+        self.try_complete_task_by_job(review_job_id, result)?;
 
-        Ok(effects)
+        Ok(())
     }
 
     /// When a review requests changes: revert the parent craft job to InProgress.
     fn handle_review_changes_requested(
         &self,
         review_job_id: &JobId,
-    ) -> crate::Result<Vec<RuleEffect>> {
-        self.revert_parent_craft_to_in_progress(review_job_id)
+        result: &mut EffectResult,
+    ) -> crate::Result<()> {
+        self.revert_parent_craft_to_in_progress(review_job_id, result)
     }
 
     /// When a review job becomes Done, check if all sibling review tasks under
@@ -44,30 +50,31 @@ impl Orchestrator {
     fn try_complete_parent_craft_job(
         &self,
         review_job_id: &JobId,
-    ) -> crate::Result<Vec<RuleEffect>> {
+        result: &mut EffectResult,
+    ) -> crate::Result<()> {
         let Some(review_job) = self.interactor.data_store.get_job(review_job_id)? else {
-            return Ok(vec![]);
+            return Ok(());
         };
         let review_task_id = &review_job.task_id;
         let Some(task_state) = self.interactor.data_store.get_task_state(review_task_id)? else {
-            return Ok(vec![]);
+            return Ok(());
         };
 
         let task_store = self.interactor.create_task_store(&task_state.workflow_id)?;
 
         let Some(review_task) = task_store.get_task(review_task_id) else {
-            return Ok(vec![]);
+            return Ok(());
         };
 
         let Some(ref parent_id) = review_task.parent_id else {
-            return Ok(vec![]);
+            return Ok(());
         };
 
         let Some(craft_job) = self.interactor.data_store.get_job_by_task_id(parent_id)? else {
-            return Ok(vec![]);
+            return Ok(());
         };
         if craft_job.status != JobStatus::Craft(CraftStatus::InReview) {
-            return Ok(vec![]);
+            return Ok(());
         }
 
         // Check if ALL review children of the parent have their jobs Done
@@ -87,7 +94,7 @@ impl Orchestrator {
         });
 
         if !all_reviews_done {
-            return Ok(vec![]);
+            return Ok(());
         }
 
         // All review children are done — transition craft job to Done
@@ -100,16 +107,12 @@ impl Orchestrator {
         );
 
         // Craft job completed → destroy crafter member + complete task
-        let mut effects = Vec::new();
         if let Some(ref assignee) = craft_job.assignee_id {
-            effects.push(RuleEffect::DestroyMember {
-                member_id: assignee.clone(),
-            });
+            self.destroy_member(assignee);
         }
-        effects.push(RuleEffect::JobCompleted {
-            job_id: craft_job.id,
-        });
-        Ok(effects)
+        self.try_complete_task_by_job(&craft_job.id, result)?;
+
+        Ok(())
     }
 
     /// When a review job gets ChangesRequested, move the parent craft job
@@ -117,30 +120,31 @@ impl Orchestrator {
     fn revert_parent_craft_to_in_progress(
         &self,
         review_job_id: &JobId,
-    ) -> crate::Result<Vec<RuleEffect>> {
+        result: &mut EffectResult,
+    ) -> crate::Result<()> {
         let Some(review_job) = self.interactor.data_store.get_job(review_job_id)? else {
-            return Ok(vec![]);
+            return Ok(());
         };
         let review_task_id = &review_job.task_id;
         let Some(task_state) = self.interactor.data_store.get_task_state(review_task_id)? else {
-            return Ok(vec![]);
+            return Ok(());
         };
 
         let task_store = self.interactor.create_task_store(&task_state.workflow_id)?;
 
         let Some(review_task) = task_store.get_task(review_task_id) else {
-            return Ok(vec![]);
+            return Ok(());
         };
 
         let Some(ref parent_id) = review_task.parent_id else {
-            return Ok(vec![]);
+            return Ok(());
         };
 
         let Some(craft_job) = self.interactor.data_store.get_job_by_task_id(parent_id)? else {
-            return Ok(vec![]);
+            return Ok(());
         };
         if craft_job.status != JobStatus::Craft(CraftStatus::InReview) {
-            return Ok(vec![]);
+            return Ok(());
         }
 
         // Move craft job back to InProgress
@@ -171,14 +175,11 @@ impl Orchestrator {
             self.interactor.data_store.enqueue_message(assignee, &msg)?;
         }
 
-        // Emit ReactivateMember so the crafter gets re-activated
+        // Reactivate the crafter member
         if let Some(ref assignee) = craft_job.assignee_id {
-            Ok(vec![RuleEffect::ReactivateMember {
-                job_id: craft_job.id,
-                member_id: assignee.clone(),
-            }])
-        } else {
-            Ok(vec![])
+            self.reactivate_member(&craft_job.id, assignee, &mut result.deliveries)?;
         }
+
+        Ok(())
     }
 }

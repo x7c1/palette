@@ -38,7 +38,7 @@ impl Orchestrator {
     ///
     /// Review jobs get a read-write mount of the artifacts directory.
     /// Craft jobs get a read-only mount (to read review feedback).
-    pub(super) fn resolve_artifacts_mount(
+    pub(in crate::orchestrator) fn resolve_artifacts_mount(
         &self,
         job: &Job,
     ) -> crate::Result<Option<ArtifactsMount>> {
@@ -104,7 +104,10 @@ impl Orchestrator {
     ///
     /// Craft jobs get a new workspace via `git clone --shared` from the bare cache.
     /// Review jobs share the parent craft job's workspace as read-only.
-    pub(super) fn resolve_workspace(&self, job: &Job) -> crate::Result<Option<WorkspaceVolume>> {
+    pub(in crate::orchestrator) fn resolve_workspace(
+        &self,
+        job: &Job,
+    ) -> crate::Result<Option<WorkspaceVolume>> {
         match job.job_type {
             // ReviewIntegrate/Orchestrator/Operator jobs don't have workspaces
             JobType::ReviewIntegrate | JobType::Orchestrator | JobType::Operator => Ok(None),

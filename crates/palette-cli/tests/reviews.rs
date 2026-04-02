@@ -217,7 +217,6 @@ async fn integrator_submit_rejected_when_children_incomplete() {
     let _wf_id = body["workflow_id"].as_str().unwrap();
 
     use palette_domain::job::{CraftStatus, JobFilter, JobStatus as JStatus, JobType};
-    use palette_domain::rule::RuleEffect;
     use palette_domain::server::ServerEvent;
     let wait = || tokio::time::sleep(tokio::time::Duration::from_millis(200));
 
@@ -238,10 +237,8 @@ async fn integrator_submit_rejected_when_children_incomplete() {
         .data_store
         .update_job_status(&craft_id, JStatus::Craft(CraftStatus::InReview))
         .unwrap();
-    let _ = state.event_tx.send(ServerEvent::ProcessEffects {
-        effects: vec![RuleEffect::CraftReadyForReview {
-            craft_job_id: craft_id.clone(),
-        }],
+    let _ = state.event_tx.send(ServerEvent::CraftReadyForReview {
+        craft_job_id: craft_id.clone(),
     });
     wait().await;
 

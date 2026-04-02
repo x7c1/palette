@@ -6,87 +6,6 @@ use palette_usecase::task_store::TaskStore;
 use super::Orchestrator;
 
 impl Orchestrator {
-    /// Validate that a reviewer wrote their review.md artifact.
-    ///
-    /// Returns `true` if the artifact exists, `false` if missing.
-    /// When missing, enqueues a re-instruction message to the reviewer.
-    pub(super) fn validate_review_artifact(&self, job_id: &JobId, worker_id: &WorkerId) -> bool {
-        let job = match self.interactor.data_store.get_job(job_id) {
-            Ok(Some(j)) => j,
-            _ => return true, // Can't validate, assume OK
-        };
-        if job.job_type != JobType::Review {
-            return true;
-        }
-
-        let task_state = match self.interactor.data_store.get_task_state(&job.task_id) {
-            Ok(Some(s)) => s,
-            _ => return true,
-        };
-
-        // Traverse task tree to find the ancestor craft job.
-        // Reviewer task → composite review task → craft task.
-        let task_store = match self.interactor.create_task_store(&task_state.workflow_id) {
-            Ok(s) => s,
-            Err(_) => return true,
-        };
-        let craft_job = match self.find_ancestor_craft_job(&task_store, &job.task_id) {
-            Some(j) => j,
-            None => return true,
-        };
-
-        // Determine the round number
-        let submissions = match self.interactor.data_store.get_review_submissions(job_id) {
-            Ok(s) => s,
-            Err(_) => return true,
-        };
-        // After a successful review stop, the submission was already recorded,
-        // so the current round is the latest submission's round.
-        let round = submissions.last().map(|s| s.round as u32).unwrap_or(1);
-
-        let artifacts_base = self
-            .workspace_manager
-            .artifacts_path(task_state.workflow_id.as_ref(), craft_job.id.as_ref());
-        let review_md = artifacts_base
-            .join(format!("round-{round}"))
-            .join(job.id.to_string())
-            .join("review.md");
-
-        if review_md.exists() {
-            tracing::debug!(
-                job_id = %job_id,
-                path = %review_md.display(),
-                "review.md artifact validated"
-            );
-            true
-        } else {
-            tracing::warn!(
-                job_id = %job_id,
-                worker_id = %worker_id,
-                path = %review_md.display(),
-                "review.md artifact missing, re-instructing reviewer"
-            );
-            // Enqueue a re-instruction message to the reviewer
-            let msg = format!(
-                "## Missing Artifact\n\n\
-                 Your review.md file was not found at the expected location.\n\
-                 Please write your review to: /home/agent/artifacts/round-{round}/{}/review.md\n\n\
-                 Write the file first, then re-submit your review.",
-                job.id,
-            );
-            if let Err(e) = self.interactor.data_store.enqueue_message(worker_id, &msg) {
-                tracing::error!(error = %e, "failed to enqueue review artifact re-instruction");
-            }
-            // Deliver the message to the idle worker
-            let _ = self
-                .event_tx
-                .send(palette_domain::server::ServerEvent::DeliverMessages {
-                    target_id: worker_id.clone(),
-                });
-            false
-        }
-    }
-
     /// Validate that all child reviewers under an integrator's task have
     /// written their review.md files.
     ///
@@ -153,6 +72,14 @@ impl Orchestrator {
             .workspace_manager
             .artifacts_path(task_state.workflow_id.as_ref(), craft_job.id.as_ref());
 
+        // If the round directory doesn't exist, no reviewer has written
+        // artifacts yet — skip validation. The base directory may exist
+        // because assign_new_job pre-creates it for bind mounts.
+        let round_dir = artifacts_base.join(format!("round-{round}"));
+        if !round_dir.exists() {
+            return true;
+        }
+
         // Check each child reviewer's review.md
         let children = task_store.get_child_tasks(&job.task_id);
         let mut all_present = true;
@@ -170,10 +97,7 @@ impl Orchestrator {
                 }
             };
 
-            let review_md = artifacts_base
-                .join(format!("round-{round}"))
-                .join(child_job.id.to_string())
-                .join("review.md");
+            let review_md = round_dir.join(child_job.id.to_string()).join("review.md");
 
             if !review_md.exists() {
                 all_present = false;
@@ -256,13 +180,11 @@ impl Orchestrator {
         let round = children
             .iter()
             .filter(|c| c.job_type == Some(JobType::Review))
-            .filter_map(|c| {
-                match self.interactor.data_store.get_job_by_task_id(&c.id) {
-                    Ok(j) => j,
-                    Err(e) => {
-                        tracing::error!(task_id = %c.id, error = %e, "failed to get review job for round detection");
-                        None
-                    }
+            .filter_map(|c| match self.interactor.data_store.get_job_by_task_id(&c.id) {
+                Ok(j) => j,
+                Err(e) => {
+                    tracing::error!(task_id = %c.id, error = %e, "failed to get review job for round detection");
+                    None
                 }
             })
             .filter_map(|j| {
