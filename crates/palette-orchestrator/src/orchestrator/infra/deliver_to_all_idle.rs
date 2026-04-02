@@ -2,7 +2,7 @@ use super::Orchestrator;
 use std::sync::Arc;
 
 impl Orchestrator {
-    pub(super) fn deliver_to_all_idle(self: &Arc<Self>) {
+    pub(in crate::orchestrator) fn deliver_to_all_idle(self: &Arc<Self>) {
         loop {
             let idle_targets = match self.interactor.data_store.list_idle_or_waiting_workers() {
                 Ok(workers) => workers,

@@ -1,12 +1,12 @@
 use super::Orchestrator;
-use super::process_effects::PendingActions;
+use super::PendingActions;
 use palette_domain::job::{JobId, JobType, ReviewTransition};
 use palette_domain::review::Verdict;
 use palette_domain::server::ServerEvent;
 use std::sync::Arc;
 
 impl Orchestrator {
-    pub(super) async fn handle_event(self: &Arc<Self>, event: ServerEvent) {
+    pub(in crate::orchestrator) async fn handle_event(self: &Arc<Self>, event: ServerEvent) {
         match event {
             // --- Domain events ---
             ServerEvent::CraftDone { job_id } => {
@@ -163,7 +163,7 @@ impl Orchestrator {
                 }
             }
 
-            // Handle the verdict (cascade effects)
+            // Handle the verdict and cascade task completion
             self.handle_review_verdict(review_job_id, verdict)
         })();
 
@@ -202,7 +202,10 @@ impl Orchestrator {
     }
 
     /// Dispatch the accumulated results: deliver messages and spawn readiness watchers.
-    pub(super) fn dispatch_pending_actions(self: &Arc<Self>, actions: PendingActions) {
+    pub(in crate::orchestrator) fn dispatch_pending_actions(
+        self: &Arc<Self>,
+        actions: PendingActions,
+    ) {
         for id in &actions.deliver_to {
             let _ = self.deliver_queued_messages(id);
         }

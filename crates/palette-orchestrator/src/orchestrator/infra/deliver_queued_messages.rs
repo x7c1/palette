@@ -10,7 +10,7 @@ impl Orchestrator {
     /// Before sending, verifies that Claude Code is actually running in the
     /// pane (`❯` prompt present). If Claude Code has exited, sends a fresh
     /// start command and spawns a readiness watcher instead of delivering.
-    pub(super) fn deliver_queued_messages(
+    pub(in crate::orchestrator) fn deliver_queued_messages(
         self: &Arc<Self>,
         target_id: &WorkerId,
     ) -> crate::Result<bool> {
@@ -80,7 +80,7 @@ impl Orchestrator {
     }
 
     /// Check whether the given workflow is in Suspending state.
-    pub(super) fn is_workflow_suspending(
+    pub(in crate::orchestrator) fn is_workflow_suspending(
         &self,
         workflow_id: &palette_domain::workflow::WorkflowId,
     ) -> crate::Result<bool> {

@@ -56,7 +56,7 @@ impl Orchestrator {
         }
 
         let result = self
-            .cascade_task_effects(task_id, &task_store)?
+            .cascade_task_completion(task_id, &task_store)?
             .merge(self.fill_vacant_slots()?);
 
         Ok(result)
@@ -73,7 +73,7 @@ impl Orchestrator {
     }
 
     /// Process cascading effects after a task completes.
-    fn cascade_task_effects(
+    fn cascade_task_completion(
         &self,
         completed_task_id: &TaskId,
         task_store: &TaskStore,

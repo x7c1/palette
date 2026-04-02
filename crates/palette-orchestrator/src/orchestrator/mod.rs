@@ -1,21 +1,6 @@
-mod assign_deferred_jobs;
-mod clean_orphan_containers;
-mod deliver_queued_messages;
-mod deliver_to_all_idle;
-mod handle_event;
-mod orchestrator_task;
-pub(crate) mod process_effects;
-mod recover_from_crash;
-mod resume_booting_watchers;
-mod shutdown;
-mod spawn_member;
-mod spawn_readiness_watcher;
-mod spawn_supervisor;
-mod start;
-mod suspend;
-mod validate_artifacts;
-mod worker_monitor;
-pub mod workspace;
+pub(crate) mod handler;
+pub(crate) mod infra;
+mod lifecycle;
 
 use palette_domain::server::ServerEvent;
 use palette_usecase::Interactor;
@@ -24,7 +9,7 @@ use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
 
 use crate::DockerConfig;
-use workspace::WorkspaceManager;
+use infra::workspace::WorkspaceManager;
 
 pub struct Orchestrator {
     pub interactor: Arc<Interactor>,

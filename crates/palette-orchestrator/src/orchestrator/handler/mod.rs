@@ -2,9 +2,12 @@ mod activate_review;
 mod assign_new_job;
 mod complete_job;
 mod destroy_member;
+mod handle_event;
 pub(crate) mod job_instruction;
+mod orchestrator_task;
 mod reactivate_member;
 mod review_verdict;
+mod validate_artifacts;
 mod workflow_activation;
 
 use super::Orchestrator;
@@ -13,7 +16,7 @@ use palette_domain::worker::WorkerId;
 /// Follow-up actions that the orchestrator event loop should perform
 /// after an event handler completes.
 ///
-/// Returned by orchestrator methods; dispatched by `dispatch_pending_actions`.
+/// Returned by handler methods; dispatched by `dispatch_pending_actions`.
 pub(in crate::orchestrator) struct PendingActions {
     /// Workers to watch for readiness and deliver queued messages to.
     pub deliver_to: Vec<WorkerId>,
