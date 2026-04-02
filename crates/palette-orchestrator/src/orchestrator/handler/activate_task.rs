@@ -120,44 +120,4 @@ impl Orchestrator {
 
         Ok(())
     }
-
-    /// Walk up the task tree to find the nearest supervisor for a job's task.
-    pub(super) fn find_supervisor_for_job(
-        &self,
-        task_id: &TaskId,
-    ) -> crate::Result<palette_domain::worker::WorkerId> {
-        let task_state = self
-            .interactor
-            .data_store
-            .get_task_state(task_id)?
-            .ok_or_else(|| crate::Error::TaskNotFound {
-                task_id: task_id.clone(),
-            })?;
-        let task_store = self.interactor.create_task_store(&task_state.workflow_id)?;
-
-        let mut current_id = task_id.clone();
-        loop {
-            if let Ok(Some(sup)) = self
-                .interactor
-                .data_store
-                .find_supervisor_for_task(&current_id)
-            {
-                return Ok(sup.id.clone());
-            }
-            let task =
-                task_store
-                    .get_task(&current_id)
-                    .ok_or_else(|| crate::Error::TaskNotFound {
-                        task_id: current_id.clone(),
-                    })?;
-            match task.parent_id {
-                Some(ref pid) => current_id = pid.clone(),
-                None => break,
-            }
-        }
-        Err(crate::Error::InvalidTaskState {
-            task_id: task_id.clone(),
-            detail: "no supervisor found in task ancestry".into(),
-        })
-    }
 }
