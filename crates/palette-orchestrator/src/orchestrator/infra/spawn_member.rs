@@ -8,7 +8,7 @@ use palette_usecase::container_runtime::{
 
 impl Orchestrator {
     /// Spawn a member container. Returns the WorkerState for DB registration.
-    pub(super) fn spawn_member(
+    pub(crate) fn spawn_member(
         &self,
         member_id: &WorkerId,
         job_type: JobType,

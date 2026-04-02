@@ -9,7 +9,6 @@ use axum::{
 };
 use palette_domain::job::{JobId, JobType};
 use palette_domain::server::ServerEvent;
-use palette_usecase::RuleEngine;
 use std::sync::Arc;
 
 pub async fn handle_submit_review(
@@ -136,17 +135,11 @@ pub async fn handle_submit_review(
         .submit_review(&review_job_id, &req)
         .map_err(Error::internal)?;
 
-    // Apply rule engine
-    let effects = RuleEngine::new(
-        state.interactor.data_store.as_ref(),
-        state.max_review_rounds,
-    )
-    .on_review_submitted(&review_job_id, &submission)
-    .map_err(Error::internal)?;
-
-    for effect in &effects {
-        tracing::info!(?effect, "review rule engine effect");
-    }
+    tracing::info!(
+        review_job_id = %review_job_id,
+        verdict = ?submission.verdict,
+        "review submission recorded"
+    );
 
     // Notify the review member's supervisor about review results
     if let Some(ref assignee) = job.assignee_id
@@ -171,24 +164,10 @@ pub async fn handle_submit_review(
         );
     }
 
-    if is_integrator {
-        // Integrator submission: validate all child reviewers' review.md files
-        let _ = state
-            .event_tx
-            .send(ServerEvent::ValidateIntegratorSubmission {
-                job_id: review_job_id.clone(),
-                pending_effects: effects,
-            });
-    } else if let Some(ref assignee) = job.assignee_id {
-        // Regular reviewer: validate this reviewer's review.md
-        let _ = state.event_tx.send(ServerEvent::ValidateReviewArtifact {
-            job_id: review_job_id.clone(),
-            worker_id: assignee.clone(),
-            pending_effects: effects,
-        });
-    } else if !effects.is_empty() {
-        let _ = state.event_tx.send(ServerEvent::ProcessEffects { effects });
-    }
+    // Send domain event — orchestrator handles artifact validation and verdict
+    let _ = state.event_tx.send(ServerEvent::ReviewSubmitted {
+        review_job_id: review_job_id.clone(),
+    });
     let _ = state.event_tx.send(ServerEvent::NotifyDeliveryLoop);
 
     Ok((

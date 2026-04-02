@@ -6,7 +6,7 @@ pub use docker_config::DockerConfig;
 
 mod orchestrator;
 pub use orchestrator::Orchestrator;
-pub use orchestrator::workspace;
+pub use orchestrator::infra::workspace;
 
 #[cfg(test)]
 pub(crate) mod testing;

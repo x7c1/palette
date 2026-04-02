@@ -1,14 +1,40 @@
 use crate::job::JobId;
-use crate::rule::RuleEffect;
+use crate::task::TaskId;
 use crate::worker::WorkerId;
 use crate::workflow::WorkflowId;
 
 /// Events emitted by the server for asynchronous processing by the orchestrator.
+///
+/// Each variant represents a domain event — "what happened" — rather than
+/// an instruction. The orchestrator decides how to react.
 #[derive(Debug)]
 pub enum ServerEvent {
-    /// Rule engine produced effects that need orchestrator processing
-    /// (auto-assign, destroy member, etc.).
-    ProcessEffects { effects: Vec<RuleEffect> },
+    // --- Domain events (craft / review cycle) ---
+    /// A craft job has been marked Done. Orchestrator should destroy the
+    /// crafter member and cascade task completion.
+    CraftDone { job_id: JobId },
+    /// A craft job has reached InReview. Orchestrator should activate
+    /// child review tasks.
+    CraftReadyForReview { craft_job_id: JobId },
+    /// A review submission has been recorded in the DB. Orchestrator should
+    /// validate artifacts and handle the verdict.
+    ReviewSubmitted { review_job_id: JobId },
+    /// A ReviewIntegrator worker has stopped. Orchestrator should validate
+    /// that integrated-review.md was written.
+    ReviewIntegratorStopped {
+        task_id: TaskId,
+        worker_id: WorkerId,
+    },
+
+    // --- Workflow lifecycle ---
+    /// A new workflow has been created and tasks registered.
+    /// Orchestrator should activate the root task and spawn initial workers.
+    ActivateWorkflow { workflow_id: WorkflowId },
+    /// A blueprint has been re-applied and new tasks added.
+    /// Orchestrator should activate newly Ready tasks.
+    ActivateNewTasks { workflow_id: WorkflowId },
+
+    // --- Infrastructure events ---
     /// Deliver queued messages to a specific target.
     DeliverMessages { target_id: WorkerId },
     /// Deliver queued messages to all idle targets.
@@ -17,26 +43,6 @@ pub enum ServerEvent {
     ResumeWorkers { worker_ids: Vec<WorkerId> },
     /// Suspend workers belonging to the specified workflow.
     SuspendWorkflow { workflow_id: WorkflowId },
-    /// Validate that a review artifact exists after a review is submitted.
-    /// If validation passes, the `pending_effects` are processed.
-    /// If validation fails, the reviewer is re-instructed and effects are discarded.
-    ValidateReviewArtifact {
-        job_id: JobId,
-        worker_id: crate::worker::WorkerId,
-        pending_effects: Vec<crate::rule::RuleEffect>,
-    },
-    /// Validate that integrated-review.md exists after a ReviewIntegrator stops.
-    ValidateIntegratedReviewArtifact {
-        task_id: crate::task::TaskId,
-        worker_id: crate::worker::WorkerId,
-    },
-    /// Validate an integrator's review submission: check that all child
-    /// reviewers have written review.md before processing effects.
-    /// If any review.md is missing, re-instruct the reviewer and hold effects.
-    ValidateIntegratorSubmission {
-        job_id: JobId,
-        pending_effects: Vec<crate::rule::RuleEffect>,
-    },
     /// An orchestrator task's command has completed.
     OrchestratorTaskCompleted {
         job_id: JobId,

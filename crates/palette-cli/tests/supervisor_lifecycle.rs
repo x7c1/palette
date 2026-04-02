@@ -3,7 +3,6 @@ mod helper;
 use helper::{spawn_server, test_session_name_with_guard, tid, wid, write_blueprint_file};
 use palette_domain::job::{CraftStatus, JobFilter, JobStatus, JobType};
 use palette_domain::review::{SubmitReviewRequest, Verdict};
-use palette_domain::rule::RuleEffect;
 use palette_domain::server::ServerEvent;
 use palette_domain::task::TaskStatus;
 use palette_domain::workflow::WorkflowStatus;
@@ -153,10 +152,8 @@ task:
         .unwrap();
 
     // CraftReadyForReview triggers review job creation
-    let _ = state.event_tx.send(ServerEvent::ProcessEffects {
-        effects: vec![RuleEffect::CraftReadyForReview {
-            craft_job_id: craft_a_id.clone(),
-        }],
+    let _ = state.event_tx.send(ServerEvent::CraftReadyForReview {
+        craft_job_id: craft_a_id.clone(),
     });
     wait().await;
 
@@ -177,7 +174,7 @@ task:
         .data_store
         .assign_job(&review_a.id, &wid("reviewer-a"), JobType::Review)
         .unwrap();
-    let sub = state
+    let _sub = state
         .interactor
         .data_store
         .submit_review(
@@ -189,13 +186,9 @@ task:
             },
         )
         .unwrap();
-    let effects = palette_usecase::RuleEngine::new(
-        state.interactor.data_store.as_ref(),
-        state.max_review_rounds,
-    )
-    .on_review_submitted(&review_a.id, &sub)
-    .unwrap();
-    let _ = state.event_tx.send(ServerEvent::ProcessEffects { effects });
+    let _ = state.event_tx.send(ServerEvent::ReviewSubmitted {
+        review_job_id: review_a.id.clone(),
+    });
     wait().await;
 
     // phase-a should be Completed
@@ -280,10 +273,8 @@ task:
         .update_job_status(&craft_b_id, JobStatus::Craft(CraftStatus::InReview))
         .unwrap();
 
-    let _ = state.event_tx.send(ServerEvent::ProcessEffects {
-        effects: vec![RuleEffect::CraftReadyForReview {
-            craft_job_id: craft_b_id.clone(),
-        }],
+    let _ = state.event_tx.send(ServerEvent::CraftReadyForReview {
+        craft_job_id: craft_b_id.clone(),
     });
     wait().await;
 
@@ -304,7 +295,7 @@ task:
         .data_store
         .assign_job(&review_b.id, &wid("reviewer-b"), JobType::Review)
         .unwrap();
-    let sub = state
+    let _sub = state
         .interactor
         .data_store
         .submit_review(
@@ -316,13 +307,9 @@ task:
             },
         )
         .unwrap();
-    let effects = palette_usecase::RuleEngine::new(
-        state.interactor.data_store.as_ref(),
-        state.max_review_rounds,
-    )
-    .on_review_submitted(&review_b.id, &sub)
-    .unwrap();
-    let _ = state.event_tx.send(ServerEvent::ProcessEffects { effects });
+    let _ = state.event_tx.send(ServerEvent::ReviewSubmitted {
+        review_job_id: review_b.id.clone(),
+    });
     wait().await;
 
     // All supervisors should be destroyed

@@ -1,29 +1,31 @@
 use super::Orchestrator;
-use palette_domain::job::{JobId, JobStatus, JobType, ReviewStatus, ReviewTransition};
-use palette_domain::rule::RuleEffect;
+use super::PendingActions;
+use palette_domain::job::{JobStatus, JobType, ReviewStatus, ReviewTransition};
 use palette_domain::task::{TaskId, TaskStatus};
 use palette_domain::worker::WorkerRole;
 
 impl Orchestrator {
     /// When a Craft Job reaches InReview, activate its child review tasks.
     /// The craft task stays InProgress; review tasks become Ready.
-    pub(super) fn activate_child_review_tasks(
+    pub(crate) fn activate_child_review_tasks(
         &self,
-        craft_job_id: &JobId,
-    ) -> crate::Result<Vec<RuleEffect>> {
+        craft_job_id: &palette_domain::job::JobId,
+    ) -> crate::Result<PendingActions> {
+        let mut result = PendingActions::new();
+
         let Some(job) = self.interactor.data_store.get_job(craft_job_id)? else {
-            return Ok(vec![]);
+            return Ok(result);
         };
         let task_id = &job.task_id;
         let Some(task_state) = self.interactor.data_store.get_task_state(task_id)? else {
-            return Ok(vec![]);
+            return Ok(result);
         };
 
         let task_store = self.interactor.create_task_store(&task_state.workflow_id)?;
 
         let children = task_store.get_child_tasks(task_id);
         if children.is_empty() {
-            return Ok(vec![]);
+            return Ok(result);
         }
 
         // Ensure the craft task is InProgress (it should be, since its job is active)
@@ -33,50 +35,31 @@ impl Orchestrator {
             task_store.update_task_status(task_id, TaskStatus::InProgress)?;
         }
 
-        let mut job_effects = Vec::new();
-
         // First pass: activate Pending children (initial review cycle)
         use palette_usecase::TaskRuleEngine;
         let task_engine = TaskRuleEngine::new(&task_store);
         let child_ids: Vec<TaskId> = children.iter().map(|c| c.id.clone()).collect();
-        let task_effects = task_engine.resolve_ready_tasks(&child_ids);
+        let ready_ids = task_engine.resolve_ready_tasks(&child_ids);
 
-        let mut pending = task_effects;
-        while !pending.is_empty() {
-            let mut next = Vec::new();
-            for effect in &pending {
-                let palette_domain::rule::TaskEffect::TaskStatusChanged {
-                    task_id,
-                    new_status,
-                } = effect
-                else {
-                    continue;
-                };
+        for ready_id in &ready_ids {
+            tracing::info!(task_id = %ready_id, status = ?TaskStatus::Ready, "review task activated");
 
-                task_store.update_task_status(task_id, *new_status)?;
-                tracing::info!(task_id = %task_id, status = ?new_status, "review task activated");
-
-                if *new_status == TaskStatus::Ready {
-                    // If this is a review-integrate composite, spawn a
-                    // Approver to handle reviewer permission prompts.
-                    // The ReviewIntegrator is spawned later when all reviewers complete.
-                    if let Some(child_task) = task_store.get_task(task_id)
-                        && child_task.job_type == Some(JobType::ReviewIntegrate)
-                    {
-                        tracing::info!(task_id = %task_id, "spawning Approver for review-integrate composite");
-                        job_effects.push(RuleEffect::SpawnSupervisor {
-                            task_id: task_id.clone(),
-                            role: WorkerRole::Approver,
-                        });
+            // If this is a review-integrate composite, spawn an
+            // Approver to handle reviewer permission prompts.
+            // The ReviewIntegrator is spawned later when all reviewers complete.
+            if let Some(child_task) = task_store.get_task(ready_id)
+                && child_task.job_type == Some(JobType::ReviewIntegrate)
+            {
+                tracing::info!(task_id = %ready_id, "spawning Approver for review-integrate composite");
+                match self.handle_spawn_supervisor(ready_id, WorkerRole::Approver) {
+                    Ok(sup_id) => result.watch_only.push(sup_id),
+                    Err(e) => {
+                        tracing::error!(error = %e, task_id = %ready_id, "failed to spawn Approver");
                     }
-
-                    let (follow_up, effects) =
-                        self.activate_ready_task(task_id, &task_store, &task_engine)?;
-                    next.extend(follow_up);
-                    job_effects.extend(effects);
                 }
             }
-            pending = next;
+
+            result = result.merge(self.activate_ready_task(ready_id, &task_store, &task_engine)?);
         }
 
         // Second pass: reactivate ChangesRequested review jobs (re-review cycle).
@@ -104,13 +87,10 @@ impl Orchestrator {
                 "reactivated ChangesRequested review job for re-review"
             );
             if let Some(ref assignee) = review_job.assignee_id {
-                job_effects.push(RuleEffect::ReactivateMember {
-                    job_id: review_job.id.clone(),
-                    member_id: assignee.clone(),
-                });
+                result = result.merge(self.reactivate_member(&review_job.id, assignee)?);
             }
         }
 
-        Ok(job_effects)
+        Ok(result)
     }
 }

@@ -1,4 +1,3 @@
-use super::task_activation::activate_ready_children;
 use crate::{AppState, Error, ValidJson};
 use axum::{
     Json,
@@ -6,13 +5,10 @@ use axum::{
     http::StatusCode,
     response::{IntoResponse, Response},
 };
-use palette_domain::rule::RuleEffect;
 use palette_domain::server::ServerEvent;
-use palette_domain::task::{TaskId, TaskStatus, TaskTree};
+use palette_domain::task::TaskTree;
 use palette_domain::workflow::WorkflowId;
-use palette_usecase::TaskRuleEngine;
 use palette_usecase::data_store::CreateTaskRequest;
-use palette_usecase::task_store::TaskStore;
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 use std::sync::Arc;
@@ -41,11 +37,10 @@ pub async fn handle_start_workflow(
 
     let task_count = register_tasks(&state, &workflow_id, &tree, &req.blueprint_path)?;
 
-    let effects = initialize_root(&state, &tree, &workflow_id)?;
-
-    if !effects.is_empty() {
-        let _ = state.event_tx.send(ServerEvent::ProcessEffects { effects });
-    }
+    // Send domain event — orchestrator handles task activation
+    let _ = state.event_tx.send(ServerEvent::ActivateWorkflow {
+        workflow_id: workflow_id.clone(),
+    });
 
     tracing::info!(
         workflow_id = %workflow_id,
@@ -91,44 +86,4 @@ fn register_tasks(
     }
 
     Ok(count)
-}
-
-/// Set the root task to InProgress and cascade Ready resolution.
-/// Creates jobs for Ready tasks with job_type and returns AutoAssign effects.
-fn initialize_root(
-    state: &AppState,
-    tree: &TaskTree,
-    workflow_id: &WorkflowId,
-) -> crate::Result<Vec<RuleEffect>> {
-    let statuses = tree
-        .task_ids()
-        .map(|id| (id.clone(), TaskStatus::Pending))
-        .collect();
-    let task_store = TaskStore::new(
-        state.interactor.data_store.as_ref(),
-        tree.clone(),
-        workflow_id.clone(),
-        statuses,
-    );
-    let task_engine = TaskRuleEngine::new(&task_store);
-
-    // Root task: spawn supervisor, then → InProgress
-    let root = task_store
-        .get_task(task_store.root_id())
-        .ok_or_else(|| Error::internal("root task not found"))?;
-
-    let mut effects = vec![RuleEffect::SpawnSupervisor {
-        task_id: root.id.clone(),
-        role: palette_domain::worker::WorkerRole::Approver,
-    }];
-
-    task_store
-        .update_task_status(&root.id, TaskStatus::InProgress)
-        .map_err(Error::internal)?;
-
-    // Resolve children recursively and create jobs
-    let child_ids: Vec<TaskId> = root.children.iter().map(|c| c.id.clone()).collect();
-    let child_effects = activate_ready_children(state, &task_store, &task_engine, &child_ids)?;
-    effects.extend(child_effects);
-    Ok(effects)
 }

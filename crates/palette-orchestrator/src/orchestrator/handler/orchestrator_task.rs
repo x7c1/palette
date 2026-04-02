@@ -1,7 +1,6 @@
 use std::time::Instant;
 
 use palette_domain::job::{Job, JobId, JobStatus, MechanizedStatus};
-use palette_domain::rule::RuleEffect;
 use palette_domain::server::ServerEvent;
 use std::sync::Arc;
 use tokio::sync::mpsc;
@@ -129,11 +128,13 @@ impl Orchestrator {
                 tracing::error!(job_id = %job_id, error = %e, "failed to mark orchestrator job as done");
                 return;
             }
-            // Emit JobCompleted to cascade through task tree
-            let effects = vec![RuleEffect::JobCompleted {
-                job_id: job_id.clone(),
-            }];
-            self.handle_process_effects(effects).await;
+            // Complete the job and cascade through task tree
+            match self.try_complete_task_by_job(job_id) {
+                Ok(result) => self.dispatch_pending_actions(result),
+                Err(e) => {
+                    tracing::error!(error = %e, job_id = %job_id, "failed to complete orchestrator job")
+                }
+            }
         } else {
             tracing::warn!(
                 job_id = %job_id,
@@ -217,12 +218,19 @@ impl Orchestrator {
                 let _ = self.interactor.data_store.enqueue_message(assignee, &msg);
 
                 // Reactivate the crafter
-                let effects = vec![RuleEffect::ReactivateMember {
-                    job_id: craft_job.id.clone(),
-                    member_id: assignee.clone(),
-                }];
-                if let Err(e) = self.process_effects(&effects) {
-                    tracing::error!(error = %e, "failed to reactivate crafter after check failure");
+                match self.reactivate_member(&craft_job.id, assignee) {
+                    Ok(actions) => {
+                        for id in actions.deliver_to {
+                            let _ = self.event_tx.send(
+                                palette_domain::server::ServerEvent::DeliverMessages {
+                                    target_id: id,
+                                },
+                            );
+                        }
+                    }
+                    Err(e) => {
+                        tracing::error!(error = %e, "failed to reactivate crafter after check failure");
+                    }
                 }
             }
 

@@ -5,9 +5,7 @@ use crate::{AppState, Error, ValidJson};
 use axum::{Json, extract::State};
 use palette_core::ReasonKey;
 use palette_domain::job::{CraftStatus, JobStatus};
-use palette_domain::rule::RuleEffect;
 use palette_domain::server::ServerEvent;
-use palette_usecase::RuleEngine;
 use std::sync::Arc;
 
 pub async fn handle_update_job(
@@ -48,28 +46,19 @@ pub async fn handle_update_job(
         .update_job_status(&job_id, new_status)
         .map_err(Error::internal)?;
 
-    // Produce effects based on the new status
-    let effects = match new_status {
-        JobStatus::Craft(CraftStatus::Done) => RuleEngine::new(
-            state.interactor.data_store.as_ref(),
-            state.max_review_rounds,
-        )
-        .on_craft_done(&job_id)
-        .map_err(Error::internal)?,
-        JobStatus::Craft(CraftStatus::InReview) => {
-            vec![RuleEffect::CraftReadyForReview {
-                craft_job_id: job_id,
-            }]
+    // Send domain event based on the new status
+    match new_status {
+        JobStatus::Craft(CraftStatus::Done) => {
+            let _ = state.event_tx.send(ServerEvent::CraftDone {
+                job_id: job_id.clone(),
+            });
         }
-        _ => vec![],
-    };
-
-    for effect in &effects {
-        tracing::info!(?effect, "rule engine effect");
-    }
-
-    if !effects.is_empty() {
-        let _ = state.event_tx.send(ServerEvent::ProcessEffects { effects });
+        JobStatus::Craft(CraftStatus::InReview) => {
+            let _ = state.event_tx.send(ServerEvent::CraftReadyForReview {
+                craft_job_id: job_id,
+            });
+        }
+        _ => {}
     }
 
     Ok(Json(JobResponse::from(job)))
