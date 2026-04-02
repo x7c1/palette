@@ -122,7 +122,7 @@ impl Orchestrator {
     }
 
     /// Walk up the task tree to find the nearest supervisor for a job's task.
-    pub(in crate::orchestrator) fn find_supervisor_for_job(
+    pub(super) fn find_supervisor_for_job(
         &self,
         task_id: &TaskId,
     ) -> crate::Result<palette_domain::worker::WorkerId> {
