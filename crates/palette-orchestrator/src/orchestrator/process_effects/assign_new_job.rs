@@ -1,8 +1,7 @@
-use super::EffectResult;
 use super::Orchestrator;
+use super::PendingActions;
 use super::job_instruction::format_job_instruction;
 use palette_domain::job::JobId;
-use palette_domain::server::PendingDelivery;
 use palette_domain::worker::WorkerId;
 use palette_usecase::data_store::InsertWorkerRequest;
 
@@ -12,8 +11,8 @@ impl Orchestrator {
     pub(in crate::orchestrator) fn assign_new_job(
         &self,
         job_id: &JobId,
-    ) -> crate::Result<EffectResult> {
-        let mut result = EffectResult::new();
+    ) -> crate::Result<PendingActions> {
+        let mut result = PendingActions::new();
 
         // Verify the job is assignable (todo + no assignee)
         let assignable_jobs = self.interactor.data_store.find_assignable_jobs()?;
@@ -72,8 +71,6 @@ impl Orchestrator {
             workspace,
             artifacts_dir,
         )?;
-        let terminal_target = member.terminal_target.clone();
-
         // Register in DB
         self.interactor
             .data_store
@@ -110,10 +107,7 @@ impl Orchestrator {
             .data_store
             .enqueue_message(&member_id, &instruction)?;
 
-        result.deliveries.push(PendingDelivery {
-            target_id: member_id,
-            terminal_target,
-        });
+        result.deliver_to.push(member_id);
 
         Ok(result)
     }

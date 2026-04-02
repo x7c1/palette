@@ -8,31 +8,31 @@ mod review_verdict;
 mod workflow_activation;
 
 use super::Orchestrator;
-use palette_domain::server::PendingDelivery;
 use palette_domain::worker::WorkerId;
 
-/// Accumulated results from direct effect execution.
+/// Follow-up actions that the orchestrator event loop should perform
+/// after an event handler completes.
 ///
-/// Returned by orchestrator methods to describe what follow-up actions
-/// (message delivery, readiness watchers) are needed. The caller
-/// dispatches these via `dispatch_effect_result`.
-pub(in crate::orchestrator) struct EffectResult {
-    pub deliveries: Vec<PendingDelivery>,
-    pub spawned_supervisors: Vec<WorkerId>,
+/// Returned by orchestrator methods; dispatched by `dispatch_pending_actions`.
+pub(in crate::orchestrator) struct PendingActions {
+    /// Workers to watch for readiness and deliver queued messages to.
+    pub deliver_to: Vec<WorkerId>,
+    /// Workers to watch for readiness only (no immediate messages).
+    pub watch_only: Vec<WorkerId>,
 }
 
-impl EffectResult {
+impl PendingActions {
     pub fn new() -> Self {
         Self {
-            deliveries: Vec::new(),
-            spawned_supervisors: Vec::new(),
+            deliver_to: Vec::new(),
+            watch_only: Vec::new(),
         }
     }
 
     /// Combine two results into one.
-    pub fn merge(mut self, other: EffectResult) -> Self {
-        self.deliveries.extend(other.deliveries);
-        self.spawned_supervisors.extend(other.spawned_supervisors);
+    pub fn merge(mut self, other: PendingActions) -> Self {
+        self.deliver_to.extend(other.deliver_to);
+        self.watch_only.extend(other.watch_only);
         self
     }
 }

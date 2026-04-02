@@ -130,7 +130,7 @@ impl Orchestrator {
             }
             // Complete the job and cascade through task tree
             match self.complete_job(job_id) {
-                Ok(result) => self.dispatch_effect_result(result),
+                Ok(result) => self.dispatch_pending_actions(result),
                 Err(e) => {
                     tracing::error!(error = %e, job_id = %job_id, "failed to complete orchestrator job")
                 }
@@ -219,11 +219,11 @@ impl Orchestrator {
 
                 // Reactivate the crafter
                 match self.reactivate_member(&craft_job.id, assignee) {
-                    Ok(result) => {
-                        for d in result.deliveries {
+                    Ok(actions) => {
+                        for id in actions.deliver_to {
                             let _ = self.event_tx.send(
                                 palette_domain::server::ServerEvent::DeliverMessages {
-                                    target_id: d.target_id,
+                                    target_id: id,
                                 },
                             );
                         }

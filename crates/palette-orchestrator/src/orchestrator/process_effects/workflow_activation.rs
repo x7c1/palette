@@ -1,5 +1,5 @@
-use super::EffectResult;
 use super::Orchestrator;
+use super::PendingActions;
 use palette_domain::task::{TaskId, TaskStatus};
 use palette_domain::worker::WorkerRole;
 use palette_domain::workflow::WorkflowId;
@@ -11,8 +11,8 @@ impl Orchestrator {
     pub(in crate::orchestrator) fn activate_workflow(
         &self,
         workflow_id: &WorkflowId,
-    ) -> crate::Result<EffectResult> {
-        let mut result = EffectResult::new();
+    ) -> crate::Result<PendingActions> {
+        let mut result = PendingActions::new();
 
         let task_store = self.interactor.create_task_store(workflow_id)?;
         let task_engine = TaskRuleEngine::new(&task_store);
@@ -25,7 +25,7 @@ impl Orchestrator {
 
         // Spawn Approver for root
         match self.handle_spawn_supervisor(&root.id, WorkerRole::Approver) {
-            Ok(sup_id) => result.spawned_supervisors.push(sup_id),
+            Ok(sup_id) => result.watch_only.push(sup_id),
             Err(e) => {
                 tracing::error!(error = %e, task_id = %root.id, "failed to spawn root supervisor");
             }
@@ -50,8 +50,8 @@ impl Orchestrator {
     pub(in crate::orchestrator) fn activate_new_tasks(
         &self,
         workflow_id: &WorkflowId,
-    ) -> crate::Result<EffectResult> {
-        let mut result = EffectResult::new();
+    ) -> crate::Result<PendingActions> {
+        let mut result = PendingActions::new();
 
         let task_store = self.interactor.create_task_store(workflow_id)?;
         let task_engine = TaskRuleEngine::new(&task_store);

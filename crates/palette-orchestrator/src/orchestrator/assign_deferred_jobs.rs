@@ -1,5 +1,5 @@
 use super::Orchestrator;
-use super::process_effects::EffectResult;
+use super::process_effects::PendingActions;
 use std::sync::Arc;
 
 impl Orchestrator {
@@ -26,7 +26,7 @@ impl Orchestrator {
             "re-assigning jobs deferred during suspend"
         );
 
-        let mut result = EffectResult::new();
+        let mut result = PendingActions::new();
         for job in &assignable {
             match self.assign_new_job(&job.id) {
                 Ok(r) => result = result.merge(r),
@@ -36,6 +36,6 @@ impl Orchestrator {
             }
         }
 
-        self.dispatch_effect_result(result);
+        self.dispatch_pending_actions(result);
     }
 }

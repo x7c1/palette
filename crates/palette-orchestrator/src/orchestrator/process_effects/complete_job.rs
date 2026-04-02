@@ -1,5 +1,5 @@
-use super::EffectResult;
 use super::Orchestrator;
+use super::PendingActions;
 use palette_core::ReasonKey;
 use palette_domain::job::{JobId, JobType};
 use palette_domain::task::{TaskId, TaskStatus};
@@ -11,7 +11,7 @@ impl Orchestrator {
     pub(in crate::orchestrator) fn complete_job(
         &self,
         job_id: &JobId,
-    ) -> crate::Result<EffectResult> {
+    ) -> crate::Result<PendingActions> {
         self.try_complete_task_by_job(job_id)
     }
 
@@ -20,13 +20,13 @@ impl Orchestrator {
     pub(in crate::orchestrator) fn try_complete_task_by_job(
         &self,
         job_id: &JobId,
-    ) -> crate::Result<EffectResult> {
+    ) -> crate::Result<PendingActions> {
         let Some(job) = self.interactor.data_store.get_job(job_id)? else {
-            return Ok(EffectResult::new());
+            return Ok(PendingActions::new());
         };
         let task_id = &job.task_id;
         let Some(task_state) = self.interactor.data_store.get_task_state(task_id)? else {
-            return Ok(EffectResult::new());
+            return Ok(PendingActions::new());
         };
 
         let task_store = self.interactor.create_task_store(&task_state.workflow_id)?;
@@ -36,7 +36,7 @@ impl Orchestrator {
         let all_children_completed = children.iter().all(|c| c.status == TaskStatus::Completed);
 
         if !all_children_completed && !children.is_empty() {
-            return Ok(EffectResult::new());
+            return Ok(PendingActions::new());
         }
 
         // All conditions met: mark task as Completed
@@ -63,9 +63,9 @@ impl Orchestrator {
     }
 
     /// Find assignable jobs waiting for a member slot and assign them.
-    fn fill_vacant_slots(&self) -> crate::Result<EffectResult> {
+    fn fill_vacant_slots(&self) -> crate::Result<PendingActions> {
         let assignable = self.interactor.data_store.find_assignable_jobs()?;
-        let mut result = EffectResult::new();
+        let mut result = PendingActions::new();
         for job in &assignable {
             result = result.merge(self.assign_new_job(&job.id)?);
         }
@@ -77,13 +77,13 @@ impl Orchestrator {
         &self,
         completed_task_id: &TaskId,
         task_store: &TaskStore,
-    ) -> crate::Result<EffectResult> {
+    ) -> crate::Result<PendingActions> {
         use palette_usecase::TaskRuleEngine;
 
         let task_engine = TaskRuleEngine::new(task_store);
         let completion = task_engine.on_task_completed(completed_task_id);
 
-        let mut result = EffectResult::new();
+        let mut result = PendingActions::new();
 
         // Process newly ready tasks
         for task_id in &completion.newly_ready {
@@ -106,8 +106,8 @@ impl Orchestrator {
         task_id: &TaskId,
         task_store: &TaskStore,
         task_engine: &palette_usecase::TaskRuleEngine<'_>,
-    ) -> crate::Result<EffectResult> {
-        let mut result = EffectResult::new();
+    ) -> crate::Result<PendingActions> {
+        let mut result = PendingActions::new();
 
         // Before marking parent as Completed, check its own Job (if any)
         let own_job_done = self
@@ -128,7 +128,7 @@ impl Orchestrator {
                     "all child reviewers completed; spawning ReviewIntegrator"
                 );
                 match self.handle_spawn_supervisor(task_id, WorkerRole::ReviewIntegrator) {
-                    Ok(sup_id) => result.spawned_supervisors.push(sup_id),
+                    Ok(sup_id) => result.watch_only.push(sup_id),
                     Err(e) => {
                         tracing::error!(error = %e, task_id = %task_id, "failed to spawn ReviewIntegrator");
                     }
@@ -191,8 +191,8 @@ impl Orchestrator {
         task_id: &TaskId,
         task_store: &TaskStore,
         task_engine: &palette_usecase::TaskRuleEngine<'_>,
-    ) -> crate::Result<EffectResult> {
-        let mut result = EffectResult::new();
+    ) -> crate::Result<PendingActions> {
+        let mut result = PendingActions::new();
         let children = task_store.get_child_tasks(task_id);
 
         if children.is_empty() {
@@ -234,7 +234,7 @@ impl Orchestrator {
             } else {
                 // Pure composite task (no job_type): spawn Approver
                 match self.handle_spawn_supervisor(task_id, WorkerRole::Approver) {
-                    Ok(sup_id) => result.spawned_supervisors.push(sup_id),
+                    Ok(sup_id) => result.watch_only.push(sup_id),
                     Err(e) => {
                         tracing::error!(error = %e, task_id = %task_id, "failed to spawn supervisor");
                     }
@@ -259,7 +259,7 @@ impl Orchestrator {
     fn create_and_assign_job(
         &self,
         task: &palette_domain::task::Task,
-    ) -> crate::Result<EffectResult> {
+    ) -> crate::Result<PendingActions> {
         let req = task
             .to_create_job_request()
             .map_err(|e| crate::Error::InvalidTaskState {

@@ -1,5 +1,5 @@
-use super::EffectResult;
 use super::Orchestrator;
+use super::PendingActions;
 use palette_domain::job::{JobStatus, JobType, ReviewStatus, ReviewTransition};
 use palette_domain::task::{TaskId, TaskStatus};
 use palette_domain::worker::WorkerRole;
@@ -10,8 +10,8 @@ impl Orchestrator {
     pub(in crate::orchestrator) fn activate_child_review_tasks(
         &self,
         craft_job_id: &palette_domain::job::JobId,
-    ) -> crate::Result<EffectResult> {
-        let mut result = EffectResult::new();
+    ) -> crate::Result<PendingActions> {
+        let mut result = PendingActions::new();
 
         let Some(job) = self.interactor.data_store.get_job(craft_job_id)? else {
             return Ok(result);
@@ -52,7 +52,7 @@ impl Orchestrator {
             {
                 tracing::info!(task_id = %ready_id, "spawning Approver for review-integrate composite");
                 match self.handle_spawn_supervisor(ready_id, WorkerRole::Approver) {
-                    Ok(sup_id) => result.spawned_supervisors.push(sup_id),
+                    Ok(sup_id) => result.watch_only.push(sup_id),
                     Err(e) => {
                         tracing::error!(error = %e, task_id = %ready_id, "failed to spawn Approver");
                     }

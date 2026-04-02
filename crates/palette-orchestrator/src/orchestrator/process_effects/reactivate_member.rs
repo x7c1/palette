@@ -1,8 +1,7 @@
-use super::EffectResult;
 use super::Orchestrator;
+use super::PendingActions;
 use super::job_instruction::format_job_instruction;
 use palette_domain::job::{CraftTransition, JobId, ReviewTransition};
-use palette_domain::server::PendingDelivery;
 use palette_domain::worker::WorkerId;
 
 impl Orchestrator {
@@ -11,13 +10,13 @@ impl Orchestrator {
         &self,
         job_id: &JobId,
         member_id: &WorkerId,
-    ) -> crate::Result<EffectResult> {
-        let mut result = EffectResult::new();
+    ) -> crate::Result<PendingActions> {
+        let mut result = PendingActions::new();
 
         let Some(job) = self.interactor.data_store.get_job(job_id)? else {
             return Ok(result);
         };
-        let Some(member) = self.interactor.data_store.find_worker(member_id)? else {
+        let Some(_member) = self.interactor.data_store.find_worker(member_id)? else {
             return Ok(result);
         };
 
@@ -45,10 +44,7 @@ impl Orchestrator {
         self.interactor
             .data_store
             .update_job_status(job_id, reactivated_status)?;
-        result.deliveries.push(PendingDelivery {
-            target_id: member_id.clone(),
-            terminal_target: member.terminal_target.clone(),
-        });
+        result.deliver_to.push(member_id.clone());
         tracing::info!(
             job_id = %job_id,
             member_id = %member_id,

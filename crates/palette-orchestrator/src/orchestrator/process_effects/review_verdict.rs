@@ -1,5 +1,5 @@
-use super::EffectResult;
 use super::Orchestrator;
+use super::PendingActions;
 use palette_domain::job::{CraftStatus, CraftTransition, JobId, JobStatus, JobType};
 use palette_domain::review::Verdict;
 
@@ -9,7 +9,7 @@ impl Orchestrator {
         &self,
         review_job_id: &JobId,
         verdict: Verdict,
-    ) -> crate::Result<EffectResult> {
+    ) -> crate::Result<PendingActions> {
         match verdict {
             Verdict::Approved => self.handle_review_approved(review_job_id),
             Verdict::ChangesRequested => self.handle_review_changes_requested(review_job_id),
@@ -18,7 +18,7 @@ impl Orchestrator {
 
     /// When a review is approved: check if all sibling reviews are done,
     /// complete the parent craft job if so, and try to complete the task.
-    fn handle_review_approved(&self, review_job_id: &JobId) -> crate::Result<EffectResult> {
+    fn handle_review_approved(&self, review_job_id: &JobId) -> crate::Result<PendingActions> {
         let result = self
             .try_complete_parent_craft_job(review_job_id)?
             .merge(self.try_complete_task_by_job(review_job_id)?);
@@ -29,37 +29,40 @@ impl Orchestrator {
     fn handle_review_changes_requested(
         &self,
         review_job_id: &JobId,
-    ) -> crate::Result<EffectResult> {
+    ) -> crate::Result<PendingActions> {
         self.revert_parent_craft_to_in_progress(review_job_id)
     }
 
     /// When a review job becomes Done, check if all sibling review tasks under
     /// the parent craft task are also done. If so, transition the parent craft job
     /// from InReview to Done.
-    fn try_complete_parent_craft_job(&self, review_job_id: &JobId) -> crate::Result<EffectResult> {
+    fn try_complete_parent_craft_job(
+        &self,
+        review_job_id: &JobId,
+    ) -> crate::Result<PendingActions> {
         let Some(review_job) = self.interactor.data_store.get_job(review_job_id)? else {
-            return Ok(EffectResult::new());
+            return Ok(PendingActions::new());
         };
         let review_task_id = &review_job.task_id;
         let Some(task_state) = self.interactor.data_store.get_task_state(review_task_id)? else {
-            return Ok(EffectResult::new());
+            return Ok(PendingActions::new());
         };
 
         let task_store = self.interactor.create_task_store(&task_state.workflow_id)?;
 
         let Some(review_task) = task_store.get_task(review_task_id) else {
-            return Ok(EffectResult::new());
+            return Ok(PendingActions::new());
         };
 
         let Some(ref parent_id) = review_task.parent_id else {
-            return Ok(EffectResult::new());
+            return Ok(PendingActions::new());
         };
 
         let Some(craft_job) = self.interactor.data_store.get_job_by_task_id(parent_id)? else {
-            return Ok(EffectResult::new());
+            return Ok(PendingActions::new());
         };
         if craft_job.status != JobStatus::Craft(CraftStatus::InReview) {
-            return Ok(EffectResult::new());
+            return Ok(PendingActions::new());
         }
 
         // Check if ALL review children of the parent have their jobs Done
@@ -79,7 +82,7 @@ impl Orchestrator {
         });
 
         if !all_reviews_done {
-            return Ok(EffectResult::new());
+            return Ok(PendingActions::new());
         }
 
         // All review children are done — transition craft job to Done
@@ -103,30 +106,30 @@ impl Orchestrator {
     fn revert_parent_craft_to_in_progress(
         &self,
         review_job_id: &JobId,
-    ) -> crate::Result<EffectResult> {
+    ) -> crate::Result<PendingActions> {
         let Some(review_job) = self.interactor.data_store.get_job(review_job_id)? else {
-            return Ok(EffectResult::new());
+            return Ok(PendingActions::new());
         };
         let review_task_id = &review_job.task_id;
         let Some(task_state) = self.interactor.data_store.get_task_state(review_task_id)? else {
-            return Ok(EffectResult::new());
+            return Ok(PendingActions::new());
         };
 
         let task_store = self.interactor.create_task_store(&task_state.workflow_id)?;
 
         let Some(review_task) = task_store.get_task(review_task_id) else {
-            return Ok(EffectResult::new());
+            return Ok(PendingActions::new());
         };
 
         let Some(ref parent_id) = review_task.parent_id else {
-            return Ok(EffectResult::new());
+            return Ok(PendingActions::new());
         };
 
         let Some(craft_job) = self.interactor.data_store.get_job_by_task_id(parent_id)? else {
-            return Ok(EffectResult::new());
+            return Ok(PendingActions::new());
         };
         if craft_job.status != JobStatus::Craft(CraftStatus::InReview) {
-            return Ok(EffectResult::new());
+            return Ok(PendingActions::new());
         }
 
         // Move craft job back to InProgress
@@ -161,7 +164,7 @@ impl Orchestrator {
         if let Some(ref assignee) = craft_job.assignee_id {
             self.reactivate_member(&craft_job.id, assignee)
         } else {
-            Ok(EffectResult::new())
+            Ok(PendingActions::new())
         }
     }
 }

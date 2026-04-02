@@ -1,5 +1,5 @@
 use super::Orchestrator;
-use super::process_effects::EffectResult;
+use super::process_effects::PendingActions;
 use palette_domain::job::{JobId, JobType, ReviewTransition};
 use palette_domain::review::Verdict;
 use palette_domain::server::ServerEvent;
@@ -73,12 +73,12 @@ impl Orchestrator {
     /// A craft job has been marked Done.
     /// Destroy the crafter member and cascade task completion.
     async fn handle_craft_done(self: &Arc<Self>, job_id: &JobId) {
-        let result: crate::Result<EffectResult> = (|| {
+        let result: crate::Result<PendingActions> = (|| {
             let job = match self.interactor.data_store.get_job(job_id)? {
                 Some(j) => j,
                 None => {
                     tracing::error!(job_id = %job_id, "CraftDone: job not found");
-                    return Ok(EffectResult::new());
+                    return Ok(PendingActions::new());
                 }
             };
 
@@ -89,7 +89,7 @@ impl Orchestrator {
         })();
 
         match result {
-            Ok(r) => self.dispatch_effect_result(r),
+            Ok(r) => self.dispatch_pending_actions(r),
             Err(e) => tracing::error!(error = %e, job_id = %job_id, "failed to handle CraftDone"),
         }
     }
@@ -98,7 +98,7 @@ impl Orchestrator {
     /// Activate child review tasks.
     async fn handle_craft_ready_for_review(self: &Arc<Self>, craft_job_id: &JobId) {
         match self.activate_child_review_tasks(craft_job_id) {
-            Ok(r) => self.dispatch_effect_result(r),
+            Ok(r) => self.dispatch_pending_actions(r),
             Err(e) => {
                 tracing::error!(error = %e, craft_job_id = %craft_job_id, "failed to activate review tasks")
             }
@@ -108,12 +108,12 @@ impl Orchestrator {
     /// A review submission has been recorded.
     /// Validate artifacts and handle the verdict.
     async fn handle_review_submitted(self: &Arc<Self>, review_job_id: &JobId) {
-        let result: crate::Result<EffectResult> = (|| {
+        let result: crate::Result<PendingActions> = (|| {
             let job = match self.interactor.data_store.get_job(review_job_id)? {
                 Some(j) => j,
                 None => {
                     tracing::error!(review_job_id = %review_job_id, "ReviewSubmitted: job not found");
-                    return Ok(EffectResult::new());
+                    return Ok(PendingActions::new());
                 }
             };
 
@@ -125,7 +125,7 @@ impl Orchestrator {
             // handler; the orchestrator logs the result for observability only.
             if is_integrator {
                 if !self.validate_all_reviewer_artifacts(review_job_id) {
-                    return Ok(EffectResult::new());
+                    return Ok(PendingActions::new());
                 }
             } else {
                 self.log_review_artifact_status(review_job_id);
@@ -168,7 +168,7 @@ impl Orchestrator {
         })();
 
         match result {
-            Ok(r) => self.dispatch_effect_result(r),
+            Ok(r) => self.dispatch_pending_actions(r),
             Err(e) => {
                 tracing::error!(error = %e, review_job_id = %review_job_id, "failed to handle ReviewSubmitted")
             }
@@ -181,7 +181,7 @@ impl Orchestrator {
         workflow_id: &palette_domain::workflow::WorkflowId,
     ) {
         match self.activate_workflow(workflow_id) {
-            Ok(r) => self.dispatch_effect_result(r),
+            Ok(r) => self.dispatch_pending_actions(r),
             Err(e) => {
                 tracing::error!(error = %e, workflow_id = %workflow_id, "failed to activate workflow")
             }
@@ -194,7 +194,7 @@ impl Orchestrator {
         workflow_id: &palette_domain::workflow::WorkflowId,
     ) {
         match self.activate_new_tasks(workflow_id) {
-            Ok(r) => self.dispatch_effect_result(r),
+            Ok(r) => self.dispatch_pending_actions(r),
             Err(e) => {
                 tracing::error!(error = %e, workflow_id = %workflow_id, "failed to activate new tasks")
             }
@@ -202,15 +202,15 @@ impl Orchestrator {
     }
 
     /// Dispatch the accumulated results: deliver messages and spawn readiness watchers.
-    pub(super) fn dispatch_effect_result(self: &Arc<Self>, result: EffectResult) {
-        for d in &result.deliveries {
-            let _ = self.deliver_queued_messages(&d.target_id);
+    pub(super) fn dispatch_pending_actions(self: &Arc<Self>, actions: PendingActions) {
+        for id in &actions.deliver_to {
+            let _ = self.deliver_queued_messages(id);
         }
-        for d in result.deliveries {
-            self.spawn_readiness_watcher(d.target_id);
+        for id in actions.deliver_to {
+            self.spawn_readiness_watcher(id);
         }
-        for sup_id in result.spawned_supervisors {
-            self.spawn_readiness_watcher(sup_id);
+        for id in actions.watch_only {
+            self.spawn_readiness_watcher(id);
         }
     }
 }
