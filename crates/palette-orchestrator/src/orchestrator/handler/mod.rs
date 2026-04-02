@@ -1,4 +1,5 @@
 mod activate_review;
+mod activate_task;
 mod assign_new_job;
 mod complete_job;
 mod destroy_member;
