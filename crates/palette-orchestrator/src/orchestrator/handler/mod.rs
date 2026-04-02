@@ -2,7 +2,7 @@ mod activate_review;
 mod activate_task;
 mod assign_new_job;
 mod complete_task;
-mod destroy_member;
+mod destroy_worker;
 mod handle_event;
 pub(crate) mod job_instruction;
 mod orchestrator_task;
