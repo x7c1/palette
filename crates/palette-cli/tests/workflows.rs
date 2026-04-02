@@ -26,7 +26,7 @@ task:
       children:
         - key: api-plan
           type: craft
-          plan_path: 2026/feature-x/planning/api-plan
+          plan_path: 2026/feature-x/planning/api-plan/README.md
           children:
             - key: api-plan-review
               type: review
@@ -36,7 +36,7 @@ task:
       children:
         - key: api-impl
           type: craft
-          plan_path: 2026/feature-x/execution/api-impl
+          plan_path: 2026/feature-x/execution/api-impl/README.md
           children:
             - key: api-impl-review
               type: review
@@ -190,13 +190,13 @@ task:
   children:
     - key: step-a
       type: craft
-      plan_path: test/step-a
+      plan_path: test/step-a/README.md
       children:
         - key: review
           type: review
     - key: step-b
       type: craft
-      plan_path: test/step-b
+      plan_path: test/step-b/README.md
       depends_on: [step-a]
       children:
         - key: review
@@ -433,7 +433,7 @@ task:
   children:
     - key: craft
       type: craft
-      plan_path: test/craft
+      plan_path: test/craft/README.md
       children:
         - key: review
           type: review
@@ -442,7 +442,7 @@ task:
       children:
         - key: craft
           type: craft
-          plan_path: test/step-b-craft
+          plan_path: test/step-b/README.md-craft
           children:
             - key: review
               type: review
@@ -571,14 +571,14 @@ task:
   children:
     - key: step-a
       type: craft
-      plan_path: test/a-craft
+      plan_path: test/a-craft/README.md
       children:
         - key: review
           type: review
     - key: step-b
       depends_on: [step-a]
       type: craft
-      plan_path: test/b-craft
+      plan_path: test/b-craft/README.md
       children:
         - key: review
           type: review
@@ -896,7 +896,7 @@ task:
   children:
     - key: craft
       type: craft
-      plan_path: test/craft
+      plan_path: test/craft/README.md
       children:
         - key: review-1
           type: review
@@ -1071,7 +1071,7 @@ task:
   children:
     - key: impl
       type: craft
-      plan_path: test/impl
+      plan_path: test/impl/README.md
       children:
         - key: review
           type: review

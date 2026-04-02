@@ -66,7 +66,6 @@ impl Orchestrator {
             self.spawn_readiness_watcher(target_id.clone());
             return Ok(false);
         }
-
         if let Some(msg) = self.interactor.data_store.dequeue_message(target_id)? {
             self.interactor.terminal.send_keys(&terminal_target, &msg)?;
             self.interactor

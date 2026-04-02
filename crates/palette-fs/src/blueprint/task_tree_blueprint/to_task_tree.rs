@@ -308,7 +308,7 @@ task:
       children:
         - key: api-plan
           type: craft
-          plan_path: planning/api-plan
+          plan_path: planning/api-plan/README.md
           children:
             - key: api-plan-review
               type: review
@@ -318,7 +318,7 @@ task:
       children:
         - key: api-impl
           type: craft
-          plan_path: execution/api-impl
+          plan_path: execution/api-impl/README.md
           children:
             - key: api-impl-review
               type: review
@@ -347,7 +347,10 @@ task:
         // api-plan (composite craft with review child)
         let api_plan = tree.find_by_key("api-plan").unwrap();
         assert_eq!(api_plan.job_type, Some(JobType::Craft));
-        assert_eq!(api_plan.plan_path.as_deref(), Some("planning/api-plan"));
+        assert_eq!(
+            api_plan.plan_path.as_deref(),
+            Some("planning/api-plan/README.md")
+        );
         assert!(api_plan.depends_on.is_empty());
         assert_eq!(api_plan.children.len(), 1);
 
@@ -357,7 +360,7 @@ task:
         assert_eq!(review.parent_id.as_ref().unwrap(), &api_plan.id);
         assert_eq!(
             review.plan_path.as_deref(),
-            Some("planning/api-plan"),
+            Some("planning/api-plan/README.md"),
             "review should inherit plan_path from parent craft"
         );
         assert!(review.depends_on.is_empty());

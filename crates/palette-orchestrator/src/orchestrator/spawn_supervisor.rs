@@ -98,6 +98,8 @@ impl Orchestrator {
 
     /// Enqueue a job instruction message for a ReviewIntegrator.
     /// The RI needs the review-integrate job ID and round number to submit its verdict.
+    /// Also transitions the job to InProgress so crash recovery can detect
+    /// that the RI has active work and nudge it to continue.
     fn enqueue_ri_instruction(&self, task_id: &TaskId, ri_id: &WorkerId) -> crate::Result<()> {
         let Some(job) = self.interactor.data_store.get_job_by_task_id(task_id)? else {
             tracing::warn!(task_id = %task_id, "no job found for review-integrate task");
@@ -106,6 +108,15 @@ impl Orchestrator {
         let round = self.current_review_round(&job)?;
         let instruction =
             super::process_effects::job_instruction::format_job_instruction(&job, Some(round));
+
+        // Transition to InProgress before enqueuing the instruction.
+        // Supervisor jobs are not assigned through the normal member flow,
+        // so this is the only place where the status advances from Todo.
+        self.interactor.data_store.update_job_status(
+            &job.id,
+            palette_domain::job::JobStatus::in_progress(job.job_type),
+        )?;
+
         self.interactor
             .data_store
             .enqueue_message(ri_id, &instruction)?;
