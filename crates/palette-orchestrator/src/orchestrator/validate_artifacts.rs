@@ -6,6 +6,57 @@ use palette_usecase::task_store::TaskStore;
 use super::Orchestrator;
 
 impl Orchestrator {
+    /// Log whether a reviewer's review.md artifact exists (informational).
+    ///
+    /// Individual reviewer artifact validation is enforced synchronously by
+    /// the server's submit handler (rejecting submissions without review.md).
+    /// This method provides observability in the orchestrator log.
+    pub(super) fn log_review_artifact_status(&self, job_id: &JobId) {
+        let job = match self.interactor.data_store.get_job(job_id) {
+            Ok(Some(j)) if j.job_type == JobType::Review => j,
+            _ => return,
+        };
+        let task_state = match self.interactor.data_store.get_task_state(&job.task_id) {
+            Ok(Some(s)) => s,
+            _ => return,
+        };
+        let task_store = match self.interactor.create_task_store(&task_state.workflow_id) {
+            Ok(s) => s,
+            Err(_) => return,
+        };
+        let craft_job = match self.find_ancestor_craft_job(&task_store, &job.task_id) {
+            Some(j) => j,
+            None => return,
+        };
+        let submissions = match self.interactor.data_store.get_review_submissions(job_id) {
+            Ok(s) => s,
+            Err(_) => return,
+        };
+        let round = submissions.last().map(|s| s.round as u32).unwrap_or(1);
+
+        let artifacts_base = self
+            .workspace_manager
+            .artifacts_path(task_state.workflow_id.as_ref(), craft_job.id.as_ref());
+        let review_md = artifacts_base
+            .join(format!("round-{round}"))
+            .join(job.id.to_string())
+            .join("review.md");
+
+        if review_md.exists() {
+            tracing::debug!(
+                job_id = %job_id,
+                path = %review_md.display(),
+                "review.md artifact validated"
+            );
+        } else {
+            tracing::debug!(
+                job_id = %job_id,
+                path = %review_md.display(),
+                "review.md artifact not found (server pre-check should have caught this)"
+            );
+        }
+    }
+
     /// Validate that all child reviewers under an integrator's task have
     /// written their review.md files.
     ///

@@ -27,7 +27,12 @@ impl TmuxManager {
         // Re-balance all panes in the window to equal widths.
         // Without this, each split-window halves the current pane,
         // making later panes progressively narrower.
-        let _ = self.run_tmux(&["select-layout", "-t", base_target.as_ref(), "even-horizontal"]);
+        let _ = self.run_tmux(&[
+            "select-layout",
+            "-t",
+            base_target.as_ref(),
+            "even-horizontal",
+        ]);
 
         Ok(TerminalTarget::new(pane_id))
     }

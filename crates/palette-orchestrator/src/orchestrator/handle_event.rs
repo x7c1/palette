@@ -125,11 +125,16 @@ impl Orchestrator {
 
             let is_integrator = job.job_type == JobType::ReviewIntegrate;
 
-            // Validate artifacts for integrator submissions: ensure all child
-            // reviewers have written their review.md files. Individual reviewer
-            // validation is handled synchronously by the server's submit handler.
-            if is_integrator && !self.validate_all_reviewer_artifacts(review_job_id) {
-                return Ok(());
+            // Validate artifacts. Integrator submissions are validated by the
+            // orchestrator (all child review.md must exist). Individual reviewer
+            // submissions are validated synchronously by the server's submit
+            // handler; the orchestrator logs the result for observability only.
+            if is_integrator {
+                if !self.validate_all_reviewer_artifacts(review_job_id) {
+                    return Ok(());
+                }
+            } else {
+                self.log_review_artifact_status(review_job_id);
             }
 
             // Get the latest submission to determine the verdict
