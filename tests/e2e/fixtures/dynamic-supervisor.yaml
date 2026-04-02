@@ -5,7 +5,7 @@ task:
       children:
         - key: craft
           type: craft
-          plan_path: step-a
+          plan_path: step-a/README.md
           priority: high
           repository:
             name: x7c1/palette
@@ -18,7 +18,7 @@ task:
       children:
         - key: craft
           type: craft
-          plan_path: step-b
+          plan_path: step-b/README.md
           priority: medium
           repository:
             name: x7c1/palette

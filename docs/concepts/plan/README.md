@@ -23,7 +23,7 @@ docs/plans/
         README.md          ← Job api-spec's Plan
 ```
 
-A Job's `plan_path` might be `2026/feature-x/api-impl`, resolving to `docs/plans/2026/feature-x/api-impl/`.
+A Job's `plan_path` might be `2026/feature-x/api-impl/README.md`, resolving to `docs/plans/2026/feature-x/api-impl/README.md`.
 
 ## Splitting work
 

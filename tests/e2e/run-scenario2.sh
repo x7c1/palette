@@ -223,8 +223,6 @@ while true; do
     echo "  - 2 supervisors spawned on workflow start (root + phase-a)"
     echo "  - phase-a supervisor destroyed on completion, phase-b supervisor spawned"
     echo "  - All supervisors destroyed on workflow completion"
-    echo "Cleaning up..."
-    scripts/reset.sh 2>&1
     exit 0
   fi
 done

@@ -1,6 +1,6 @@
 use super::Orchestrator;
 use palette_domain::job::JobFilter;
-use palette_domain::worker::{WorkerId, WorkerStatus};
+use palette_domain::worker::{WorkerId, WorkerRole, WorkerStatus};
 use std::ops::ControlFlow;
 use std::sync::Arc;
 
@@ -145,19 +145,18 @@ impl Orchestrator {
 
     /// If the worker has an in-progress job (i.e. it was suspended mid-work),
     /// send a continuation prompt so Claude Code resumes working.
+    ///
+    /// For supervisors (e.g. ReviewIntegrator), jobs are looked up by
+    /// `task_id` rather than `assignee_id` because supervisor jobs are not
+    /// assigned through the normal member assignment flow.
     fn nudge_resumed_worker(self: &Arc<Self>, target_id: &WorkerId) {
-        let jobs = match self.interactor.data_store.list_jobs(&JobFilter {
-            assignee_id: Some(target_id.clone()),
-            ..Default::default()
-        }) {
-            Ok(jobs) => jobs,
+        let has_in_progress = match self.has_in_progress_job(target_id) {
+            Ok(v) => v,
             Err(e) => {
-                tracing::error!(error = %e, target_id = %target_id, "failed to list jobs for resume nudge");
+                tracing::error!(error = %e, target_id = %target_id, "failed to check in-progress jobs for resume nudge");
                 return;
             }
         };
-
-        let has_in_progress = jobs.iter().any(|j| j.status.is_in_progress());
         if !has_in_progress {
             return;
         }
@@ -170,5 +169,29 @@ impl Orchestrator {
             return;
         }
         let _ = self.deliver_queued_messages(target_id);
+    }
+
+    /// Check whether the worker has an in-progress job.
+    /// Members are checked via `assignee_id`; supervisors via `task_id`.
+    fn has_in_progress_job(&self, target_id: &WorkerId) -> crate::Result<bool> {
+        let jobs = self.interactor.data_store.list_jobs(&JobFilter {
+            assignee_id: Some(target_id.clone()),
+            ..Default::default()
+        })?;
+        if jobs.iter().any(|j| j.status.is_in_progress()) {
+            return Ok(true);
+        }
+
+        // Non-member roles (Approver, ReviewIntegrator) have jobs linked by
+        // task_id, not assignee_id. Fall back to task_id lookup.
+        let worker = self.interactor.data_store.find_worker(target_id)?;
+        if let Some(w) = worker
+            && w.role != WorkerRole::Member
+            && let Some(job) = self.interactor.data_store.get_job_by_task_id(&w.task_id)?
+        {
+            return Ok(job.status.is_in_progress());
+        }
+
+        Ok(false)
     }
 }

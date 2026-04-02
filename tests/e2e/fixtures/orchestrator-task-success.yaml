@@ -3,7 +3,7 @@ task:
   children:
     - key: craft-phase
       type: craft
-      plan_path: implement
+      plan_path: implement/README.md
       priority: high
       repository:
         name: x7c1/palette

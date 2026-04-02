@@ -70,27 +70,28 @@ fi
 WORKFLOW_ID=$(cat /tmp/palette-e2e-response.json | jq -r '.workflow_id')
 echo "Workflow ID: $WORKFLOW_ID"
 
-# --- Step 4: Wait for review phase and review.md files ---
+# --- Step 4: Wait for all review.md files ---
+# The blueprint has 2 reviewers. Wait for both to write review.md before
+# proceeding, because the RI is only spawned after all reviewers complete.
 echo ""
-echo "=== Step 4: Wait for review.md files ==="
+echo "=== Step 4: Wait for all review.md files ==="
 
+EXPECTED_REVIEWS=2
 CRAFT_JOB=""
-REVIEW_MD_FOUND=false
 for i in $(seq 1 180); do
   JOBS=$(curl -sf "$PALETTE_URL/jobs" 2>/dev/null || echo "[]")
   CRAFT_JOB=$(echo "$JOBS" | jq -r '.[] | select(.type == "craft") | .id' 2>/dev/null | head -1)
 
   if [[ -n "$CRAFT_JOB" ]]; then
     REVIEW_COUNT="$(find "data/artifacts/$WORKFLOW_ID/$CRAFT_JOB" -name "review.md" 2>/dev/null | wc -l)" || true
-    if [[ "$REVIEW_COUNT" -gt 0 ]]; then
+    if [[ "$REVIEW_COUNT" -ge "$EXPECTED_REVIEWS" ]]; then
       echo "Found $REVIEW_COUNT review.md file(s) after $((i*2))s"
-      REVIEW_MD_FOUND=true
       break
     fi
   fi
 
   if [[ $i -eq 180 ]]; then
-    echo "FAIL: No review.md files found after 360 seconds"
+    echo "FAIL: Expected $EXPECTED_REVIEWS review.md files, found ${REVIEW_COUNT:-0} after 360 seconds"
     exit 1
   fi
   sleep 2
@@ -101,19 +102,31 @@ PRE_CRASH_REVIEWS=$(find "data/artifacts/$WORKFLOW_ID/$CRAFT_JOB" -name "review.
 echo "Pre-crash review.md files:"
 echo "$PRE_CRASH_REVIEWS" | sed 's/^/  /'
 
-# --- Step 5: Find and crash the ReviewIntegrator ---
+# --- Step 5: Wait for ReviewIntegrator and crash it ---
+# After the Approver/RI separation, the RI is spawned only after all reviewers
+# complete. Poll until the RI appears in the workers list, then crash it.
 echo ""
-echo "=== Step 5: Crash ReviewIntegrator container ==="
+echo "=== Step 5: Wait for ReviewIntegrator and crash it ==="
 
-WORKERS_JSON=$(curl -sf "$PALETTE_URL/workers" 2>/dev/null || echo "[]")
-INTEGRATOR_CONTAINER=$(echo "$WORKERS_JSON" | jq -r '[.[] | select(.role == "review_integrator")] | .[0].container_id // empty' 2>/dev/null || true)
-INTEGRATOR_ID=$(echo "$WORKERS_JSON" | jq -r '[.[] | select(.role == "review_integrator")] | .[0].id // empty' 2>/dev/null || true)
+INTEGRATOR_CONTAINER=""
+INTEGRATOR_ID=""
+for i in $(seq 1 120); do
+  WORKERS_JSON=$(curl -sf "$PALETTE_URL/workers" 2>/dev/null || echo "[]")
+  INTEGRATOR_CONTAINER=$(echo "$WORKERS_JSON" | jq -r '[.[] | select(.role == "review_integrator")] | .[0].container_id // empty' 2>/dev/null || true)
+  INTEGRATOR_ID=$(echo "$WORKERS_JSON" | jq -r '[.[] | select(.role == "review_integrator")] | .[0].id // empty' 2>/dev/null || true)
 
-if [[ -z "$INTEGRATOR_CONTAINER" ]]; then
-  echo "WARN: No ReviewIntegrator found (single-reviewer path, skipping crash test)"
-  echo "=== Review artifacts crash-recovery: skipped (no integrator) ==="
-  exit 0
-fi
+  if [[ -n "$INTEGRATOR_CONTAINER" ]]; then
+    echo "ReviewIntegrator found after ${i}s: id=$INTEGRATOR_ID"
+    break
+  fi
+
+  if [[ $i -eq 120 ]]; then
+    echo "FAIL: ReviewIntegrator not spawned within 120 seconds"
+    tail -30 "$LOG_FILE"
+    exit 1
+  fi
+  sleep 1
+done
 
 echo "Crashing integrator: id=$INTEGRATOR_ID container=$INTEGRATOR_CONTAINER"
 docker stop "$INTEGRATOR_CONTAINER" 2>/dev/null || true
