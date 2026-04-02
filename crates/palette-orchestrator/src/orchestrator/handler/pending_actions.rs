@@ -4,7 +4,7 @@ use palette_domain::worker::WorkerId;
 /// after an event handler completes.
 ///
 /// Returned by handler methods; dispatched by `dispatch_pending_actions`.
-pub(in crate::orchestrator) struct PendingActions {
+pub(crate) struct PendingActions {
     /// Workers to watch for readiness and deliver queued messages to.
     pub deliver_to: Vec<WorkerId>,
     /// Workers to watch for readiness only (no immediate messages).

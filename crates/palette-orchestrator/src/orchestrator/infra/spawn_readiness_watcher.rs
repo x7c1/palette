@@ -11,7 +11,7 @@ const READINESS_POLL_INTERVAL: std::time::Duration = std::time::Duration::from_s
 const READINESS_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(120);
 
 impl Orchestrator {
-    pub(in crate::orchestrator) fn spawn_readiness_watcher(self: &Arc<Self>, target_id: WorkerId) {
+    pub(crate) fn spawn_readiness_watcher(self: &Arc<Self>, target_id: WorkerId) {
         let this = Arc::clone(self);
         let max_polls = READINESS_TIMEOUT.as_secs() / READINESS_POLL_INTERVAL.as_secs();
 

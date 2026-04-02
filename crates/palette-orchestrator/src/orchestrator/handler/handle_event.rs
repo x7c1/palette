@@ -6,7 +6,7 @@ use palette_domain::server::ServerEvent;
 use std::sync::Arc;
 
 impl Orchestrator {
-    pub(in crate::orchestrator) async fn handle_event(self: &Arc<Self>, event: ServerEvent) {
+    pub(crate) async fn handle_event(self: &Arc<Self>, event: ServerEvent) {
         match event {
             // --- Domain events ---
             ServerEvent::CraftDone { job_id } => {
@@ -202,10 +202,7 @@ impl Orchestrator {
     }
 
     /// Dispatch the accumulated results: deliver messages and spawn readiness watchers.
-    pub(in crate::orchestrator) fn dispatch_pending_actions(
-        self: &Arc<Self>,
-        actions: PendingActions,
-    ) {
+    pub(crate) fn dispatch_pending_actions(self: &Arc<Self>, actions: PendingActions) {
         for id in &actions.deliver_to {
             let _ = self.deliver_queued_messages(id);
         }

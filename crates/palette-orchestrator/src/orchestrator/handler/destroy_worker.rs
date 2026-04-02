@@ -3,7 +3,7 @@ use palette_domain::job::JobType;
 use palette_domain::worker::WorkerId;
 
 impl Orchestrator {
-    pub(in crate::orchestrator) fn destroy_member(&self, member_id: &WorkerId) {
+    pub(crate) fn destroy_member(&self, member_id: &WorkerId) {
         let worker = match self.interactor.data_store.remove_worker(member_id) {
             Ok(Some(w)) => w,
             Ok(None) => return,
@@ -39,7 +39,7 @@ impl Orchestrator {
         }
     }
 
-    pub(in crate::orchestrator) fn destroy_supervisor(&self, supervisor_id: &WorkerId) {
+    pub(crate) fn destroy_supervisor(&self, supervisor_id: &WorkerId) {
         let worker = match self.interactor.data_store.remove_worker(supervisor_id) {
             Ok(Some(w)) => w,
             Ok(None) => return,

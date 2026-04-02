@@ -9,7 +9,7 @@ use palette_usecase::task_store::TaskStore;
 impl Orchestrator {
     /// Handle a task that just became Ready.
     /// Leaf tasks get a Job created; composite tasks with no job resolve their children.
-    pub(in crate::orchestrator) fn activate_ready_task(
+    pub(crate) fn activate_ready_task(
         &self,
         task_id: &TaskId,
         task_store: &TaskStore,

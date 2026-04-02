@@ -8,7 +8,7 @@ impl Orchestrator {
     /// Spawn a dynamic supervisor for a composite task.
     /// Creates a tmux window and Docker container, then registers in DB.
     /// If Docker fails, the supervisor is still registered with an empty container_id.
-    pub(in crate::orchestrator) fn handle_spawn_supervisor(
+    pub(crate) fn handle_spawn_supervisor(
         &self,
         task_id: &TaskId,
         role: WorkerRole,

@@ -9,10 +9,7 @@ use palette_usecase::data_store::InsertWorkerRequest;
 impl Orchestrator {
     /// Assign a new job to a freshly spawned member.
     /// Skipped when the workflow is suspending (no new members during suspend).
-    pub(in crate::orchestrator) fn assign_new_job(
-        &self,
-        job_id: &JobId,
-    ) -> crate::Result<PendingActions> {
+    pub(crate) fn assign_new_job(&self, job_id: &JobId) -> crate::Result<PendingActions> {
         let mut result = PendingActions::new();
 
         // Verify the job is assignable (todo + no assignee)

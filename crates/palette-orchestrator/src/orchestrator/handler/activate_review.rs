@@ -7,7 +7,7 @@ use palette_domain::worker::WorkerRole;
 impl Orchestrator {
     /// When a Craft Job reaches InReview, activate its child review tasks.
     /// The craft task stays InProgress; review tasks become Ready.
-    pub(in crate::orchestrator) fn activate_child_review_tasks(
+    pub(crate) fn activate_child_review_tasks(
         &self,
         craft_job_id: &palette_domain::job::JobId,
     ) -> crate::Result<PendingActions> {

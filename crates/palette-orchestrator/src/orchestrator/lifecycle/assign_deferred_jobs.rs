@@ -8,7 +8,7 @@ impl Orchestrator {
     /// During `Suspending`, `assign_new_job` skips job assignment to avoid
     /// spawning new members. After resume, these jobs remain in `Todo` with
     /// no assignee. This method finds them and fires assignments.
-    pub(in crate::orchestrator) fn assign_deferred_jobs(self: &Arc<Self>) {
+    pub(crate) fn assign_deferred_jobs(self: &Arc<Self>) {
         let assignable = match self.interactor.data_store.find_assignable_jobs() {
             Ok(jobs) => jobs,
             Err(e) => {

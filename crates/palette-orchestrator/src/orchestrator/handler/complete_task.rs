@@ -8,10 +8,7 @@ use palette_usecase::task_store::TaskStore;
 impl Orchestrator {
     /// Check if a job's task can be completed and cascade.
     /// A task is complete when all children are Completed AND its own job (if any) is Done.
-    pub(in crate::orchestrator) fn try_complete_task_by_job(
-        &self,
-        job_id: &JobId,
-    ) -> crate::Result<PendingActions> {
+    pub(crate) fn try_complete_task_by_job(&self, job_id: &JobId) -> crate::Result<PendingActions> {
         let Some(job) = self.interactor.data_store.get_job(job_id)? else {
             return Ok(PendingActions::new());
         };

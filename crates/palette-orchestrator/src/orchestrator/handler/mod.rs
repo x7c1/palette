@@ -13,4 +13,4 @@ mod validate_artifacts;
 mod workflow_activation;
 
 use super::Orchestrator;
-pub(in crate::orchestrator) use pending_actions::PendingActions;
+pub(crate) use pending_actions::PendingActions;

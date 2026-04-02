@@ -5,7 +5,7 @@ use palette_domain::review::Verdict;
 
 impl Orchestrator {
     /// Handle a review verdict (Approved or ChangesRequested).
-    pub(in crate::orchestrator) fn handle_review_verdict(
+    pub(crate) fn handle_review_verdict(
         &self,
         review_job_id: &JobId,
         verdict: Verdict,

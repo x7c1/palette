@@ -6,7 +6,7 @@ use palette_domain::worker::WorkerId;
 
 impl Orchestrator {
     /// Reactivate an idle member with a new instruction (same container, preserving context).
-    pub(in crate::orchestrator) fn reactivate_member(
+    pub(crate) fn reactivate_member(
         &self,
         job_id: &JobId,
         member_id: &WorkerId,

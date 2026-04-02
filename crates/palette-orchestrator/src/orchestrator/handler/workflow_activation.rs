@@ -8,7 +8,7 @@ use palette_usecase::TaskRuleEngine;
 impl Orchestrator {
     /// Handle ActivateWorkflow: set root to InProgress, spawn supervisor,
     /// and recursively activate ready children.
-    pub(in crate::orchestrator) fn activate_workflow(
+    pub(crate) fn activate_workflow(
         &self,
         workflow_id: &WorkflowId,
     ) -> crate::Result<PendingActions> {
@@ -47,7 +47,7 @@ impl Orchestrator {
 
     /// Handle ActivateNewTasks: find pending tasks in the workflow and activate
     /// any that are now ready.
-    pub(in crate::orchestrator) fn activate_new_tasks(
+    pub(crate) fn activate_new_tasks(
         &self,
         workflow_id: &WorkflowId,
     ) -> crate::Result<PendingActions> {
