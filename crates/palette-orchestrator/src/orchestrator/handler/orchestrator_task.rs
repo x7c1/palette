@@ -129,7 +129,7 @@ impl Orchestrator {
                 return;
             }
             // Complete the job and cascade through task tree
-            match self.complete_job(job_id) {
+            match self.try_complete_task_by_job(job_id) {
                 Ok(result) => self.dispatch_pending_actions(result),
                 Err(e) => {
                     tracing::error!(error = %e, job_id = %job_id, "failed to complete orchestrator job")

@@ -85,7 +85,7 @@ impl Orchestrator {
             if let Some(ref assignee) = job.assignee_id {
                 self.destroy_member(assignee);
             }
-            self.complete_job(job_id)
+            self.try_complete_task_by_job(job_id)
         })();
 
         match result {

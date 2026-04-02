@@ -6,15 +6,7 @@ use palette_domain::worker::WorkerRole;
 use palette_usecase::task_store::TaskStore;
 
 impl Orchestrator {
-    /// When a Job is Done, check if its task can be completed and cascade.
-    pub(in crate::orchestrator) fn complete_job(
-        &self,
-        job_id: &JobId,
-    ) -> crate::Result<PendingActions> {
-        self.try_complete_task_by_job(job_id)
-    }
-
-    /// Check if a job's task can be completed.
+    /// Check if a job's task can be completed and cascade.
     /// A task is complete when all children are Completed AND its own job (if any) is Done.
     pub(in crate::orchestrator) fn try_complete_task_by_job(
         &self,
