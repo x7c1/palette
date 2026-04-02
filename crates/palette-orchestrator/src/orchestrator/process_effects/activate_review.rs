@@ -10,21 +10,22 @@ impl Orchestrator {
     pub(in crate::orchestrator) fn activate_child_review_tasks(
         &self,
         craft_job_id: &palette_domain::job::JobId,
-        result: &mut EffectResult,
-    ) -> crate::Result<()> {
+    ) -> crate::Result<EffectResult> {
+        let mut result = EffectResult::new();
+
         let Some(job) = self.interactor.data_store.get_job(craft_job_id)? else {
-            return Ok(());
+            return Ok(result);
         };
         let task_id = &job.task_id;
         let Some(task_state) = self.interactor.data_store.get_task_state(task_id)? else {
-            return Ok(());
+            return Ok(result);
         };
 
         let task_store = self.interactor.create_task_store(&task_state.workflow_id)?;
 
         let children = task_store.get_child_tasks(task_id);
         if children.is_empty() {
-            return Ok(());
+            return Ok(result);
         }
 
         // Ensure the craft task is InProgress (it should be, since its job is active)
@@ -58,7 +59,7 @@ impl Orchestrator {
                 }
             }
 
-            self.activate_ready_task(ready_id, &task_store, &task_engine, result)?;
+            result = result.merge(self.activate_ready_task(ready_id, &task_store, &task_engine)?);
         }
 
         // Second pass: reactivate ChangesRequested review jobs (re-review cycle).
@@ -86,10 +87,10 @@ impl Orchestrator {
                 "reactivated ChangesRequested review job for re-review"
             );
             if let Some(ref assignee) = review_job.assignee_id {
-                self.reactivate_member(&review_job.id, assignee, &mut result.deliveries)?;
+                result = result.merge(self.reactivate_member(&review_job.id, assignee)?);
             }
         }
 
-        Ok(())
+        Ok(result)
     }
 }

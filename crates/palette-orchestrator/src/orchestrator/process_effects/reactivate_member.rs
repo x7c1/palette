@@ -1,3 +1,4 @@
+use super::EffectResult;
 use super::Orchestrator;
 use super::job_instruction::format_job_instruction;
 use palette_domain::job::{CraftTransition, JobId, ReviewTransition};
@@ -10,13 +11,14 @@ impl Orchestrator {
         &self,
         job_id: &JobId,
         member_id: &WorkerId,
-        deliveries: &mut Vec<PendingDelivery>,
-    ) -> crate::Result<()> {
+    ) -> crate::Result<EffectResult> {
+        let mut result = EffectResult::new();
+
         let Some(job) = self.interactor.data_store.get_job(job_id)? else {
-            return Ok(());
+            return Ok(result);
         };
         let Some(member) = self.interactor.data_store.find_worker(member_id)? else {
-            return Ok(());
+            return Ok(result);
         };
 
         let round = if job.job_type == palette_domain::job::JobType::Review {
@@ -37,13 +39,13 @@ impl Orchestrator {
             palette_domain::job::JobType::ReviewIntegrate
             | palette_domain::job::JobType::Orchestrator
             | palette_domain::job::JobType::Operator => {
-                return Ok(());
+                return Ok(result);
             }
         };
         self.interactor
             .data_store
             .update_job_status(job_id, reactivated_status)?;
-        deliveries.push(PendingDelivery {
+        result.deliveries.push(PendingDelivery {
             target_id: member_id.clone(),
             terminal_target: member.terminal_target.clone(),
         });
@@ -52,6 +54,6 @@ impl Orchestrator {
             member_id = %member_id,
             "reactivated member"
         );
-        Ok(())
+        Ok(result)
     }
 }

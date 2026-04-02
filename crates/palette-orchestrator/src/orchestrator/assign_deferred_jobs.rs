@@ -1,4 +1,5 @@
 use super::Orchestrator;
+use super::process_effects::EffectResult;
 use std::sync::Arc;
 
 impl Orchestrator {
@@ -25,18 +26,16 @@ impl Orchestrator {
             "re-assigning jobs deferred during suspend"
         );
 
-        let mut deliveries = Vec::new();
+        let mut result = EffectResult::new();
         for job in &assignable {
-            if let Err(e) = self.assign_new_job(&job.id, &mut deliveries) {
-                tracing::error!(error = %e, job_id = %job.id, "failed to assign deferred job");
+            match self.assign_new_job(&job.id) {
+                Ok(r) => result = result.merge(r),
+                Err(e) => {
+                    tracing::error!(error = %e, job_id = %job.id, "failed to assign deferred job")
+                }
             }
         }
 
-        for d in &deliveries {
-            let _ = self.deliver_queued_messages(&d.target_id);
-        }
-        for d in deliveries {
-            self.spawn_readiness_watcher(d.target_id);
-        }
+        self.dispatch_effect_result(result);
     }
 }

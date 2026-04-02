@@ -129,11 +129,12 @@ impl Orchestrator {
                 return;
             }
             // Complete the job and cascade through task tree
-            let mut result = super::process_effects::EffectResult::new();
-            if let Err(e) = self.complete_job(job_id, &mut result) {
-                tracing::error!(error = %e, job_id = %job_id, "failed to complete orchestrator job");
+            match self.complete_job(job_id) {
+                Ok(result) => self.dispatch_effect_result(result),
+                Err(e) => {
+                    tracing::error!(error = %e, job_id = %job_id, "failed to complete orchestrator job")
+                }
             }
-            self.dispatch_effect_result(result);
         } else {
             tracing::warn!(
                 job_id = %job_id,
@@ -217,16 +218,19 @@ impl Orchestrator {
                 let _ = self.interactor.data_store.enqueue_message(assignee, &msg);
 
                 // Reactivate the crafter
-                let mut deliveries = Vec::new();
-                if let Err(e) = self.reactivate_member(&craft_job.id, assignee, &mut deliveries) {
-                    tracing::error!(error = %e, "failed to reactivate crafter after check failure");
-                }
-                for d in deliveries {
-                    let _ =
-                        self.event_tx
-                            .send(palette_domain::server::ServerEvent::DeliverMessages {
-                                target_id: d.target_id,
-                            });
+                match self.reactivate_member(&craft_job.id, assignee) {
+                    Ok(result) => {
+                        for d in result.deliveries {
+                            let _ = self.event_tx.send(
+                                palette_domain::server::ServerEvent::DeliverMessages {
+                                    target_id: d.target_id,
+                                },
+                            );
+                        }
+                    }
+                    Err(e) => {
+                        tracing::error!(error = %e, "failed to reactivate crafter after check failure");
+                    }
                 }
             }
 

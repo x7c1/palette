@@ -1,3 +1,4 @@
+use super::EffectResult;
 use super::Orchestrator;
 use super::job_instruction::format_job_instruction;
 use palette_domain::job::JobId;
@@ -11,13 +12,14 @@ impl Orchestrator {
     pub(in crate::orchestrator) fn assign_new_job(
         &self,
         job_id: &JobId,
-        deliveries: &mut Vec<PendingDelivery>,
-    ) -> crate::Result<()> {
+    ) -> crate::Result<EffectResult> {
+        let mut result = EffectResult::new();
+
         // Verify the job is assignable (todo + no assignee)
         let assignable_jobs = self.interactor.data_store.find_assignable_jobs()?;
         let job = match assignable_jobs.iter().find(|j| j.id == *job_id) {
             Some(j) => j.clone(),
-            None => return Ok(()),
+            None => return Ok(result),
         };
 
         // Don't spawn new members while a suspend is in progress
@@ -30,7 +32,7 @@ impl Orchestrator {
             })?;
         if self.is_workflow_suspending(&task_state.workflow_id)? {
             tracing::warn!(job_id = %job_id, "suspend in progress, deferring job assignment");
-            return Ok(());
+            return Ok(result);
         }
         let active = self.interactor.data_store.count_active_workers()?;
         if active >= self.docker_config.max_workers {
@@ -40,12 +42,13 @@ impl Orchestrator {
                 max = self.docker_config.max_workers,
                 "max workers reached, job waits"
             );
-            return Ok(());
+            return Ok(result);
         }
 
         // Mechanized jobs (Orchestrator/Operator) don't spawn worker containers
         if !job.job_type.needs_worker() {
-            return self.handle_mechanized_job(&job);
+            self.handle_mechanized_job(&job)?;
+            return Ok(result);
         }
 
         // Determine workspace volume based on job type
@@ -107,12 +110,12 @@ impl Orchestrator {
             .data_store
             .enqueue_message(&member_id, &instruction)?;
 
-        deliveries.push(PendingDelivery {
+        result.deliveries.push(PendingDelivery {
             target_id: member_id,
             terminal_target,
         });
 
-        Ok(())
+        Ok(result)
     }
 
     /// Handle a mechanized job (Orchestrator or Operator).

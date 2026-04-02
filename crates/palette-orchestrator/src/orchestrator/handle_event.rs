@@ -39,8 +39,6 @@ impl Orchestrator {
                 for worker_id in worker_ids {
                     self.spawn_readiness_watcher(worker_id);
                 }
-                // Re-assign jobs that were deferred during suspend.
-                // Delayed to give workers time to boot and become ready.
                 let this = Arc::clone(self);
                 tokio::spawn(async move {
                     tokio::time::sleep(std::time::Duration::from_secs(15)).await;
@@ -75,51 +73,47 @@ impl Orchestrator {
     /// A craft job has been marked Done.
     /// Destroy the crafter member and cascade task completion.
     async fn handle_craft_done(self: &Arc<Self>, job_id: &JobId) {
-        let mut result = EffectResult::new();
-
-        let outcome: crate::Result<()> = (|| {
+        let result: crate::Result<EffectResult> = (|| {
             let job = match self.interactor.data_store.get_job(job_id)? {
                 Some(j) => j,
                 None => {
                     tracing::error!(job_id = %job_id, "CraftDone: job not found");
-                    return Ok(());
+                    return Ok(EffectResult::new());
                 }
             };
 
             if let Some(ref assignee) = job.assignee_id {
                 self.destroy_member(assignee);
             }
-            self.complete_job(job_id, &mut result)?;
-            Ok(())
+            self.complete_job(job_id)
         })();
 
-        if let Err(e) = outcome {
-            tracing::error!(error = %e, job_id = %job_id, "failed to handle CraftDone");
+        match result {
+            Ok(r) => self.dispatch_effect_result(r),
+            Err(e) => tracing::error!(error = %e, job_id = %job_id, "failed to handle CraftDone"),
         }
-        self.dispatch_effect_result(result);
     }
 
     /// A craft job has reached InReview.
     /// Activate child review tasks.
     async fn handle_craft_ready_for_review(self: &Arc<Self>, craft_job_id: &JobId) {
-        let mut result = EffectResult::new();
-        if let Err(e) = self.activate_child_review_tasks(craft_job_id, &mut result) {
-            tracing::error!(error = %e, craft_job_id = %craft_job_id, "failed to activate review tasks");
+        match self.activate_child_review_tasks(craft_job_id) {
+            Ok(r) => self.dispatch_effect_result(r),
+            Err(e) => {
+                tracing::error!(error = %e, craft_job_id = %craft_job_id, "failed to activate review tasks")
+            }
         }
-        self.dispatch_effect_result(result);
     }
 
     /// A review submission has been recorded.
     /// Validate artifacts and handle the verdict.
     async fn handle_review_submitted(self: &Arc<Self>, review_job_id: &JobId) {
-        let mut result = EffectResult::new();
-
-        let outcome: crate::Result<()> = (|| {
+        let result: crate::Result<EffectResult> = (|| {
             let job = match self.interactor.data_store.get_job(review_job_id)? {
                 Some(j) => j,
                 None => {
                     tracing::error!(review_job_id = %review_job_id, "ReviewSubmitted: job not found");
-                    return Ok(());
+                    return Ok(EffectResult::new());
                 }
             };
 
@@ -131,7 +125,7 @@ impl Orchestrator {
             // handler; the orchestrator logs the result for observability only.
             if is_integrator {
                 if !self.validate_all_reviewer_artifacts(review_job_id) {
-                    return Ok(());
+                    return Ok(EffectResult::new());
                 }
             } else {
                 self.log_review_artifact_status(review_job_id);
@@ -150,7 +144,7 @@ impl Orchestrator {
                 })?;
             let verdict = submission.verdict;
 
-            // Apply status transition (previously done by RuleEngine)
+            // Apply status transition
             match verdict {
                 Verdict::ChangesRequested => {
                     self.interactor.data_store.update_job_status(
@@ -170,15 +164,15 @@ impl Orchestrator {
             }
 
             // Handle the verdict (cascade effects)
-            self.handle_review_verdict(review_job_id, verdict, &mut result)?;
-
-            Ok(())
+            self.handle_review_verdict(review_job_id, verdict)
         })();
 
-        if let Err(e) = outcome {
-            tracing::error!(error = %e, review_job_id = %review_job_id, "failed to handle ReviewSubmitted");
+        match result {
+            Ok(r) => self.dispatch_effect_result(r),
+            Err(e) => {
+                tracing::error!(error = %e, review_job_id = %review_job_id, "failed to handle ReviewSubmitted")
+            }
         }
-        self.dispatch_effect_result(result);
     }
 
     /// A new workflow was created. Activate root and initial tasks.
@@ -186,11 +180,12 @@ impl Orchestrator {
         self: &Arc<Self>,
         workflow_id: &palette_domain::workflow::WorkflowId,
     ) {
-        let mut result = EffectResult::new();
-        if let Err(e) = self.activate_workflow(workflow_id, &mut result) {
-            tracing::error!(error = %e, workflow_id = %workflow_id, "failed to activate workflow");
+        match self.activate_workflow(workflow_id) {
+            Ok(r) => self.dispatch_effect_result(r),
+            Err(e) => {
+                tracing::error!(error = %e, workflow_id = %workflow_id, "failed to activate workflow")
+            }
         }
-        self.dispatch_effect_result(result);
     }
 
     /// Blueprint re-applied; activate new tasks.
@@ -198,11 +193,12 @@ impl Orchestrator {
         self: &Arc<Self>,
         workflow_id: &palette_domain::workflow::WorkflowId,
     ) {
-        let mut result = EffectResult::new();
-        if let Err(e) = self.activate_new_tasks(workflow_id, &mut result) {
-            tracing::error!(error = %e, workflow_id = %workflow_id, "failed to activate new tasks");
+        match self.activate_new_tasks(workflow_id) {
+            Ok(r) => self.dispatch_effect_result(r),
+            Err(e) => {
+                tracing::error!(error = %e, workflow_id = %workflow_id, "failed to activate new tasks")
+            }
         }
-        self.dispatch_effect_result(result);
     }
 
     /// Dispatch the accumulated results: deliver messages and spawn readiness watchers.

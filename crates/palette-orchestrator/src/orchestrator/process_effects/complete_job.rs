@@ -11,9 +11,8 @@ impl Orchestrator {
     pub(in crate::orchestrator) fn complete_job(
         &self,
         job_id: &JobId,
-        result: &mut EffectResult,
-    ) -> crate::Result<()> {
-        self.try_complete_task_by_job(job_id, result)
+    ) -> crate::Result<EffectResult> {
+        self.try_complete_task_by_job(job_id)
     }
 
     /// Check if a job's task can be completed.
@@ -21,14 +20,13 @@ impl Orchestrator {
     pub(in crate::orchestrator) fn try_complete_task_by_job(
         &self,
         job_id: &JobId,
-        result: &mut EffectResult,
-    ) -> crate::Result<()> {
+    ) -> crate::Result<EffectResult> {
         let Some(job) = self.interactor.data_store.get_job(job_id)? else {
-            return Ok(());
+            return Ok(EffectResult::new());
         };
         let task_id = &job.task_id;
         let Some(task_state) = self.interactor.data_store.get_task_state(task_id)? else {
-            return Ok(());
+            return Ok(EffectResult::new());
         };
 
         let task_store = self.interactor.create_task_store(&task_state.workflow_id)?;
@@ -38,7 +36,7 @@ impl Orchestrator {
         let all_children_completed = children.iter().all(|c| c.status == TaskStatus::Completed);
 
         if !all_children_completed && !children.is_empty() {
-            return Ok(());
+            return Ok(EffectResult::new());
         }
 
         // All conditions met: mark task as Completed
@@ -57,21 +55,21 @@ impl Orchestrator {
             }
         }
 
-        self.cascade_task_effects(task_id, &task_store, result)?;
+        let result = self
+            .cascade_task_effects(task_id, &task_store)?
+            .merge(self.fill_vacant_slots()?);
 
-        // Fill vacant member slots with waiting jobs
-        self.fill_vacant_slots(result)?;
-
-        Ok(())
+        Ok(result)
     }
 
     /// Find assignable jobs waiting for a member slot and assign them.
-    fn fill_vacant_slots(&self, result: &mut EffectResult) -> crate::Result<()> {
+    fn fill_vacant_slots(&self) -> crate::Result<EffectResult> {
         let assignable = self.interactor.data_store.find_assignable_jobs()?;
+        let mut result = EffectResult::new();
         for job in &assignable {
-            self.assign_new_job(&job.id, &mut result.deliveries)?;
+            result = result.merge(self.assign_new_job(&job.id)?);
         }
-        Ok(())
+        Ok(result)
     }
 
     /// Process cascading effects after a task completes.
@@ -79,25 +77,27 @@ impl Orchestrator {
         &self,
         completed_task_id: &TaskId,
         task_store: &TaskStore,
-        result: &mut EffectResult,
-    ) -> crate::Result<()> {
+    ) -> crate::Result<EffectResult> {
         use palette_usecase::TaskRuleEngine;
 
         let task_engine = TaskRuleEngine::new(task_store);
         let completion = task_engine.on_task_completed(completed_task_id);
 
+        let mut result = EffectResult::new();
+
         // Process newly ready tasks
         for task_id in &completion.newly_ready {
             tracing::info!(task_id = %task_id, status = ?TaskStatus::Ready, "task status cascaded");
-            self.activate_ready_task(task_id, task_store, &task_engine, result)?;
+            result = result.merge(self.activate_ready_task(task_id, task_store, &task_engine)?);
         }
 
         // Process parent completion
         if let Some(ref parent_id) = completion.parent_completed {
-            self.handle_parent_completion(parent_id, task_store, &task_engine, result)?;
+            result =
+                result.merge(self.handle_parent_completion(parent_id, task_store, &task_engine)?);
         }
 
-        Ok(())
+        Ok(result)
     }
 
     /// Handle a parent task that may be completing (all children done).
@@ -106,8 +106,9 @@ impl Orchestrator {
         task_id: &TaskId,
         task_store: &TaskStore,
         task_engine: &palette_usecase::TaskRuleEngine<'_>,
-        result: &mut EffectResult,
-    ) -> crate::Result<()> {
+    ) -> crate::Result<EffectResult> {
+        let mut result = EffectResult::new();
+
         // Before marking parent as Completed, check its own Job (if any)
         let own_job_done = self
             .interactor
@@ -138,7 +139,7 @@ impl Orchestrator {
                     "all children completed but own job not done; deferring task completion"
                 );
             }
-            return Ok(());
+            return Ok(result);
         }
 
         task_store.update_task_status(task_id, TaskStatus::Completed)?;
@@ -173,13 +174,14 @@ impl Orchestrator {
         let completion = task_engine.on_task_completed(task_id);
         for ready_id in &completion.newly_ready {
             tracing::info!(task_id = %ready_id, status = ?TaskStatus::Ready, "task status cascaded");
-            self.activate_ready_task(ready_id, task_store, task_engine, result)?;
+            result = result.merge(self.activate_ready_task(ready_id, task_store, task_engine)?);
         }
         if let Some(ref parent_id) = completion.parent_completed {
-            self.handle_parent_completion(parent_id, task_store, task_engine, result)?;
+            result =
+                result.merge(self.handle_parent_completion(parent_id, task_store, task_engine)?);
         }
 
-        Ok(())
+        Ok(result)
     }
 
     /// Handle a task that just became Ready.
@@ -189,8 +191,8 @@ impl Orchestrator {
         task_id: &TaskId,
         task_store: &TaskStore,
         task_engine: &palette_usecase::TaskRuleEngine<'_>,
-        result: &mut EffectResult,
-    ) -> crate::Result<()> {
+    ) -> crate::Result<EffectResult> {
+        let mut result = EffectResult::new();
         let children = task_store.get_child_tasks(task_id);
 
         if children.is_empty() {
@@ -206,7 +208,7 @@ impl Orchestrator {
                 {
                     task.plan_path = parent.plan_path.clone();
                 }
-                self.create_and_assign_job(&task, result)?;
+                result = result.merge(self.create_and_assign_job(&task)?);
             }
         } else {
             if let Some(task) = task_store.get_task(task_id)
@@ -217,8 +219,7 @@ impl Orchestrator {
                     // Craft composites: create job + member, do NOT resolve children
                     // (activated later on InReview).
                     JobType::Craft => {
-                        self.create_and_assign_job(&task, result)?;
-                        return Ok(());
+                        return self.create_and_assign_job(&task);
                     }
                     // ReviewIntegrate composites: create job (verdict anchor) but do NOT
                     // assign a member. The ReviewIntegrator is spawned after all child
@@ -227,7 +228,7 @@ impl Orchestrator {
                         self.create_job_without_assign(&task)?;
                     }
                     _ => {
-                        self.create_and_assign_job(&task, result)?;
+                        result = result.merge(self.create_and_assign_job(&task)?);
                     }
                 }
             } else {
@@ -246,19 +247,19 @@ impl Orchestrator {
             let ready_ids = task_engine.resolve_ready_tasks(&child_ids);
             for ready_id in &ready_ids {
                 tracing::info!(task_id = %ready_id, status = ?TaskStatus::Ready, "task status cascaded");
-                self.activate_ready_task(ready_id, task_store, task_engine, result)?;
+                result =
+                    result.merge(self.activate_ready_task(ready_id, task_store, task_engine)?);
             }
         }
 
-        Ok(())
+        Ok(result)
     }
 
     /// Create a Job for a task and assign it (spawn member).
     fn create_and_assign_job(
         &self,
         task: &palette_domain::task::Task,
-        result: &mut EffectResult,
-    ) -> crate::Result<()> {
+    ) -> crate::Result<EffectResult> {
         let req = task
             .to_create_job_request()
             .map_err(|e| crate::Error::InvalidTaskState {
@@ -274,8 +275,7 @@ impl Orchestrator {
             "created job for ready task"
         );
 
-        self.assign_new_job(&job.id, &mut result.deliveries)?;
-        Ok(())
+        self.assign_new_job(&job.id)
     }
 
     /// Create a Job for a task without assigning a member.

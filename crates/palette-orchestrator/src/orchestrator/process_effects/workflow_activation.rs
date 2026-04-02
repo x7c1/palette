@@ -11,8 +11,9 @@ impl Orchestrator {
     pub(in crate::orchestrator) fn activate_workflow(
         &self,
         workflow_id: &WorkflowId,
-        result: &mut EffectResult,
-    ) -> crate::Result<()> {
+    ) -> crate::Result<EffectResult> {
+        let mut result = EffectResult::new();
+
         let task_store = self.interactor.create_task_store(workflow_id)?;
         let task_engine = TaskRuleEngine::new(&task_store);
 
@@ -38,10 +39,10 @@ impl Orchestrator {
         let ready_ids = task_engine.resolve_ready_tasks(&child_ids);
         for ready_id in &ready_ids {
             tracing::info!(task_id = %ready_id, status = ?TaskStatus::Ready, "task activated");
-            self.activate_ready_task(ready_id, &task_store, &task_engine, result)?;
+            result = result.merge(self.activate_ready_task(ready_id, &task_store, &task_engine)?);
         }
 
-        Ok(())
+        Ok(result)
     }
 
     /// Handle ActivateNewTasks: find pending tasks in the workflow and activate
@@ -49,8 +50,9 @@ impl Orchestrator {
     pub(in crate::orchestrator) fn activate_new_tasks(
         &self,
         workflow_id: &WorkflowId,
-        result: &mut EffectResult,
-    ) -> crate::Result<()> {
+    ) -> crate::Result<EffectResult> {
+        let mut result = EffectResult::new();
+
         let task_store = self.interactor.create_task_store(workflow_id)?;
         let task_engine = TaskRuleEngine::new(&task_store);
 
@@ -66,15 +68,15 @@ impl Orchestrator {
             .collect();
 
         if pending_ids.is_empty() {
-            return Ok(());
+            return Ok(result);
         }
 
         let ready_ids = task_engine.resolve_ready_tasks(&pending_ids);
         for ready_id in &ready_ids {
             tracing::info!(task_id = %ready_id, status = ?TaskStatus::Ready, "task activated (blueprint apply)");
-            self.activate_ready_task(ready_id, &task_store, &task_engine, result)?;
+            result = result.merge(self.activate_ready_task(ready_id, &task_store, &task_engine)?);
         }
 
-        Ok(())
+        Ok(result)
     }
 }
