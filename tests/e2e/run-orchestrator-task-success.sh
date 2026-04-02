@@ -146,6 +146,4 @@ done
 
 echo ""
 echo "=== All orchestrator-task-success checks passed ==="
-scripts/reset.sh 2>&1
-rm -f "$LOG_FILE"
 exit 0

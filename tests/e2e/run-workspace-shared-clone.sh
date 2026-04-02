@@ -203,5 +203,4 @@ fi
 
 echo ""
 echo "=== All workspace-shared-clone checks passed ==="
-scripts/reset.sh 2>&1
 exit 0

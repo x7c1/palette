@@ -128,8 +128,6 @@ while true; do
 
     echo ""
     echo "=== All orchestrator-task-failure checks passed ==="
-    scripts/reset.sh 2>&1
-rm -f "$LOG_FILE"
     exit 0
   fi
 

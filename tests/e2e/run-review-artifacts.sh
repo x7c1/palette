@@ -185,6 +185,4 @@ fi
 
 echo ""
 echo "=== All review-artifacts checks passed ==="
-scripts/reset.sh 2>&1
-rm -f "$LOG_FILE"
 exit 0

@@ -173,8 +173,6 @@ fi
 echo ""
 if [[ "$PASS" == true ]]; then
   echo "=== All orphan cleanup checks passed ==="
-  "$SCRIPT_DIR/stop-palette.sh" 2>/dev/null || true
-  scripts/reset.sh 2>&1
   exit 0
 else
   echo "=== FAILED: Some checks did not pass ==="

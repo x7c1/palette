@@ -379,7 +379,6 @@ fi
 echo ""
 if [[ "$PASS" == true ]]; then
   echo "=== All suspend/resume/reconciliation checks passed ==="
-  scripts/reset.sh 2>&1
   exit 0
 else
   echo "=== FAILED: Some checks did not pass ==="
