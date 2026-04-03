@@ -89,6 +89,16 @@ else
   echo "INFO: skipping loopback check (set RUN_LOOPBACK_CHECK=1 to enable)"
 fi
 
+if [[ "${RUN_HOOK_ROUTE_CHECK:-0}" == "1" ]]; then
+  if "$SCRIPT_DIR/check-macos-hook-routes.sh"; then
+    pass "hook route check passed"
+  else
+    fail "hook route check failed"
+  fi
+else
+  echo "INFO: skipping hook route check (set RUN_HOOK_ROUTE_CHECK=1 to enable)"
+fi
+
 echo
 echo "== preflight summary =="
 echo "pass=$PASS_COUNT warn=$WARN_COUNT fail=$FAIL_COUNT"
