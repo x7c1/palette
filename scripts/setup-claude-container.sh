@@ -7,6 +7,7 @@ set -e
 main() {
     check_prerequisites
     mkdir -p claude.local/.claude claude.local/.npm-global claude.local/.local
+    copy_host_credentials
     setup_claude_config
     setup_bash_history
     echo "Setup completed successfully!"
@@ -39,6 +40,21 @@ setup_claude_config() {
 EOF
 
     echo "Successfully created claude.local/.claude.json with empty project history"
+}
+
+copy_host_credentials() {
+    local src="${HOME}/.claude/.credentials.json"
+    local dst="claude.local/.claude/.credentials.json"
+
+    if [[ -f "${dst}" ]]; then
+        return
+    fi
+
+    if [[ -f "${src}" ]]; then
+        echo "Copying ${src} to ${dst} so Linux credentials persist inside claude.local."
+        cp "${src}" "${dst}"
+        chmod 600 "${dst}"
+    fi
 }
 
 setup_bash_history() {
