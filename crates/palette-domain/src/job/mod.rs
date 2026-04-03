@@ -32,6 +32,9 @@ pub use priority::Priority;
 mod repository;
 pub use repository::{InvalidRepository, Repository};
 
+mod mechanized_status;
+pub use mechanized_status::MechanizedStatus;
+
 mod review_status;
 pub use review_status::ReviewStatus;
 

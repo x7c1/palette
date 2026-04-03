@@ -1,5 +1,5 @@
 use palette_domain::worker::{ContainerId, WorkerRole, WorkerSessionId};
-use palette_usecase::container_runtime::{PlanDirMount, WorkspaceVolume};
+use palette_usecase::container_runtime::ContainerMounts;
 
 /// Stub container runtime for integration tests.
 /// All container operations are no-ops; `is_claude_running` always returns
@@ -15,8 +15,7 @@ impl palette_usecase::ContainerRuntime for StubContainerRuntime {
         _: &str,
         _: WorkerRole,
         _: &str,
-        _: Option<WorkspaceVolume>,
-        _: Option<PlanDirMount>,
+        _: ContainerMounts,
     ) -> Result<ContainerId, BoxErr> {
         Ok(ContainerId::new("stub"))
     }
@@ -60,10 +59,22 @@ impl palette_usecase::ContainerRuntime for StubContainerRuntime {
     fn read_container_file(&self, _: &ContainerId, _: &str, _: usize) -> Result<String, BoxErr> {
         Ok(String::new())
     }
-    fn claude_exec_command(&self, _: &ContainerId, _: &str, _: WorkerRole) -> String {
+    fn claude_exec_command(
+        &self,
+        _: &ContainerId,
+        _: &str,
+        _: WorkerRole,
+        _: Option<&str>,
+    ) -> String {
         String::new()
     }
-    fn claude_resume_command(&self, _: &ContainerId, _: &WorkerSessionId, _: WorkerRole) -> String {
+    fn claude_resume_command(
+        &self,
+        _: &ContainerId,
+        _: &WorkerSessionId,
+        _: WorkerRole,
+        _: Option<&str>,
+    ) -> String {
         String::new()
     }
 }

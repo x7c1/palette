@@ -14,4 +14,4 @@ max_review_rounds = 5
 [docker]
 worker_callback_url = "http://127.0.0.1:7100"
 callback_network = "auto"
-max_workers = 5
+max_workers = 50

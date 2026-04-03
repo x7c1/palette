@@ -26,11 +26,11 @@ for cid in $container_ids; do
   fi
 done
 
-# Kill tmux session
-if tmux has-session -t "$SESSION_NAME" 2>/dev/null; then
-  echo "killing tmux session '$SESSION_NAME'..."
-  tmux kill-session -t "$SESSION_NAME"
-fi
+# Kill tmux sessions (main + any stale test sessions)
+for sess in $(tmux ls -F '#{session_name}' 2>/dev/null | grep "^palette" || true); do
+  echo "killing tmux session '$sess'..."
+  tmux kill-session -t "$sess" 2>/dev/null || true
+done
 
 # Remove plans directory (including git history from previous runs)
 PLANS_DIR="$ROOT_DIR/data/plans"

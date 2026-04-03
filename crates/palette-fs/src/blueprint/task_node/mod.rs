@@ -18,6 +18,8 @@ pub struct TaskNode {
     pub job_type: Option<JobTypeYaml>,
     pub priority: Option<PriorityYaml>,
     pub repository: Option<RepositoryYaml>,
+    /// Command to execute for orchestrator tasks.
+    pub command: Option<String>,
     #[serde(default)]
     pub children: Vec<TaskNode>,
     #[serde(default)]

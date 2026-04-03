@@ -5,11 +5,11 @@ Verify that supervisors are dynamically spawned per composite task and destroyed
 ## Task Tree
 
 ```
-root (dynamic-supervisor)        → Leader spawned
-├── phase-a (pure composite)     → Leader spawned
+root (dynamic-supervisor)        → Approver spawned
+├── phase-a (pure composite)     → Approver spawned
 │   └── craft (craft job + review child)
 │       └── review (review job)
-└── phase-b (pure composite, depends_on: phase-a)  → Leader spawned after phase-a completes
+└── phase-b (pure composite, depends_on: phase-a)  → Approver spawned after phase-a completes
     └── craft (craft job + review child)
         └── review (review job)
 ```

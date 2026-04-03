@@ -12,10 +12,10 @@ fn test_docker_config() -> DockerConfig {
     DockerConfig {
         worker_callback_url: "http://127.0.0.1:0".to_string(),
         callback_network: CallbackNetwork::Host,
-        leader_image: "palette-leader:latest".to_string(),
+        approver_image: "palette-leader:latest".to_string(),
         member_image: "palette-member:latest".to_string(),
         settings_template: "config/hooks/worker-settings.json".to_string(),
-        leader_prompt: "prompts/leader.md".to_string(),
+        approver_prompt: "prompts/approver.md".to_string(),
         review_integrator_image: "palette-leader:latest".to_string(),
         review_integrator_prompt: "prompts/review-integrator.md".to_string(),
         crafter_prompt: "prompts/crafter.md".to_string(),
@@ -46,8 +46,9 @@ pub async fn spawn_server(
     let state = Arc::new(AppState {
         interactor: Arc::clone(&interactor),
         max_review_rounds: 5,
+        data_dir: std::path::PathBuf::from("data"),
         event_log: tokio::sync::Mutex::new(Vec::new()),
-        event_tx,
+        event_tx: event_tx.clone(),
     });
 
     let orchestrator = Arc::new(Orchestrator {
@@ -56,6 +57,8 @@ pub async fn spawn_server(
         plan_dir: String::new(),
         session_name: session_name.to_string(),
         cancel_token: tokio_util::sync::CancellationToken::new(),
+        workspace_manager: palette_orchestrator::workspace::WorkspaceManager::new("data"),
+        event_tx,
     });
     let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel();
     let _ = orchestrator.start(event_rx, shutdown_rx);

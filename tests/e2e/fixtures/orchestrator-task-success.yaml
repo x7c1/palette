@@ -1,0 +1,17 @@
+task:
+  key: orchestrator-task-success
+  children:
+    - key: craft-phase
+      type: craft
+      plan_path: implement/README.md
+      priority: high
+      repository:
+        name: x7c1/palette
+        branch: plan/2026-999-e2e-orchestrator
+      children:
+        - key: automated-checks
+          type: orchestrator
+          command: "echo 'checks passed'"
+        - key: review
+          type: review
+          depends_on: [automated-checks]

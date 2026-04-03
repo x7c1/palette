@@ -9,6 +9,8 @@ pub enum ErrorCode {
     InputValidationFailed,
     InvalidStateTransition,
     NotReviewJob,
+    ChildReviewersIncomplete,
+    ReviewArtifactMissing,
     BlueprintInvalid,
 }
 

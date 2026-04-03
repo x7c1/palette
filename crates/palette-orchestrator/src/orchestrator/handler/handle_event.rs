@@ -1,0 +1,216 @@
+use super::Orchestrator;
+use super::PendingActions;
+use palette_domain::job::{JobId, JobType, ReviewTransition};
+use palette_domain::review::Verdict;
+use palette_domain::server::ServerEvent;
+use std::sync::Arc;
+
+impl Orchestrator {
+    pub(crate) async fn handle_event(self: &Arc<Self>, event: ServerEvent) {
+        match event {
+            // --- Domain events ---
+            ServerEvent::CraftDone { job_id } => {
+                self.handle_craft_done(&job_id).await;
+            }
+            ServerEvent::CraftReadyForReview { craft_job_id } => {
+                self.handle_craft_ready_for_review(&craft_job_id).await;
+            }
+            ServerEvent::ReviewSubmitted { review_job_id } => {
+                self.handle_review_submitted(&review_job_id).await;
+            }
+            ServerEvent::ReviewIntegratorStopped { task_id, worker_id } => {
+                self.validate_integrated_review_artifact(&task_id, &worker_id);
+            }
+
+            // --- Workflow lifecycle ---
+            ServerEvent::ActivateWorkflow { workflow_id } => {
+                self.handle_activate_workflow(&workflow_id).await;
+            }
+            ServerEvent::ActivateNewTasks { workflow_id } => {
+                self.handle_activate_new_tasks(&workflow_id).await;
+            }
+
+            // --- Infrastructure events ---
+            ServerEvent::DeliverMessages { target_id } => {
+                let _ = self.deliver_queued_messages(&target_id);
+            }
+            ServerEvent::NotifyDeliveryLoop => self.deliver_to_all_idle(),
+            ServerEvent::ResumeWorkers { worker_ids } => {
+                for worker_id in worker_ids {
+                    self.spawn_readiness_watcher(worker_id);
+                }
+                let this = Arc::clone(self);
+                tokio::spawn(async move {
+                    tokio::time::sleep(std::time::Duration::from_secs(15)).await;
+                    this.assign_deferred_jobs();
+                });
+            }
+            ServerEvent::SuspendWorkflow { workflow_id } => {
+                let this = Arc::clone(self);
+                tokio::task::spawn_blocking(move || this.suspend(&workflow_id));
+            }
+            ServerEvent::OrchestratorTaskCompleted {
+                job_id,
+                success,
+                stdout,
+                stderr,
+                exit_code,
+                duration_ms,
+            } => {
+                self.handle_orchestrator_task_completed(
+                    &job_id,
+                    success,
+                    &stdout,
+                    &stderr,
+                    exit_code,
+                    duration_ms,
+                )
+                .await;
+            }
+        }
+    }
+
+    /// A craft job has been marked Done.
+    /// Destroy the crafter member and cascade task completion.
+    async fn handle_craft_done(self: &Arc<Self>, job_id: &JobId) {
+        let result: crate::Result<PendingActions> = (|| {
+            let job = match self.interactor.data_store.get_job(job_id)? {
+                Some(j) => j,
+                None => {
+                    tracing::error!(job_id = %job_id, "CraftDone: job not found");
+                    return Ok(PendingActions::new());
+                }
+            };
+
+            if let Some(ref assignee) = job.assignee_id {
+                self.destroy_member(assignee);
+            }
+            self.try_complete_task_by_job(job_id)
+        })();
+
+        match result {
+            Ok(r) => self.dispatch_pending_actions(r),
+            Err(e) => tracing::error!(error = %e, job_id = %job_id, "failed to handle CraftDone"),
+        }
+    }
+
+    /// A craft job has reached InReview.
+    /// Activate child review tasks.
+    async fn handle_craft_ready_for_review(self: &Arc<Self>, craft_job_id: &JobId) {
+        match self.activate_child_review_tasks(craft_job_id) {
+            Ok(r) => self.dispatch_pending_actions(r),
+            Err(e) => {
+                tracing::error!(error = %e, craft_job_id = %craft_job_id, "failed to activate review tasks")
+            }
+        }
+    }
+
+    /// A review submission has been recorded.
+    /// Validate artifacts and handle the verdict.
+    async fn handle_review_submitted(self: &Arc<Self>, review_job_id: &JobId) {
+        let result: crate::Result<PendingActions> = (|| {
+            let job = match self.interactor.data_store.get_job(review_job_id)? {
+                Some(j) => j,
+                None => {
+                    tracing::error!(review_job_id = %review_job_id, "ReviewSubmitted: job not found");
+                    return Ok(PendingActions::new());
+                }
+            };
+
+            let is_integrator = job.job_type == JobType::ReviewIntegrate;
+
+            // Validate artifacts. Integrator submissions are validated by the
+            // orchestrator (all child review.md must exist). Individual reviewer
+            // submissions are validated synchronously by the server's submit
+            // handler; the orchestrator logs the result for observability only.
+            if is_integrator {
+                if !self.validate_all_reviewer_artifacts(review_job_id) {
+                    return Ok(PendingActions::new());
+                }
+            } else {
+                self.log_review_artifact_status(review_job_id);
+            }
+
+            // Get the latest submission to determine the verdict
+            let submissions = self
+                .interactor
+                .data_store
+                .get_review_submissions(review_job_id)?;
+            let submission = submissions
+                .last()
+                .ok_or_else(|| crate::Error::InvalidTaskState {
+                    task_id: job.task_id.clone(),
+                    detail: "no submissions found for review job".into(),
+                })?;
+            let verdict = submission.verdict;
+
+            // Apply status transition
+            match verdict {
+                Verdict::ChangesRequested => {
+                    self.interactor.data_store.update_job_status(
+                        review_job_id,
+                        ReviewTransition::RequestChanges.to_job_status(),
+                    )?;
+                }
+                Verdict::Approved => {
+                    self.interactor.data_store.update_job_status(
+                        review_job_id,
+                        ReviewTransition::Approve.to_job_status(),
+                    )?;
+                    if let Some(ref assignee) = job.assignee_id {
+                        self.destroy_member(assignee);
+                    }
+                }
+            }
+
+            // Handle the verdict and cascade task completion
+            self.handle_review_verdict(review_job_id, verdict)
+        })();
+
+        match result {
+            Ok(r) => self.dispatch_pending_actions(r),
+            Err(e) => {
+                tracing::error!(error = %e, review_job_id = %review_job_id, "failed to handle ReviewSubmitted")
+            }
+        }
+    }
+
+    /// A new workflow was created. Activate root and initial tasks.
+    async fn handle_activate_workflow(
+        self: &Arc<Self>,
+        workflow_id: &palette_domain::workflow::WorkflowId,
+    ) {
+        match self.activate_workflow(workflow_id) {
+            Ok(r) => self.dispatch_pending_actions(r),
+            Err(e) => {
+                tracing::error!(error = %e, workflow_id = %workflow_id, "failed to activate workflow")
+            }
+        }
+    }
+
+    /// Blueprint re-applied; activate new tasks.
+    async fn handle_activate_new_tasks(
+        self: &Arc<Self>,
+        workflow_id: &palette_domain::workflow::WorkflowId,
+    ) {
+        match self.activate_new_tasks(workflow_id) {
+            Ok(r) => self.dispatch_pending_actions(r),
+            Err(e) => {
+                tracing::error!(error = %e, workflow_id = %workflow_id, "failed to activate new tasks")
+            }
+        }
+    }
+
+    /// Dispatch the accumulated results: deliver messages and spawn readiness watchers.
+    pub(crate) fn dispatch_pending_actions(self: &Arc<Self>, actions: PendingActions) {
+        for id in &actions.deliver_to {
+            let _ = self.deliver_queued_messages(id);
+        }
+        for id in actions.deliver_to {
+            self.spawn_readiness_watcher(id);
+        }
+        for id in actions.watch_only {
+            self.spawn_readiness_watcher(id);
+        }
+    }
+}

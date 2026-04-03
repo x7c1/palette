@@ -1,6 +1,6 @@
 use palette_domain::worker::{ContainerId, WorkerRole, WorkerSessionId};
 use palette_usecase::ContainerRuntime;
-use palette_usecase::container_runtime::{PlanDirMount, WorkspaceVolume};
+use palette_usecase::container_runtime::ContainerMounts;
 use std::path::Path;
 use std::sync::Mutex;
 
@@ -56,6 +56,7 @@ impl ContainerRuntime for MockContainerRuntime {
         container_id: &ContainerId,
         prompt_file: &str,
         _role: WorkerRole,
+        _workdir: Option<&str>,
     ) -> String {
         format!("mock-exec {container_id} {prompt_file}")
     }
@@ -65,6 +66,7 @@ impl ContainerRuntime for MockContainerRuntime {
         container_id: &ContainerId,
         session_id: &WorkerSessionId,
         _role: WorkerRole,
+        _workdir: Option<&str>,
     ) -> String {
         format!("mock-resume {container_id} {session_id}")
     }
@@ -75,8 +77,7 @@ impl ContainerRuntime for MockContainerRuntime {
         _: &str,
         _: WorkerRole,
         _: &str,
-        _: Option<WorkspaceVolume>,
-        _: Option<PlanDirMount>,
+        _: ContainerMounts,
     ) -> Result<ContainerId, BoxErr> {
         unimplemented!()
     }

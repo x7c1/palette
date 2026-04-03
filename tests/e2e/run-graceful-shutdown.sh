@@ -173,7 +173,6 @@ fi
 echo ""
 if [[ "$PASS" == true ]]; then
   echo "=== All graceful shutdown checks passed ==="
-  scripts/reset.sh 2>&1
   exit 0
 else
   echo "=== FAILED: Some checks did not pass ==="

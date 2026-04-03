@@ -10,7 +10,7 @@ All communication between Workers passes through the Orchestrator. No Worker com
 
 - The Orchestrator spawns a [Crafter](../worker/member/crafter/) when a Craft Job is ready to begin.
 - The Orchestrator transitions a Craft Job from "in progress" to "in review" when the Crafter finishes, and spawns [Reviewers](../worker/member/reviewer/) for the associated Review Jobs.
-- The Orchestrator delivers a permission prompt notification from a Crafter to the [Leader](../worker/supervisor/leader/).
+- The Orchestrator delivers a permission prompt notification from a Crafter to the [Approver](../worker/supervisor/approver/).
 - The Orchestrator despawns a Worker when its Job is complete.
 
 ## Collocations

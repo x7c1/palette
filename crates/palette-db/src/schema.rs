@@ -66,6 +66,7 @@ CREATE TABLE IF NOT EXISTS jobs (
     status_id INTEGER NOT NULL,
     priority_id INTEGER,
     repository TEXT,
+    command TEXT,
     pr_url TEXT,
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL,
@@ -147,6 +148,9 @@ pub(crate) const SEED: &str = r#"
 -- Job types
 INSERT OR IGNORE INTO job_types (id, name) VALUES (1, 'craft');
 INSERT OR IGNORE INTO job_types (id, name) VALUES (2, 'review');
+INSERT OR IGNORE INTO job_types (id, name) VALUES (3, 'orchestrator');
+INSERT OR IGNORE INTO job_types (id, name) VALUES (4, 'operator');
+INSERT OR IGNORE INTO job_types (id, name) VALUES (5, 'review_integrate');
 
 -- Craft statuses (job_type_id = 1)
 INSERT OR IGNORE INTO job_statuses (id, job_type_id, name) VALUES (1, 1, 'todo');
@@ -161,6 +165,25 @@ INSERT OR IGNORE INTO job_statuses (id, job_type_id, name) VALUES (7, 2, 'in_pro
 INSERT OR IGNORE INTO job_statuses (id, job_type_id, name) VALUES (8, 2, 'changes_requested');
 INSERT OR IGNORE INTO job_statuses (id, job_type_id, name) VALUES (9, 2, 'done');
 INSERT OR IGNORE INTO job_statuses (id, job_type_id, name) VALUES (10, 2, 'escalated');
+
+-- ReviewIntegrate statuses (job_type_id = 5, same lifecycle as review)
+INSERT OR IGNORE INTO job_statuses (id, job_type_id, name) VALUES (19, 5, 'todo');
+INSERT OR IGNORE INTO job_statuses (id, job_type_id, name) VALUES (20, 5, 'in_progress');
+INSERT OR IGNORE INTO job_statuses (id, job_type_id, name) VALUES (21, 5, 'changes_requested');
+INSERT OR IGNORE INTO job_statuses (id, job_type_id, name) VALUES (22, 5, 'done');
+INSERT OR IGNORE INTO job_statuses (id, job_type_id, name) VALUES (23, 5, 'escalated');
+
+-- Orchestrator statuses (job_type_id = 3)
+INSERT OR IGNORE INTO job_statuses (id, job_type_id, name) VALUES (11, 3, 'todo');
+INSERT OR IGNORE INTO job_statuses (id, job_type_id, name) VALUES (12, 3, 'in_progress');
+INSERT OR IGNORE INTO job_statuses (id, job_type_id, name) VALUES (13, 3, 'done');
+INSERT OR IGNORE INTO job_statuses (id, job_type_id, name) VALUES (14, 3, 'failed');
+
+-- Operator statuses (job_type_id = 4)
+INSERT OR IGNORE INTO job_statuses (id, job_type_id, name) VALUES (15, 4, 'todo');
+INSERT OR IGNORE INTO job_statuses (id, job_type_id, name) VALUES (16, 4, 'in_progress');
+INSERT OR IGNORE INTO job_statuses (id, job_type_id, name) VALUES (17, 4, 'done');
+INSERT OR IGNORE INTO job_statuses (id, job_type_id, name) VALUES (18, 4, 'failed');
 
 -- Task statuses
 INSERT OR IGNORE INTO task_statuses (id, name) VALUES (1, 'pending');
@@ -185,7 +208,7 @@ INSERT OR IGNORE INTO priorities (id, name) VALUES (2, 'medium');
 INSERT OR IGNORE INTO priorities (id, name) VALUES (3, 'low');
 
 -- Worker roles
-INSERT OR IGNORE INTO worker_roles (id, name) VALUES (1, 'leader');
+INSERT OR IGNORE INTO worker_roles (id, name) VALUES (1, 'approver');
 INSERT OR IGNORE INTO worker_roles (id, name) VALUES (2, 'review_integrator');
 INSERT OR IGNORE INTO worker_roles (id, name) VALUES (3, 'member');
 

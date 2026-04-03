@@ -1,0 +1,18 @@
+task:
+  key: review-artifacts
+  children:
+    - key: implement
+      type: craft
+      plan_path: implement/README.md
+      priority: high
+      repository:
+        name: x7c1/palette
+        branch: plan/2026-999-e2e-review-artifacts
+      children:
+        - key: review-integrate
+          type: review_integrate
+          children:
+            - key: review-a
+              type: review
+            - key: review-b
+              type: review

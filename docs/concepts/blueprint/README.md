@@ -20,7 +20,7 @@ task:
       children:
         - key: api-plan
           type: craft
-          plan_path: planning/api-plan
+          plan_path: planning/api-plan/README.md
         - key: api-plan-review
           type: review
           depends_on: [api-plan]
@@ -30,7 +30,7 @@ task:
       children:
         - key: api-impl
           type: craft
-          plan_path: execution/api-impl
+          plan_path: execution/api-impl/README.md
           repository:
             name: x7c1/palette
             branch: feature/x-api-impl

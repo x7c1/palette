@@ -16,6 +16,7 @@ use std::sync::Arc;
 pub struct AppState {
     pub interactor: Arc<Interactor>,
     pub max_review_rounds: u32,
+    pub data_dir: std::path::PathBuf,
     pub event_log: tokio::sync::Mutex<Vec<EventRecord>>,
     pub event_tx: tokio::sync::mpsc::UnboundedSender<ServerEvent>,
 }

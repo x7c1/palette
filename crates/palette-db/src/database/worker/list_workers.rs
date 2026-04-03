@@ -9,13 +9,13 @@ impl Database {
     /// List all supervisors for a workflow.
     pub fn list_supervisors(&self, workflow_id: &WorkflowId) -> crate::Result<Vec<WorkerState>> {
         let conn = lock(&self.conn)?;
-        let role_leader = lookup::worker_role_id(WorkerRole::Leader);
+        let role_ps = lookup::worker_role_id(WorkerRole::Approver);
         let role_ri = lookup::worker_role_id(WorkerRole::ReviewIntegrator);
         let sql =
             format!("SELECT {COLUMNS} FROM workers WHERE workflow_id = ?1 AND role_id IN (?2, ?3)");
         let mut stmt = conn.prepare(&sql)?;
         let rows = stmt.query_map(
-            params![workflow_id.as_ref(), role_leader, role_ri],
+            params![workflow_id.as_ref(), role_ps, role_ri],
             read_worker_row,
         )?;
         rows.map(|row| into_worker_state(row?))
@@ -76,13 +76,13 @@ mod tests {
     #[test]
     fn list_booting_workers() {
         let db = test_db();
-        insert_test_worker(&db, "leader-1", WorkerRole::Leader, "wf-1");
+        insert_test_worker(&db, "approver-1", WorkerRole::Approver, "wf-1");
         insert_test_worker(&db, "member-1", WorkerRole::Member, "wf-1");
         db.update_worker_status(&WorkerId::parse("member-1").unwrap(), WorkerStatus::Idle)
             .unwrap();
 
         let booting = db.list_booting_workers().unwrap();
         assert_eq!(booting.len(), 1);
-        assert_eq!(booting[0].id, WorkerId::parse("leader-1").unwrap());
+        assert_eq!(booting[0].id, WorkerId::parse("approver-1").unwrap());
     }
 }

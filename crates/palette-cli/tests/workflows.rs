@@ -26,7 +26,7 @@ task:
       children:
         - key: api-plan
           type: craft
-          plan_path: 2026/feature-x/planning/api-plan
+          plan_path: 2026/feature-x/planning/api-plan/README.md
           children:
             - key: api-plan-review
               type: review
@@ -36,7 +36,7 @@ task:
       children:
         - key: api-impl
           type: craft
-          plan_path: 2026/feature-x/execution/api-impl
+          plan_path: 2026/feature-x/execution/api-impl/README.md
           children:
             - key: api-impl-review
               type: review
@@ -190,13 +190,13 @@ task:
   children:
     - key: step-a
       type: craft
-      plan_path: test/step-a
+      plan_path: test/step-a/README.md
       children:
         - key: review
           type: review
     - key: step-b
       type: craft
-      plan_path: test/step-b
+      plan_path: test/step-b/README.md
       depends_on: [step-a]
       children:
         - key: review
@@ -217,6 +217,7 @@ task:
     let wf_id = resp_body["workflow_id"].as_str().unwrap();
 
     use palette_domain::job::{CraftStatus, JobFilter, JobStatus as JStatus, JobType};
+    use palette_domain::server::ServerEvent;
     use palette_domain::task::TaskStatus;
 
     // step-a should have a Job in Todo state (craft)
@@ -242,9 +243,6 @@ task:
     assert_eq!(step_b.status, TaskStatus::Pending);
 
     // Simulate Job lifecycle: InProgress → InReview → review approved → Done
-    use palette_domain::rule::RuleEffect;
-    use palette_domain::server::ServerEvent;
-
     let job_id = &jobs[0].id;
     state
         .interactor
@@ -258,10 +256,8 @@ task:
         .unwrap();
 
     // CraftReadyForReview creates the review job
-    let _ = state.event_tx.send(ServerEvent::ProcessEffects {
-        effects: vec![RuleEffect::CraftReadyForReview {
-            craft_job_id: job_id.clone(),
-        }],
+    let _ = state.event_tx.send(ServerEvent::CraftReadyForReview {
+        craft_job_id: job_id.clone(),
     });
     tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
 
@@ -282,7 +278,7 @@ task:
         .data_store
         .assign_job(&review_a.id, &helper::wid("reviewer-a"), JobType::Review)
         .unwrap();
-    let sub = state
+    let _sub = state
         .interactor
         .data_store
         .submit_review(
@@ -294,13 +290,9 @@ task:
             },
         )
         .unwrap();
-    let effects = palette_usecase::RuleEngine::new(
-        state.interactor.data_store.as_ref(),
-        state.max_review_rounds,
-    )
-    .on_review_submitted(&review_a.id, &sub)
-    .unwrap();
-    let _ = state.event_tx.send(ServerEvent::ProcessEffects { effects });
+    let _ = state.event_tx.send(ServerEvent::ReviewSubmitted {
+        review_job_id: review_a.id.clone(),
+    });
     tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
 
     // Verify: step-a task should be Done
@@ -351,10 +343,8 @@ task:
         .update_job_status(&step_b_job_id, JStatus::Craft(CraftStatus::InReview))
         .unwrap();
 
-    let _ = state.event_tx.send(ServerEvent::ProcessEffects {
-        effects: vec![RuleEffect::CraftReadyForReview {
-            craft_job_id: step_b_job_id.clone(),
-        }],
+    let _ = state.event_tx.send(ServerEvent::CraftReadyForReview {
+        craft_job_id: step_b_job_id.clone(),
     });
     tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
 
@@ -375,7 +365,7 @@ task:
         .data_store
         .assign_job(&review_b.id, &helper::wid("reviewer-b"), JobType::Review)
         .unwrap();
-    let sub = state
+    let _sub = state
         .interactor
         .data_store
         .submit_review(
@@ -387,13 +377,9 @@ task:
             },
         )
         .unwrap();
-    let effects = palette_usecase::RuleEngine::new(
-        state.interactor.data_store.as_ref(),
-        state.max_review_rounds,
-    )
-    .on_review_submitted(&review_b.id, &sub)
-    .unwrap();
-    let _ = state.event_tx.send(ServerEvent::ProcessEffects { effects });
+    let _ = state.event_tx.send(ServerEvent::ReviewSubmitted {
+        review_job_id: review_b.id.clone(),
+    });
     tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
 
     // step-b task should be Done
@@ -433,7 +419,7 @@ task:
   children:
     - key: craft
       type: craft
-      plan_path: test/craft
+      plan_path: test/craft/README.md
       children:
         - key: review
           type: review
@@ -442,7 +428,7 @@ task:
       children:
         - key: craft
           type: craft
-          plan_path: test/step-b-craft
+          plan_path: test/step-b/README.md-craft
           children:
             - key: review
               type: review
@@ -462,6 +448,7 @@ task:
     let wf_id = resp_body["workflow_id"].as_str().unwrap();
 
     use palette_domain::job::{CraftStatus, JobFilter, JobStatus as JStatus, ReviewStatus};
+    use palette_domain::server::ServerEvent;
     use palette_domain::task::TaskStatus;
 
     // craft task should have a Job in Todo state (composite craft with children)
@@ -494,13 +481,9 @@ task:
         .update_job_status(craft_job_id, JStatus::Craft(CraftStatus::InReview))
         .unwrap();
 
-    // Send StatusChanged(InReview) — this is what the stop hook sends
-    use palette_domain::rule::RuleEffect;
-    use palette_domain::server::ServerEvent;
-    let _ = state.event_tx.send(ServerEvent::ProcessEffects {
-        effects: vec![RuleEffect::CraftReadyForReview {
-            craft_job_id: craft_job_id.clone(),
-        }],
+    // Send CraftReadyForReview — this is what the stop hook sends
+    let _ = state.event_tx.send(ServerEvent::CraftReadyForReview {
+        craft_job_id: craft_job_id.clone(),
     });
 
     tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
@@ -571,14 +554,14 @@ task:
   children:
     - key: step-a
       type: craft
-      plan_path: test/a-craft
+      plan_path: test/a-craft/README.md
       children:
         - key: review
           type: review
     - key: step-b
       depends_on: [step-a]
       type: craft
-      plan_path: test/b-craft
+      plan_path: test/b-craft/README.md
       children:
         - key: review
           type: review
@@ -599,7 +582,6 @@ task:
     let workflow_id = palette_domain::workflow::WorkflowId::parse(wf_id).unwrap();
 
     use palette_domain::job::{CraftStatus, JobFilter, JobStatus as JStatus, JobType};
-    use palette_domain::rule::RuleEffect;
     use palette_domain::server::ServerEvent;
     use palette_domain::task::TaskStatus;
     use palette_domain::workflow::WorkflowStatus;
@@ -638,10 +620,8 @@ task:
         .update_job_status(&craft_a_id, JStatus::Craft(CraftStatus::InReview))
         .unwrap();
 
-    let _ = state.event_tx.send(ServerEvent::ProcessEffects {
-        effects: vec![RuleEffect::CraftReadyForReview {
-            craft_job_id: craft_a_id.clone(),
-        }],
+    let _ = state.event_tx.send(ServerEvent::CraftReadyForReview {
+        craft_job_id: craft_a_id.clone(),
     });
     wait().await;
 
@@ -704,7 +684,7 @@ task:
         .unwrap();
 
     use palette_domain::review::{SubmitReviewRequest, Verdict};
-    let sub = state
+    let _sub = state
         .interactor
         .data_store
         .submit_review(
@@ -717,13 +697,9 @@ task:
         )
         .unwrap();
 
-    let engine = palette_usecase::RuleEngine::new(
-        state.interactor.data_store.as_ref(),
-        state.max_review_rounds,
-    );
-    let effects = engine.on_review_submitted(&review_a_id, &sub).unwrap();
-
-    let _ = state.event_tx.send(ServerEvent::ProcessEffects { effects });
+    let _ = state.event_tx.send(ServerEvent::ReviewSubmitted {
+        review_job_id: review_a_id.clone(),
+    });
     wait().await;
 
     // step-a/review task should be Completed
@@ -783,10 +759,8 @@ task:
         .update_job_status(&craft_b_id, JStatus::Craft(CraftStatus::InReview))
         .unwrap();
 
-    let _ = state.event_tx.send(ServerEvent::ProcessEffects {
-        effects: vec![RuleEffect::CraftReadyForReview {
-            craft_job_id: craft_b_id.clone(),
-        }],
+    let _ = state.event_tx.send(ServerEvent::CraftReadyForReview {
+        craft_job_id: craft_b_id.clone(),
     });
     wait().await;
 
@@ -824,7 +798,7 @@ task:
         )
         .unwrap();
 
-    let sub = state
+    let _sub = state
         .interactor
         .data_store
         .submit_review(
@@ -837,8 +811,9 @@ task:
         )
         .unwrap();
 
-    let effects = engine.on_review_submitted(&review_b_id, &sub).unwrap();
-    let _ = state.event_tx.send(ServerEvent::ProcessEffects { effects });
+    let _ = state.event_tx.send(ServerEvent::ReviewSubmitted {
+        review_job_id: review_b_id.clone(),
+    });
     wait().await;
 
     // step-b task (craft) should be Completed
@@ -896,7 +871,7 @@ task:
   children:
     - key: craft
       type: craft
-      plan_path: test/craft
+      plan_path: test/craft/README.md
       children:
         - key: review-1
           type: review
@@ -918,7 +893,6 @@ task:
     let wf_id = resp_body["workflow_id"].as_str().unwrap();
 
     use palette_domain::job::{CraftStatus, JobFilter, JobStatus as JStatus, JobType};
-    use palette_domain::rule::RuleEffect;
     use palette_domain::server::ServerEvent;
     let wait = || tokio::time::sleep(tokio::time::Duration::from_millis(200));
 
@@ -940,10 +914,8 @@ task:
         .update_job_status(&craft_id, JStatus::Craft(CraftStatus::InReview))
         .unwrap();
 
-    let _ = state.event_tx.send(ServerEvent::ProcessEffects {
-        effects: vec![RuleEffect::CraftReadyForReview {
-            craft_job_id: craft_id.clone(),
-        }],
+    let _ = state.event_tx.send(ServerEvent::CraftReadyForReview {
+        craft_job_id: craft_id.clone(),
     });
     wait().await;
 
@@ -976,7 +948,7 @@ task:
         .unwrap();
 
     use palette_domain::review::{SubmitReviewRequest, Verdict};
-    let sub = state
+    let _sub = state
         .interactor
         .data_store
         .submit_review(
@@ -989,12 +961,9 @@ task:
         )
         .unwrap();
 
-    let engine = palette_usecase::RuleEngine::new(
-        state.interactor.data_store.as_ref(),
-        state.max_review_rounds,
-    );
-    let effects = engine.on_review_submitted(&review_1_id, &sub).unwrap();
-    let _ = state.event_tx.send(ServerEvent::ProcessEffects { effects });
+    let _ = state.event_tx.send(ServerEvent::ReviewSubmitted {
+        review_job_id: review_1_id.clone(),
+    });
     wait().await;
 
     // Craft job should still be InReview (not Done) because review-2 is not yet approved
@@ -1021,7 +990,7 @@ task:
         )
         .unwrap();
 
-    let sub = state
+    let _sub = state
         .interactor
         .data_store
         .submit_review(
@@ -1034,8 +1003,9 @@ task:
         )
         .unwrap();
 
-    let effects = engine.on_review_submitted(&review_2_id, &sub).unwrap();
-    let _ = state.event_tx.send(ServerEvent::ProcessEffects { effects });
+    let _ = state.event_tx.send(ServerEvent::ReviewSubmitted {
+        review_job_id: review_2_id.clone(),
+    });
     wait().await;
 
     // NOW craft job should be Done
@@ -1061,7 +1031,6 @@ task:
 async fn changes_requested_flow() {
     use palette_domain::job::{CraftStatus, JobStatus as JStatus, JobType, ReviewStatus};
     use palette_domain::review::{SubmitReviewRequest, Verdict};
-    use palette_domain::rule::RuleEffect;
     use palette_domain::server::ServerEvent;
     use palette_domain::task::TaskStatus;
 
@@ -1071,7 +1040,7 @@ task:
   children:
     - key: impl
       type: craft
-      plan_path: test/impl
+      plan_path: test/impl/README.md
       children:
         - key: review
           type: review
@@ -1125,10 +1094,8 @@ task:
         .data_store
         .update_job_status(&craft_id, JStatus::Craft(CraftStatus::InReview))
         .unwrap();
-    let _ = state.event_tx.send(ServerEvent::ProcessEffects {
-        effects: vec![RuleEffect::CraftReadyForReview {
-            craft_job_id: craft_id.clone(),
-        }],
+    let _ = state.event_tx.send(ServerEvent::CraftReadyForReview {
+        craft_job_id: craft_id.clone(),
     });
     wait().await;
 
@@ -1155,7 +1122,7 @@ task:
         )
         .unwrap();
 
-    let sub = state
+    let _sub = state
         .interactor
         .data_store
         .submit_review(
@@ -1168,13 +1135,9 @@ task:
         )
         .unwrap();
 
-    let effects = palette_usecase::RuleEngine::new(
-        state.interactor.data_store.as_ref(),
-        state.max_review_rounds,
-    )
-    .on_review_submitted(&review_id, &sub)
-    .unwrap();
-    let _ = state.event_tx.send(ServerEvent::ProcessEffects { effects });
+    let _ = state.event_tx.send(ServerEvent::ReviewSubmitted {
+        review_job_id: review_id.clone(),
+    });
     wait().await;
 
     // Verify: review job should be ChangesRequested
@@ -1208,10 +1171,8 @@ task:
         .data_store
         .update_job_status(&craft_id, JStatus::Craft(CraftStatus::InReview))
         .unwrap();
-    let _ = state.event_tx.send(ServerEvent::ProcessEffects {
-        effects: vec![RuleEffect::CraftReadyForReview {
-            craft_job_id: craft_id.clone(),
-        }],
+    let _ = state.event_tx.send(ServerEvent::CraftReadyForReview {
+        craft_job_id: craft_id.clone(),
     });
     wait().await;
 
@@ -1229,7 +1190,7 @@ task:
     );
 
     // Reviewer approves this time
-    let sub2 = state
+    let _sub2 = state
         .interactor
         .data_store
         .submit_review(
@@ -1242,13 +1203,9 @@ task:
         )
         .unwrap();
 
-    let effects = palette_usecase::RuleEngine::new(
-        state.interactor.data_store.as_ref(),
-        state.max_review_rounds,
-    )
-    .on_review_submitted(&review_id, &sub2)
-    .unwrap();
-    let _ = state.event_tx.send(ServerEvent::ProcessEffects { effects });
+    let _ = state.event_tx.send(ServerEvent::ReviewSubmitted {
+        review_job_id: review_id.clone(),
+    });
     wait().await;
 
     // Verify: review job Done, craft job Done, craft task Completed

@@ -1,0 +1,16 @@
+task:
+  key: operator-task
+  children:
+    - key: craft-phase
+      type: craft
+      plan_path: implement/README.md
+      priority: high
+      repository:
+        name: x7c1/palette
+        branch: plan/2026-999-e2e-operator
+      children:
+        - key: human-approval
+          type: operator
+        - key: review
+          type: review
+          depends_on: [human-approval]

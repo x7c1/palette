@@ -117,17 +117,17 @@ mod tests {
         let mut state = PersistentState::new("test".to_string());
         state
             .supervisors
-            .push(make_supervisor("leader-1", WorkerRole::Leader));
+            .push(make_supervisor("approver-1", WorkerRole::Approver));
         state
             .supervisors
             .push(make_supervisor("ri-1", WorkerRole::ReviewIntegrator));
 
         assert_eq!(
             state
-                .find_supervisor_for_task(&TaskId::parse("wf-test:leader-1").unwrap())
+                .find_supervisor_for_task(&TaskId::parse("wf-test:approver-1").unwrap())
                 .unwrap()
                 .id,
-            WorkerId::parse("leader-1").unwrap()
+            WorkerId::parse("approver-1").unwrap()
         );
         assert_eq!(
             state
@@ -148,14 +148,14 @@ mod tests {
         let mut state = PersistentState::new("test".to_string());
         state
             .supervisors
-            .push(make_supervisor("leader-1", WorkerRole::Leader));
+            .push(make_supervisor("approver-1", WorkerRole::Approver));
         state
             .supervisors
             .push(make_supervisor("ri-1", WorkerRole::ReviewIntegrator));
 
-        let removed = state.remove_supervisor(&WorkerId::parse("leader-1").unwrap());
+        let removed = state.remove_supervisor(&WorkerId::parse("approver-1").unwrap());
         assert!(removed.is_some());
-        assert_eq!(removed.unwrap().id, WorkerId::parse("leader-1").unwrap());
+        assert_eq!(removed.unwrap().id, WorkerId::parse("approver-1").unwrap());
         assert_eq!(state.supervisors.len(), 1);
 
         assert!(

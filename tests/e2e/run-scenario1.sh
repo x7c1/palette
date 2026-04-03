@@ -202,8 +202,6 @@ while true; do
     echo ""
     echo "=== All E2E checks passed ==="
     echo "Workflow completed successfully: step-a → step-b cascade verified."
-    echo "Cleaning up..."
-    scripts/reset.sh 2>&1
     exit 0
   fi
 done

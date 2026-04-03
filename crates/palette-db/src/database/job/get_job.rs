@@ -5,7 +5,7 @@ impl Database {
     pub fn get_job(&self, id: &JobId) -> crate::Result<Option<Job>> {
         let conn = lock(&self.conn)?;
         let mut stmt = conn.prepare(
-            "SELECT id, task_id, type_id, title, plan_path, assignee_id, status_id, priority_id, repository, pr_url, created_at, updated_at, notes, assigned_at
+            "SELECT id, task_id, type_id, title, plan_path, assignee_id, status_id, priority_id, repository, command, pr_url, created_at, updated_at, notes, assigned_at
              FROM jobs WHERE id = ?1",
         )?;
         stmt.query_map(params![id.as_ref()], read_job_row)?

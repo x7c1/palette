@@ -5,7 +5,6 @@ use axum::{
     http::StatusCode,
 };
 use palette_domain::job::{CraftTransition, Job, JobStatus, JobType};
-use palette_domain::rule::RuleEffect;
 use palette_domain::server::ServerEvent;
 use palette_domain::worker::{WorkerId, WorkerRole, WorkerStatus};
 use std::sync::Arc;
@@ -39,6 +38,16 @@ pub async fn handle_stop(
     state.event_log.lock().await.push(record);
 
     super::save_session_id(state.interactor.data_store.as_ref(), &worker_id, &payload);
+
+    // If the stopping worker is a ReviewIntegrator, validate integrated-review.md
+    if let Ok(Some(worker)) = state.interactor.data_store.find_worker(&worker_id)
+        && worker.role == WorkerRole::ReviewIntegrator
+    {
+        let _ = state.event_tx.send(ServerEvent::ReviewIntegratorStopped {
+            task_id: worker.task_id.clone(),
+            worker_id: worker_id.clone(),
+        });
+    }
 
     let supervisor_id = transition_worker_to_idle(&state, &worker_id);
 
@@ -140,6 +149,8 @@ fn process_member_jobs(
             JobType::Review => {
                 handle_review_stop(state, job, worker_id, supervisor_id, last_message)
             }
+            // ReviewIntegrate, Orchestrator, and Operator jobs don't have member workers
+            JobType::ReviewIntegrate | JobType::Orchestrator | JobType::Operator => {}
         }
     }
 }
@@ -168,10 +179,8 @@ fn handle_craft_stop(state: &AppState, job: &Job) {
         tracing::error!(job_id = %job.id, error = %e, "failed to transition job to in_review");
         return;
     }
-    let _ = state.event_tx.send(ServerEvent::ProcessEffects {
-        effects: vec![RuleEffect::CraftReadyForReview {
-            craft_job_id: job.id.clone(),
-        }],
+    let _ = state.event_tx.send(ServerEvent::CraftReadyForReview {
+        craft_job_id: job.id.clone(),
     });
 }
 

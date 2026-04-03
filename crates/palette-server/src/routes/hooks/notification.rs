@@ -103,13 +103,23 @@ pub async fn handle_notification(
         notification.push_str(&format!(" pane=[{pane}]"));
     }
 
-    if let Some(ref supervisor_id) = worker_context.supervisor_id
-        && let Err(e) = state
+    if let Some(ref supervisor_id) = worker_context.supervisor_id {
+        match state
             .interactor
             .data_store
             .enqueue_message(supervisor_id, &notification)
-    {
-        tracing::error!(error = %e, "failed to enqueue notification for supervisor");
+        {
+            Ok(_) => {
+                tracing::info!(
+                    worker_id = worker_id_str,
+                    supervisor_id = %supervisor_id,
+                    "enqueued permission prompt notification for supervisor"
+                );
+            }
+            Err(e) => {
+                tracing::error!(error = %e, "failed to enqueue notification for supervisor");
+            }
+        }
     }
 
     let _ = state.event_tx.send(ServerEvent::NotifyDeliveryLoop);

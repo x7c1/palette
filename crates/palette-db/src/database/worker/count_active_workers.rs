@@ -1,13 +1,21 @@
 use super::super::*;
+use palette_domain::worker::WorkerStatus;
 
 impl Database {
-    /// Count the number of active workers (all records in the workers table).
+    /// Count the number of workers that occupy a worker slot.
     ///
-    /// Every worker that has a row in the table is considered active,
-    /// regardless of its status, because the row is removed on destroy.
+    /// Idle workers are excluded because they have a container but consume no
+    /// compute resources (e.g. a crafter waiting during the review phase).
+    /// Their containers are kept alive for potential reactivation on
+    /// ChangesRequested, but they should not block new worker spawns.
     pub fn count_active_workers(&self) -> crate::Result<usize> {
         let conn = lock(&self.conn)?;
-        let count: i64 = conn.query_row("SELECT COUNT(*) FROM workers", [], |row| row.get(0))?;
+        let idle_id = crate::lookup::worker_status_id(WorkerStatus::Idle);
+        let count: i64 = conn.query_row(
+            "SELECT COUNT(*) FROM workers WHERE status_id != ?1",
+            [idle_id],
+            |row| row.get(0),
+        )?;
         Ok(count as usize)
     }
 }
@@ -50,7 +58,7 @@ mod tests {
     }
 
     #[test]
-    fn counts_all_worker_statuses() {
+    fn excludes_idle_workers() {
         let db = test_db();
 
         insert_worker(&db, "w-booting", WorkerRole::Member, WorkerStatus::Booting);
@@ -59,8 +67,9 @@ mod tests {
         insert_worker(&db, "w-working", WorkerRole::Member, WorkerStatus::Working);
         assert_eq!(db.count_active_workers().unwrap(), 2);
 
+        // Idle workers should not be counted
         insert_worker(&db, "w-idle", WorkerRole::Member, WorkerStatus::Idle);
-        assert_eq!(db.count_active_workers().unwrap(), 3);
+        assert_eq!(db.count_active_workers().unwrap(), 2);
 
         insert_worker(
             &db,
@@ -68,10 +77,10 @@ mod tests {
             WorkerRole::Member,
             WorkerStatus::WaitingPermission,
         );
-        assert_eq!(db.count_active_workers().unwrap(), 4);
+        assert_eq!(db.count_active_workers().unwrap(), 3);
 
         insert_worker(&db, "w-crashed", WorkerRole::Member, WorkerStatus::Crashed);
-        assert_eq!(db.count_active_workers().unwrap(), 5);
+        assert_eq!(db.count_active_workers().unwrap(), 4);
     }
 
     #[test]
@@ -79,7 +88,12 @@ mod tests {
         let db = test_db();
 
         insert_worker(&db, "member-1", WorkerRole::Member, WorkerStatus::Working);
-        insert_worker(&db, "leader-1", WorkerRole::Leader, WorkerStatus::Working);
+        insert_worker(
+            &db,
+            "approver-1",
+            WorkerRole::Approver,
+            WorkerStatus::Working,
+        );
         insert_worker(
             &db,
             "review-integrator-1",
