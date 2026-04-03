@@ -10,19 +10,13 @@ main() {
     setup_claude_config
     setup_bash_history
     echo "Setup completed successfully!"
-    echo "Original ~/.claude.json preserved"
+    echo "Local Claude runtime files prepared under claude.local/"
 }
 
 check_prerequisites() {
     # Check if jq is installed
     if ! command -v jq &> /dev/null; then
         echo "Error: jq is required but not installed. Please install jq first."
-        exit 1
-    fi
-
-    # Check if ~/.claude.json exists
-    if [ ! -f ~/.claude.json ]; then
-        echo "Error: ~/.claude.json not found"
         exit 1
     fi
 
@@ -46,14 +40,21 @@ setup_claude_config() {
         return
     fi
 
-    # Copy ~/.claude.json to claude.local/
-    echo "Copying ~/.claude.json to claude.local/.claude.json..."
-    cp ~/.claude.json claude.local/.claude.json
+    if [ -f ~/.claude.json ]; then
+        # Copy ~/.claude.json to claude.local/
+        echo "Copying ~/.claude.json to claude.local/.claude.json..."
+        cp ~/.claude.json claude.local/.claude.json
 
-    # Empty the projects history using jq
-    echo "Emptying project history..."
-    jq '.projects = {}' claude.local/.claude.json > claude.local/.claude.json.tmp && \
-        mv claude.local/.claude.json.tmp claude.local/.claude.json
+        # Empty the projects history using jq
+        echo "Emptying project history..."
+        jq '.projects = {}' claude.local/.claude.json > claude.local/.claude.json.tmp && \
+            mv claude.local/.claude.json.tmp claude.local/.claude.json
+    else
+        echo "~/.claude.json not found. Creating a minimal claude.local/.claude.json..."
+        cat > claude.local/.claude.json <<'EOF'
+{"hasCompletedOnboarding":true,"bypassPermissionsModeAccepted":true,"projects":{}}
+EOF
+    fi
 
     echo "Successfully created claude.local/.claude.json with empty project history"
 }

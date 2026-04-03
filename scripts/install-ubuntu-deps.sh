@@ -8,6 +8,7 @@ echo "Installing common Ubuntu system dependencies..."
 apt-get update
 apt-get install -y \
     build-essential \
+    ca-certificates \
     curl \
     pkg-config \
     libssl-dev \
