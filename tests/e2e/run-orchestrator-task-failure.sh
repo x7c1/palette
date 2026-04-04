@@ -14,6 +14,14 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
 cd "$ROOT_DIR"
 
+if [[ "${PALETTE_E2E_IMAGE_CHECK:-1}" == "1" ]]; then
+  "$SCRIPT_DIR/check-required-images.sh"
+fi
+
+if [[ "${PALETTE_E2E_SYNC_AUTH_BUNDLE:-1}" == "1" ]]; then
+  "$SCRIPT_DIR/sync-bootstrap-auth-bundle.sh"
+fi
+
 PALETTE_URL="http://127.0.0.1:7100"
 BLUEPRINT_PATH="$ROOT_DIR/tests/e2e/fixtures/orchestrator-task-failure.yaml"
 LOG_FILE="data/palette.log"

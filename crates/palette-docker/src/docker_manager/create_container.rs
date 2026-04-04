@@ -231,9 +231,16 @@ fn resolve_claude_auth_mounts_with_root(home: &Path, auth_bundle_root: &Path) ->
         "/home/agent/.claude/.credentials.json",
         true,
     );
-    add_mount(".claude/settings.json", "/home/agent/.claude/settings.json", true);
-    add_mount(".claude/CLAUDE.md", "/home/agent/.claude/CLAUDE.md", false);
-    add_mount(".claude.json", "/home/agent/.claude.json", false);
+    let worker_claude = home.join(".config/palette/worker/CLAUDE.md");
+    if worker_claude.exists() {
+        mounts.push(AuthMount {
+            host_path: worker_claude,
+            container_path: "/home/agent/.claude/CLAUDE.md",
+            is_auth_marker: false,
+        });
+    } else {
+        add_mount(".claude/CLAUDE.md", "/home/agent/.claude/CLAUDE.md", false);
+    }
 
     if !mounts.iter().any(|m| m.is_auth_marker) {
         let legacy = home.join(".claude/.credentials.json");
@@ -267,13 +274,10 @@ mod tests {
             home,
             &home.join(".config/palette/claude-auth-bundle"),
         );
-        assert_eq!(mounts.len(), 2);
+        assert_eq!(mounts.len(), 1);
         assert!(mounts
             .iter()
             .any(|m| m.container_path == "/home/agent/.claude/.credentials.json"));
-        assert!(mounts
-            .iter()
-            .any(|m| m.container_path == "/home/agent/.claude/settings.json"));
     }
 
     #[test]
@@ -293,5 +297,33 @@ mod tests {
             mounts[0].container_path,
             "/home/agent/.claude/.credentials.json"
         );
+    }
+
+    #[test]
+    fn prefers_worker_claude_md_over_bundle_claude_md() {
+        let tmp = tempfile::tempdir().unwrap();
+        let home = tmp.path();
+
+        let bundle = home.join(".config/palette/claude-auth-bundle/.claude");
+        fs::create_dir_all(&bundle).unwrap();
+        fs::write(bundle.join(".credentials.json"), "{}").unwrap();
+        fs::write(bundle.join("CLAUDE.md"), "bundle").unwrap();
+
+        let worker_dir = home.join(".config/palette/worker");
+        fs::create_dir_all(&worker_dir).unwrap();
+        let worker_claude = worker_dir.join("CLAUDE.md");
+        fs::write(&worker_claude, "worker").unwrap();
+
+        let mounts = resolve_claude_auth_mounts_with_root(
+            home,
+            &home.join(".config/palette/claude-auth-bundle"),
+        );
+        assert_eq!(mounts.len(), 2);
+
+        let claude_mount = mounts
+            .iter()
+            .find(|m| m.container_path == "/home/agent/.claude/CLAUDE.md")
+            .expect("CLAUDE.md mount should exist");
+        assert_eq!(claude_mount.host_path, worker_claude);
     }
 }

@@ -33,6 +33,10 @@ warn() {
   WARN_COUNT=$((WARN_COUNT + 1))
 }
 
+info() {
+  echo "INFO: $*"
+}
+
 pass() {
   echo "PASS: $*"
 }
@@ -303,13 +307,13 @@ fi
 if [[ "$notification_hits" -ge 1 ]]; then
   pass "Notification hook reached host via host.docker.internal"
 else
-  warn "Notification hook was not observed in this run"
+  info "Notification hook was not observed in this run (optional signal)"
 fi
 
 if [[ "$notification_any_hits" -ge 1 ]]; then
   pass "Notification(any) hook observed (non-matcher route)"
 else
-  warn "No Notification(any) hooks observed; no Claude notifications were emitted in this probe"
+  info "No Notification(any) hooks observed; Claude notifications are optional in this probe"
 fi
 
 echo

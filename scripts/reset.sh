@@ -8,6 +8,47 @@ ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 DB_FILE="$ROOT_DIR/data/palette.db"
 SESSION_NAME="palette"
 
+collect_protected_pids() {
+  # Keep current process lineage alive so reset invoked from a test script
+  # does not terminate itself.
+  local current="$$"
+  local out=" $current "
+  while [[ "$current" -gt 1 ]]; do
+    local parent
+    parent="$(ps -o ppid= -p "$current" 2>/dev/null | tr -d ' ' || true)"
+    if [[ -z "$parent" || "$parent" -le 1 ]]; then
+      break
+    fi
+    out="${out}${parent} "
+    current="$parent"
+  done
+  echo "$out"
+}
+
+stop_other_e2e_scripts() {
+  local protected
+  protected="$(collect_protected_pids)"
+  while IFS= read -r line; do
+    [[ -z "$line" ]] && continue
+    local pid
+    pid="$(echo "$line" | awk '{print $1}')"
+    local cmd
+    cmd="$(echo "$line" | cut -d' ' -f2-)"
+    [[ -z "$pid" ]] && continue
+    if [[ "$protected" == *" $pid "* ]]; then
+      continue
+    fi
+    if [[ "$cmd" == *"/tests/e2e/run-"*".sh"* ]]; then
+      echo "stopping other e2e script (PID $pid)..."
+      kill "$pid" 2>/dev/null || true
+    fi
+  done < <(ps -axo pid=,command= 2>/dev/null || true)
+}
+
+# Stop other running E2E scripts first to avoid parallel runs fighting
+# over shared pid/log/data paths.
+stop_other_e2e_scripts
+
 # Stop Palette process if running
 port_pid=$(lsof -ti :7100 2>/dev/null || true)
 if [[ -n "$port_pid" ]]; then

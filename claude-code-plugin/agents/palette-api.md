@@ -34,9 +34,11 @@ Get the API base URL by running `echo $PALETTE_URL`.
 - **List submissions**: `GET $PALETTE_URL/reviews/{id}/submissions`
 
 ### Communication
-- **Send message**: `POST $PALETTE_URL/send` — Body: `{"member_id": "...", "message": "..."}`
-  - If the member is busy (Working), the message is queued and delivered when the member becomes idle
-  - If the member is waiting for permission, the message is sent immediately (use `"message": "<number>", "no_enter": true` where `<number>` is the option number from the permission prompt)
+- **Send message**: `POST $PALETTE_URL/send` — Body: `{"worker_id": "...", "message": "...", "no_enter": false}`
+  - Use `worker_id` (not `member_id`)
+  - For permission responses, use the `member=...` value from the incoming event as `worker_id`
+  - If the worker is busy (`working`), the message is queued and delivered when the worker becomes idle
+  - If the worker is waiting for permission, the message is sent immediately (use `"message": "<number>", "no_enter": true` where `<number>` is the option number from the permission prompt)
 
 ## Instructions
 

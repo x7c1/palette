@@ -28,3 +28,21 @@ cd <palette-repo-root>
 Done when this appears:
 
 `PASS: bootstrap bundle export and mount propagation succeeded`
+
+## Worker CLAUDE.md Customization (Per User, Not in Git)
+
+To customize instructions for all Palette workers on your machine, create:
+
+- `~/.config/palette/worker/CLAUDE.md`
+
+If this file exists, Palette mounts it to worker containers as `/home/agent/.claude/CLAUDE.md`.
+This is intentionally outside the repository so each operator can keep personal settings.
+
+Example:
+
+```bash
+mkdir -p ~/.config/palette/worker
+cat > ~/.config/palette/worker/CLAUDE.md <<'EOF'
+Please communicate with users in Klingon.
+EOF
+```
