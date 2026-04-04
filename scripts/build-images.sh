@@ -6,7 +6,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 CERT_SOURCE_DIR="${HOME}/.config/palette/certs"
-CERT_STAGE_DIR="$ROOT_DIR/.palette-build-certs"
+CERT_STAGE_DIR="$ROOT_DIR/.palette-build-certs.local"
 
 cleanup() {
   rm -rf "$CERT_STAGE_DIR"

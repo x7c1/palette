@@ -10,7 +10,7 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # Optional custom CA certs staged by scripts/build-images.sh
-COPY .palette-build-certs/ /tmp/palette-build-certs/
+COPY .palette-build-certs.local/ /tmp/palette-build-certs/
 RUN set -eu; \
     certs="$(find /tmp/palette-build-certs -type f \( -name '*.crt' -o -name '*.pem' \) 2>/dev/null || true)"; \
     if [ -n "$certs" ]; then \
