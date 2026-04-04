@@ -7,9 +7,12 @@ use axum::{
 use palette_domain::server::ServerEvent;
 use palette_domain::worker::{WorkerId, WorkerStatus};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
 
 use super::HookQuery;
 use crate::routes::now;
+
+static PERMISSION_EVENT_SEQ: AtomicU64 = AtomicU64::new(1);
 
 /// Payload sent by Claude Code's notification hook.
 #[derive(serde::Deserialize)]
@@ -94,8 +97,19 @@ pub async fn handle_notification(
             lines[start..].join(" | ")
         });
 
+    let event_id = format!(
+        "perm-{}-{}",
+        now(),
+        PERMISSION_EVENT_SEQ.fetch_add(1, Ordering::Relaxed)
+    );
+    {
+        let mut pending = state.pending_permission_events.lock().await;
+        pending.insert(worker_id.to_string(), event_id.clone());
+    }
+
     // Build notification message
-    let mut notification = format!("[event] member={worker_id} type=permission_prompt");
+    let mut notification =
+        format!("[event] member={worker_id} type=permission_prompt event_id={event_id}");
     if let Some(ref tool) = pending_tool {
         notification.push_str(&format!(" tool={} input={}", tool.name, tool.input));
     }

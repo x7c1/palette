@@ -36,9 +36,11 @@ Get the API base URL by running `echo $PALETTE_URL`.
 ### Communication
 - **Send message**: `POST $PALETTE_URL/send` — Body: `{"worker_id": "...", "message": "...", "no_enter": false}`
   - Use `worker_id` (not `member_id`)
-  - For permission responses, use the `member=...` value from the incoming event as `worker_id`
   - If the worker is busy (`working`), the message is queued and delivered when the worker becomes idle
-  - If the worker is waiting for permission, the message is sent immediately (use `"message": "<number>", "no_enter": true` where `<number>` is the option number from the permission prompt)
+- **Send permission choice**: `POST $PALETTE_URL/send/permission` — Body: `{"worker_id":"...", "event_id":"...", "choice":"<number>"}`
+  - Use `worker_id` from `member=...` in the event line
+  - Use `event_id` from the same event line
+  - `choice` is the permission option number as string (for example `"2"`)
 
 ## Instructions
 

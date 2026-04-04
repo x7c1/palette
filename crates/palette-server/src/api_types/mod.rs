@@ -7,6 +7,9 @@ pub use update_job_request::UpdateJobRequest;
 mod send_request;
 pub use send_request::SendRequest;
 
+mod send_permission_request;
+pub use send_permission_request::SendPermissionRequest;
+
 mod send_response;
 pub use send_response::SendResponse;
 

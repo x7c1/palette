@@ -5,7 +5,7 @@ use palette_domain::task::TaskId;
 use palette_domain::terminal::TerminalTarget;
 use palette_domain::worker::{ContainerId, WorkerRole, WorkerStatus};
 use palette_domain::workflow::WorkflowId;
-use palette_server::api_types::SendRequest;
+use palette_server::api_types::{SendPermissionRequest, SendRequest};
 use palette_tmux::TmuxManager;
 use palette_usecase::data_store::InsertWorkerRequest;
 use serde_json::json;
@@ -153,5 +153,72 @@ async fn send_queues_when_member_is_working() {
     assert!(
         content.contains("queued message"),
         "pane should contain the queued message after stop, got: {content}"
+    );
+}
+
+#[tokio::test]
+async fn send_permission_requires_matching_event_id() {
+    let (session, _guard) = test_session_name_with_guard("perm-mismatch");
+    let tmux = TmuxManager::new(session.clone());
+    tmux.create_session(&session).unwrap();
+
+    let target = tmux.create_target("worker").unwrap();
+    let (base_url, state, _shutdown_tx) = spawn_server(tmux, &session).await;
+    register_worker(&state, "worker", &target, WorkerStatus::WaitingPermission);
+
+    state
+        .pending_permission_events
+        .lock()
+        .await
+        .insert("worker".to_string(), "perm-expected".to_string());
+
+    let client = reqwest::Client::new();
+    let resp = client
+        .post(format!("{base_url}/send/permission"))
+        .json(&SendPermissionRequest {
+            worker_id: "worker".to_string(),
+            event_id: "perm-wrong".to_string(),
+            choice: "2".to_string(),
+        })
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), 400);
+}
+
+#[tokio::test]
+async fn send_permission_delivers_choice_without_enter() {
+    let (session, _guard) = test_session_name_with_guard("perm-ok");
+    let tmux = TmuxManager::new(session.clone());
+    tmux.create_session(&session).unwrap();
+
+    let target = tmux.create_target("worker").unwrap();
+    let (base_url, state, _shutdown_tx) = spawn_server(tmux, &session).await;
+    register_worker(&state, "worker", &target, WorkerStatus::WaitingPermission);
+
+    state
+        .pending_permission_events
+        .lock()
+        .await
+        .insert("worker".to_string(), "perm-ok".to_string());
+
+    let client = reqwest::Client::new();
+    let resp = client
+        .post(format!("{base_url}/send/permission"))
+        .json(&SendPermissionRequest {
+            worker_id: "worker".to_string(),
+            event_id: "perm-ok".to_string(),
+            choice: "2".to_string(),
+        })
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), 200);
+
+    tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+    let content = capture_pane(&target);
+    assert!(
+        content.contains("2"),
+        "pane should contain permission choice, got: {content}"
     );
 }

@@ -2,6 +2,7 @@ mod hooks;
 mod jobs;
 mod reviews;
 mod send;
+mod send_permission;
 mod workers;
 mod workflows;
 
@@ -21,6 +22,10 @@ pub fn create_router(state: Arc<AppState>) -> Router {
         .route("/hooks/session-start", post(hooks::handle_session_start))
         // Send
         .route("/send", post(send::handle_send))
+        .route(
+            "/send/permission",
+            post(send_permission::handle_send_permission),
+        )
         // Events
         .route("/events", get(handle_events))
         // Workflow API

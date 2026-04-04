@@ -17,7 +17,10 @@ impl DockerManager {
             "{}/hooks/session-start?worker_id={worker_id}",
             self.worker_callback_url
         );
-        let stop_url = format!("{}/hooks/stop?worker_id={worker_id}", self.worker_callback_url);
+        let stop_url = format!(
+            "{}/hooks/stop?worker_id={worker_id}",
+            self.worker_callback_url
+        );
         let notification_url = format!(
             "{}/hooks/notification?worker_id={worker_id}",
             self.worker_callback_url

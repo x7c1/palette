@@ -64,6 +64,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         max_review_rounds: config.rules.max_review_rounds,
         data_dir: std::path::PathBuf::from("data"),
         event_log: tokio::sync::Mutex::new(Vec::new()),
+        pending_permission_events: tokio::sync::Mutex::new(std::collections::HashMap::new()),
         event_tx: event_tx.clone(),
     });
 

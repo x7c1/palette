@@ -38,6 +38,10 @@ pub async fn handle_stop(
     state.event_log.lock().await.push(record);
 
     super::save_session_id(state.interactor.data_store.as_ref(), &worker_id, &payload);
+    {
+        let mut pending = state.pending_permission_events.lock().await;
+        pending.remove(worker_id.as_ref());
+    }
 
     // If the stopping worker is a ReviewIntegrator, validate integrated-review.md
     if let Ok(Some(worker)) = state.interactor.data_store.find_worker(&worker_id)

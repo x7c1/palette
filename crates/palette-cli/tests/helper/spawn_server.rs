@@ -48,6 +48,7 @@ pub async fn spawn_server(
         max_review_rounds: 5,
         data_dir: std::path::PathBuf::from("data"),
         event_log: tokio::sync::Mutex::new(Vec::new()),
+        pending_permission_events: tokio::sync::Mutex::new(std::collections::HashMap::new()),
         event_tx: event_tx.clone(),
     });
 
@@ -61,7 +62,7 @@ pub async fn spawn_server(
         event_tx,
     });
     let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel();
-    let _ = orchestrator.start(event_rx, shutdown_rx);
+    std::mem::drop(orchestrator.start(event_rx, shutdown_rx));
 
     let app = create_router(state.clone());
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();

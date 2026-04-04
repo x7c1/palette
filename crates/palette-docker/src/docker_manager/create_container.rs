@@ -275,9 +275,11 @@ mod tests {
             &home.join(".config/palette/claude-auth-bundle"),
         );
         assert_eq!(mounts.len(), 1);
-        assert!(mounts
-            .iter()
-            .any(|m| m.container_path == "/home/agent/.claude/.credentials.json"));
+        assert!(
+            mounts
+                .iter()
+                .any(|m| m.container_path == "/home/agent/.claude/.credentials.json")
+        );
     }
 
     #[test]
