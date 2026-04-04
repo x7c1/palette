@@ -38,6 +38,10 @@ pub async fn handle_stop(
     state.event_log.lock().await.push(record);
 
     super::save_session_id(state.interactor.data_store.as_ref(), &worker_id, &payload);
+    // A worker waiting for permission is blocked and cannot stop on its own,
+    // so normally the approver resolves the prompt (removing the entry in
+    // send_permission) before the worker ever reaches stop. An entry here
+    // means the worker crashed or was forcefully terminated.
     {
         let mut pending = state.pending_permission_events.lock().await;
         pending.remove(worker_id.as_ref());
