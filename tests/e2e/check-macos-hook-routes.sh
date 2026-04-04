@@ -97,6 +97,13 @@ if [[ "$baseline_ok" -eq 1 ]]; then
   echo "PASS: host -> session-start endpoint"
 else
   echo "FAIL: host -> session-start endpoint"
+  if ! kill -0 "$SERVER_PID" >/dev/null 2>&1; then
+    echo "INFO: local receiver process is not running (likely bind/startup failure)"
+  fi
+  if [[ -s "$SERVER_LOG" ]]; then
+    echo "INFO: receiver log:"
+    sed -n '1,80p' "$SERVER_LOG"
+  fi
   exit 1
 fi
 
