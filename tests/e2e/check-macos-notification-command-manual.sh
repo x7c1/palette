@@ -117,7 +117,7 @@ cat > \"\$TMP/settings.json\" <<'JSON'
       {
         \"matcher\": \"permission_prompt\",
         \"hooks\": [
-          { \"type\": \"http\", \"url\": \"http://host.docker.internal:${PORT}/hooks/notification-permission\" }
+          { \"type\": \"command\", \"command\": \"curl -sf -X POST -H 'Content-Type: application/json' -d @- 'http://host.docker.internal:${PORT}/hooks/notification-permission' || true\" }
         ]
       }
     ],

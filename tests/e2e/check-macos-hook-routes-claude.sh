@@ -118,7 +118,7 @@ docker exec "$SOURCE_CONTAINER" sh -lc "
   set -e
   test -x /home/developer/.local/bin/claude
   TMP=\$(mktemp -d)
-  cat > \"\$TMP/settings-http-stop.json\" <<'JSON'
+  cat > \"\$TMP/settings-primary.json\" <<'JSON'
 {
   \"permissions\": {
     \"allow\": [
@@ -143,8 +143,8 @@ docker exec "$SOURCE_CONTAINER" sh -lc "
       {
         \"hooks\": [
           {
-            \"type\": \"http\",
-            \"url\": \"http://host.docker.internal:${PORT}/hooks/stop\"
+            \"type\": \"command\",
+            \"command\": \"curl -sf -X POST -H 'Content-Type: application/json' -d @- 'http://host.docker.internal:${PORT}/hooks/stop' || true\"
           }
         ]
       }
@@ -154,16 +154,16 @@ docker exec "$SOURCE_CONTAINER" sh -lc "
         \"matcher\": \"permission_prompt\",
         \"hooks\": [
           {
-            \"type\": \"http\",
-            \"url\": \"http://host.docker.internal:${PORT}/hooks/notification\"
+            \"type\": \"command\",
+            \"command\": \"curl -sf -X POST -H 'Content-Type: application/json' -d @- 'http://host.docker.internal:${PORT}/hooks/notification' || true\"
           }
         ]
       },
       {
         \"hooks\": [
           {
-            \"type\": \"http\",
-            \"url\": \"http://host.docker.internal:${PORT}/hooks/notification-any\"
+            \"type\": \"command\",
+            \"command\": \"curl -sf -X POST -H 'Content-Type: application/json' -d @- 'http://host.docker.internal:${PORT}/hooks/notification-any' || true\"
           }
         ]
       }
@@ -208,16 +208,16 @@ JSON
         \"matcher\": \"permission_prompt\",
         \"hooks\": [
           {
-            \"type\": \"http\",
-            \"url\": \"http://host.docker.internal:${PORT}/hooks/notification\"
+            \"type\": \"command\",
+            \"command\": \"curl -sf -X POST -H 'Content-Type: application/json' -d @- 'http://host.docker.internal:${PORT}/hooks/notification' || true\"
           }
         ]
       },
       {
         \"hooks\": [
           {
-            \"type\": \"http\",
-            \"url\": \"http://host.docker.internal:${PORT}/hooks/notification-any\"
+            \"type\": \"command\",
+            \"command\": \"curl -sf -X POST -H 'Content-Type: application/json' -d @- 'http://host.docker.internal:${PORT}/hooks/notification-any' || true\"
           }
         ]
       }
@@ -228,20 +228,20 @@ JSON
 
   /home/developer/.local/bin/claude -p \
     --permission-mode default \
-    --settings \"\$TMP/settings-http-stop.json\" \
+    --settings \"\$TMP/settings-primary.json\" \
     \"Return exactly: hook-probe-ok\" >/tmp/claude-hook-probe.out 2>/tmp/claude-hook-probe.err || true
 
   # Best-effort second run that tends to raise permission prompts and notification hooks.
   /home/developer/.local/bin/claude -p \
     --permission-mode default \
-    --settings \"\$TMP/settings-http-stop.json\" \
+    --settings \"\$TMP/settings-primary.json\" \
     \"Use Bash to run: pwd\" >/tmp/claude-hook-probe-tool.out 2>/tmp/claude-hook-probe-tool.err || true
 
   # Fallback run without -p. Some hook types are only emitted in interactive lifecycle.
   printf 'Return exactly: interactive-hook-probe\n/exit\n' | \
     /home/developer/.local/bin/claude \
       --permission-mode default \
-      --settings \"\$TMP/settings-http-stop.json\" \
+      --settings \"\$TMP/settings-primary.json\" \
       >/tmp/claude-hook-probe-interactive.out 2>/tmp/claude-hook-probe-interactive.err || true
 
   # Control run: Stop as command hook for event-emission/policy split.
@@ -254,12 +254,12 @@ JSON
   if command -v timeout >/dev/null 2>&1; then
     timeout 20s /home/developer/.local/bin/claude \
       --permission-mode default \
-      --settings \"\$TMP/settings-http-stop.json\" \
+      --settings \"\$TMP/settings-primary.json\" \
       \"Use Bash to run: pwd\" >/tmp/claude-hook-probe-permission.out 2>/tmp/claude-hook-probe-permission.err || true
   else
     /home/developer/.local/bin/claude -p \
       --permission-mode default \
-      --settings \"\$TMP/settings-http-stop.json\" \
+      --settings \"\$TMP/settings-primary.json\" \
       \"Use Bash to run: pwd\" >/tmp/claude-hook-probe-permission.out 2>/tmp/claude-hook-probe-permission.err || true
   fi
 

@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 # Diagnose callback reachability for hook endpoints from Docker containers.
 #
-# This script validates transport reachability for:
-# - SessionStart-style command hook (curl -d @- ...)
-# - Stop/Notification-style HTTP hooks
+# This script validates transport reachability for command-style hooks:
+# - SessionStart
+# - Stop
+# - Notification
 #
 # It does not execute Claude Code itself; it isolates network path behavior.
 set -euo pipefail
@@ -109,14 +110,18 @@ run_probe "bridge container command-hook -> /hooks/session-start via host.docker
    curl -fsS -X POST -H 'Content-Type: application/json' -d @- \
    http://host.docker.internal:$PORT/hooks/session-start"
 
-# Stop / Notification HTTP hook emulation.
-run_probe "bridge container http-hook -> /hooks/stop via host.docker.internal" \
-  docker run --rm "$IMAGE" -fsS -X POST -H "Content-Type: application/json" \
-  -d '{"session_id":"worker-1"}' "http://host.docker.internal:$PORT/hooks/stop"
+# Stop / Notification command-style hook emulation.
+run_probe "bridge container command-hook -> /hooks/stop via host.docker.internal" \
+  docker run --rm "$IMAGE" sh -lc \
+  "echo '{\"session_id\":\"worker-1\"}' | \
+   curl -fsS -X POST -H 'Content-Type: application/json' -d @- \
+   http://host.docker.internal:$PORT/hooks/stop"
 
-run_probe "bridge container http-hook -> /hooks/notification via host.docker.internal" \
-  docker run --rm "$IMAGE" -fsS -X POST -H "Content-Type: application/json" \
-  -d '{"notification_type":"permission_prompt"}' "http://host.docker.internal:$PORT/hooks/notification"
+run_probe "bridge container command-hook -> /hooks/notification via host.docker.internal" \
+  docker run --rm "$IMAGE" sh -lc \
+  "echo '{\"notification_type\":\"permission_prompt\"}' | \
+   curl -fsS -X POST -H 'Content-Type: application/json' -d @- \
+   http://host.docker.internal:$PORT/hooks/notification"
 
 echo
 echo "== Container probes (127.0.0.1 reference) =="
@@ -141,4 +146,4 @@ if [[ "$session_hits" -lt 1 || "$stop_hits" -lt 1 || "$notification_hits" -lt 1 
   exit 1
 fi
 
-echo "PASS: command-style and http-style hook routes are reachable via host.docker.internal"
+echo "PASS: command-style hook routes are reachable via host.docker.internal"
