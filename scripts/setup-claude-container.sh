@@ -7,25 +7,14 @@ set -e
 main() {
     check_prerequisites
     mkdir -p claude.local/.claude claude.local/.npm-global claude.local/.local
+    copy_host_credentials
     setup_claude_config
     setup_bash_history
     echo "Setup completed successfully!"
-    echo "Original ~/.claude.json preserved"
+    echo "Local Claude runtime files prepared under claude.local/"
 }
 
 check_prerequisites() {
-    # Check if jq is installed
-    if ! command -v jq &> /dev/null; then
-        echo "Error: jq is required but not installed. Please install jq first."
-        exit 1
-    fi
-
-    # Check if ~/.claude.json exists
-    if [ ! -f ~/.claude.json ]; then
-        echo "Error: ~/.claude.json not found"
-        exit 1
-    fi
-
     # Check if git config uses XDG location
     if [ ! -f ~/.config/git/config ]; then
         echo "Error: ~/.config/git/config not found."
@@ -46,16 +35,26 @@ setup_claude_config() {
         return
     fi
 
-    # Copy ~/.claude.json to claude.local/
-    echo "Copying ~/.claude.json to claude.local/.claude.json..."
-    cp ~/.claude.json claude.local/.claude.json
-
-    # Empty the projects history using jq
-    echo "Emptying project history..."
-    jq '.projects = {}' claude.local/.claude.json > claude.local/.claude.json.tmp && \
-        mv claude.local/.claude.json.tmp claude.local/.claude.json
+    cat > claude.local/.claude.json <<'EOF'
+{"hasCompletedOnboarding":true,"bypassPermissionsModeAccepted":true,"projects":{}}
+EOF
 
     echo "Successfully created claude.local/.claude.json with empty project history"
+}
+
+copy_host_credentials() {
+    local src="${HOME}/.claude/.credentials.json"
+    local dst="claude.local/.claude/.credentials.json"
+
+    if [[ -f "${dst}" ]]; then
+        return
+    fi
+
+    if [[ -f "${src}" ]]; then
+        echo "Copying ${src} to ${dst} so Linux credentials persist inside claude.local."
+        cp "${src}" "${dst}"
+        chmod 600 "${dst}"
+    fi
 }
 
 setup_bash_history() {

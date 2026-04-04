@@ -17,6 +17,8 @@ services:
       # Short-form: allows auto-creation because the dir may not exist
       # until poll-usage.sh runs for the first time.
       - ${HOST_HOME:-~}/.claude/token-logs:/home/developer/.claude/token-logs
+      # Additional root CAs for Claude installer TLS verification.
+      - ${HOST_HOME:-~}/.config/palette/certs:/home/developer/.config/palette/certs:ro
       - type: bind
         source: ./claude.local/.claude.json
         target: /home/developer/.claude.json
@@ -30,11 +32,6 @@ services:
       - type: bind
         source: ${HOST_HOME:-~}/.claude/CLAUDE.md
         target: /home/developer/.claude/CLAUDE.md
-        bind:
-          create_host_path: false
-      - type: bind
-        source: ${HOST_HOME:-~}/.claude/.credentials.json
-        target: /home/developer/.claude/.credentials.json
         bind:
           create_host_path: false
       - type: bind

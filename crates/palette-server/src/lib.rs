@@ -18,6 +18,7 @@ pub struct AppState {
     pub max_review_rounds: u32,
     pub data_dir: std::path::PathBuf,
     pub event_log: tokio::sync::Mutex<Vec<EventRecord>>,
+    pub pending_permission_events: tokio::sync::Mutex<std::collections::HashMap<String, String>>,
     pub event_tx: tokio::sync::mpsc::UnboundedSender<ServerEvent>,
 }
 

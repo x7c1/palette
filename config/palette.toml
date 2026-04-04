@@ -1,4 +1,6 @@
 port = 7100
+operator_api_url = "http://127.0.0.1:7100"
+server_bind_addr = "0.0.0.0:7100"
 db_path = "data/palette.db"
 state_path = "data/state.json"
 plan_dir = "data/plans"
@@ -10,5 +12,6 @@ session_name = "palette"
 max_review_rounds = 5
 
 [docker]
-palette_url = "http://127.0.0.1:7100"
+worker_callback_url = "http://127.0.0.1:7100"
+callback_network = "auto"
 max_workers = 50

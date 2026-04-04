@@ -237,7 +237,7 @@ task:
     let step_b = state
         .interactor
         .data_store
-        .get_task_state(&tid(&wf_id, "cascade-test/step-b"))
+        .get_task_state(&tid(wf_id, "cascade-test/step-b"))
         .unwrap()
         .unwrap();
     assert_eq!(step_b.status, TaskStatus::Pending);
@@ -299,7 +299,7 @@ task:
     let step_a = state
         .interactor
         .data_store
-        .get_task_state(&tid(&wf_id, "cascade-test/step-a"))
+        .get_task_state(&tid(wf_id, "cascade-test/step-a"))
         .unwrap()
         .unwrap();
     assert_eq!(step_a.status, TaskStatus::Completed);
@@ -308,7 +308,7 @@ task:
     let step_b = state
         .interactor
         .data_store
-        .get_task_state(&tid(&wf_id, "cascade-test/step-b"))
+        .get_task_state(&tid(wf_id, "cascade-test/step-b"))
         .unwrap()
         .unwrap();
     assert!(
@@ -386,7 +386,7 @@ task:
     let step_b = state
         .interactor
         .data_store
-        .get_task_state(&tid(&wf_id, "cascade-test/step-b"))
+        .get_task_state(&tid(wf_id, "cascade-test/step-b"))
         .unwrap()
         .unwrap();
     assert_eq!(step_b.status, TaskStatus::Completed);
@@ -395,7 +395,7 @@ task:
     let root = state
         .interactor
         .data_store
-        .get_task_state(&tid(&wf_id, "cascade-test"))
+        .get_task_state(&tid(wf_id, "cascade-test"))
         .unwrap()
         .unwrap();
     assert_eq!(root.status, TaskStatus::Completed);
@@ -464,7 +464,7 @@ task:
     let review_task = state
         .interactor
         .data_store
-        .get_task_state(&tid(&wf_id, "ir-test/craft/review"))
+        .get_task_state(&tid(wf_id, "ir-test/craft/review"))
         .unwrap()
         .unwrap();
     assert_eq!(review_task.status, TaskStatus::Pending);
@@ -492,7 +492,7 @@ task:
     let craft_task = state
         .interactor
         .data_store
-        .get_task_state(&tid(&wf_id, "ir-test/craft"))
+        .get_task_state(&tid(wf_id, "ir-test/craft"))
         .unwrap()
         .unwrap();
     assert_eq!(craft_task.status, TaskStatus::InProgress);
@@ -501,7 +501,7 @@ task:
     let review_task = state
         .interactor
         .data_store
-        .get_task_state(&tid(&wf_id, "ir-test/craft/review"))
+        .get_task_state(&tid(wf_id, "ir-test/craft/review"))
         .unwrap()
         .unwrap();
     assert_eq!(review_task.status, TaskStatus::Ready);
@@ -514,7 +514,7 @@ task:
         .unwrap();
     let review_jobs: Vec<_> = all_jobs
         .iter()
-        .filter(|j| j.task_id.to_string() == tid(&wf_id, "ir-test/craft/review").to_string())
+        .filter(|j| j.task_id.to_string() == tid(wf_id, "ir-test/craft/review").to_string())
         .collect();
     assert_eq!(review_jobs.len(), 1, "review job should be created");
     assert_eq!(
@@ -527,7 +527,7 @@ task:
     let step_b = state
         .interactor
         .data_store
-        .get_task_state(&tid(&wf_id, "ir-test/step-b"))
+        .get_task_state(&tid(wf_id, "ir-test/step-b"))
         .unwrap()
         .unwrap();
     assert_eq!(step_b.status, TaskStatus::Pending);
@@ -602,7 +602,7 @@ task:
         state
             .interactor
             .data_store
-            .get_task_state(&tid(&wf_id, "full/step-a"))
+            .get_task_state(&tid(wf_id, "full/step-a"))
             .unwrap()
             .unwrap()
             .status,
@@ -630,7 +630,7 @@ task:
         state
             .interactor
             .data_store
-            .get_task_state(&tid(&wf_id, "full/step-a"))
+            .get_task_state(&tid(wf_id, "full/step-a"))
             .unwrap()
             .unwrap()
             .status,
@@ -642,7 +642,7 @@ task:
         state
             .interactor
             .data_store
-            .get_task_state(&tid(&wf_id, "full/step-a/review"))
+            .get_task_state(&tid(wf_id, "full/step-a/review"))
             .unwrap()
             .unwrap()
             .status,
@@ -656,7 +656,7 @@ task:
         .unwrap();
     let review_a_job = all_jobs
         .iter()
-        .find(|j| j.task_id.as_ref() == tid(&wf_id, "full/step-a/review").to_string())
+        .find(|j| j.task_id.as_ref() == tid(wf_id, "full/step-a/review").to_string())
         .expect("review job should exist");
     let review_a_id = review_a_job.id.clone();
 
@@ -665,7 +665,7 @@ task:
         state
             .interactor
             .data_store
-            .get_task_state(&tid(&wf_id, "full/step-b"))
+            .get_task_state(&tid(wf_id, "full/step-b"))
             .unwrap()
             .unwrap()
             .status,
@@ -707,7 +707,7 @@ task:
         state
             .interactor
             .data_store
-            .get_task_state(&tid(&wf_id, "full/step-a/review"))
+            .get_task_state(&tid(wf_id, "full/step-a/review"))
             .unwrap()
             .unwrap()
             .status,
@@ -719,7 +719,7 @@ task:
         state
             .interactor
             .data_store
-            .get_task_state(&tid(&wf_id, "full/step-a"))
+            .get_task_state(&tid(wf_id, "full/step-a"))
             .unwrap()
             .unwrap()
             .status,
@@ -730,7 +730,7 @@ task:
     let step_b_status = state
         .interactor
         .data_store
-        .get_task_state(&tid(&wf_id, "full/step-b"))
+        .get_task_state(&tid(wf_id, "full/step-b"))
         .unwrap()
         .unwrap()
         .status;
@@ -743,7 +743,7 @@ task:
         .unwrap();
     let craft_b_job = all_jobs
         .iter()
-        .find(|j| j.task_id.as_ref() == tid(&wf_id, "full/step-b").to_string())
+        .find(|j| j.task_id.as_ref() == tid(wf_id, "full/step-b").to_string())
         .expect("step-b craft job should exist");
     let craft_b_id = craft_b_job.id.clone();
 
@@ -769,7 +769,7 @@ task:
         state
             .interactor
             .data_store
-            .get_task_state(&tid(&wf_id, "full/step-b/review"))
+            .get_task_state(&tid(wf_id, "full/step-b/review"))
             .unwrap()
             .unwrap()
             .status,
@@ -783,7 +783,7 @@ task:
         .unwrap();
     let review_b_job = all_jobs
         .iter()
-        .find(|j| j.task_id.as_ref() == tid(&wf_id, "full/step-b/review").to_string())
+        .find(|j| j.task_id.as_ref() == tid(wf_id, "full/step-b/review").to_string())
         .expect("step-b review job should exist");
     let review_b_id = review_b_job.id.clone();
 
@@ -821,7 +821,7 @@ task:
         state
             .interactor
             .data_store
-            .get_task_state(&tid(&wf_id, "full/step-b"))
+            .get_task_state(&tid(wf_id, "full/step-b"))
             .unwrap()
             .unwrap()
             .status,
@@ -833,7 +833,7 @@ task:
         state
             .interactor
             .data_store
-            .get_task_state(&tid(&wf_id, "full"))
+            .get_task_state(&tid(wf_id, "full"))
             .unwrap()
             .unwrap()
             .status,
@@ -1232,7 +1232,7 @@ task:
     let craft_task = state
         .interactor
         .data_store
-        .get_task_state(&tid(&wf_id, "cr-test/impl"))
+        .get_task_state(&tid(wf_id, "cr-test/impl"))
         .unwrap()
         .unwrap();
     assert_eq!(

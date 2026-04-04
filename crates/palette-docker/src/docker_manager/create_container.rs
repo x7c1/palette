@@ -1,6 +1,7 @@
 use super::{DockerManager, run_docker};
 use crate::Error;
 use palette_domain::worker::{ContainerId, WorkerRole};
+use std::path::{Path, PathBuf};
 
 /// Workspace bind mount configuration for the container.
 pub struct WorkspaceVolume {
@@ -54,16 +55,17 @@ impl DockerManager {
             "create".to_string(),
             "--name".to_string(),
             format!("palette-{name}"),
-            // Use host network so 127.0.0.1 reaches the palette server
-            // (Claude Code blocks HTTP hooks to private IPs but allows loopback)
-            "--network".to_string(),
-            "host".to_string(),
             // Interactive TTY for Claude Code
             "-it".to_string(),
             // Pass Palette API URL as environment variable
             "-e".to_string(),
-            format!("PALETTE_URL={}", self.palette_url),
+            format!("PALETTE_URL={}", self.worker_callback_url),
         ];
+
+        if self.callback_network_mode == super::CallbackNetworkMode::Host {
+            args.push("--network".to_string());
+            args.push("host".to_string());
+        }
 
         for label in &labels {
             args.push("--label".to_string());
@@ -72,13 +74,19 @@ impl DockerManager {
 
         // Mount host authentication files (read-only)
         let home = std::env::var("HOME").unwrap_or_else(|_| "/root".to_string());
+        let home_path = Path::new(&home);
+        let fail_fast_credentials = env_flag("PALETTE_FAIL_FAST_CREDENTIALS");
 
-        // Claude credentials
-        let creds_path = format!("{home}/.claude/.credentials.json");
-        if std::path::Path::new(&creds_path).exists() {
+        let mut auth_marker_found = false;
+        for mount in resolve_claude_auth_mounts(home_path) {
+            if mount.is_auth_marker {
+                auth_marker_found = true;
+            }
             args.push("-v".to_string());
             args.push(format!(
-                "{creds_path}:/home/agent/.claude/.credentials.json:ro"
+                "{}:{}:ro",
+                mount.host_path.display(),
+                mount.container_path
             ));
         }
 
@@ -87,6 +95,11 @@ impl DockerManager {
         if std::path::Path::new(&git_config).exists() {
             args.push("-v".to_string());
             args.push(format!("{git_config}:/home/agent/.config/git:ro"));
+        } else if fail_fast_credentials {
+            return Err(Error::Command(
+                "missing required git config: ~/.config/git. migrate from ~/.gitconfig to XDG path"
+                    .to_string(),
+            ));
         }
 
         // GitHub CLI config
@@ -94,6 +107,20 @@ impl DockerManager {
         if std::path::Path::new(&gh_config).exists() {
             args.push("-v".to_string());
             args.push(format!("{gh_config}:/home/agent/.config/gh:ro"));
+        }
+
+        // SSH config/keys are optional, but can be mounted for SSH remotes.
+        let ssh_dir = format!("{home}/.ssh");
+        if std::path::Path::new(&ssh_dir).exists() {
+            args.push("-v".to_string());
+            args.push(format!("{ssh_dir}:/home/agent/.ssh:ro"));
+        }
+
+        if fail_fast_credentials && !auth_marker_found {
+            return Err(Error::Command(
+                "missing Claude auth bundle/credentials. run bootstrap login and provide auth files"
+                    .to_string(),
+            ));
         }
 
         // Docker socket for members
@@ -163,5 +190,144 @@ impl DockerManager {
         let container_id = ContainerId::new(raw_id);
         tracing::info!(container_id = %container_id, name = name, "created container");
         Ok(container_id)
+    }
+}
+
+fn env_flag(name: &str) -> bool {
+    std::env::var(name)
+        .map(|v| matches!(v.as_str(), "1" | "true" | "TRUE" | "yes" | "YES"))
+        .unwrap_or(false)
+}
+
+struct AuthMount {
+    host_path: PathBuf,
+    container_path: &'static str,
+    is_auth_marker: bool,
+}
+
+fn resolve_claude_auth_mounts(home: &Path) -> Vec<AuthMount> {
+    let auth_bundle_root = std::env::var("PALETTE_CLAUDE_AUTH_BUNDLE_DIR")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| home.join(".config/palette/claude-auth-bundle"));
+    resolve_claude_auth_mounts_with_root(home, &auth_bundle_root)
+}
+
+fn resolve_claude_auth_mounts_with_root(home: &Path, auth_bundle_root: &Path) -> Vec<AuthMount> {
+    let mut mounts = Vec::new();
+
+    let mut add_mount = |host_rel: &str, container_path: &'static str, is_auth_marker: bool| {
+        let path = auth_bundle_root.join(host_rel);
+        if path.exists() {
+            mounts.push(AuthMount {
+                host_path: path,
+                container_path,
+                is_auth_marker,
+            });
+        }
+    };
+
+    add_mount(
+        ".claude/.credentials.json",
+        "/home/agent/.claude/.credentials.json",
+        true,
+    );
+    let worker_claude = home.join(".config/palette/worker/CLAUDE.md");
+    if worker_claude.exists() {
+        mounts.push(AuthMount {
+            host_path: worker_claude,
+            container_path: "/home/agent/.claude/CLAUDE.md",
+            is_auth_marker: false,
+        });
+    } else {
+        add_mount(".claude/CLAUDE.md", "/home/agent/.claude/CLAUDE.md", false);
+    }
+
+    // Fallback: use host's ~/.claude/.credentials.json directly (Linux hosts
+    // with Claude Code installed locally).
+    if !mounts.iter().any(|m| m.is_auth_marker) {
+        let host_credentials = home.join(".claude/.credentials.json");
+        if host_credentials.exists() {
+            mounts.push(AuthMount {
+                host_path: host_credentials,
+                container_path: "/home/agent/.claude/.credentials.json",
+                is_auth_marker: true,
+            });
+        }
+    }
+
+    mounts
+}
+
+#[cfg(test)]
+mod tests {
+    use super::resolve_claude_auth_mounts_with_root;
+    use std::fs;
+
+    #[test]
+    fn prefers_bundle_paths_when_present() {
+        let tmp = tempfile::tempdir().unwrap();
+        let home = tmp.path();
+        let bundle = home.join(".config/palette/claude-auth-bundle/.claude");
+        fs::create_dir_all(&bundle).unwrap();
+        fs::write(bundle.join(".credentials.json"), "{}").unwrap();
+        fs::write(bundle.join("settings.json"), "{}").unwrap();
+
+        let mounts = resolve_claude_auth_mounts_with_root(
+            home,
+            &home.join(".config/palette/claude-auth-bundle"),
+        );
+        assert_eq!(mounts.len(), 1);
+        assert!(
+            mounts
+                .iter()
+                .any(|m| m.container_path == "/home/agent/.claude/.credentials.json")
+        );
+    }
+
+    #[test]
+    fn falls_back_to_host_credentials_json() {
+        let tmp = tempfile::tempdir().unwrap();
+        let home = tmp.path();
+        let host_claude_dir = home.join(".claude");
+        fs::create_dir_all(&host_claude_dir).unwrap();
+        fs::write(host_claude_dir.join(".credentials.json"), "{}").unwrap();
+
+        let mounts = resolve_claude_auth_mounts_with_root(
+            home,
+            &home.join(".config/palette/claude-auth-bundle"),
+        );
+        assert_eq!(mounts.len(), 1);
+        assert_eq!(
+            mounts[0].container_path,
+            "/home/agent/.claude/.credentials.json"
+        );
+    }
+
+    #[test]
+    fn prefers_worker_claude_md_over_bundle_claude_md() {
+        let tmp = tempfile::tempdir().unwrap();
+        let home = tmp.path();
+
+        let bundle = home.join(".config/palette/claude-auth-bundle/.claude");
+        fs::create_dir_all(&bundle).unwrap();
+        fs::write(bundle.join(".credentials.json"), "{}").unwrap();
+        fs::write(bundle.join("CLAUDE.md"), "bundle").unwrap();
+
+        let worker_dir = home.join(".config/palette/worker");
+        fs::create_dir_all(&worker_dir).unwrap();
+        let worker_claude = worker_dir.join("CLAUDE.md");
+        fs::write(&worker_claude, "worker").unwrap();
+
+        let mounts = resolve_claude_auth_mounts_with_root(
+            home,
+            &home.join(".config/palette/claude-auth-bundle"),
+        );
+        assert_eq!(mounts.len(), 2);
+
+        let claude_mount = mounts
+            .iter()
+            .find(|m| m.container_path == "/home/agent/.claude/CLAUDE.md")
+            .expect("CLAUDE.md mount should exist");
+        assert_eq!(claude_mount.host_path, worker_claude);
     }
 }

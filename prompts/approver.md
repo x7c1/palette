@@ -28,7 +28,7 @@ The orchestrator sends you events via tmux:
 2. When a `[event] type=permission_prompt` arrives:
    1. Read the permission dialog in the event payload
    2. Decide whether to approve (usually "Yes") or deny
-   3. Use the `palette:palette-api` agent to send the option number to the member with `no_enter: true`
+   3. Use the `palette:palette-api` agent to call `POST /send/permission` with `worker_id`, `event_id`, and option number (`choice`)
    4. Prefer session-wide allow options (e.g., "Yes, and don't ask again for this session") over one-time "Yes"
    5. Deny if the command looks dangerous or unrelated to the task
 3. End your turn immediately after responding

@@ -205,10 +205,10 @@ impl DataStore for MockDataStore {
     }
     fn dequeue_message(&self, target_id: &WorkerId) -> Result<Option<String>, BoxErr> {
         let mut messages = self.messages.lock().unwrap();
-        if let Some(queue) = messages.get_mut(target_id) {
-            if !queue.is_empty() {
-                return Ok(Some(queue.remove(0)));
-            }
+        if let Some(queue) = messages.get_mut(target_id)
+            && !queue.is_empty()
+        {
+            return Ok(Some(queue.remove(0)));
         }
         Ok(None)
     }
