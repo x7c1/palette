@@ -38,7 +38,7 @@ echo "OS: $(uname -s)"
 echo "Arch: $(uname -m)"
 echo
 
-for cmd in bash jq sqlite3 tmux docker curl lsof; do
+for cmd in bash jq sqlite3 tmux docker curl lsof git; do
   require_cmd "$cmd"
 done
 
@@ -62,6 +62,37 @@ if [[ -S /var/run/docker.sock ]]; then
   pass "host docker socket exists: /var/run/docker.sock"
 else
   fail "host docker socket missing: /var/run/docker.sock"
+fi
+
+if [[ -f "$HOME/.config/git/config" ]]; then
+  pass "git config is present at ~/.config/git/config"
+else
+  if [[ -f "$HOME/.gitconfig" ]]; then
+    fail "~/.config/git/config is missing (found ~/.gitconfig only). migrate to XDG path"
+  else
+    fail "~/.config/git/config is missing"
+  fi
+fi
+
+if git config -f "$HOME/.config/git/config" user.name >/dev/null 2>&1; then
+  pass "git user.name is configured in ~/.config/git/config"
+else
+  fail "git user.name is missing in ~/.config/git/config"
+fi
+
+if git config -f "$HOME/.config/git/config" user.email >/dev/null 2>&1; then
+  pass "git user.email is configured in ~/.config/git/config"
+else
+  fail "git user.email is missing in ~/.config/git/config"
+fi
+
+AUTH_BUNDLE_DIR="${PALETTE_CLAUDE_AUTH_BUNDLE_DIR:-$HOME/.config/palette/claude-auth-bundle}"
+if [[ -f "$AUTH_BUNDLE_DIR/.claude/.credentials.json" ]]; then
+  pass "Claude auth bundle credentials found: $AUTH_BUNDLE_DIR/.claude/.credentials.json"
+elif [[ -f "$HOME/.claude/.credentials.json" ]]; then
+  warn "using legacy Claude credentials path ~/.claude/.credentials.json (bundle not found)"
+else
+  fail "Claude credentials not found in auth bundle or legacy path"
 fi
 
 MEMBER_CONTAINER="${MEMBER_CONTAINER:-member}"

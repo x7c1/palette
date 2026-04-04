@@ -10,8 +10,9 @@ SOURCE_CONTAINER="${SOURCE_CONTAINER:-}"
 TARGET_IMAGE="${TARGET_IMAGE:-}"
 REQUIRE_AUTH="${REQUIRE_AUTH:-1}"
 TMP_DIR="$(mktemp -d)"
-BUNDLE_DIR="$TMP_DIR/bundle"
-mkdir -p "$BUNDLE_DIR"
+STAGING_DIR="$TMP_DIR/bundle"
+OUTPUT_DIR="${OUTPUT_DIR:-$HOME/.config/palette/claude-auth-bundle}"
+mkdir -p "$STAGING_DIR"
 
 cleanup() {
   rm -rf "$TMP_DIR"
@@ -93,24 +94,24 @@ echo
 echo "== Discover auth artifacts in bootstrap container =="
 auth_count=0
 
-if copy_if_exists "/home/developer/.claude/.credentials.json" "$BUNDLE_DIR/.claude/.credentials.json"; then
+if copy_if_exists "/home/developer/.claude/.credentials.json" "$STAGING_DIR/.claude/.credentials.json"; then
   auth_count=$((auth_count + 1))
 fi
-if copy_if_exists "/home/developer/.claude/settings.json" "$BUNDLE_DIR/.claude/settings.json"; then
+if copy_if_exists "/home/developer/.claude/settings.json" "$STAGING_DIR/.claude/settings.json"; then
   auth_count=$((auth_count + 1))
 fi
-if copy_if_exists "/home/developer/.claude/CLAUDE.md" "$BUNDLE_DIR/.claude/CLAUDE.md"; then
+if copy_if_exists "/home/developer/.claude/CLAUDE.md" "$STAGING_DIR/.claude/CLAUDE.md"; then
   :
 fi
-if copy_if_exists "/home/developer/.claude.json" "$BUNDLE_DIR/.claude.json"; then
+if copy_if_exists "/home/developer/.claude.json" "$STAGING_DIR/.claude.json"; then
   :
 fi
 
 echo
 echo "== Bundle summary =="
-echo "bundle_dir=$BUNDLE_DIR"
+echo "staging_dir=$STAGING_DIR"
 echo "auth_markers=$auth_count"
-find "$BUNDLE_DIR" -type f | sed "s#^$BUNDLE_DIR#  .#"
+find "$STAGING_DIR" -type f | sed "s#^$STAGING_DIR#  .#"
 
 if [[ "$REQUIRE_AUTH" == "1" && "$auth_count" -eq 0 ]]; then
   echo
@@ -119,10 +120,21 @@ if [[ "$REQUIRE_AUTH" == "1" && "$auth_count" -eq 0 ]]; then
   exit 1
 fi
 
+mkdir -p "$OUTPUT_DIR/.claude"
+cp -f "$STAGING_DIR/.claude/.credentials.json" "$OUTPUT_DIR/.claude/.credentials.json" 2>/dev/null || true
+cp -f "$STAGING_DIR/.claude/settings.json" "$OUTPUT_DIR/.claude/settings.json" 2>/dev/null || true
+cp -f "$STAGING_DIR/.claude/CLAUDE.md" "$OUTPUT_DIR/.claude/CLAUDE.md" 2>/dev/null || true
+cp -f "$STAGING_DIR/.claude.json" "$OUTPUT_DIR/.claude.json" 2>/dev/null || true
+
+echo
+echo "== Persisted bundle =="
+echo "output_dir=$OUTPUT_DIR"
+find "$OUTPUT_DIR" -type f 2>/dev/null | sed "s#^$OUTPUT_DIR#  .#" || true
+
 echo
 echo "== Propagation check =="
 docker run --rm \
-  -v "$BUNDLE_DIR:/tmp/bootstrap-bundle:ro" \
+  -v "$OUTPUT_DIR:/tmp/bootstrap-bundle:ro" \
   "$TARGET_IMAGE" \
   sh -lc '
     set -eu
@@ -135,4 +147,4 @@ docker run --rm \
     fi
   '
 
-echo "PASS: bootstrap bundle export and mount propagation succeeded"
+echo "PASS: bootstrap bundle export, persistence, and mount propagation succeeded"

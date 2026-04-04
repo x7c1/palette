@@ -13,30 +13,21 @@ impl DockerManager {
         worker_id: &str,
     ) -> crate::Result<()> {
         let template = std::fs::read_to_string(template_path)?;
+        let session_start_url = format!(
+            "{}/hooks/session-start?worker_id={worker_id}",
+            self.worker_callback_url
+        );
+        let stop_url = format!("{}/hooks/stop?worker_id={worker_id}", self.worker_callback_url);
+        let notification_url = format!(
+            "{}/hooks/notification?worker_id={worker_id}",
+            self.worker_callback_url
+        );
 
         // Replace template placeholders with actual URLs
         let settings = template
-            .replace(
-                "{{PALETTE_SESSION_START_URL}}",
-                &format!(
-                    "{}/hooks/session-start?worker_id={worker_id}",
-                    self.worker_callback_url
-                ),
-            )
-            .replace(
-                "{{PALETTE_STOP_URL}}",
-                &format!(
-                    "{}/hooks/stop?worker_id={worker_id}",
-                    self.worker_callback_url
-                ),
-            )
-            .replace(
-                "{{PALETTE_NOTIFICATION_URL}}",
-                &format!(
-                    "{}/hooks/notification?worker_id={worker_id}",
-                    self.worker_callback_url
-                ),
-            );
+            .replace("{{PALETTE_SESSION_START_URL}}", &session_start_url)
+            .replace("{{PALETTE_STOP_URL}}", &stop_url)
+            .replace("{{PALETTE_NOTIFICATION_URL}}", &notification_url);
 
         let cid = container_id.as_ref();
         // Write via docker exec (as root to avoid permission issues, then chown)
@@ -77,8 +68,8 @@ mod tests {
             r#"{
   "hooks": {
     "SessionStart": [{"hooks": [{"type": "http", "url": "{{PALETTE_SESSION_START_URL}}"}]}],
-    "Stop": [{"hooks": [{"type": "http", "url": "{{PALETTE_STOP_URL}}"}]}],
-    "Notification": [{"matcher": "permission_prompt", "hooks": [{"type": "http", "url": "{{PALETTE_NOTIFICATION_URL}}"}]}]
+    "Stop": [{"hooks": [{"type": "command", "command": "curl -sf -X POST -H 'Content-Type: application/json' -d @- '{{PALETTE_STOP_URL}}' || true"}]}],
+    "Notification": [{"matcher": "permission_prompt", "hooks": [{"type": "command", "command": "curl -sf -X POST -H 'Content-Type: application/json' -d @- '{{PALETTE_NOTIFICATION_URL}}' || true"}]}]
   }
 }"#,
         )
@@ -112,9 +103,12 @@ mod tests {
         assert!(settings.contains(&format!(
             "{callback_url}/hooks/session-start?worker_id=worker-a"
         )));
-        assert!(settings.contains(&format!("{callback_url}/hooks/stop?worker_id=worker-a")));
+        assert!(settings.contains("\"type\": \"command\""));
         assert!(settings.contains(&format!(
-            "{callback_url}/hooks/notification?worker_id=worker-a"
+            "'{callback_url}/hooks/stop?worker_id=worker-a' || true"
+        )));
+        assert!(settings.contains(&format!(
+            "'{callback_url}/hooks/notification?worker_id=worker-a' || true"
         )));
     }
 }
