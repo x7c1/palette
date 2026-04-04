@@ -1,6 +1,6 @@
 ---
 name: palette-api
-description: Execute Palette orchestrator API calls. Use proactively when creating tasks, updating task status, listing tasks, sending messages to members, submitting reviews, or listing review submissions.
+description: Execute Palette orchestrator API calls. Use proactively when sending messages to members, submitting reviews, or listing review submissions.
 tools: Bash
 model: haiku
 ---
@@ -13,29 +13,12 @@ Get the API base URL by running `echo $PALETTE_URL`.
 
 ## Available Endpoints
 
-### Blueprint
-- **Submit blueprint**: `POST $PALETTE_URL/blueprints/submit` — Body: raw YAML (Content-Type: text/plain). Returns the stored blueprint with `task_id`.
-- **List blueprints**: `GET $PALETTE_URL/blueprints` — Returns all stored blueprints.
-- **Get blueprint**: `GET $PALETTE_URL/blueprints/{task_id}` — Returns a specific blueprint by task ID.
-- **Load blueprint**: `POST $PALETTE_URL/blueprints/{task_id}/load` — Creates jobs from the stored blueprint and starts execution. Returns created jobs.
-
-### Task Management
-- **Create task**: `POST $PALETTE_URL/tasks/create` — Body: `{"type": "work"|"review", "title": "...", "description": "...", "priority": "high"|"medium"|"low", "depends_on": [...]}`
-  - Work tasks are created with status `draft`
-  - Review tasks are created with status `todo`
-- **Update task**: `POST $PALETTE_URL/tasks/update` — Body: `{"id": "...", "status": "draft"|"ready"|"in_progress"|"in_review"|"done"}`
-  - Work task flow: `draft` → `ready` → `in_progress` → `in_review` → `done`
-  - `ready` → `in_progress` is set automatically by the orchestrator (do not call manually)
-  - `in_review` → `done` is set automatically by the rule engine when reviews are approved
-- **List tasks**: `GET $PALETTE_URL/tasks` — Optional query params: `type=work&status=draft&assignee=member-a`
-
 ### Review
-- **Submit review**: `POST $PALETTE_URL/reviews/{id}/submit` — Body: `{"verdict": "approved"|"changes_requested", "summary": "...", "comments": [...]}`
+- **Submit review**: `POST $PALETTE_URL/reviews/{id}/submit` — Body: `{"verdict": "approved"|"changes_requested", "summary": "...", "comments": [{"file": "...", "line": 1, "body": "..."}]}`
 - **List submissions**: `GET $PALETTE_URL/reviews/{id}/submissions`
 
 ### Communication
 - **Send message**: `POST $PALETTE_URL/send` — Body: `{"worker_id": "...", "message": "...", "no_enter": false}`
-  - Use `worker_id` (not `member_id`)
   - If the worker is busy (`working`), the message is queued and delivered when the worker becomes idle
 - **Send permission choice**: `POST $PALETTE_URL/send/permission` — Body: `{"worker_id":"...", "event_id":"...", "choice":"<number>"}`
   - Use `worker_id` from `member=...` in the event line

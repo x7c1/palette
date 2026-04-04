@@ -242,11 +242,13 @@ fn resolve_claude_auth_mounts_with_root(home: &Path, auth_bundle_root: &Path) ->
         add_mount(".claude/CLAUDE.md", "/home/agent/.claude/CLAUDE.md", false);
     }
 
+    // Fallback: use host's ~/.claude/.credentials.json directly (Linux hosts
+    // with Claude Code installed locally).
     if !mounts.iter().any(|m| m.is_auth_marker) {
-        let legacy = home.join(".claude/.credentials.json");
-        if legacy.exists() {
+        let host_credentials = home.join(".claude/.credentials.json");
+        if host_credentials.exists() {
             mounts.push(AuthMount {
-                host_path: legacy,
+                host_path: host_credentials,
                 container_path: "/home/agent/.claude/.credentials.json",
                 is_auth_marker: true,
             });
@@ -283,12 +285,12 @@ mod tests {
     }
 
     #[test]
-    fn falls_back_to_legacy_credentials_json() {
+    fn falls_back_to_host_credentials_json() {
         let tmp = tempfile::tempdir().unwrap();
         let home = tmp.path();
-        let legacy_dir = home.join(".claude");
-        fs::create_dir_all(&legacy_dir).unwrap();
-        fs::write(legacy_dir.join(".credentials.json"), "{}").unwrap();
+        let host_claude_dir = home.join(".claude");
+        fs::create_dir_all(&host_claude_dir).unwrap();
+        fs::write(host_claude_dir.join(".credentials.json"), "{}").unwrap();
 
         let mounts = resolve_claude_auth_mounts_with_root(
             home,
