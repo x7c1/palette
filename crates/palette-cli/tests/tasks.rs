@@ -49,7 +49,6 @@ async fn job_api_create_and_list() {
     let resp = client
         .post(format!("{base_url}/jobs/create"))
         .json(&CreateJobRequest {
-            id: Some("W-001".to_string()),
             task_id: "wf-jobapi:task-w-001".to_string(),
             job_type: JobType::Craft,
             title: "Implement feature".to_string(),
@@ -68,14 +67,14 @@ async fn job_api_create_and_list() {
     assert_eq!(resp.status(), 201);
 
     let job: serde_json::Value = resp.json().await.unwrap();
-    assert_eq!(job["id"], "W-001");
+    let craft_job_id = job["id"].as_str().unwrap().to_string();
+    assert!(!craft_job_id.is_empty());
     assert_eq!(job["status"], "todo");
 
     // Create a review job
     let resp = client
         .post(format!("{base_url}/jobs/create"))
         .json(&CreateJobRequest {
-            id: Some("R-001".to_string()),
             task_id: "wf-jobapi:task-r-001".to_string(),
             job_type: JobType::Review,
             title: "Review feature".to_string(),
@@ -151,12 +150,14 @@ async fn job_api_update_with_rules() {
     let client = reqwest::Client::new();
 
     // Create craft + review
-    client
+    let resp = client
         .post(format!("{base_url}/jobs/create"))
         .json(&create_craft("W-001", "Craft", "wf-jobrules:task-w-001"))
         .send()
         .await
         .unwrap();
+    let craft_job: serde_json::Value = resp.json().await.unwrap();
+    let craft_id = craft_job["id"].as_str().unwrap();
 
     client
         .post(format!("{base_url}/jobs/create"))
@@ -165,17 +166,17 @@ async fn job_api_update_with_rules() {
         .await
         .unwrap();
 
-    // Transition W-001: todo -> in_progress -> in_review
+    // Transition craft: todo -> in_progress -> in_review
     client
         .post(format!("{base_url}/jobs/update"))
-        .json(&update_status("W-001", JobStatus::InProgress))
+        .json(&update_status(craft_id, JobStatus::InProgress))
         .send()
         .await
         .unwrap();
 
     client
         .post(format!("{base_url}/jobs/update"))
-        .json(&update_status("W-001", JobStatus::InReview))
+        .json(&update_status(craft_id, JobStatus::InReview))
         .send()
         .await
         .unwrap();
@@ -183,7 +184,7 @@ async fn job_api_update_with_rules() {
     // Invalid transition should fail (in_review -> todo)
     let resp = client
         .post(format!("{base_url}/jobs/update"))
-        .json(&update_status("W-001", JobStatus::Todo))
+        .json(&update_status(craft_id, JobStatus::Todo))
         .send()
         .await
         .unwrap();

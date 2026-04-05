@@ -74,7 +74,6 @@ pub fn insert_worker(
 
 pub fn create_craft(id: &str, title: &str, task_id: &str) -> CreateJobRequest {
     CreateJobRequest {
-        id: Some(id.to_string()),
         task_id: task_id.to_string(),
         job_type: JobType::Craft,
         title: title.to_string(),
@@ -91,7 +90,6 @@ pub fn create_craft(id: &str, title: &str, task_id: &str) -> CreateJobRequest {
 
 pub fn create_review(id: &str, title: &str, task_id: &str) -> CreateJobRequest {
     CreateJobRequest {
-        id: Some(id.to_string()),
         task_id: task_id.to_string(),
         job_type: JobType::Review,
         title: title.to_string(),

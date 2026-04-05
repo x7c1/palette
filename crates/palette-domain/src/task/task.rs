@@ -1,5 +1,5 @@
 use super::{TaskId, TaskKey, TaskStatus};
-use crate::job::{CreateJobRequest, JobDetail, JobId, PlanPath, Priority, Title};
+use crate::job::{CreateJobRequest, JobDetail, PlanPath, Priority, Title};
 use crate::workflow::WorkflowId;
 use palette_core::ReasonKey;
 
@@ -57,7 +57,6 @@ impl Task {
             })?;
 
         Ok(CreateJobRequest::new(
-            Some(JobId::generate(job_detail.job_type())),
             self.id.clone(),
             title,
             plan_path,

@@ -30,9 +30,7 @@ async fn review_submit_and_get_submissions() {
 
     let (base_url, state, _shutdown_tx) = spawn_server(tmux, &session).await;
 
-    use palette_domain::job::{
-        CreateJobRequest, JobDetail, JobId, JobStatus, JobType, ReviewStatus,
-    };
+    use palette_domain::job::{CreateJobRequest, JobDetail, JobStatus, JobType, ReviewStatus};
     use palette_domain::worker::WorkerId;
 
     let task_id = setup_review_task(&state, "wf-review:task-R-001");
@@ -40,7 +38,6 @@ async fn review_submit_and_get_submissions() {
         .interactor
         .data_store
         .create_job(&CreateJobRequest::new(
-            Some(JobId::parse("R-001").unwrap()),
             task_id,
             palette_domain::job::Title::parse("Review").unwrap(),
             palette_domain::job::PlanPath::parse("test/R-001").unwrap(),
@@ -49,12 +46,13 @@ async fn review_submit_and_get_submissions() {
             JobDetail::Review,
         ))
         .unwrap();
+    let review_job_id = review_job.id.clone();
     helper::setup_worker(&*state.interactor.data_store, "member-b");
     state
         .interactor
         .data_store
         .assign_job(
-            &review_job.id,
+            &review_job_id,
             &WorkerId::parse("member-b").unwrap(),
             JobType::Review,
         )
@@ -64,7 +62,7 @@ async fn review_submit_and_get_submissions() {
 
     // Submit review with changes_requested
     let resp = client
-        .post(format!("{base_url}/reviews/R-001/submit"))
+        .post(format!("{base_url}/reviews/{review_job_id}/submit"))
         .json(&SubmitReviewRequest {
             verdict: Verdict::ChangesRequested,
             summary: Some("Needs fixes".to_string()),
@@ -87,7 +85,7 @@ async fn review_submit_and_get_submissions() {
     let review = state
         .interactor
         .data_store
-        .get_job(&JobId::parse("R-001").unwrap())
+        .get_job(&review_job_id)
         .unwrap()
         .unwrap();
     assert_eq!(
@@ -97,7 +95,7 @@ async fn review_submit_and_get_submissions() {
 
     // Get submissions
     let submissions: Vec<serde_json::Value> = client
-        .get(format!("{base_url}/reviews/R-001/submissions"))
+        .get(format!("{base_url}/reviews/{review_job_id}/submissions"))
         .send()
         .await
         .unwrap()
@@ -115,9 +113,7 @@ async fn review_approved_completes_review_job() {
 
     let (base_url, state, _shutdown_tx) = spawn_server(tmux, &session).await;
 
-    use palette_domain::job::{
-        CreateJobRequest, JobDetail, JobId, JobStatus, JobType, ReviewStatus,
-    };
+    use palette_domain::job::{CreateJobRequest, JobDetail, JobStatus, JobType, ReviewStatus};
     use palette_domain::worker::WorkerId;
 
     let task_id = setup_review_task(&state, "wf-review:task-R-001");
@@ -125,7 +121,6 @@ async fn review_approved_completes_review_job() {
         .interactor
         .data_store
         .create_job(&CreateJobRequest::new(
-            Some(JobId::parse("R-001").unwrap()),
             task_id,
             palette_domain::job::Title::parse("Review").unwrap(),
             palette_domain::job::PlanPath::parse("test/R-001").unwrap(),
@@ -134,12 +129,13 @@ async fn review_approved_completes_review_job() {
             JobDetail::Review,
         ))
         .unwrap();
+    let review_job_id = review_job.id.clone();
     helper::setup_worker(&*state.interactor.data_store, "member-b");
     state
         .interactor
         .data_store
         .assign_job(
-            &review_job.id,
+            &review_job_id,
             &WorkerId::parse("member-b").unwrap(),
             JobType::Review,
         )
@@ -149,7 +145,7 @@ async fn review_approved_completes_review_job() {
 
     // Review: approve
     let resp = client
-        .post(format!("{base_url}/reviews/R-001/submit"))
+        .post(format!("{base_url}/reviews/{review_job_id}/submit"))
         .json(&SubmitReviewRequest {
             verdict: Verdict::Approved,
             summary: Some("LGTM".to_string()),
@@ -164,7 +160,7 @@ async fn review_approved_completes_review_job() {
     let review = state
         .interactor
         .data_store
-        .get_job(&JobId::parse("R-001").unwrap())
+        .get_job(&review_job_id)
         .unwrap()
         .unwrap();
     assert_eq!(review.status, JobStatus::Review(ReviewStatus::Done));

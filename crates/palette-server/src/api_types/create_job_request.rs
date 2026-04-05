@@ -1,14 +1,11 @@
 use super::{InputError, JobType, Priority, Repository};
-use palette_domain::job::{
-    CreateJobRequest as DomainCreateJobRequest, JobDetail, JobId, PlanPath, Title,
-};
+use palette_domain::job::{CreateJobRequest as DomainCreateJobRequest, JobDetail, PlanPath, Title};
 use palette_domain::task::TaskId;
 use palette_domain::worker::WorkerId;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct CreateJobRequest {
-    pub id: Option<String>,
     pub task_id: String,
     #[serde(rename = "type")]
     pub job_type: JobType,
@@ -60,7 +57,6 @@ impl CreateJobRequest {
 
         // Use the macro for standard field validation
         let result = palette_macros::validate!(DomainCreateJobRequest::new {
-            id: self.id.as_deref().map(JobId::parse).transpose(),
             task_id: TaskId::parse(&self.task_id),
             title: Title::parse(&self.title),
             plan_path: PlanPath::parse(&self.plan_path),

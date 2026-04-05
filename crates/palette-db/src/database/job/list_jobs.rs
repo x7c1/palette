@@ -40,22 +40,21 @@ mod tests {
     fn list_jobs_with_filter() {
         let db = test_db();
         let craft_task = setup_task(&db, "wf-test:task-C-001");
-        db.create_job(&CreateJobRequest::new(
-            Some(jid("C-001")),
-            craft_task,
-            Title::parse("Craft 1").unwrap(),
-            PlanPath::parse("test/C-001").unwrap(),
-            None,
-            None,
-            JobDetail::Craft {
-                repository: Repository::parse("x7c1/palette-demo", "main").unwrap(),
-            },
-        ))
-        .unwrap();
+        let craft_job = db
+            .create_job(&CreateJobRequest::new(
+                craft_task,
+                Title::parse("Craft 1").unwrap(),
+                PlanPath::parse("test/C-001").unwrap(),
+                None,
+                None,
+                JobDetail::Craft {
+                    repository: Repository::parse("x7c1/palette-demo", "main").unwrap(),
+                },
+            ))
+            .unwrap();
 
         let review_task = setup_task(&db, "wf-test:task-R-001");
         db.create_job(&CreateJobRequest::new(
-            Some(jid("R-001")),
             review_task,
             Title::parse("Review 1").unwrap(),
             PlanPath::parse("test/R-001").unwrap(),
@@ -82,6 +81,6 @@ mod tests {
             })
             .unwrap();
         assert_eq!(crafts.len(), 1);
-        assert_eq!(crafts[0].id, jid("C-001"));
+        assert_eq!(crafts[0].id, craft_job.id);
     }
 }

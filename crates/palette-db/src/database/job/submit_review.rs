@@ -74,7 +74,6 @@ mod tests {
         let db = test_db();
         let craft_task = setup_task(&db, "wf-test:task-C-001");
         db.create_job(&CreateJobRequest::new(
-            Some(jid("C-001")),
             craft_task,
             Title::parse("Craft").unwrap(),
             PlanPath::parse("test/C-001").unwrap(),
@@ -87,20 +86,20 @@ mod tests {
         .unwrap();
 
         let review_task = setup_task(&db, "wf-test:task-R-001");
-        db.create_job(&CreateJobRequest::new(
-            Some(jid("R-001")),
-            review_task,
-            Title::parse("Review").unwrap(),
-            PlanPath::parse("test/R-001").unwrap(),
-            None,
-            None,
-            JobDetail::Review,
-        ))
-        .unwrap();
+        let review_job = db
+            .create_job(&CreateJobRequest::new(
+                review_task,
+                Title::parse("Review").unwrap(),
+                PlanPath::parse("test/R-001").unwrap(),
+                None,
+                None,
+                JobDetail::Review,
+            ))
+            .unwrap();
 
         let sub = db
             .submit_review(
-                &jid("R-001"),
+                &review_job.id,
                 &SubmitReviewRequest {
                     verdict: Verdict::ChangesRequested,
                     summary: Some("Needs fixes".to_string()),
@@ -117,7 +116,7 @@ mod tests {
 
         let sub2 = db
             .submit_review(
-                &jid("R-001"),
+                &review_job.id,
                 &SubmitReviewRequest {
                     verdict: Verdict::Approved,
                     summary: Some("LGTM".to_string()),
@@ -127,7 +126,7 @@ mod tests {
             .unwrap();
         assert_eq!(sub2.round, 2);
 
-        let submissions = db.get_review_submissions(&jid("R-001")).unwrap();
+        let submissions = db.get_review_submissions(&review_job.id).unwrap();
         assert_eq!(submissions.len(), 2);
 
         let comments = db.get_review_comments(sub.id).unwrap();

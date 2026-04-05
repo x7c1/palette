@@ -7,7 +7,7 @@ impl Database {
         let now = Utc::now();
         let now_str = now.to_rfc3339();
         let job_type = req.detail.job_type();
-        let id = req.id.clone().unwrap_or_else(|| JobId::generate(job_type));
+        let id = JobId::generate(job_type);
 
         let repos_json = req
             .detail
@@ -60,7 +60,6 @@ mod tests {
         let task_id = setup_task(&db, "wf-test:task-C-001");
         let job = db
             .create_job(&CreateJobRequest::new(
-                Some(jid("C-001")),
                 task_id,
                 Title::parse("Implement feature").unwrap(),
                 PlanPath::parse("2026/feature-x/api-impl").unwrap(),
@@ -72,12 +71,11 @@ mod tests {
             ))
             .unwrap();
 
-        assert_eq!(job.id, jid("C-001"));
         assert_eq!(job.detail.job_type(), JobType::Craft);
         assert_eq!(job.status, JobStatus::Craft(CraftStatus::Todo));
         assert_eq!(job.priority, Some(Priority::High));
 
-        let fetched = db.get_job(&jid("C-001")).unwrap().unwrap();
+        let fetched = db.get_job(&job.id).unwrap().unwrap();
         assert_eq!(fetched.title.as_ref(), "Implement feature");
     }
 }
