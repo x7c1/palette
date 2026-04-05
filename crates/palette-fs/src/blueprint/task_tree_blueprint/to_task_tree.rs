@@ -69,6 +69,9 @@ impl BlueprintError {
 /// Result of validating a Blueprint node tree.
 struct Validated<'a> {
     keys: HashMap<&'a str, TaskKey>,
+    /// Parsed job details keyed by the raw task key string.
+    /// `None` value means the node has no job_type (composite-only).
+    job_details: HashMap<&'a str, Option<JobDetail>>,
 }
 
 impl TaskTreeBlueprint {
@@ -87,44 +90,60 @@ impl TaskTreeBlueprint {
         let root_id = TaskId::root(workflow_id, root_key);
         let mut nodes = HashMap::new();
 
-        insert_node(&root_id, None, None, root, &mut nodes, &validated.keys);
+        insert_node(
+            &root_id,
+            None,
+            None,
+            root,
+            &mut nodes,
+            &validated.keys,
+            &validated.job_details,
+        );
         collect_nodes(
             &root_id,
             root.plan_path.as_deref(),
             &root.children,
             &mut nodes,
             &validated.keys,
+            &validated.job_details,
         );
 
         Ok(TaskTree::new(root_id, nodes))
     }
 }
 
-/// Validate all nodes recursively. Returns parsed keys on success,
-/// or all collected errors on failure.
+/// Validate all nodes recursively. Returns parsed keys and job details on
+/// success, or all collected errors on failure.
 fn validate_tree(root: &TaskNode) -> Result<Validated<'_>, Vec<BlueprintError>> {
-    let (errors, keys) = validate_node(root);
+    let (errors, keys, job_details) = validate_node(root);
     if errors.is_empty() {
-        Ok(Validated { keys })
+        Ok(Validated { keys, job_details })
     } else {
         Err(errors)
     }
 }
 
+/// Per-node validation result.
+type NodeResult<'a> = (
+    Vec<BlueprintError>,
+    HashMap<&'a str, TaskKey>,
+    HashMap<&'a str, Option<JobDetail>>,
+);
+
 /// Validate a single node and all its descendants.
-/// Returns (errors, parsed_keys) so callers can aggregate.
-fn validate_node(node: &TaskNode) -> (Vec<BlueprintError>, HashMap<&str, TaskKey>) {
+fn validate_node(node: &TaskNode) -> NodeResult<'_> {
     let (key_errors, keys) = collect_keys(node);
     let structure_errors = check_craft_has_review(node);
-    let repo_errors = check_repository(node);
+    let (repo_errors, job_detail) = build_job_detail(node);
     let dep_errors = validate_depends_on(node);
 
-    let (child_errors, child_keys) = node.children.iter().map(validate_node).fold(
-        (Vec::new(), HashMap::new()),
-        |(mut errs, mut keys), (ce, ck)| {
+    let (child_errors, child_keys, child_details) = node.children.iter().map(validate_node).fold(
+        (Vec::new(), HashMap::new(), HashMap::new()),
+        |(mut errs, mut keys, mut details), (ce, ck, cd)| {
             errs.extend(ce);
             keys.extend(ck);
-            (errs, keys)
+            details.extend(cd);
+            (errs, keys, details)
         },
     );
 
@@ -138,7 +157,12 @@ fn validate_node(node: &TaskNode) -> (Vec<BlueprintError>, HashMap<&str, TaskKey
 
     let mut all_keys = keys;
     all_keys.extend(child_keys);
-    (errors, all_keys)
+
+    let mut all_details = HashMap::new();
+    all_details.insert(node.key.as_str(), job_detail);
+    all_details.extend(child_details);
+
+    (errors, all_keys, all_details)
 }
 
 /// Parse the node's own key and depends_on keys.
@@ -183,24 +207,72 @@ fn check_craft_has_review(node: &TaskNode) -> Option<BlueprintError> {
     }
 }
 
-/// Check that craft tasks have a repository and that any repository has valid name and branch.
-fn check_repository(node: &TaskNode) -> Vec<BlueprintError> {
-    let is_craft = node
-        .job_type
-        .is_some_and(|jt| matches!(JobType::from(jt), JobType::Craft));
+/// Validate repository constraints and build [`JobDetail`] for this node.
+///
+/// Returns (errors, parsed job detail). On error the detail is `None`; the
+/// caller still collects the error so that all problems are reported at once.
+fn build_job_detail(node: &TaskNode) -> (Vec<BlueprintError>, Option<JobDetail>) {
+    let Some(job_type_yaml) = node.job_type else {
+        // Validate repository format even for non-typed nodes.
+        let errors = validate_repository_format(node);
+        return (errors, None);
+    };
 
-    match node.repository.as_ref() {
-        None if is_craft => vec![BlueprintError::MissingRepository {
-            task_key: node.key.clone(),
-        }],
-        Some(repo) => match Repository::parse(&repo.name, &repo.branch) {
-            Ok(_) => vec![],
-            Err(cause) => vec![BlueprintError::InvalidRepository {
-                task_key: node.key.clone(),
-                cause,
-            }],
+    let job_type = JobType::from(job_type_yaml);
+    match job_type {
+        JobType::Craft => match node.repository.as_ref() {
+            None => (
+                vec![BlueprintError::MissingRepository {
+                    task_key: node.key.clone(),
+                }],
+                None,
+            ),
+            Some(repo) => match Repository::parse(&repo.name, &repo.branch) {
+                Ok(repository) => (vec![], Some(JobDetail::Craft { repository })),
+                Err(cause) => (
+                    vec![BlueprintError::InvalidRepository {
+                        task_key: node.key.clone(),
+                        cause,
+                    }],
+                    None,
+                ),
+            },
         },
-        _ => vec![],
+        JobType::Review => {
+            let errors = validate_repository_format(node);
+            (errors, Some(JobDetail::Review))
+        }
+        JobType::ReviewIntegrate => {
+            let errors = validate_repository_format(node);
+            (errors, Some(JobDetail::ReviewIntegrate))
+        }
+        JobType::Orchestrator => {
+            let errors = validate_repository_format(node);
+            (
+                errors,
+                Some(JobDetail::Orchestrator {
+                    command: node.command.clone(),
+                }),
+            )
+        }
+        JobType::Operator => {
+            let errors = validate_repository_format(node);
+            (errors, Some(JobDetail::Operator))
+        }
+    }
+}
+
+/// Validate repository format (if present) for non-craft nodes.
+fn validate_repository_format(node: &TaskNode) -> Vec<BlueprintError> {
+    let Some(repo) = node.repository.as_ref() else {
+        return vec![];
+    };
+    match Repository::parse(&repo.name, &repo.branch) {
+        Ok(_) => vec![],
+        Err(cause) => vec![BlueprintError::InvalidRepository {
+            task_key: node.key.clone(),
+            cause,
+        }],
     }
 }
 
@@ -236,6 +308,7 @@ fn insert_node(
     node: &TaskNode,
     nodes: &mut HashMap<TaskId, TaskTreeNode>,
     keys: &HashMap<&str, TaskKey>,
+    job_details: &HashMap<&str, Option<JobDetail>>,
 ) {
     let key = keys[node.key.as_str()].clone();
 
@@ -259,20 +332,7 @@ fn insert_node(
         .clone()
         .or_else(|| parent_plan_path.map(String::from));
 
-    // validate_tree has already verified that craft tasks have a valid repository.
-    let job_detail = node.job_type.map(JobType::from).map(|jt| match jt {
-        JobType::Craft => {
-            let repo_yaml = node.repository.as_ref().unwrap();
-            let repository = Repository::parse(&repo_yaml.name, &repo_yaml.branch).unwrap();
-            JobDetail::Craft { repository }
-        }
-        JobType::Review => JobDetail::Review,
-        JobType::ReviewIntegrate => JobDetail::ReviewIntegrate,
-        JobType::Orchestrator => JobDetail::Orchestrator {
-            command: node.command.clone(),
-        },
-        JobType::Operator => JobDetail::Operator,
-    });
+    let job_detail = job_details[node.key.as_str()].clone();
 
     nodes.insert(
         task_id.clone(),
@@ -295,6 +355,7 @@ fn collect_nodes(
     children: &[TaskNode],
     nodes: &mut HashMap<TaskId, TaskTreeNode>,
     keys: &HashMap<&str, TaskKey>,
+    job_details: &HashMap<&str, Option<JobDetail>>,
 ) {
     for child in children {
         let child_task_id = parent_task_id.child(&keys[child.key.as_str()]);
@@ -307,6 +368,7 @@ fn collect_nodes(
             child,
             nodes,
             keys,
+            job_details,
         );
 
         if !child.children.is_empty() {
@@ -316,6 +378,7 @@ fn collect_nodes(
                 &child.children,
                 nodes,
                 keys,
+                job_details,
             );
         }
     }
