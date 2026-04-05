@@ -1,6 +1,6 @@
 mod helper;
 
-use helper::{CreateJobRequest, CreateTaskRequest, JobStatus, JobType, ReviewStatus};
+use helper::{CreateJobRequest, CreateTaskRequest, JobDetail, JobStatus, JobType, ReviewStatus};
 use helper::{WorkerRole, WorkerStatus, WorkflowId};
 use helper::{capture_pane, insert_worker, jid, spawn_server, test_session_name_with_guard, wid};
 use palette_domain::task::TaskId;
@@ -84,13 +84,11 @@ async fn sequential_delivery() {
         .create_job(&CreateJobRequest::new(
             Some(jid("R-1")),
             task_r,
-            JobType::Review,
             palette_domain::job::Title::parse("Review 1").unwrap(),
             palette_domain::job::PlanPath::parse("test/R-1").unwrap(),
             None,
             None,
-            None,
-            None,
+            JobDetail::Review,
         ))
         .unwrap();
     state
@@ -257,13 +255,11 @@ async fn queued_while_working() {
         .create_job(&CreateJobRequest::new(
             Some(jid("R-1")),
             task_r,
-            JobType::Review,
             palette_domain::job::Title::parse("Review 1").unwrap(),
             palette_domain::job::PlanPath::parse("test/R-1").unwrap(),
             None,
             None,
-            None,
-            None,
+            JobDetail::Review,
         ))
         .unwrap();
     state
@@ -494,13 +490,11 @@ async fn concurrent_race() {
         .create_job(&CreateJobRequest::new(
             Some(jid("R-1")),
             task_r,
-            JobType::Review,
             palette_domain::job::Title::parse("Review 1").unwrap(),
             palette_domain::job::PlanPath::parse("test/R-1").unwrap(),
             None,
             None,
-            None,
-            None,
+            JobDetail::Review,
         ))
         .unwrap();
     state

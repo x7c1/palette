@@ -30,7 +30,9 @@ async fn review_submit_and_get_submissions() {
 
     let (base_url, state, _shutdown_tx) = spawn_server(tmux, &session).await;
 
-    use palette_domain::job::{CreateJobRequest, JobId, JobStatus, JobType, ReviewStatus};
+    use palette_domain::job::{
+        CreateJobRequest, JobDetail, JobId, JobStatus, JobType, ReviewStatus,
+    };
     use palette_domain::worker::WorkerId;
 
     let task_id = setup_review_task(&state, "wf-review:task-R-001");
@@ -40,13 +42,11 @@ async fn review_submit_and_get_submissions() {
         .create_job(&CreateJobRequest::new(
             Some(JobId::parse("R-001").unwrap()),
             task_id,
-            JobType::Review,
             palette_domain::job::Title::parse("Review").unwrap(),
             palette_domain::job::PlanPath::parse("test/R-001").unwrap(),
             None,
             None,
-            None,
-            None,
+            JobDetail::Review,
         ))
         .unwrap();
     helper::setup_worker(&*state.interactor.data_store, "member-b");
@@ -115,7 +115,9 @@ async fn review_approved_completes_review_job() {
 
     let (base_url, state, _shutdown_tx) = spawn_server(tmux, &session).await;
 
-    use palette_domain::job::{CreateJobRequest, JobId, JobStatus, JobType, ReviewStatus};
+    use palette_domain::job::{
+        CreateJobRequest, JobDetail, JobId, JobStatus, JobType, ReviewStatus,
+    };
     use palette_domain::worker::WorkerId;
 
     let task_id = setup_review_task(&state, "wf-review:task-R-001");
@@ -125,13 +127,11 @@ async fn review_approved_completes_review_job() {
         .create_job(&CreateJobRequest::new(
             Some(JobId::parse("R-001").unwrap()),
             task_id,
-            JobType::Review,
             palette_domain::job::Title::parse("Review").unwrap(),
             palette_domain::job::PlanPath::parse("test/R-001").unwrap(),
             None,
             None,
-            None,
-            None,
+            JobDetail::Review,
         ))
         .unwrap();
     helper::setup_worker(&*state.interactor.data_store, "member-b");
@@ -178,6 +178,9 @@ task:
     - key: craft
       type: craft
       plan_path: test/craft
+      repository:
+        name: x7c1/palette
+        branch: main
       children:
         - key: review-integrate
           type: review_integrate

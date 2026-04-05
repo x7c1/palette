@@ -81,7 +81,10 @@ pub fn create_craft(id: &str, title: &str, task_id: &str) -> CreateJobRequest {
         plan_path: format!("test/{id}"),
         assignee_id: None,
         priority: None,
-        repository: None,
+        repository: Some(palette_server::api_types::Repository {
+            name: "x7c1/palette".to_string(),
+            branch: "main".to_string(),
+        }),
         command: None,
     }
 }

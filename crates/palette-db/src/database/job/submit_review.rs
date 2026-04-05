@@ -76,13 +76,13 @@ mod tests {
         db.create_job(&CreateJobRequest::new(
             Some(jid("C-001")),
             craft_task,
-            JobType::Craft,
             Title::parse("Craft").unwrap(),
             PlanPath::parse("test/C-001").unwrap(),
             None,
             None,
-            None,
-            None,
+            JobDetail::Craft {
+                repository: Repository::parse("x7c1/palette", "main").unwrap(),
+            },
         ))
         .unwrap();
 
@@ -90,13 +90,11 @@ mod tests {
         db.create_job(&CreateJobRequest::new(
             Some(jid("R-001")),
             review_task,
-            JobType::Review,
             Title::parse("Review").unwrap(),
             PlanPath::parse("test/R-001").unwrap(),
             None,
             None,
-            None,
-            None,
+            JobDetail::Review,
         ))
         .unwrap();
 

@@ -1,7 +1,7 @@
 use super::Orchestrator;
 use super::PendingActions;
 use super::job_instruction::format_job_instruction;
-use palette_domain::job::{CraftTransition, JobId, ReviewTransition};
+use palette_domain::job::{CraftTransition, JobDetail, JobId, ReviewTransition};
 use palette_domain::worker::WorkerId;
 
 impl Orchestrator {
@@ -20,7 +20,7 @@ impl Orchestrator {
             return Ok(result);
         };
 
-        let round = if job.job_type == palette_domain::job::JobType::Review {
+        let round = if matches!(job.detail, JobDetail::Review) {
             Some(self.current_review_round(&job)?)
         } else {
             None
@@ -31,13 +31,11 @@ impl Orchestrator {
             .enqueue_message(member_id, &instruction)?;
         // ReactivateMember is used for both craft (ChangesRequested → re-work)
         // and review (re-review cycle). The transition meaning differs by job type.
-        let reactivated_status = match job.job_type {
-            palette_domain::job::JobType::Craft => CraftTransition::RequestChanges.to_job_status(),
-            palette_domain::job::JobType::Review => ReviewTransition::Restart.to_job_status(),
+        let reactivated_status = match &job.detail {
+            JobDetail::Craft { .. } => CraftTransition::RequestChanges.to_job_status(),
+            JobDetail::Review => ReviewTransition::Restart.to_job_status(),
             // ReviewIntegrate/Orchestrator/Operator jobs don't have members to reactivate
-            palette_domain::job::JobType::ReviewIntegrate
-            | palette_domain::job::JobType::Orchestrator
-            | palette_domain::job::JobType::Operator => {
+            JobDetail::ReviewIntegrate | JobDetail::Orchestrator { .. } | JobDetail::Operator => {
                 return Ok(result);
             }
         };

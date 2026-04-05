@@ -30,13 +30,13 @@ mod tests {
         db.create_job(&CreateJobRequest::new(
             Some(jid("C-001")),
             task_id,
-            JobType::Craft,
             Title::parse("Craft").unwrap(),
             PlanPath::parse("test/C-001").unwrap(),
             None,
             None,
-            None,
-            None,
+            JobDetail::Craft {
+                repository: Repository::parse("x7c1/palette", "main").unwrap(),
+            },
         ))
         .unwrap();
 

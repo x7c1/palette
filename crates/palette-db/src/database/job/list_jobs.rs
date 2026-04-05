@@ -1,10 +1,10 @@
 use super::super::*;
-use super::row::{into_job, read_job_row};
+use super::row::{JOB_COLUMNS, into_job, read_job_row};
 
 impl Database {
     pub fn list_jobs(&self, filter: &JobFilter) -> crate::Result<Vec<Job>> {
         let conn = lock(&self.conn)?;
-        let mut sql = "SELECT id, task_id, type_id, title, plan_path, assignee_id, status_id, priority_id, repository, command, pr_url, created_at, updated_at, notes, assigned_at FROM jobs WHERE 1=1".to_string();
+        let mut sql = format!("SELECT {JOB_COLUMNS} FROM jobs WHERE 1=1");
         let mut param_values: Vec<Box<dyn rusqlite::types::ToSql>> = Vec::new();
 
         if let Some(ref t) = filter.job_type {
@@ -43,13 +43,13 @@ mod tests {
         db.create_job(&CreateJobRequest::new(
             Some(jid("C-001")),
             craft_task,
-            JobType::Craft,
             Title::parse("Craft 1").unwrap(),
             PlanPath::parse("test/C-001").unwrap(),
             None,
             None,
-            None,
-            None,
+            JobDetail::Craft {
+                repository: Repository::parse("x7c1/palette", "main").unwrap(),
+            },
         ))
         .unwrap();
 
@@ -57,13 +57,11 @@ mod tests {
         db.create_job(&CreateJobRequest::new(
             Some(jid("R-001")),
             review_task,
-            JobType::Review,
             Title::parse("Review 1").unwrap(),
             PlanPath::parse("test/R-001").unwrap(),
             None,
             None,
-            None,
-            None,
+            JobDetail::Review,
         ))
         .unwrap();
 

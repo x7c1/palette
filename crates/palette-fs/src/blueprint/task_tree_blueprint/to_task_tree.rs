@@ -1,5 +1,5 @@
 use super::{TaskNode, TaskTreeBlueprint};
-use palette_domain::job::{InvalidRepository, JobType, Priority, Repository};
+use palette_domain::job::{InvalidRepository, JobDetail, JobType, Priority, Repository};
 use palette_domain::task::{InvalidTaskKey, TaskId, TaskKey, TaskTree, TaskTreeNode};
 use palette_domain::workflow::WorkflowId;
 use std::collections::HashMap;
@@ -243,6 +243,23 @@ fn insert_node(
         .clone()
         .or_else(|| parent_plan_path.map(String::from));
 
+    let job_detail = node.job_type.map(JobType::from).map(|jt| match jt {
+        JobType::Craft => {
+            let repository = node
+                .repository
+                .clone()
+                .and_then(|r| r.parse().ok())
+                .expect("craft task must have a valid repository");
+            JobDetail::Craft { repository }
+        }
+        JobType::Review => JobDetail::Review,
+        JobType::ReviewIntegrate => JobDetail::ReviewIntegrate,
+        JobType::Orchestrator => JobDetail::Orchestrator {
+            command: node.command.clone(),
+        },
+        JobType::Operator => JobDetail::Operator,
+    });
+
     nodes.insert(
         task_id.clone(),
         TaskTreeNode {
@@ -250,12 +267,10 @@ fn insert_node(
             parent_id: parent_id.cloned(),
             key,
             plan_path,
-            job_type: node.job_type.map(JobType::from),
             priority: node.priority.map(Priority::from),
-            repository: node.repository.clone().and_then(|r| r.parse().ok()),
-            command: node.command.clone(),
             children: child_ids,
             depends_on,
+            job_detail,
         },
     );
 }
@@ -296,6 +311,7 @@ fn collect_nodes(
 mod tests {
     use super::TaskTreeBlueprint;
     use super::*;
+    use palette_domain::job::JobDetail;
 
     #[test]
     fn builds_flat_index_from_nested_blueprint() {
@@ -309,6 +325,9 @@ task:
         - key: api-plan
           type: craft
           plan_path: planning/api-plan/README.md
+          repository:
+            name: x7c1/palette
+            branch: main
           children:
             - key: api-plan-review
               type: review
@@ -319,6 +338,9 @@ task:
         - key: api-impl
           type: craft
           plan_path: execution/api-impl/README.md
+          repository:
+            name: x7c1/palette
+            branch: main
           children:
             - key: api-impl-review
               type: review
@@ -340,13 +362,13 @@ task:
             TaskId::parse("wf-test:feature-x/planning").unwrap()
         );
         assert_eq!(planning.parent_id.as_ref().unwrap(), tree.root_id());
-        assert!(planning.job_type.is_none());
+        assert!(planning.job_detail.is_none());
         assert_eq!(planning.children.len(), 1);
         assert!(planning.depends_on.is_empty());
 
         // api-plan (composite craft with review child)
         let api_plan = tree.find_by_key("api-plan").unwrap();
-        assert_eq!(api_plan.job_type, Some(JobType::Craft));
+        assert!(matches!(api_plan.job_detail, Some(JobDetail::Craft { .. })));
         assert_eq!(
             api_plan.plan_path.as_deref(),
             Some("planning/api-plan/README.md")
@@ -356,7 +378,7 @@ task:
 
         // api-plan-review (child of api-plan, review type, inherits plan_path)
         let review = tree.find_by_key("api-plan-review").unwrap();
-        assert_eq!(review.job_type, Some(JobType::Review));
+        assert!(matches!(review.job_detail, Some(JobDetail::Review)));
         assert_eq!(review.parent_id.as_ref().unwrap(), &api_plan.id);
         assert_eq!(
             review.plan_path.as_deref(),
@@ -400,6 +422,9 @@ task:
   children:
     - key: my-craft
       type: craft
+      repository:
+        name: x7c1/palette
+        branch: main
 "#;
         let blueprint: TaskTreeBlueprint = serde_yaml::from_str(yaml).unwrap();
         let errors = blueprint.to_task_tree(&wf_id).unwrap_err();
@@ -418,6 +443,9 @@ task:
   children:
     - key: craft-no-review
       type: craft
+      repository:
+        name: x7c1/palette
+        branch: main
 "#;
         let blueprint: TaskTreeBlueprint = serde_yaml::from_str(yaml).unwrap();
         let errors = blueprint.to_task_tree(&wf_id).unwrap_err();

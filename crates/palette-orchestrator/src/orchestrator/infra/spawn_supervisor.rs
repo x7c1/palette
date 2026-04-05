@@ -116,7 +116,7 @@ impl Orchestrator {
         // didn't exist yet at job creation time.
         self.interactor
             .data_store
-            .assign_job(&job.id, ri_id, job.job_type)?;
+            .assign_job(&job.id, ri_id, job.detail.job_type())?;
 
         self.interactor
             .data_store

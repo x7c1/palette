@@ -56,7 +56,10 @@ async fn job_api_create_and_list() {
             plan_path: "test/W-001".to_string(),
             assignee_id: Some("member-a".to_string()),
             priority: Some(palette_server::api_types::Priority::High),
-            repository: None,
+            repository: Some(palette_server::api_types::Repository {
+                name: "x7c1/palette".to_string(),
+                branch: "main".to_string(),
+            }),
             command: None,
         })
         .send()

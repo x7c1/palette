@@ -1,6 +1,6 @@
 use std::time::Instant;
 
-use palette_domain::job::{Job, JobId, JobStatus, MechanizedStatus};
+use palette_domain::job::{Job, JobDetail, JobId, JobStatus, MechanizedStatus};
 use palette_domain::server::ServerEvent;
 use std::sync::Arc;
 use tokio::sync::mpsc;
@@ -21,7 +21,11 @@ impl Orchestrator {
         job: &Job,
         event_tx: &mpsc::UnboundedSender<ServerEvent>,
     ) {
-        let Some(ref command) = job.command else {
+        let JobDetail::Orchestrator { ref command } = job.detail else {
+            tracing::error!(job_id = %job.id, "execute_orchestrator_task called on non-orchestrator job");
+            return;
+        };
+        let Some(command) = command else {
             tracing::error!(job_id = %job.id, "orchestrator task has no command");
             return;
         };
@@ -179,7 +183,7 @@ impl Orchestrator {
         // Find the implementation (craft) task among siblings
         let siblings = task_store.get_child_tasks(parent_id);
         for sibling in &siblings {
-            if sibling.job_type != Some(palette_domain::job::JobType::Craft) {
+            if !matches!(sibling.job_detail, Some(JobDetail::Craft { .. })) {
                 continue;
             }
             let craft_job = match self.interactor.data_store.get_job_by_task_id(&sibling.id) {
@@ -209,9 +213,13 @@ impl Orchestrator {
 
             // Enqueue failure feedback to the crafter
             if let Some(ref assignee) = craft_job.assignee_id {
+                let orchestrator_command = match &orchestrator_job.detail {
+                    JobDetail::Orchestrator { command } => command.as_deref().unwrap_or("unknown"),
+                    _ => "unknown",
+                };
                 let msg = format!(
                     "## Automated Check Failed\n\nCommand: {}\nExit code: {}\n\n```\n{}\n```\n\nPlease fix the issues and try again.",
-                    orchestrator_job.command.as_deref().unwrap_or("unknown"),
+                    orchestrator_command,
                     craft_job.id,
                     stderr.chars().take(4000).collect::<String>(),
                 );
@@ -272,7 +280,7 @@ impl Orchestrator {
         let siblings = task_store.get_child_tasks(parent_id);
         let craft_sibling = siblings
             .iter()
-            .find(|s| s.job_type == Some(palette_domain::job::JobType::Craft));
+            .find(|s| matches!(s.job_detail, Some(JobDetail::Craft { .. })));
         let Some(craft_sibling) = craft_sibling else {
             return;
         };
@@ -297,9 +305,14 @@ impl Orchestrator {
             return;
         }
 
+        let command = match &job.detail {
+            JobDetail::Orchestrator { command } => command.as_deref(),
+            _ => None,
+        };
+
         let result = serde_json::json!({
             "status": if success { "success" } else { "failed" },
-            "command": job.command,
+            "command": command,
             "exit_code": exit_code,
             "stdout": stdout,
             "stderr": stderr,
@@ -336,7 +349,7 @@ impl Orchestrator {
         let siblings = task_store.get_child_tasks(parent_id);
         let craft_sibling = siblings
             .iter()
-            .find(|s| s.job_type == Some(palette_domain::job::JobType::Craft))?;
+            .find(|s| matches!(s.job_detail, Some(JobDetail::Craft { .. })))?;
         let craft_job = match self
             .interactor
             .data_store

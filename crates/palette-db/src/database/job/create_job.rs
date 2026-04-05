@@ -6,34 +6,39 @@ impl Database {
         let mut conn = lock(&self.conn)?;
         let now = Utc::now();
         let now_str = now.to_rfc3339();
-        let id = req
-            .id
-            .clone()
-            .unwrap_or_else(|| JobId::generate(req.job_type));
+        let job_type = req.detail.job_type();
+        let id = req.id.clone().unwrap_or_else(|| JobId::generate(job_type));
 
-        let repos_json = req
-            .repository
-            .as_ref()
-            .map(super::repository_row::repository_to_json);
+        let repos_json = match &req.detail {
+            JobDetail::Craft { repository } => {
+                Some(super::repository_row::repository_to_json(repository))
+            }
+            _ => None,
+        };
 
-        let initial_status = JobStatus::todo(req.job_type);
+        let command = match &req.detail {
+            JobDetail::Orchestrator { command } => command.as_deref(),
+            _ => None,
+        };
+
+        let initial_status = JobStatus::todo(job_type);
 
         let tx = conn.transaction()?;
 
         tx.execute(
-            "INSERT INTO jobs (id, task_id, type_id, title, plan_path, assignee_id, status_id, priority_id, repository, command, pr_url, created_at, updated_at, notes, assigned_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, NULL, ?11, ?12, NULL, NULL)",
+            "INSERT INTO jobs (id, task_id, type_id, title, plan_path, assignee_id, status_id, priority_id, repository, command, created_at, updated_at, notes, assigned_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, NULL, NULL)",
             params![
                 id.as_ref(),
                 req.task_id.as_ref(),
-                crate::lookup::job_type_id(req.job_type),
+                crate::lookup::job_type_id(job_type),
                 req.title.as_ref(),
                 req.plan_path.as_ref(),
                 req.assignee_id.as_ref().map(|a| a.as_ref()),
                 crate::lookup::job_status_id(initial_status),
                 req.priority.map(crate::lookup::priority_id),
                 repos_json,
-                req.command.as_deref(),
+                command,
                 now_str,
                 now_str,
             ],
@@ -62,18 +67,18 @@ mod tests {
             .create_job(&CreateJobRequest::new(
                 Some(jid("C-001")),
                 task_id,
-                JobType::Craft,
                 Title::parse("Implement feature").unwrap(),
                 PlanPath::parse("2026/feature-x/api-impl").unwrap(),
                 Some(wid("member-a")),
                 Some(Priority::High),
-                Some(Repository::parse("x7c1/palette", "feature/test").unwrap()),
-                None,
+                JobDetail::Craft {
+                    repository: Repository::parse("x7c1/palette", "feature/test").unwrap(),
+                },
             ))
             .unwrap();
 
         assert_eq!(job.id, jid("C-001"));
-        assert_eq!(job.job_type, JobType::Craft);
+        assert_eq!(job.detail.job_type(), JobType::Craft);
         assert_eq!(job.status, JobStatus::Craft(CraftStatus::Todo));
         assert_eq!(job.priority, Some(Priority::High));
 

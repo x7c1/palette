@@ -27,7 +27,7 @@ pub async fn handle_update_job(
         })?;
 
     // Convert API status to domain status using the job's type
-    let new_status = api_req.status.to_domain(current.job_type);
+    let new_status = api_req.status.to_domain(current.detail.job_type());
 
     palette_domain::rule::validate_transition(current.status, new_status).map_err(|e| {
         Error::BadRequest {

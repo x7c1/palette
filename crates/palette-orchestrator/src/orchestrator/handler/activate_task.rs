@@ -1,7 +1,7 @@
 use super::Orchestrator;
 use super::PendingActions;
 use palette_core::ReasonKey;
-use palette_domain::job::JobType;
+use palette_domain::job::{JobDetail, JobType};
 use palette_domain::task::{TaskId, TaskStatus};
 use palette_domain::worker::WorkerRole;
 use palette_usecase::task_store::TaskStore;
@@ -38,7 +38,7 @@ impl Orchestrator {
         Ok(result)
     }
 
-    /// Activate a leaf task (no children): create a job if it has a job_type.
+    /// Activate a leaf task (no children): create a job if it has a job_detail.
     fn activate_leaf_task(
         &self,
         task_id: &TaskId,
@@ -47,12 +47,12 @@ impl Orchestrator {
         let Some(mut task) = task_store.get_task(task_id) else {
             return Ok(PendingActions::new());
         };
-        if task.job_type.is_none() {
+        if task.job_detail.is_none() {
             return Ok(PendingActions::new());
         }
 
         // For review tasks, inherit plan_path from parent craft task
-        if task.job_type == Some(JobType::Review)
+        if matches!(task.job_detail, Some(JobDetail::Review))
             && task.plan_path.is_none()
             && let Some(ref parent_id) = task.parent_id
             && let Some(parent) = task_store.get_task(parent_id)
@@ -77,8 +77,8 @@ impl Orchestrator {
             return Ok((PendingActions::new(), false));
         };
 
-        let Some(job_type) = task.job_type else {
-            // Pure composite task (no job_type): spawn Approver
+        let Some(ref job_detail) = task.job_detail else {
+            // Pure composite task (no job_detail): spawn Approver
             let mut result = PendingActions::new();
             match self.handle_spawn_supervisor(task_id, WorkerRole::Approver) {
                 Ok(sup_id) => result.watch_only.push(sup_id),
@@ -92,7 +92,7 @@ impl Orchestrator {
 
         task_store.update_task_status(task_id, TaskStatus::InProgress)?;
 
-        match job_type {
+        match job_detail.job_type() {
             // Craft composites: create job + member, do NOT resolve children.
             JobType::Craft => Ok((self.create_and_assign_job(&task)?, false)),
             // ReviewIntegrate composites: create job (verdict anchor) but do NOT
@@ -122,7 +122,7 @@ impl Orchestrator {
         tracing::info!(
             job_id = %job.id,
             task_id = %task.id,
-            job_type = ?job.job_type,
+            job_type = ?job.detail.job_type(),
             "created job for ready task"
         );
 
@@ -142,7 +142,7 @@ impl Orchestrator {
         tracing::info!(
             job_id = %job.id,
             task_id = %task.id,
-            job_type = ?job.job_type,
+            job_type = ?job.detail.job_type(),
             "created job for ready task (no member assignment)"
         );
 

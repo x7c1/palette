@@ -1,6 +1,6 @@
 mod helper;
 
-use helper::{CreateJobRequest, CreateTaskRequest, JobStatus, JobType, ReviewStatus};
+use helper::{CreateJobRequest, CreateTaskRequest, JobDetail, JobStatus, JobType, ReviewStatus};
 use helper::{WorkerRole, WorkerStatus, WorkflowId};
 use helper::{capture_pane, insert_worker, jid, spawn_server, test_session_name_with_guard, wid};
 use palette_domain::task::TaskId;
@@ -97,13 +97,11 @@ async fn message_queuing_to_supervisor() {
         .create_job(&CreateJobRequest::new(
             Some(jid("R-A")),
             task_a,
-            JobType::Review,
             palette_domain::job::Title::parse("Review A").unwrap(),
             palette_domain::job::PlanPath::parse("test/R-A").unwrap(),
             None,
             None,
-            None,
-            None,
+            JobDetail::Review,
         ))
         .unwrap();
     state
@@ -112,13 +110,11 @@ async fn message_queuing_to_supervisor() {
         .create_job(&CreateJobRequest::new(
             Some(jid("R-B")),
             task_b,
-            JobType::Review,
             palette_domain::job::Title::parse("Review B").unwrap(),
             palette_domain::job::PlanPath::parse("test/R-B").unwrap(),
             None,
             None,
-            None,
-            None,
+            JobDetail::Review,
         ))
         .unwrap();
 

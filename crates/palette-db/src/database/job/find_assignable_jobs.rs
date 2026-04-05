@@ -1,5 +1,5 @@
 use super::super::*;
-use super::row::{into_job, read_job_row};
+use super::row::{JOB_COLUMNS, into_job, read_job_row};
 
 impl Database {
     /// Find jobs that are assignable: status = 'todo' with no assignee_id.
@@ -20,8 +20,8 @@ impl Database {
         let operator_todo = crate::lookup::job_status_id(palette_domain::job::JobStatus::Operator(
             palette_domain::job::MechanizedStatus::Todo,
         ));
-        let mut stmt = conn.prepare(
-            "SELECT t.id, t.task_id, t.type_id, t.title, t.plan_path, t.assignee_id, t.status_id, t.priority_id, t.repository, t.command, t.pr_url, t.created_at, t.updated_at, t.notes, t.assigned_at
+        let mut stmt = conn.prepare(&format!(
+            "SELECT {JOB_COLUMNS}
              FROM jobs t
              WHERE t.status_id IN (?1, ?2, ?3, ?4) AND t.assignee_id IS NULL
              ORDER BY
@@ -30,8 +30,8 @@ impl Database {
                  WHEN 2 THEN 1
                  WHEN 3 THEN 2
                  ELSE 3
-               END",
-        )?;
+               END"
+        ))?;
         stmt.query_map(
             params![craft_todo, review_todo, orchestrator_todo, operator_todo],
             read_job_row,

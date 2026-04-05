@@ -1,6 +1,6 @@
 use super::Orchestrator;
 use super::PendingActions;
-use palette_domain::job::{JobId, JobType};
+use palette_domain::job::{JobDetail, JobId};
 use palette_domain::task::{TaskId, TaskStatus};
 use palette_domain::worker::WorkerRole;
 use palette_usecase::task_store::TaskStore;
@@ -109,7 +109,7 @@ impl Orchestrator {
             // Spawn the ReviewIntegrator to read review.md files and
             // write integrated-review.md.
             if let Some(task) = task_store.get_task(task_id)
-                && task.job_type == Some(JobType::ReviewIntegrate)
+                && matches!(task.job_detail, Some(JobDetail::ReviewIntegrate))
             {
                 tracing::info!(
                     task_id = %task_id,

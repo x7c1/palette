@@ -13,7 +13,7 @@ pub use stub_container_runtime::StubContainerRuntime;
 pub use tmux::*;
 
 // Re-export commonly used domain types for test convenience.
-pub use palette_domain::job::{CreateJobRequest, JobStatus, JobType, ReviewStatus};
+pub use palette_domain::job::{CreateJobRequest, JobDetail, JobStatus, JobType, ReviewStatus};
 pub use palette_domain::task::TaskId;
 pub use palette_domain::terminal::TerminalTarget;
 pub use palette_domain::worker::{ContainerId, WorkerRole, WorkerStatus};

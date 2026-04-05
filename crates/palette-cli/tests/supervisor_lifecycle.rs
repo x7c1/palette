@@ -23,6 +23,9 @@ task:
         - key: craft
           type: craft
           plan_path: test/a-craft
+          repository:
+            name: x7c1/palette
+            branch: main
           children:
             - key: review
               type: review
@@ -32,6 +35,9 @@ task:
         - key: craft
           type: craft
           plan_path: test/b-craft
+          repository:
+            name: x7c1/palette
+            branch: main
           children:
             - key: review
               type: review

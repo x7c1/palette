@@ -60,13 +60,13 @@ pub fn create_craft(db: &Database, id: &str, priority: Option<Priority>) {
     db.create_job(&CreateJobRequest::new(
         Some(jid(id)),
         task_id,
-        JobType::Craft,
         Title::parse(format!("Job {id}")).unwrap(),
         PlanPath::parse(format!("test/{id}")).unwrap(),
         None,
         priority,
-        None,
-        None,
+        JobDetail::Craft {
+            repository: Repository::parse("x7c1/palette", "main").unwrap(),
+        },
     ))
     .unwrap();
 }
@@ -76,13 +76,11 @@ pub fn create_review(db: &Database, id: &str) {
     db.create_job(&CreateJobRequest::new(
         Some(jid(id)),
         task_id,
-        JobType::Review,
         Title::parse(format!("Review {id}")).unwrap(),
         PlanPath::parse(format!("test/{id}")).unwrap(),
         None,
         None,
-        None,
-        None,
+        JobDetail::Review,
     ))
     .unwrap();
 }
