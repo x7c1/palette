@@ -46,10 +46,10 @@ mod tests {
     fn assign_job_sets_assignee_and_status() {
         let db = test_db();
         setup_worker(&db, "member-a");
-        create_craft(&db, "C-001", None);
+        let craft = create_craft(&db, "C-001", None);
 
         let job = db
-            .assign_job(&jid("C-001"), &wid("member-a"), JobType::Craft)
+            .assign_job(&craft.id, &wid("member-a"), JobType::Craft)
             .unwrap();
         assert_eq!(job.status, JobStatus::Craft(CraftStatus::InProgress));
         assert_eq!(job.assignee_id, Some(wid("member-a")));

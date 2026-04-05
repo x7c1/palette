@@ -4,7 +4,7 @@ use axum::{
     extract::{Query, State},
     http::StatusCode,
 };
-use palette_domain::job::{CraftTransition, Job, JobStatus, JobType};
+use palette_domain::job::{CraftTransition, Job, JobDetail, JobStatus};
 use palette_domain::server::ServerEvent;
 use palette_domain::worker::{WorkerId, WorkerRole, WorkerStatus};
 use std::sync::Arc;
@@ -152,13 +152,13 @@ fn process_member_jobs(
     }
 
     for job in &jobs {
-        match job.job_type {
-            JobType::Craft => handle_craft_stop(state, job),
-            JobType::Review => {
+        match &job.detail {
+            JobDetail::Craft { .. } => handle_craft_stop(state, job),
+            JobDetail::Review => {
                 handle_review_stop(state, job, worker_id, supervisor_id, last_message)
             }
             // ReviewIntegrate, Orchestrator, and Operator jobs don't have member workers
-            JobType::ReviewIntegrate | JobType::Orchestrator | JobType::Operator => {}
+            JobDetail::ReviewIntegrate | JobDetail::Orchestrator { .. } | JobDetail::Operator => {}
         }
     }
 }

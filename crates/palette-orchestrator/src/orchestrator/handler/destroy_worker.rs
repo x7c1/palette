@@ -1,5 +1,5 @@
 use super::Orchestrator;
-use palette_domain::job::JobType;
+use palette_domain::job::JobDetail;
 use palette_domain::worker::WorkerId;
 
 impl Orchestrator {
@@ -33,7 +33,7 @@ impl Orchestrator {
             .interactor
             .data_store
             .get_job_by_task_id(&worker.task_id)
-            && job.job_type == JobType::Craft
+            && matches!(job.detail, JobDetail::Craft { .. })
         {
             self.workspace_manager.remove_workspace(job.id.as_ref());
         }

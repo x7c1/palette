@@ -1,10 +1,10 @@
 use super::super::*;
-use super::row::{into_job, read_job_row};
+use super::row::{JOB_COLUMNS, into_job, read_job_row};
 
 impl Database {
     pub fn list_jobs(&self, filter: &JobFilter) -> crate::Result<Vec<Job>> {
         let conn = lock(&self.conn)?;
-        let mut sql = "SELECT id, task_id, type_id, title, plan_path, assignee_id, status_id, priority_id, repository, command, pr_url, created_at, updated_at, notes, assigned_at FROM jobs WHERE 1=1".to_string();
+        let mut sql = format!("SELECT {JOB_COLUMNS} FROM jobs WHERE 1=1");
         let mut param_values: Vec<Box<dyn rusqlite::types::ToSql>> = Vec::new();
 
         if let Some(ref t) = filter.job_type {
@@ -40,30 +40,27 @@ mod tests {
     fn list_jobs_with_filter() {
         let db = test_db();
         let craft_task = setup_task(&db, "wf-test:task-C-001");
-        db.create_job(&CreateJobRequest::new(
-            Some(jid("C-001")),
-            craft_task,
-            JobType::Craft,
-            Title::parse("Craft 1").unwrap(),
-            PlanPath::parse("test/C-001").unwrap(),
-            None,
-            None,
-            None,
-            None,
-        ))
-        .unwrap();
+        let craft_job = db
+            .create_job(&CreateJobRequest::new(
+                craft_task,
+                Title::parse("Craft 1").unwrap(),
+                PlanPath::parse("test/C-001").unwrap(),
+                None,
+                None,
+                JobDetail::Craft {
+                    repository: Repository::parse("x7c1/palette-demo", "main").unwrap(),
+                },
+            ))
+            .unwrap();
 
         let review_task = setup_task(&db, "wf-test:task-R-001");
         db.create_job(&CreateJobRequest::new(
-            Some(jid("R-001")),
             review_task,
-            JobType::Review,
             Title::parse("Review 1").unwrap(),
             PlanPath::parse("test/R-001").unwrap(),
             None,
             None,
-            None,
-            None,
+            JobDetail::Review,
         ))
         .unwrap();
 
@@ -84,6 +81,6 @@ mod tests {
             })
             .unwrap();
         assert_eq!(crafts.len(), 1);
-        assert_eq!(crafts[0].id, jid("C-001"));
+        assert_eq!(crafts[0].id, craft_job.id);
     }
 }

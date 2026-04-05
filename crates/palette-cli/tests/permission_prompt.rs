@@ -1,8 +1,8 @@
 mod helper;
 
-use helper::{CreateJobRequest, CreateTaskRequest, JobStatus, JobType, ReviewStatus};
+use helper::{CreateJobRequest, CreateTaskRequest, JobDetail, JobStatus, JobType, ReviewStatus};
 use helper::{WorkerRole, WorkerStatus, WorkflowId};
-use helper::{capture_pane, insert_worker, jid, spawn_server, test_session_name_with_guard, wid};
+use helper::{capture_pane, insert_worker, spawn_server, test_session_name_with_guard, wid};
 use palette_domain::task::TaskId;
 use palette_tmux::TmuxManager;
 use serde_json::json;
@@ -78,30 +78,27 @@ async fn sequential_delivery() {
     let client = reqwest::Client::new();
 
     // Create and assign a review job
-    state
+    let review_job = state
         .interactor
         .data_store
         .create_job(&CreateJobRequest::new(
-            Some(jid("R-1")),
             task_r,
-            JobType::Review,
             palette_domain::job::Title::parse("Review 1").unwrap(),
             palette_domain::job::PlanPath::parse("test/R-1").unwrap(),
             None,
             None,
-            None,
-            None,
+            JobDetail::Review,
         ))
         .unwrap();
     state
         .interactor
         .data_store
-        .update_job_status(&jid("R-1"), JobStatus::Review(ReviewStatus::Todo))
+        .update_job_status(&review_job.id, JobStatus::Review(ReviewStatus::Todo))
         .unwrap();
     state
         .interactor
         .data_store
-        .assign_job(&jid("R-1"), &wid("reviewer-1"), JobType::Review)
+        .assign_job(&review_job.id, &wid("reviewer-1"), JobType::Review)
         .unwrap();
 
     let wait = || tokio::time::sleep(std::time::Duration::from_millis(500));
@@ -251,30 +248,27 @@ async fn queued_while_working() {
 
     let client = reqwest::Client::new();
 
-    state
+    let review_job = state
         .interactor
         .data_store
         .create_job(&CreateJobRequest::new(
-            Some(jid("R-1")),
             task_r,
-            JobType::Review,
             palette_domain::job::Title::parse("Review 1").unwrap(),
             palette_domain::job::PlanPath::parse("test/R-1").unwrap(),
             None,
             None,
-            None,
-            None,
+            JobDetail::Review,
         ))
         .unwrap();
     state
         .interactor
         .data_store
-        .update_job_status(&jid("R-1"), JobStatus::Review(ReviewStatus::Todo))
+        .update_job_status(&review_job.id, JobStatus::Review(ReviewStatus::Todo))
         .unwrap();
     state
         .interactor
         .data_store
-        .assign_job(&jid("R-1"), &wid("reviewer-1"), JobType::Review)
+        .assign_job(&review_job.id, &wid("reviewer-1"), JobType::Review)
         .unwrap();
 
     let wait = || tokio::time::sleep(std::time::Duration::from_millis(500));
@@ -488,30 +482,27 @@ async fn concurrent_race() {
 
     let client = reqwest::Client::new();
 
-    state
+    let review_job = state
         .interactor
         .data_store
         .create_job(&CreateJobRequest::new(
-            Some(jid("R-1")),
             task_r,
-            JobType::Review,
             palette_domain::job::Title::parse("Review 1").unwrap(),
             palette_domain::job::PlanPath::parse("test/R-1").unwrap(),
             None,
             None,
-            None,
-            None,
+            JobDetail::Review,
         ))
         .unwrap();
     state
         .interactor
         .data_store
-        .update_job_status(&jid("R-1"), JobStatus::Review(ReviewStatus::Todo))
+        .update_job_status(&review_job.id, JobStatus::Review(ReviewStatus::Todo))
         .unwrap();
     state
         .interactor
         .data_store
-        .assign_job(&jid("R-1"), &wid("reviewer-1"), JobType::Review)
+        .assign_job(&review_job.id, &wid("reviewer-1"), JobType::Review)
         .unwrap();
 
     let wait = || tokio::time::sleep(std::time::Duration::from_millis(500));

@@ -11,7 +11,6 @@ pub(crate) struct JobRow {
     pub priority_id: Option<i64>,
     pub repository: Option<String>,
     pub command: Option<String>,
-    pub pr_url: Option<String>,
     pub created_at: String,
     pub updated_at: String,
     pub notes: Option<String>,

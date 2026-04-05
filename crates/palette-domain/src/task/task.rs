@@ -1,5 +1,5 @@
 use super::{TaskId, TaskKey, TaskStatus};
-use crate::job::{CreateJobRequest, JobId, JobType, PlanPath, Priority, Repository, Title};
+use crate::job::{CreateJobRequest, JobDetail, PlanPath, Priority, Title};
 use crate::workflow::WorkflowId;
 use palette_core::ReasonKey;
 
@@ -15,11 +15,8 @@ pub struct Task {
     pub parent_id: Option<TaskId>,
     pub key: TaskKey,
     pub plan_path: Option<String>,
-    pub job_type: Option<JobType>,
     pub priority: Option<Priority>,
-    pub repository: Option<Repository>,
-    /// Command for orchestrator tasks (e.g., "docker compose run --rm check").
-    pub command: Option<String>,
+    pub job_detail: Option<JobDetail>,
     pub status: TaskStatus,
     pub children: Vec<Task>,
     pub depends_on: Vec<TaskId>,
@@ -33,11 +30,12 @@ impl Task {
 
     /// Build a CreateJobRequest from this task.
     ///
-    /// Requires `job_type` and `plan_path` to be set.
+    /// Requires `job_detail` and `plan_path` to be set.
     /// The task key is used as the job title.
     pub fn to_create_job_request(&self) -> Result<CreateJobRequest, TaskToJobError> {
-        let job_type = self
-            .job_type
+        let job_detail = self
+            .job_detail
+            .clone()
             .ok_or_else(|| TaskToJobError::MissingJobType {
                 task_id: self.id.clone(),
             })?;
@@ -59,15 +57,12 @@ impl Task {
             })?;
 
         Ok(CreateJobRequest::new(
-            Some(JobId::generate(job_type)),
             self.id.clone(),
-            job_type,
             title,
             plan_path,
             None,
             self.priority,
-            self.repository.clone(),
-            self.command.clone(),
+            job_detail,
         ))
     }
 }
@@ -83,18 +78,17 @@ pub enum TaskToJobError {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::job::{JobType, Repository};
 
-    fn test_task(job_type: Option<JobType>, plan_path: Option<&str>) -> Task {
+    fn test_task(job_detail: Option<JobDetail>, plan_path: Option<&str>) -> Task {
         Task {
             id: TaskId::parse("wf-test:task-1").unwrap(),
             workflow_id: WorkflowId::parse("wf-test").unwrap(),
             parent_id: None,
             key: TaskKey::parse("my-task").unwrap(),
             plan_path: plan_path.map(String::from),
-            job_type,
             priority: Some(Priority::High),
-            repository: None,
-            command: None,
+            job_detail,
             status: TaskStatus::Ready,
             children: vec![],
             depends_on: vec![],
@@ -103,10 +97,13 @@ mod tests {
 
     #[test]
     fn creates_job_request_from_craft_task() {
-        let task = test_task(Some(JobType::Craft), Some("plans/my-task"));
+        let detail = JobDetail::Craft {
+            repository: Repository::parse("x7c1/palette-demo", "main").unwrap(),
+        };
+        let task = test_task(Some(detail), Some("plans/my-task"));
         let req = task.to_create_job_request().unwrap();
         assert_eq!(req.task_id, task.id);
-        assert_eq!(req.job_type, JobType::Craft);
+        assert_eq!(req.detail.job_type(), JobType::Craft);
         assert_eq!(req.title.as_ref(), "my-task");
         assert_eq!(req.plan_path.as_ref(), "plans/my-task");
         assert_eq!(req.priority, Some(Priority::High));
@@ -115,9 +112,9 @@ mod tests {
 
     #[test]
     fn creates_job_request_from_review_task() {
-        let task = test_task(Some(JobType::Review), Some("plans/review"));
+        let task = test_task(Some(JobDetail::Review), Some("plans/review"));
         let req = task.to_create_job_request().unwrap();
-        assert_eq!(req.job_type, JobType::Review);
+        assert_eq!(req.detail.job_type(), JobType::Review);
     }
 
     #[test]
@@ -129,7 +126,10 @@ mod tests {
 
     #[test]
     fn fails_without_plan_path() {
-        let task = test_task(Some(JobType::Craft), None);
+        let detail = JobDetail::Craft {
+            repository: Repository::parse("x7c1/palette-demo", "main").unwrap(),
+        };
+        let task = test_task(Some(detail), None);
         let err = task.to_create_job_request().unwrap_err();
         assert!(matches!(err, TaskToJobError::MissingPlanPath { .. }));
     }

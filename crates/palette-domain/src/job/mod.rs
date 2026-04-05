@@ -7,6 +7,9 @@ pub use craft_transition::CraftTransition;
 mod create_job_request;
 pub use create_job_request::CreateJobRequest;
 
+mod job_detail;
+pub use job_detail::JobDetail;
+
 #[allow(clippy::module_inception)]
 mod job;
 pub use job::Job;

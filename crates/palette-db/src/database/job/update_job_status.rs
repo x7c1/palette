@@ -27,21 +27,21 @@ mod tests {
     fn update_job_status() {
         let db = test_db();
         let task_id = setup_task(&db, "wf-test:task-C-001");
-        db.create_job(&CreateJobRequest::new(
-            Some(jid("C-001")),
-            task_id,
-            JobType::Craft,
-            Title::parse("Craft").unwrap(),
-            PlanPath::parse("test/C-001").unwrap(),
-            None,
-            None,
-            None,
-            None,
-        ))
-        .unwrap();
+        let job = db
+            .create_job(&CreateJobRequest::new(
+                task_id,
+                Title::parse("Craft").unwrap(),
+                PlanPath::parse("test/C-001").unwrap(),
+                None,
+                None,
+                JobDetail::Craft {
+                    repository: Repository::parse("x7c1/palette-demo", "main").unwrap(),
+                },
+            ))
+            .unwrap();
 
         let updated = db
-            .update_job_status(&jid("C-001"), JobStatus::Craft(CraftStatus::InProgress))
+            .update_job_status(&job.id, JobStatus::Craft(CraftStatus::InProgress))
             .unwrap();
         assert_eq!(updated.status, JobStatus::Craft(CraftStatus::InProgress));
     }

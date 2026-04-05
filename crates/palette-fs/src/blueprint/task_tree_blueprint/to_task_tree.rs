@@ -1,5 +1,5 @@
 use super::{TaskNode, TaskTreeBlueprint};
-use palette_domain::job::{InvalidRepository, JobType, Priority, Repository};
+use palette_domain::job::{InvalidRepository, JobDetail, JobType, Priority, Repository};
 use palette_domain::task::{InvalidTaskKey, TaskId, TaskKey, TaskTree, TaskTreeNode};
 use palette_domain::workflow::WorkflowId;
 use std::collections::HashMap;
@@ -11,6 +11,8 @@ pub enum BlueprintError {
     InvalidKey(InvalidTaskKey),
     /// Craft task has no review child.
     MissingReviewChild { task_key: String },
+    /// Craft task has no repository.
+    MissingRepository { task_key: String },
     /// Repository has invalid name or branch.
     InvalidRepository {
         task_key: String,
@@ -32,6 +34,9 @@ impl BlueprintError {
             BlueprintError::MissingReviewChild { task_key } => {
                 format!("tasks[key={task_key}].children")
             }
+            BlueprintError::MissingRepository { task_key } => {
+                format!("tasks[key={task_key}].repository")
+            }
             BlueprintError::InvalidRepository { task_key, .. } => {
                 format!("tasks[key={task_key}].repository")
             }
@@ -51,6 +56,7 @@ impl BlueprintError {
             BlueprintError::MissingReviewChild { .. } => {
                 "blueprint/missing_review_child".to_string()
             }
+            BlueprintError::MissingRepository { .. } => "blueprint/missing_repository".to_string(),
             BlueprintError::InvalidRepository { cause, .. } => cause.reason_key(),
             BlueprintError::SelfDependency { .. } => "blueprint/self_dependency".to_string(),
             BlueprintError::DuplicateDependency { .. } => {
@@ -63,6 +69,9 @@ impl BlueprintError {
 /// Result of validating a Blueprint node tree.
 struct Validated<'a> {
     keys: HashMap<&'a str, TaskKey>,
+    /// Parsed job details keyed by the raw task key string.
+    /// `None` value means the node has no job_type (composite-only).
+    job_details: HashMap<&'a str, Option<JobDetail>>,
 }
 
 impl TaskTreeBlueprint {
@@ -81,44 +90,60 @@ impl TaskTreeBlueprint {
         let root_id = TaskId::root(workflow_id, root_key);
         let mut nodes = HashMap::new();
 
-        insert_node(&root_id, None, None, root, &mut nodes, &validated.keys);
+        insert_node(
+            &root_id,
+            None,
+            None,
+            root,
+            &mut nodes,
+            &validated.keys,
+            &validated.job_details,
+        );
         collect_nodes(
             &root_id,
             root.plan_path.as_deref(),
             &root.children,
             &mut nodes,
             &validated.keys,
+            &validated.job_details,
         );
 
         Ok(TaskTree::new(root_id, nodes))
     }
 }
 
-/// Validate all nodes recursively. Returns parsed keys on success,
-/// or all collected errors on failure.
+/// Validate all nodes recursively. Returns parsed keys and job details on
+/// success, or all collected errors on failure.
 fn validate_tree(root: &TaskNode) -> Result<Validated<'_>, Vec<BlueprintError>> {
-    let (errors, keys) = validate_node(root);
+    let (errors, keys, job_details) = validate_node(root);
     if errors.is_empty() {
-        Ok(Validated { keys })
+        Ok(Validated { keys, job_details })
     } else {
         Err(errors)
     }
 }
 
+/// Per-node validation result.
+type NodeResult<'a> = (
+    Vec<BlueprintError>,
+    HashMap<&'a str, TaskKey>,
+    HashMap<&'a str, Option<JobDetail>>,
+);
+
 /// Validate a single node and all its descendants.
-/// Returns (errors, parsed_keys) so callers can aggregate.
-fn validate_node(node: &TaskNode) -> (Vec<BlueprintError>, HashMap<&str, TaskKey>) {
+fn validate_node(node: &TaskNode) -> NodeResult<'_> {
     let (key_errors, keys) = collect_keys(node);
     let structure_errors = check_craft_has_review(node);
-    let repo_errors = check_repository(node);
+    let (repo_errors, job_detail) = build_job_detail(node);
     let dep_errors = validate_depends_on(node);
 
-    let (child_errors, child_keys) = node.children.iter().map(validate_node).fold(
-        (Vec::new(), HashMap::new()),
-        |(mut errs, mut keys), (ce, ck)| {
+    let (child_errors, child_keys, child_details) = node.children.iter().map(validate_node).fold(
+        (Vec::new(), HashMap::new(), HashMap::new()),
+        |(mut errs, mut keys, mut details), (ce, ck, cd)| {
             errs.extend(ce);
             keys.extend(ck);
-            (errs, keys)
+            details.extend(cd);
+            (errs, keys, details)
         },
     );
 
@@ -132,7 +157,12 @@ fn validate_node(node: &TaskNode) -> (Vec<BlueprintError>, HashMap<&str, TaskKey
 
     let mut all_keys = keys;
     all_keys.extend(child_keys);
-    (errors, all_keys)
+
+    let mut all_details = HashMap::new();
+    all_details.insert(node.key.as_str(), job_detail);
+    all_details.extend(child_details);
+
+    (errors, all_keys, all_details)
 }
 
 /// Parse the node's own key and depends_on keys.
@@ -177,15 +207,73 @@ fn check_craft_has_review(node: &TaskNode) -> Option<BlueprintError> {
     }
 }
 
-/// Check that the repository (if present) has valid name and branch.
-fn check_repository(node: &TaskNode) -> Option<BlueprintError> {
-    let repo = node.repository.as_ref()?;
-    Repository::parse(&repo.name, &repo.branch)
-        .err()
-        .map(|cause| BlueprintError::InvalidRepository {
+/// Validate repository constraints and build [`JobDetail`] for this node.
+///
+/// Returns (errors, parsed job detail). On error the detail is `None`; the
+/// caller still collects the error so that all problems are reported at once.
+fn build_job_detail(node: &TaskNode) -> (Vec<BlueprintError>, Option<JobDetail>) {
+    let Some(job_type_yaml) = node.job_type else {
+        // Validate repository format even for non-typed nodes.
+        let errors = validate_repository_format(node);
+        return (errors, None);
+    };
+
+    let job_type = JobType::from(job_type_yaml);
+    match job_type {
+        JobType::Craft => match node.repository.as_ref() {
+            None => (
+                vec![BlueprintError::MissingRepository {
+                    task_key: node.key.clone(),
+                }],
+                None,
+            ),
+            Some(repo) => match Repository::parse(&repo.name, &repo.branch) {
+                Ok(repository) => (vec![], Some(JobDetail::Craft { repository })),
+                Err(cause) => (
+                    vec![BlueprintError::InvalidRepository {
+                        task_key: node.key.clone(),
+                        cause,
+                    }],
+                    None,
+                ),
+            },
+        },
+        JobType::Review => {
+            let errors = validate_repository_format(node);
+            (errors, Some(JobDetail::Review))
+        }
+        JobType::ReviewIntegrate => {
+            let errors = validate_repository_format(node);
+            (errors, Some(JobDetail::ReviewIntegrate))
+        }
+        JobType::Orchestrator => {
+            let errors = validate_repository_format(node);
+            (
+                errors,
+                Some(JobDetail::Orchestrator {
+                    command: node.command.clone(),
+                }),
+            )
+        }
+        JobType::Operator => {
+            let errors = validate_repository_format(node);
+            (errors, Some(JobDetail::Operator))
+        }
+    }
+}
+
+/// Validate repository format (if present) for non-craft nodes.
+fn validate_repository_format(node: &TaskNode) -> Vec<BlueprintError> {
+    let Some(repo) = node.repository.as_ref() else {
+        return vec![];
+    };
+    match Repository::parse(&repo.name, &repo.branch) {
+        Ok(_) => vec![],
+        Err(cause) => vec![BlueprintError::InvalidRepository {
             task_key: node.key.clone(),
             cause,
-        })
+        }],
+    }
 }
 
 /// Check depends_on for self-dependency and duplicates.
@@ -220,6 +308,7 @@ fn insert_node(
     node: &TaskNode,
     nodes: &mut HashMap<TaskId, TaskTreeNode>,
     keys: &HashMap<&str, TaskKey>,
+    job_details: &HashMap<&str, Option<JobDetail>>,
 ) {
     let key = keys[node.key.as_str()].clone();
 
@@ -243,6 +332,8 @@ fn insert_node(
         .clone()
         .or_else(|| parent_plan_path.map(String::from));
 
+    let job_detail = job_details[node.key.as_str()].clone();
+
     nodes.insert(
         task_id.clone(),
         TaskTreeNode {
@@ -250,12 +341,10 @@ fn insert_node(
             parent_id: parent_id.cloned(),
             key,
             plan_path,
-            job_type: node.job_type.map(JobType::from),
             priority: node.priority.map(Priority::from),
-            repository: node.repository.clone().and_then(|r| r.parse().ok()),
-            command: node.command.clone(),
             children: child_ids,
             depends_on,
+            job_detail,
         },
     );
 }
@@ -266,6 +355,7 @@ fn collect_nodes(
     children: &[TaskNode],
     nodes: &mut HashMap<TaskId, TaskTreeNode>,
     keys: &HashMap<&str, TaskKey>,
+    job_details: &HashMap<&str, Option<JobDetail>>,
 ) {
     for child in children {
         let child_task_id = parent_task_id.child(&keys[child.key.as_str()]);
@@ -278,6 +368,7 @@ fn collect_nodes(
             child,
             nodes,
             keys,
+            job_details,
         );
 
         if !child.children.is_empty() {
@@ -287,6 +378,7 @@ fn collect_nodes(
                 &child.children,
                 nodes,
                 keys,
+                job_details,
             );
         }
     }
@@ -296,6 +388,7 @@ fn collect_nodes(
 mod tests {
     use super::TaskTreeBlueprint;
     use super::*;
+    use palette_domain::job::JobDetail;
 
     #[test]
     fn builds_flat_index_from_nested_blueprint() {
@@ -309,6 +402,9 @@ task:
         - key: api-plan
           type: craft
           plan_path: planning/api-plan/README.md
+          repository:
+            name: x7c1/palette-demo
+            branch: main
           children:
             - key: api-plan-review
               type: review
@@ -319,6 +415,9 @@ task:
         - key: api-impl
           type: craft
           plan_path: execution/api-impl/README.md
+          repository:
+            name: x7c1/palette-demo
+            branch: main
           children:
             - key: api-impl-review
               type: review
@@ -340,13 +439,13 @@ task:
             TaskId::parse("wf-test:feature-x/planning").unwrap()
         );
         assert_eq!(planning.parent_id.as_ref().unwrap(), tree.root_id());
-        assert!(planning.job_type.is_none());
+        assert!(planning.job_detail.is_none());
         assert_eq!(planning.children.len(), 1);
         assert!(planning.depends_on.is_empty());
 
         // api-plan (composite craft with review child)
         let api_plan = tree.find_by_key("api-plan").unwrap();
-        assert_eq!(api_plan.job_type, Some(JobType::Craft));
+        assert!(matches!(api_plan.job_detail, Some(JobDetail::Craft { .. })));
         assert_eq!(
             api_plan.plan_path.as_deref(),
             Some("planning/api-plan/README.md")
@@ -356,7 +455,7 @@ task:
 
         // api-plan-review (child of api-plan, review type, inherits plan_path)
         let review = tree.find_by_key("api-plan-review").unwrap();
-        assert_eq!(review.job_type, Some(JobType::Review));
+        assert!(matches!(review.job_detail, Some(JobDetail::Review)));
         assert_eq!(review.parent_id.as_ref().unwrap(), &api_plan.id);
         assert_eq!(
             review.plan_path.as_deref(),
@@ -400,12 +499,36 @@ task:
   children:
     - key: my-craft
       type: craft
+      repository:
+        name: x7c1/palette-demo
+        branch: main
 "#;
         let blueprint: TaskTreeBlueprint = serde_yaml::from_str(yaml).unwrap();
         let errors = blueprint.to_task_tree(&wf_id).unwrap_err();
         assert_eq!(errors.len(), 1);
         assert!(
             matches!(&errors[0], BlueprintError::MissingReviewChild { task_key } if task_key == "my-craft")
+        );
+    }
+
+    #[test]
+    fn rejects_craft_without_repository() {
+        let wf_id = WorkflowId::parse("wf-test").unwrap();
+        let yaml = r#"
+task:
+  key: root
+  children:
+    - key: my-craft
+      type: craft
+      children:
+        - key: my-review
+          type: review
+"#;
+        let blueprint: TaskTreeBlueprint = serde_yaml::from_str(yaml).unwrap();
+        let errors = blueprint.to_task_tree(&wf_id).unwrap_err();
+        assert_eq!(errors.len(), 1);
+        assert!(
+            matches!(&errors[0], BlueprintError::MissingRepository { task_key } if task_key == "my-craft")
         );
     }
 
@@ -418,6 +541,9 @@ task:
   children:
     - key: craft-no-review
       type: craft
+      repository:
+        name: x7c1/palette-demo
+        branch: main
 "#;
         let blueprint: TaskTreeBlueprint = serde_yaml::from_str(yaml).unwrap();
         let errors = blueprint.to_task_tree(&wf_id).unwrap_err();

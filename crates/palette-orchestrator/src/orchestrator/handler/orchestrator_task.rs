@@ -1,6 +1,6 @@
 use std::time::Instant;
 
-use palette_domain::job::{Job, JobId, JobStatus, MechanizedStatus};
+use palette_domain::job::{Job, JobDetail, JobId, JobStatus, MechanizedStatus};
 use palette_domain::server::ServerEvent;
 use std::sync::Arc;
 use tokio::sync::mpsc;
@@ -21,7 +21,11 @@ impl Orchestrator {
         job: &Job,
         event_tx: &mpsc::UnboundedSender<ServerEvent>,
     ) {
-        let Some(ref command) = job.command else {
+        let JobDetail::Orchestrator { ref command } = job.detail else {
+            tracing::error!(job_id = %job.id, "execute_orchestrator_task called on non-orchestrator job");
+            return;
+        };
+        let Some(command) = command else {
             tracing::error!(job_id = %job.id, "orchestrator task has no command");
             return;
         };
@@ -150,14 +154,23 @@ impl Orchestrator {
                 tracing::error!(job_id = %job_id, error = %e, "failed to mark orchestrator job as failed");
                 return;
             }
-            // Revert the dependent implementation task
-            self.revert_implementation_task(&job, stderr);
+            // Revert the dependent implementation task.
+            // command is always Some here because execute_orchestrator_task
+            // validates it before spawning. Log and bail if somehow absent.
+            let Some(command) = job.detail.command() else {
+                tracing::error!(job_id = %job_id, "orchestrator job has no command during revert");
+                return;
+            };
+            self.revert_implementation_task(&job, command, stderr);
         }
     }
 
     /// Revert the implementation task that the orchestrator task depends on.
     /// Sends the failure log as feedback to the crafter.
-    fn revert_implementation_task(&self, orchestrator_job: &Job, stderr: &str) {
+    ///
+    /// `command` is the orchestrator command that failed (already validated
+    /// as `Some` by `execute_orchestrator_task`).
+    fn revert_implementation_task(&self, orchestrator_job: &Job, command: &str, stderr: &str) {
         let task_id = &orchestrator_job.task_id;
 
         // Find sibling craft task (implementation task)
@@ -179,7 +192,7 @@ impl Orchestrator {
         // Find the implementation (craft) task among siblings
         let siblings = task_store.get_child_tasks(parent_id);
         for sibling in &siblings {
-            if sibling.job_type != Some(palette_domain::job::JobType::Craft) {
+            if !matches!(sibling.job_detail, Some(JobDetail::Craft { .. })) {
                 continue;
             }
             let craft_job = match self.interactor.data_store.get_job_by_task_id(&sibling.id) {
@@ -211,7 +224,7 @@ impl Orchestrator {
             if let Some(ref assignee) = craft_job.assignee_id {
                 let msg = format!(
                     "## Automated Check Failed\n\nCommand: {}\nExit code: {}\n\n```\n{}\n```\n\nPlease fix the issues and try again.",
-                    orchestrator_job.command.as_deref().unwrap_or("unknown"),
+                    command,
                     craft_job.id,
                     stderr.chars().take(4000).collect::<String>(),
                 );
@@ -272,7 +285,7 @@ impl Orchestrator {
         let siblings = task_store.get_child_tasks(parent_id);
         let craft_sibling = siblings
             .iter()
-            .find(|s| s.job_type == Some(palette_domain::job::JobType::Craft));
+            .find(|s| matches!(s.job_detail, Some(JobDetail::Craft { .. })));
         let Some(craft_sibling) = craft_sibling else {
             return;
         };
@@ -297,9 +310,11 @@ impl Orchestrator {
             return;
         }
 
+        let command = job.detail.command();
+
         let result = serde_json::json!({
             "status": if success { "success" } else { "failed" },
-            "command": job.command,
+            "command": command,
             "exit_code": exit_code,
             "stdout": stdout,
             "stderr": stderr,
@@ -336,7 +351,7 @@ impl Orchestrator {
         let siblings = task_store.get_child_tasks(parent_id);
         let craft_sibling = siblings
             .iter()
-            .find(|s| s.job_type == Some(palette_domain::job::JobType::Craft))?;
+            .find(|s| matches!(s.job_detail, Some(JobDetail::Craft { .. })))?;
         let craft_job = match self
             .interactor
             .data_store

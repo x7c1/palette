@@ -23,7 +23,7 @@ impl WorkspaceManager {
     }
 
     /// Return the host path to the bare cache for a repository.
-    /// e.g., `data/repos/x7c1/palette.git`
+    /// e.g., `data/repos/x7c1/palette-demo.git`
     pub fn repo_cache_path(&self, repo: &Repository) -> PathBuf {
         self.data_dir
             .join("repos")
