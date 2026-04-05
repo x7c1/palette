@@ -154,14 +154,23 @@ impl Orchestrator {
                 tracing::error!(job_id = %job_id, error = %e, "failed to mark orchestrator job as failed");
                 return;
             }
-            // Revert the dependent implementation task
-            self.revert_implementation_task(&job, stderr);
+            // Revert the dependent implementation task.
+            // command is always Some here because execute_orchestrator_task
+            // validates it before spawning. Log and bail if somehow absent.
+            let Some(command) = job.detail.command() else {
+                tracing::error!(job_id = %job_id, "orchestrator job has no command during revert");
+                return;
+            };
+            self.revert_implementation_task(&job, command, stderr);
         }
     }
 
     /// Revert the implementation task that the orchestrator task depends on.
     /// Sends the failure log as feedback to the crafter.
-    fn revert_implementation_task(&self, orchestrator_job: &Job, stderr: &str) {
+    ///
+    /// `command` is the orchestrator command that failed (already validated
+    /// as `Some` by `execute_orchestrator_task`).
+    fn revert_implementation_task(&self, orchestrator_job: &Job, command: &str, stderr: &str) {
         let task_id = &orchestrator_job.task_id;
 
         // Find sibling craft task (implementation task)
@@ -213,11 +222,9 @@ impl Orchestrator {
 
             // Enqueue failure feedback to the crafter
             if let Some(ref assignee) = craft_job.assignee_id {
-                let orchestrator_command =
-                    orchestrator_job.detail.command().unwrap_or("unknown");
                 let msg = format!(
                     "## Automated Check Failed\n\nCommand: {}\nExit code: {}\n\n```\n{}\n```\n\nPlease fix the issues and try again.",
-                    orchestrator_command,
+                    command,
                     craft_job.id,
                     stderr.chars().take(4000).collect::<String>(),
                 );
