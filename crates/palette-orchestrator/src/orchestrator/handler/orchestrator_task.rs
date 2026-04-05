@@ -213,10 +213,8 @@ impl Orchestrator {
 
             // Enqueue failure feedback to the crafter
             if let Some(ref assignee) = craft_job.assignee_id {
-                let orchestrator_command = match &orchestrator_job.detail {
-                    JobDetail::Orchestrator { command } => command.as_deref().unwrap_or("unknown"),
-                    _ => "unknown",
-                };
+                let orchestrator_command =
+                    orchestrator_job.detail.command().unwrap_or("unknown");
                 let msg = format!(
                     "## Automated Check Failed\n\nCommand: {}\nExit code: {}\n\n```\n{}\n```\n\nPlease fix the issues and try again.",
                     orchestrator_command,
@@ -305,10 +303,7 @@ impl Orchestrator {
             return;
         }
 
-        let command = match &job.detail {
-            JobDetail::Orchestrator { command } => command.as_deref(),
-            _ => None,
-        };
+        let command = job.detail.command();
 
         let result = serde_json::json!({
             "status": if success { "success" } else { "failed" },

@@ -9,17 +9,12 @@ impl Database {
         let job_type = req.detail.job_type();
         let id = req.id.clone().unwrap_or_else(|| JobId::generate(job_type));
 
-        let repos_json = match &req.detail {
-            JobDetail::Craft { repository } => {
-                Some(super::repository_row::repository_to_json(repository))
-            }
-            _ => None,
-        };
+        let repos_json = req
+            .detail
+            .repository()
+            .map(super::repository_row::repository_to_json);
 
-        let command = match &req.detail {
-            JobDetail::Orchestrator { command } => command.as_deref(),
-            _ => None,
-        };
+        let command = req.detail.command();
 
         let initial_status = JobStatus::todo(job_type);
 
