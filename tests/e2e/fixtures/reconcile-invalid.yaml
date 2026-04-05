@@ -8,7 +8,7 @@ task:
           plan_path: step-a/README.md
           priority: high
           repository:
-            name: x7c1/palette
+            name: x7c1/palette-demo
             branch: plan/2026-999-e2e-dynamic-sup
           children:
             - key: review
@@ -18,7 +18,7 @@ task:
           plan_path: step-a/README.md
           priority: low
           repository:
-            name: x7c1/palette
+            name: x7c1/palette-demo
             branch: plan/2026-999-e2e-dynamic-sup
           children:
             - key: review
@@ -31,7 +31,7 @@ task:
           plan_path: step-b/README.md
           priority: medium
           repository:
-            name: x7c1/palette
+            name: x7c1/palette-demo
             branch: plan/2026-999-e2e-dynamic-sup
           children:
             - key: review

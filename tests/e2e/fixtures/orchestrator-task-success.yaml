@@ -6,7 +6,7 @@ task:
       plan_path: implement/README.md
       priority: high
       repository:
-        name: x7c1/palette
+        name: x7c1/palette-demo
         branch: plan/2026-999-e2e-orchestrator
       children:
         - key: automated-checks
