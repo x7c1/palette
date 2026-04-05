@@ -259,8 +259,7 @@ fn insert_node(
         .clone()
         .or_else(|| parent_plan_path.map(String::from));
 
-    // Safety: validate_tree has already verified that craft tasks have a valid
-    // repository, so the unwrap below cannot fail for validated input.
+    // validate_tree has already verified that craft tasks have a valid repository.
     let job_detail = node.job_type.map(JobType::from).map(|jt| match jt {
         JobType::Craft => {
             let repo_yaml = node.repository.as_ref().unwrap();
