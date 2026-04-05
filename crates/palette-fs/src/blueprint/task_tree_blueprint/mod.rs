@@ -72,7 +72,7 @@ task:
           type: craft
           plan_path: planning/api-plan
           repository:
-            name: x7c1/palette
+            name: x7c1/palette-demo
             branch: main
         - key: api-plan-review
           type: review
@@ -85,7 +85,7 @@ task:
           type: craft
           plan_path: execution/api-impl
           repository:
-            name: x7c1/palette
+            name: x7c1/palette-demo
             branch: feature/x-api-impl
         - key: api-impl-review
           type: review
@@ -108,7 +108,7 @@ task:
         let mut f = tempfile::NamedTempFile::new().unwrap();
         std::io::Write::write_all(
             &mut f,
-            b"task:\n  key: test\n  children:\n    - key: task-a\n      type: craft\n      repository:\n        name: x7c1/palette\n        branch: main\n",
+            b"task:\n  key: test\n  children:\n    - key: task-a\n      type: craft\n      repository:\n        name: x7c1/palette-demo\n        branch: main\n",
         )
         .unwrap();
 

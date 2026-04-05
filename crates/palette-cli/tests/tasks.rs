@@ -57,7 +57,7 @@ async fn job_api_create_and_list() {
             assignee_id: Some("member-a".to_string()),
             priority: Some(palette_server::api_types::Priority::High),
             repository: Some(palette_server::api_types::Repository {
-                name: "x7c1/palette".to_string(),
+                name: "x7c1/palette-demo".to_string(),
                 branch: "main".to_string(),
             }),
             command: None,

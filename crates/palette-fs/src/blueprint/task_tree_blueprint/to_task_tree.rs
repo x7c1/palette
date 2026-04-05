@@ -326,7 +326,7 @@ task:
           type: craft
           plan_path: planning/api-plan/README.md
           repository:
-            name: x7c1/palette
+            name: x7c1/palette-demo
             branch: main
           children:
             - key: api-plan-review
@@ -339,7 +339,7 @@ task:
           type: craft
           plan_path: execution/api-impl/README.md
           repository:
-            name: x7c1/palette
+            name: x7c1/palette-demo
             branch: main
           children:
             - key: api-impl-review
@@ -423,7 +423,7 @@ task:
     - key: my-craft
       type: craft
       repository:
-        name: x7c1/palette
+        name: x7c1/palette-demo
         branch: main
 "#;
         let blueprint: TaskTreeBlueprint = serde_yaml::from_str(yaml).unwrap();
@@ -444,7 +444,7 @@ task:
     - key: craft-no-review
       type: craft
       repository:
-        name: x7c1/palette
+        name: x7c1/palette-demo
         branch: main
 "#;
         let blueprint: TaskTreeBlueprint = serde_yaml::from_str(yaml).unwrap();

@@ -28,7 +28,7 @@ task:
           type: craft
           plan_path: 2026/feature-x/planning/api-plan/README.md
           repository:
-            name: x7c1/palette
+            name: x7c1/palette-demo
             branch: main
           children:
             - key: api-plan-review
@@ -41,7 +41,7 @@ task:
           type: craft
           plan_path: 2026/feature-x/execution/api-impl/README.md
           repository:
-            name: x7c1/palette
+            name: x7c1/palette-demo
             branch: main
           children:
             - key: api-impl-review
@@ -201,7 +201,7 @@ task:
       type: craft
       plan_path: test/step-a/README.md
       repository:
-        name: x7c1/palette
+        name: x7c1/palette-demo
         branch: main
       children:
         - key: review
@@ -211,7 +211,7 @@ task:
       plan_path: test/step-b/README.md
       depends_on: [step-a]
       repository:
-        name: x7c1/palette
+        name: x7c1/palette-demo
         branch: main
       children:
         - key: review
@@ -436,7 +436,7 @@ task:
       type: craft
       plan_path: test/craft/README.md
       repository:
-        name: x7c1/palette
+        name: x7c1/palette-demo
         branch: main
       children:
         - key: review
@@ -448,7 +448,7 @@ task:
           type: craft
           plan_path: test/step-b/README.md-craft
           repository:
-            name: x7c1/palette
+            name: x7c1/palette-demo
             branch: main
           children:
             - key: review
@@ -577,7 +577,7 @@ task:
       type: craft
       plan_path: test/a-craft/README.md
       repository:
-        name: x7c1/palette
+        name: x7c1/palette-demo
         branch: main
       children:
         - key: review
@@ -587,7 +587,7 @@ task:
       type: craft
       plan_path: test/b-craft/README.md
       repository:
-        name: x7c1/palette
+        name: x7c1/palette-demo
         branch: main
       children:
         - key: review
@@ -900,7 +900,7 @@ task:
       type: craft
       plan_path: test/craft/README.md
       repository:
-        name: x7c1/palette
+        name: x7c1/palette-demo
         branch: main
       children:
         - key: review-1
@@ -1072,7 +1072,7 @@ task:
       type: craft
       plan_path: test/impl/README.md
       repository:
-        name: x7c1/palette
+        name: x7c1/palette-demo
         branch: main
       children:
         - key: review

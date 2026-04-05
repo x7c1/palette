@@ -179,7 +179,7 @@ task:
       type: craft
       plan_path: test/craft
       repository:
-        name: x7c1/palette
+        name: x7c1/palette-demo
         branch: main
       children:
         - key: review-integrate
