@@ -56,9 +56,7 @@ impl BlueprintError {
             BlueprintError::MissingReviewChild { .. } => {
                 "blueprint/missing_review_child".to_string()
             }
-            BlueprintError::MissingRepository { .. } => {
-                "blueprint/missing_repository".to_string()
-            }
+            BlueprintError::MissingRepository { .. } => "blueprint/missing_repository".to_string(),
             BlueprintError::InvalidRepository { cause, .. } => cause.reason_key(),
             BlueprintError::SelfDependency { .. } => "blueprint/self_dependency".to_string(),
             BlueprintError::DuplicateDependency { .. } => {
