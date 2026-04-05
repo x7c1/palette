@@ -2,7 +2,7 @@
 # Manual harness to verify Claude Notification hook delivery on macOS.
 #
 # Usage:
-#   tests/e2e/check-macos-notification-manual.sh
+#   tests/e2e/manual/check-macos-notification-manual.sh
 #
 # Flow:
 #   1) Starts a local hook receiver on 127.0.0.1:$PORT.
