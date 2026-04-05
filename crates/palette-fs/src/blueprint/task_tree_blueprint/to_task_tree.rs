@@ -11,6 +11,8 @@ pub enum BlueprintError {
     InvalidKey(InvalidTaskKey),
     /// Craft task has no review child.
     MissingReviewChild { task_key: String },
+    /// Craft task has no repository.
+    MissingRepository { task_key: String },
     /// Repository has invalid name or branch.
     InvalidRepository {
         task_key: String,
@@ -32,6 +34,9 @@ impl BlueprintError {
             BlueprintError::MissingReviewChild { task_key } => {
                 format!("tasks[key={task_key}].children")
             }
+            BlueprintError::MissingRepository { task_key } => {
+                format!("tasks[key={task_key}].repository")
+            }
             BlueprintError::InvalidRepository { task_key, .. } => {
                 format!("tasks[key={task_key}].repository")
             }
@@ -50,6 +55,9 @@ impl BlueprintError {
             BlueprintError::InvalidKey(e) => e.reason_key(),
             BlueprintError::MissingReviewChild { .. } => {
                 "blueprint/missing_review_child".to_string()
+            }
+            BlueprintError::MissingRepository { .. } => {
+                "blueprint/missing_repository".to_string()
             }
             BlueprintError::InvalidRepository { cause, .. } => cause.reason_key(),
             BlueprintError::SelfDependency { .. } => "blueprint/self_dependency".to_string(),
@@ -177,15 +185,25 @@ fn check_craft_has_review(node: &TaskNode) -> Option<BlueprintError> {
     }
 }
 
-/// Check that the repository (if present) has valid name and branch.
-fn check_repository(node: &TaskNode) -> Option<BlueprintError> {
-    let repo = node.repository.as_ref()?;
-    Repository::parse(&repo.name, &repo.branch)
-        .err()
-        .map(|cause| BlueprintError::InvalidRepository {
+/// Check that craft tasks have a repository and that any repository has valid name and branch.
+fn check_repository(node: &TaskNode) -> Vec<BlueprintError> {
+    let is_craft = node
+        .job_type
+        .is_some_and(|jt| matches!(JobType::from(jt), JobType::Craft));
+
+    match node.repository.as_ref() {
+        None if is_craft => vec![BlueprintError::MissingRepository {
             task_key: node.key.clone(),
-            cause,
-        })
+        }],
+        Some(repo) => match Repository::parse(&repo.name, &repo.branch) {
+            Ok(_) => vec![],
+            Err(cause) => vec![BlueprintError::InvalidRepository {
+                task_key: node.key.clone(),
+                cause,
+            }],
+        },
+        _ => vec![],
+    }
 }
 
 /// Check depends_on for self-dependency and duplicates.
@@ -243,13 +261,12 @@ fn insert_node(
         .clone()
         .or_else(|| parent_plan_path.map(String::from));
 
+    // Safety: validate_tree has already verified that craft tasks have a valid
+    // repository, so the unwrap below cannot fail for validated input.
     let job_detail = node.job_type.map(JobType::from).map(|jt| match jt {
         JobType::Craft => {
-            let repository = node
-                .repository
-                .clone()
-                .and_then(|r| r.parse().ok())
-                .expect("craft task must have a valid repository");
+            let repo_yaml = node.repository.as_ref().unwrap();
+            let repository = Repository::parse(&repo_yaml.name, &repo_yaml.branch).unwrap();
             JobDetail::Craft { repository }
         }
         JobType::Review => JobDetail::Review,
@@ -431,6 +448,27 @@ task:
         assert_eq!(errors.len(), 1);
         assert!(
             matches!(&errors[0], BlueprintError::MissingReviewChild { task_key } if task_key == "my-craft")
+        );
+    }
+
+    #[test]
+    fn rejects_craft_without_repository() {
+        let wf_id = WorkflowId::parse("wf-test").unwrap();
+        let yaml = r#"
+task:
+  key: root
+  children:
+    - key: my-craft
+      type: craft
+      children:
+        - key: my-review
+          type: review
+"#;
+        let blueprint: TaskTreeBlueprint = serde_yaml::from_str(yaml).unwrap();
+        let errors = blueprint.to_task_tree(&wf_id).unwrap_err();
+        assert_eq!(errors.len(), 1);
+        assert!(
+            matches!(&errors[0], BlueprintError::MissingRepository { task_key } if task_key == "my-craft")
         );
     }
 
