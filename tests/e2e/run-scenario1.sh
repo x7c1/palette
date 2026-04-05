@@ -55,7 +55,7 @@ cargo build 2>&1
 # --- Step 2: Start Palette ---
 echo ""
 echo "=== Step 2: Start Palette ==="
-RUST_LOG=info cargo run >> "$LOG_FILE" 2>&1 &
+NO_COLOR=1 RUST_LOG=info cargo run >> "$LOG_FILE" 2>&1 &
 echo $! > "$PID_FILE"
 echo "PID: $(cat "$PID_FILE")"
 
@@ -203,8 +203,8 @@ while true; do
     exit 1
   fi
 
-  # Check completion: workflow completed in Palette log
-  if grep -q "workflow completed" "$LOG_FILE" 2>/dev/null; then
+  # Check completion: workflow completed in Palette log (match current workflow only)
+  if grep -q "workflow completed.*workflow_id=$WORKFLOW_ID" "$LOG_FILE" 2>/dev/null; then
     echo ""
     echo "=== Step 6: Verify final state ==="
     JOBS=$(curl -sf "$PALETTE_URL/jobs" 2>/dev/null || echo "[]")
