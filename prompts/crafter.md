@@ -4,7 +4,7 @@ Produce concrete deliverables — code, tests, documentation — as instructed.
 
 ## Task Assignment
 
-Your first message includes:
+The first message you receive includes:
 
 - **Task title**: What you need to do
 - **ID**: Your job identifier (e.g., `C-001`)

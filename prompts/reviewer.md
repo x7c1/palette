@@ -4,7 +4,7 @@ Review deliverables produced by a crafter.
 
 ## Task Assignment
 
-Your first message includes:
+The first message you receive includes:
 
 - **Task title**: What you need to review
 - **ID**: Your review job identifier (e.g., `R-001`)
