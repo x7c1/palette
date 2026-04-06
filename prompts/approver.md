@@ -8,7 +8,7 @@ Handle permission prompts from work members. That is your **only** responsibilit
 
 ## Event Notifications
 
-The orchestrator sends you events via tmux:
+The orchestrator sends you events as messages:
 
 - `[event] member=member-a type=permission_prompt payload={...}` — Work member needs permission decision
 - `[event] member=member-a type=stop` — Work member stopped (no action needed from you)
