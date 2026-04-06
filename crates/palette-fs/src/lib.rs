@@ -1,7 +1,5 @@
-pub mod blueprint;
-pub use blueprint::{
-    BlueprintError, BlueprintReadError, TaskNode, TaskTreeBlueprint, read_blueprint,
-};
+pub(crate) mod blueprint;
+pub use blueprint::{BlueprintReadError, read_blueprint};
 
 mod adapter;
 pub use adapter::FsBlueprintReader;

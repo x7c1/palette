@@ -1,4 +1,6 @@
-use crate::blueprint::task_tree_blueprint::to_task_tree;
+mod to_task_tree;
+pub(crate) use to_task_tree::BlueprintError;
+
 use palette_core::{InputError, Location};
 use palette_domain::task::TaskTree;
 use palette_domain::workflow::WorkflowId;
@@ -30,7 +32,7 @@ impl BlueprintReader for FsBlueprintReader {
         let blueprint =
             crate::read_blueprint(path).map_err(|e| ReadBlueprintError::Read(Box::new(e)))?;
         let tree = to_task_tree::to_task_tree(&blueprint, workflow_id, &self.known_perspectives)
-            .map_err(|errors: Vec<crate::BlueprintError>| {
+            .map_err(|errors: Vec<BlueprintError>| {
                 ReadBlueprintError::Validation(
                     errors
                         .iter()

@@ -1,4 +1,4 @@
-use super::{TaskNode, TaskTreeBlueprint};
+use crate::blueprint::{TaskNode, TaskTreeBlueprint};
 use palette_domain::job::{
     InvalidRepository, JobDetail, JobType, PerspectiveName, Priority, Repository,
 };
@@ -29,6 +29,7 @@ pub enum BlueprintError {
     /// Perspective name not found in server configuration.
     UnknownPerspective {
         task_key: String,
+        #[allow(dead_code)]
         perspective: String,
     },
 }
@@ -104,7 +105,7 @@ struct Validated<'a> {
 /// the tree using the validated keys. `known_perspectives` is the set
 /// of perspective names defined in the server configuration; any
 /// perspective referenced in the Blueprint must be present in this set.
-pub(crate) fn to_task_tree(
+pub(super) fn to_task_tree(
     blueprint: &TaskTreeBlueprint,
     workflow_id: &WorkflowId,
     known_perspectives: &HashSet<String>,
