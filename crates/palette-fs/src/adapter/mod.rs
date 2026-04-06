@@ -34,8 +34,8 @@ impl BlueprintReader for FsBlueprintReader {
     ) -> Result<TaskTree, ReadBlueprintError> {
         let blueprint =
             crate::read_blueprint(path).map_err(|e| ReadBlueprintError::Read(Box::new(e)))?;
-        let tree = to_task_tree(&blueprint, workflow_id, &self.known_perspectives)
-            .map_err(|errors| {
+        let tree =
+            to_task_tree(&blueprint, workflow_id, &self.known_perspectives).map_err(|errors| {
                 ReadBlueprintError::Validation(
                     errors
                         .iter()
