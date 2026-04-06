@@ -42,7 +42,12 @@ pub(crate) fn format_job_instruction(
         if let Some(perspective) = perspectives.find(perspective_name.as_ref()) {
             msg.push_str("Perspective Priority Paths:\n");
             for (i, path) in perspective.paths.iter().enumerate() {
-                msg.push_str(&format!("{}. {}\n", i + 1, path.as_config_str()));
+                msg.push_str(&format!(
+                    "{}. @{PERSPECTIVE_MOUNT}/{}/{}\n",
+                    i + 1,
+                    path.dir_name,
+                    path.relative_path,
+                ));
             }
         }
     }
