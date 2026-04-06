@@ -56,7 +56,11 @@ pub(crate) fn into_job(row: JobRow) -> crate::Result<Job> {
             JobDetail::Craft { repository }
         }
         JobType::Review => JobDetail::Review {
-            perspective: row.perspective,
+            perspective: row
+                .perspective
+                .map(PerspectiveName::parse)
+                .transpose()
+                .map_err(corrupt_parse)?,
         },
         JobType::ReviewIntegrate => JobDetail::ReviewIntegrate,
         JobType::Orchestrator => JobDetail::Orchestrator {

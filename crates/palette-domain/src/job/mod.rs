@@ -44,6 +44,9 @@ pub use review_status::ReviewStatus;
 mod review_transition;
 pub use review_transition::ReviewTransition;
 
+mod perspective_name;
+pub use perspective_name::{InvalidPerspectiveName, PerspectiveName};
+
 mod plan_path;
 pub use plan_path::{InvalidPlanPath, PlanPath};
 

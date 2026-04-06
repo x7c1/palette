@@ -1,5 +1,7 @@
 use super::{TaskNode, TaskTreeBlueprint};
-use palette_domain::job::{InvalidRepository, JobDetail, JobType, Priority, Repository};
+use palette_domain::job::{
+    InvalidRepository, JobDetail, JobType, PerspectiveName, Priority, Repository,
+};
 use palette_domain::task::{InvalidTaskKey, TaskId, TaskKey, TaskTree, TaskTreeNode};
 use palette_domain::workflow::WorkflowId;
 use std::collections::{HashMap, HashSet};
@@ -275,7 +277,10 @@ fn build_job_detail(node: &TaskNode) -> (Vec<BlueprintError>, Option<JobDetail>)
             (
                 errors,
                 Some(JobDetail::Review {
-                    perspective: node.perspective.clone(),
+                    perspective: node
+                        .perspective
+                        .as_ref()
+                        .map(|s| PerspectiveName::parse(s).expect("validated")),
                 }),
             )
         }
@@ -647,7 +652,7 @@ task:
         let review = tree.find_by_key("my-review").unwrap();
         assert!(matches!(
             &review.job_detail,
-            Some(JobDetail::Review { perspective: Some(p) }) if p == "rust-review"
+            Some(JobDetail::Review { perspective: Some(p) }) if p.as_ref() == "rust-review"
         ));
     }
 

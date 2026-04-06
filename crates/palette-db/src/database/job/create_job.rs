@@ -15,7 +15,7 @@ impl Database {
             .map(super::repository_row::repository_to_json);
 
         let command = req.detail.command();
-        let perspective = req.detail.perspective();
+        let perspective = req.detail.perspective().map(AsRef::as_ref);
 
         let initial_status = JobStatus::todo(job_type);
 

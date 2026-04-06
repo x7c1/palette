@@ -126,7 +126,7 @@ impl Orchestrator {
         let Some(perspective_name) = job_detail.perspective() else {
             return vec![];
         };
-        let Some(perspective) = self.perspectives.find(perspective_name) else {
+        let Some(perspective) = self.perspectives.find(perspective_name.as_ref()) else {
             return vec![];
         };
         perspective

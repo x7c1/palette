@@ -39,7 +39,7 @@ pub(crate) fn format_job_instruction(
     if let Some(perspective_name) = job.detail.perspective() {
         msg.push_str(&format!("\nPerspective: {perspective_name}\n"));
         msg.push_str(&format!("Perspective Documents: {PERSPECTIVE_MOUNT}/\n"));
-        if let Some(perspective) = perspectives.find(perspective_name) {
+        if let Some(perspective) = perspectives.find(perspective_name.as_ref()) {
             msg.push_str("Perspective Priority Paths:\n");
             for (i, path) in perspective.paths.iter().enumerate() {
                 msg.push_str(&format!("{}. {}\n", i + 1, path.as_config_str()));

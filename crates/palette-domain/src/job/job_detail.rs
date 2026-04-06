@@ -1,13 +1,19 @@
-use super::{JobType, Repository};
+use super::{JobType, PerspectiveName, Repository};
 
 /// Job-type-specific fields, replacing the flat `job_type` / `repository` / `command`
 /// combination. Each variant carries only the fields relevant to that job type.
 #[derive(Debug, Clone)]
 pub enum JobDetail {
-    Craft { repository: Repository },
-    Review { perspective: Option<String> },
+    Craft {
+        repository: Repository,
+    },
+    Review {
+        perspective: Option<PerspectiveName>,
+    },
     ReviewIntegrate,
-    Orchestrator { command: Option<String> },
+    Orchestrator {
+        command: Option<String>,
+    },
     Operator,
 }
 
@@ -35,9 +41,9 @@ impl JobDetail {
     }
 
     /// Return the perspective name if this variant carries one.
-    pub fn perspective(&self) -> Option<&str> {
+    pub fn perspective(&self) -> Option<&PerspectiveName> {
         match self {
-            JobDetail::Review { perspective } => perspective.as_deref(),
+            JobDetail::Review { perspective } => perspective.as_ref(),
             JobDetail::Craft { .. }
             | JobDetail::ReviewIntegrate
             | JobDetail::Orchestrator { .. }
