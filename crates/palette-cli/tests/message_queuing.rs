@@ -100,7 +100,7 @@ async fn message_queuing_to_supervisor() {
             palette_domain::job::PlanPath::parse("test/R-A").unwrap(),
             None,
             None,
-            JobDetail::Review,
+            JobDetail::Review { perspective: None },
         ))
         .unwrap();
     let job_b = state
@@ -112,7 +112,7 @@ async fn message_queuing_to_supervisor() {
             palette_domain::job::PlanPath::parse("test/R-B").unwrap(),
             None,
             None,
-            JobDetail::Review,
+            JobDetail::Review { perspective: None },
         ))
         .unwrap();
 

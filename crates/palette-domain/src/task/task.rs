@@ -112,7 +112,10 @@ mod tests {
 
     #[test]
     fn creates_job_request_from_review_task() {
-        let task = test_task(Some(JobDetail::Review), Some("plans/review"));
+        let task = test_task(
+            Some(JobDetail::Review { perspective: None }),
+            Some("plans/review"),
+        );
         let req = task.to_create_job_request().unwrap();
         assert_eq!(req.detail.job_type(), JobType::Review);
     }

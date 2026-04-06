@@ -49,12 +49,25 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         callback_network_mode,
     );
 
+    // Validate perspectives configuration
+    let validated_perspectives = config.perspectives.validate().map_err(|errors| {
+        let msgs: Vec<String> = errors.iter().map(|e| e.to_string()).collect();
+        std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            format!(
+                "perspectives config validation failed:\n  {}",
+                msgs.join("\n  ")
+            ),
+        )
+    })?;
+    let perspective_names = validated_perspectives.names();
+
     // Assemble the Interactor with concrete implementations
     let interactor = Arc::new(Interactor {
         container: Box::new(docker),
         terminal: Box::new(tmux),
         data_store: Box::new(db),
-        blueprint: Box::new(FsBlueprintReader),
+        blueprint: Box::new(FsBlueprintReader::new(perspective_names)),
     });
 
     let (event_tx, event_rx) = tokio::sync::mpsc::unbounded_channel();
@@ -80,6 +93,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         session_name: config.tmux.session_name.clone(),
         cancel_token: tokio_util::sync::CancellationToken::new(),
         workspace_manager,
+        perspectives: validated_perspectives,
         event_tx,
     });
 

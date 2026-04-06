@@ -109,6 +109,7 @@ impl Orchestrator {
         let instruction = crate::orchestrator::handler::job_instruction::format_job_instruction(
             &job,
             Some(round),
+            &self.perspectives,
         );
 
         // Assign the job to the RI (sets assignee_id and transitions to InProgress).

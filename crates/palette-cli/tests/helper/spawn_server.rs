@@ -38,7 +38,7 @@ pub async fn spawn_server(
         container: Box::new(StubContainerRuntime),
         terminal: Box::new(tmux),
         data_store: Box::new(db),
-        blueprint: Box::new(FsBlueprintReader),
+        blueprint: Box::new(FsBlueprintReader::new(std::collections::HashSet::new())),
     });
 
     let (event_tx, event_rx) = tokio::sync::mpsc::unbounded_channel();
@@ -59,6 +59,10 @@ pub async fn spawn_server(
         session_name: session_name.to_string(),
         cancel_token: tokio_util::sync::CancellationToken::new(),
         workspace_manager: palette_orchestrator::workspace::WorkspaceManager::new("data"),
+        perspectives: palette_orchestrator::ValidatedPerspectives {
+            dirs: std::collections::HashMap::new(),
+            perspectives: vec![],
+        },
         event_tx,
     });
     let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel();

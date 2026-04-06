@@ -52,7 +52,7 @@ impl Orchestrator {
         }
 
         // For review tasks, inherit plan_path from parent craft task
-        if matches!(task.job_detail, Some(JobDetail::Review))
+        if matches!(task.job_detail, Some(JobDetail::Review { .. }))
             && task.plan_path.is_none()
             && let Some(ref parent_id) = task.parent_id
             && let Some(parent) = task_store.get_task(parent_id)

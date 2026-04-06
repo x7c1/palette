@@ -2,7 +2,7 @@ use super::{TaskNode, TaskTreeBlueprint};
 use palette_domain::job::{InvalidRepository, JobDetail, JobType, Priority, Repository};
 use palette_domain::task::{InvalidTaskKey, TaskId, TaskKey, TaskTree, TaskTreeNode};
 use palette_domain::workflow::WorkflowId;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 /// Blueprint validation error.
 #[derive(Debug)]
@@ -22,6 +22,13 @@ pub enum BlueprintError {
     SelfDependency { task_key: String },
     /// Same dependency listed more than once.
     DuplicateDependency { task_key: String, dep: String },
+    /// Perspective specified on a non-review task.
+    PerspectiveOnNonReview { task_key: String },
+    /// Perspective name not found in server configuration.
+    UnknownPerspective {
+        task_key: String,
+        perspective: String,
+    },
 }
 
 impl BlueprintError {
@@ -46,6 +53,12 @@ impl BlueprintError {
             BlueprintError::DuplicateDependency { task_key, dep } => {
                 format!("tasks[key={task_key}].depends_on[{dep}]")
             }
+            BlueprintError::PerspectiveOnNonReview { task_key } => {
+                format!("tasks[key={task_key}].perspective")
+            }
+            BlueprintError::UnknownPerspective { task_key, .. } => {
+                format!("tasks[key={task_key}].perspective")
+            }
         }
     }
 
@@ -62,6 +75,12 @@ impl BlueprintError {
             BlueprintError::DuplicateDependency { .. } => {
                 "blueprint/duplicate_dependency".to_string()
             }
+            BlueprintError::PerspectiveOnNonReview { .. } => {
+                "blueprint/perspective_on_non_review".to_string()
+            }
+            BlueprintError::UnknownPerspective { .. } => {
+                "blueprint/unknown_perspective".to_string()
+            }
         }
     }
 }
@@ -74,48 +93,55 @@ struct Validated<'a> {
     job_details: HashMap<&'a str, Option<JobDetail>>,
 }
 
-impl TaskTreeBlueprint {
-    /// Convert this Blueprint into a domain TaskTree.
-    ///
-    /// Task IDs are built as `{workflow_id}:{key_path}` where key_path
-    /// is the `/`-separated path of task keys from root to the node.
-    ///
-    /// Validates all constraints first (collecting all errors), then builds
-    /// the tree using the validated keys.
-    pub fn to_task_tree(&self, workflow_id: &WorkflowId) -> Result<TaskTree, Vec<BlueprintError>> {
-        let validated = validate_tree(&self.task)?;
+/// Convert a Blueprint into a domain TaskTree.
+///
+/// Task IDs are built as `{workflow_id}:{key_path}` where key_path
+/// is the `/`-separated path of task keys from root to the node.
+///
+/// Validates all constraints first (collecting all errors), then builds
+/// the tree using the validated keys. `known_perspectives` is the set
+/// of perspective names defined in the server configuration; any
+/// perspective referenced in the Blueprint must be present in this set.
+pub(crate) fn to_task_tree(
+    blueprint: &TaskTreeBlueprint,
+    workflow_id: &WorkflowId,
+    known_perspectives: &HashSet<String>,
+) -> Result<TaskTree, Vec<BlueprintError>> {
+    let validated = validate_tree(&blueprint.task, known_perspectives)?;
 
-        let root = &self.task;
-        let root_key = &validated.keys[root.key.as_str()];
-        let root_id = TaskId::root(workflow_id, root_key);
-        let mut nodes = HashMap::new();
+    let root = &blueprint.task;
+    let root_key = &validated.keys[root.key.as_str()];
+    let root_id = TaskId::root(workflow_id, root_key);
+    let mut nodes = HashMap::new();
 
-        insert_node(
-            &root_id,
-            None,
-            None,
-            root,
-            &mut nodes,
-            &validated.keys,
-            &validated.job_details,
-        );
-        collect_nodes(
-            &root_id,
-            root.plan_path.as_deref(),
-            &root.children,
-            &mut nodes,
-            &validated.keys,
-            &validated.job_details,
-        );
+    insert_node(
+        &root_id,
+        None,
+        None,
+        root,
+        &mut nodes,
+        &validated.keys,
+        &validated.job_details,
+    );
+    collect_nodes(
+        &root_id,
+        root.plan_path.as_deref(),
+        &root.children,
+        &mut nodes,
+        &validated.keys,
+        &validated.job_details,
+    );
 
-        Ok(TaskTree::new(root_id, nodes))
-    }
+    Ok(TaskTree::new(root_id, nodes))
 }
 
 /// Validate all nodes recursively. Returns parsed keys and job details on
 /// success, or all collected errors on failure.
-fn validate_tree(root: &TaskNode) -> Result<Validated<'_>, Vec<BlueprintError>> {
-    let (errors, keys, job_details) = validate_node(root);
+fn validate_tree<'a>(
+    root: &'a TaskNode,
+    known_perspectives: &HashSet<String>,
+) -> Result<Validated<'a>, Vec<BlueprintError>> {
+    let (errors, keys, job_details) = validate_node(root, known_perspectives);
     if errors.is_empty() {
         Ok(Validated { keys, job_details })
     } else {
@@ -131,26 +157,32 @@ type NodeResult<'a> = (
 );
 
 /// Validate a single node and all its descendants.
-fn validate_node(node: &TaskNode) -> NodeResult<'_> {
+fn validate_node<'a>(node: &'a TaskNode, known_perspectives: &HashSet<String>) -> NodeResult<'a> {
     let (key_errors, keys) = collect_keys(node);
     let structure_errors = check_craft_has_review(node);
     let (repo_errors, job_detail) = build_job_detail(node);
+    let perspective_errors = validate_perspective(node, known_perspectives);
     let dep_errors = validate_depends_on(node);
 
-    let (child_errors, child_keys, child_details) = node.children.iter().map(validate_node).fold(
-        (Vec::new(), HashMap::new(), HashMap::new()),
-        |(mut errs, mut keys, mut details), (ce, ck, cd)| {
-            errs.extend(ce);
-            keys.extend(ck);
-            details.extend(cd);
-            (errs, keys, details)
-        },
-    );
+    let (child_errors, child_keys, child_details) = node
+        .children
+        .iter()
+        .map(|c| validate_node(c, known_perspectives))
+        .fold(
+            (Vec::new(), HashMap::new(), HashMap::new()),
+            |(mut errs, mut keys, mut details), (ce, ck, cd)| {
+                errs.extend(ce);
+                keys.extend(ck);
+                details.extend(cd);
+                (errs, keys, details)
+            },
+        );
 
     let errors = key_errors
         .into_iter()
         .chain(structure_errors)
         .chain(repo_errors)
+        .chain(perspective_errors)
         .chain(dep_errors)
         .chain(child_errors)
         .collect();
@@ -240,7 +272,12 @@ fn build_job_detail(node: &TaskNode) -> (Vec<BlueprintError>, Option<JobDetail>)
         },
         JobType::Review => {
             let errors = validate_repository_format(node);
-            (errors, Some(JobDetail::Review))
+            (
+                errors,
+                Some(JobDetail::Review {
+                    perspective: node.perspective.clone(),
+                }),
+            )
         }
         JobType::ReviewIntegrate => {
             let errors = validate_repository_format(node);
@@ -274,6 +311,39 @@ fn validate_repository_format(node: &TaskNode) -> Vec<BlueprintError> {
             cause,
         }],
     }
+}
+
+/// Validate perspective usage: only allowed on review tasks, and must
+/// reference a known perspective name from server configuration.
+fn validate_perspective(
+    node: &TaskNode,
+    known_perspectives: &HashSet<String>,
+) -> Vec<BlueprintError> {
+    let Some(ref perspective) = node.perspective else {
+        return vec![];
+    };
+
+    let mut errors = vec![];
+
+    // perspective is only allowed on review tasks
+    let is_review = node
+        .job_type
+        .is_some_and(|jt| matches!(JobType::from(jt), JobType::Review));
+    if !is_review {
+        errors.push(BlueprintError::PerspectiveOnNonReview {
+            task_key: node.key.clone(),
+        });
+    }
+
+    // perspective name must exist in server config
+    if !known_perspectives.contains(perspective) {
+        errors.push(BlueprintError::UnknownPerspective {
+            task_key: node.key.clone(),
+            perspective: perspective.clone(),
+        });
+    }
+
+    errors
 }
 
 /// Check depends_on for self-dependency and duplicates.
@@ -386,9 +456,12 @@ fn collect_nodes(
 
 #[cfg(test)]
 mod tests {
-    use super::TaskTreeBlueprint;
     use super::*;
     use palette_domain::job::JobDetail;
+
+    fn no_perspectives() -> HashSet<String> {
+        HashSet::new()
+    }
 
     #[test]
     fn builds_flat_index_from_nested_blueprint() {
@@ -423,7 +496,7 @@ task:
               type: review
 "#;
         let blueprint: TaskTreeBlueprint = serde_yaml::from_str(yaml).unwrap();
-        let tree = blueprint.to_task_tree(&wf_id).unwrap();
+        let tree = to_task_tree(&blueprint, &wf_id, &no_perspectives()).unwrap();
 
         // Root
         assert_eq!(tree.root_id(), &TaskId::parse("wf-test:feature-x").unwrap());
@@ -455,7 +528,7 @@ task:
 
         // api-plan-review (child of api-plan, review type, inherits plan_path)
         let review = tree.find_by_key("api-plan-review").unwrap();
-        assert!(matches!(review.job_detail, Some(JobDetail::Review)));
+        assert!(matches!(review.job_detail, Some(JobDetail::Review { .. })));
         assert_eq!(review.parent_id.as_ref().unwrap(), &api_plan.id);
         assert_eq!(
             review.plan_path.as_deref(),
@@ -482,7 +555,7 @@ task:
     - key: valid-key
 "#;
         let blueprint: TaskTreeBlueprint = serde_yaml::from_str(yaml).unwrap();
-        let errors = blueprint.to_task_tree(&wf_id).unwrap_err();
+        let errors = to_task_tree(&blueprint, &wf_id, &no_perspectives()).unwrap_err();
         assert_eq!(errors.len(), 1);
         assert!(matches!(
             &errors[0],
@@ -504,7 +577,7 @@ task:
         branch: main
 "#;
         let blueprint: TaskTreeBlueprint = serde_yaml::from_str(yaml).unwrap();
-        let errors = blueprint.to_task_tree(&wf_id).unwrap_err();
+        let errors = to_task_tree(&blueprint, &wf_id, &no_perspectives()).unwrap_err();
         assert_eq!(errors.len(), 1);
         assert!(
             matches!(&errors[0], BlueprintError::MissingReviewChild { task_key } if task_key == "my-craft")
@@ -525,7 +598,7 @@ task:
           type: review
 "#;
         let blueprint: TaskTreeBlueprint = serde_yaml::from_str(yaml).unwrap();
-        let errors = blueprint.to_task_tree(&wf_id).unwrap_err();
+        let errors = to_task_tree(&blueprint, &wf_id, &no_perspectives()).unwrap_err();
         assert_eq!(errors.len(), 1);
         assert!(
             matches!(&errors[0], BlueprintError::MissingRepository { task_key } if task_key == "my-craft")
@@ -546,7 +619,85 @@ task:
         branch: main
 "#;
         let blueprint: TaskTreeBlueprint = serde_yaml::from_str(yaml).unwrap();
-        let errors = blueprint.to_task_tree(&wf_id).unwrap_err();
+        let errors = to_task_tree(&blueprint, &wf_id, &no_perspectives()).unwrap_err();
         assert_eq!(errors.len(), 2);
+    }
+
+    #[test]
+    fn perspective_on_review_with_known_name() {
+        let wf_id = WorkflowId::parse("wf-test").unwrap();
+        let yaml = r#"
+task:
+  key: root
+  children:
+    - key: my-craft
+      type: craft
+      plan_path: plans/impl
+      repository:
+        name: x7c1/palette-demo
+        branch: main
+      children:
+        - key: my-review
+          type: review
+          perspective: rust-review
+"#;
+        let perspectives: HashSet<String> = ["rust-review".to_string()].into();
+        let blueprint: TaskTreeBlueprint = serde_yaml::from_str(yaml).unwrap();
+        let tree = to_task_tree(&blueprint, &wf_id, &perspectives).unwrap();
+        let review = tree.find_by_key("my-review").unwrap();
+        assert!(matches!(
+            &review.job_detail,
+            Some(JobDetail::Review { perspective: Some(p) }) if p == "rust-review"
+        ));
+    }
+
+    #[test]
+    fn rejects_perspective_on_non_review_task() {
+        let wf_id = WorkflowId::parse("wf-test").unwrap();
+        let yaml = r#"
+task:
+  key: root
+  children:
+    - key: my-craft
+      type: craft
+      perspective: rust-review
+      repository:
+        name: x7c1/palette-demo
+        branch: main
+      children:
+        - key: my-review
+          type: review
+"#;
+        let perspectives: HashSet<String> = ["rust-review".to_string()].into();
+        let blueprint: TaskTreeBlueprint = serde_yaml::from_str(yaml).unwrap();
+        let errors = to_task_tree(&blueprint, &wf_id, &perspectives).unwrap_err();
+        assert!(errors
+            .iter()
+            .any(|e| matches!(e, BlueprintError::PerspectiveOnNonReview { task_key } if task_key == "my-craft")));
+    }
+
+    #[test]
+    fn rejects_unknown_perspective_name() {
+        let wf_id = WorkflowId::parse("wf-test").unwrap();
+        let yaml = r#"
+task:
+  key: root
+  children:
+    - key: my-craft
+      type: craft
+      plan_path: plans/impl
+      repository:
+        name: x7c1/palette-demo
+        branch: main
+      children:
+        - key: my-review
+          type: review
+          perspective: nonexistent
+"#;
+        let blueprint: TaskTreeBlueprint = serde_yaml::from_str(yaml).unwrap();
+        let errors = to_task_tree(&blueprint, &wf_id, &no_perspectives()).unwrap_err();
+        assert!(errors
+            .iter()
+            .any(|e| matches!(e, BlueprintError::UnknownPerspective { perspective, .. } if perspective == "nonexistent")));
     }
 }

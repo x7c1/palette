@@ -68,7 +68,7 @@ impl Orchestrator {
         // Check if ALL review children of the parent have their jobs Done
         let siblings = task_store.get_child_tasks(parent_id);
         let all_reviews_done = siblings.iter().all(|child| {
-            if !matches!(child.job_detail, Some(JobDetail::Review)) {
+            if !matches!(child.job_detail, Some(JobDetail::Review { .. })) {
                 return true;
             }
             match self.interactor.data_store.get_job_by_task_id(&child.id) {

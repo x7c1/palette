@@ -47,7 +47,7 @@ impl CreateJobRequest {
                     None
                 }
             },
-            palette_domain::job::JobType::Review => Some(JobDetail::Review),
+            palette_domain::job::JobType::Review => Some(JobDetail::Review { perspective: None }),
             palette_domain::job::JobType::ReviewIntegrate => Some(JobDetail::ReviewIntegrate),
             palette_domain::job::JobType::Orchestrator => Some(JobDetail::Orchestrator {
                 command: self.command.clone(),

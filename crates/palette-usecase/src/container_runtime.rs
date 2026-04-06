@@ -90,6 +90,17 @@ pub struct ContainerMounts {
     pub workspace: Option<WorkspaceVolume>,
     pub plan_dir: Option<PlanDirMount>,
     pub artifacts_dir: Option<ArtifactsMount>,
+    pub perspective_dirs: Vec<PerspectiveMount>,
+}
+
+/// A single perspective directory mount (read-only).
+///
+/// Mounted at `/home/agent/perspective/{dir_name}/{relative_path}` inside the container.
+pub struct PerspectiveMount {
+    /// Absolute path on the host to the perspective directory.
+    pub host_path: String,
+    /// Container-side mount target path.
+    pub container_path: String,
 }
 
 /// Workspace bind mount configuration for container creation.

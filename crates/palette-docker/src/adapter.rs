@@ -26,7 +26,15 @@ impl ContainerRuntime for DockerManager {
             host_path: a.host_path,
             read_only: a.read_only,
         });
-        Ok(self.create_container(name, image, role, session_name, ws, pd, ad)?)
+        let pm: Vec<crate::PerspectiveMount> = mounts
+            .perspective_dirs
+            .into_iter()
+            .map(|p| crate::PerspectiveMount {
+                host_path: p.host_path,
+                container_path: p.container_path,
+            })
+            .collect();
+        Ok(self.create_container(name, image, role, session_name, ws, pd, ad, pm)?)
     }
 
     fn start_container(

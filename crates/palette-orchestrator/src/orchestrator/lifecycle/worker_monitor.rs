@@ -504,6 +504,10 @@ mod tests {
             session_name: String::new(),
             cancel_token: tokio_util::sync::CancellationToken::new(),
             workspace_manager: crate::orchestrator::infra::workspace::WorkspaceManager::new("data"),
+            perspectives: crate::ValidatedPerspectives {
+                dirs: std::collections::HashMap::new(),
+                perspectives: vec![],
+            },
             event_tx: tokio::sync::mpsc::unbounded_channel().0,
         })
     }

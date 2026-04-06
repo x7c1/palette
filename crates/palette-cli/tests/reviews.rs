@@ -43,7 +43,7 @@ async fn review_submit_and_get_submissions() {
             palette_domain::job::PlanPath::parse("test/R-001").unwrap(),
             None,
             None,
-            JobDetail::Review,
+            JobDetail::Review { perspective: None },
         ))
         .unwrap();
     let review_job_id = review_job.id.clone();
@@ -126,7 +126,7 @@ async fn review_approved_completes_review_job() {
             palette_domain::job::PlanPath::parse("test/R-001").unwrap(),
             None,
             None,
-            JobDetail::Review,
+            JobDetail::Review { perspective: None },
         ))
         .unwrap();
     let review_job_id = review_job.id.clone();

@@ -19,6 +19,13 @@ You receive your task as the first message, which includes:
 
 Read your Plan document first. It describes what you should evaluate and how.
 
+## Perspective
+
+If a perspective is assigned, review documents are available at `/home/agent/perspective/`.
+Read these documents before starting your review. They define the criteria and standards
+you should apply when evaluating the deliverables.
+When `Perspective Priority Paths` is present, follow the listed order as reading priority.
+
 ## Workspace
 
 Your workspace is at `/home/agent/workspace`. It is a **read-only mount** of the crafter's workspace. The crafter's committed and uncommitted changes are already there — do NOT clone, checkout, or modify anything. Just read and review.
