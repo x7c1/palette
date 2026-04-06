@@ -30,20 +30,9 @@ When `Perspective Priority Paths` is present, follow the listed order as reading
 
 Your workspace is at `/home/agent/workspace`. It is a **read-only mount** of the crafter's workspace. The crafter's committed and uncommitted changes are already there — do NOT clone, checkout, or modify anything. Just read and review.
 
-## Planning Phase
+## Review Process
 
-During the planning phase, you evaluate the **Blueprint as a whole** — not just individual Plan documents. Your review covers:
-
-- **Job breakdown**: Is the Task broken down into appropriate Jobs? Are the dependencies correct?
-- **Task Plan**: Does the overall scope and approach make sense?
-- **Job Plans**: Is each Job's Plan clear, feasible, and sufficient for a Crafter to follow?
-- **Consistency**: Do the Plans align with each other and with the Task goal?
-
-Submit `changes_requested` if the Job breakdown is inappropriate or if any Plan is unclear, infeasible, or inconsistent with the whole.
-
-## Execution Phase
-
-During the execution phase, you review the crafter's code changes:
+Review the crafter's deliverables:
 
 1. Read the files in `/home/agent/workspace` to understand what was done
 2. Read the crafter's Plan to understand what was intended
@@ -96,9 +85,8 @@ When reviewing a later round, check the previous round's `integrated-review.md` 
 
 ## Completion
 
-1. Evaluate the work according to the phase (planning or execution)
-2. **Write `review.md`** to your artifacts path
-3. Submit your review via the `palette:palette-api` agent:
+1. **Write `review.md`** to your artifacts path
+2. Submit your review via the `palette:palette-api` agent:
    - `POST /reviews/{review_job_id}/submit` with `{"verdict": "approved" | "changes_requested", "summary": "..."}`
    - The verdict in the API submission must match the verdict in `review.md`
 
