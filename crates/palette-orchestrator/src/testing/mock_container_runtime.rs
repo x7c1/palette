@@ -1,20 +1,21 @@
 use palette_domain::worker::{ContainerId, WorkerRole, WorkerSessionId};
 use palette_usecase::ContainerRuntime;
 use palette_usecase::container_runtime::ContainerMounts;
+use std::collections::HashSet;
 use std::path::Path;
 use std::sync::Mutex;
 
 type BoxErr = Box<dyn std::error::Error + Send + Sync>;
 
 pub struct MockContainerRuntime {
-    pub running_containers: Mutex<std::collections::HashSet<String>>,
+    pub running_containers: Mutex<HashSet<String>>,
     pub started_containers: Mutex<Vec<ContainerId>>,
 }
 
 impl MockContainerRuntime {
     pub fn new() -> Self {
         Self {
-            running_containers: Mutex::new(std::collections::HashSet::new()),
+            running_containers: Mutex::new(HashSet::new()),
             started_containers: Mutex::new(Vec::new()),
         }
     }

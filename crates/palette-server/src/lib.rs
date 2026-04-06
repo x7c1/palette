@@ -11,14 +11,16 @@ mod routes;
 use axum::Router;
 use palette_domain::server::ServerEvent;
 use palette_usecase::Interactor;
+use std::collections::HashMap;
+use std::path::PathBuf;
 use std::sync::Arc;
 
 pub struct AppState {
     pub interactor: Arc<Interactor>,
     pub max_review_rounds: u32,
-    pub data_dir: std::path::PathBuf,
+    pub data_dir: PathBuf,
     pub event_log: tokio::sync::Mutex<Vec<EventRecord>>,
-    pub pending_permission_events: tokio::sync::Mutex<std::collections::HashMap<String, String>>,
+    pub pending_permission_events: tokio::sync::Mutex<HashMap<String, String>>,
     pub event_tx: tokio::sync::mpsc::UnboundedSender<ServerEvent>,
 }
 

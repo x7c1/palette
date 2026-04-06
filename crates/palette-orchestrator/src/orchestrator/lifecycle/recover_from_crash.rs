@@ -102,6 +102,8 @@ mod tests {
     use palette_domain::job::{CraftStatus, JobStatus, JobType};
     use palette_domain::worker::{WorkerId, WorkerRole, WorkerStatus};
     use palette_usecase::Interactor;
+    use std::collections::HashMap;
+    use tokio_util::sync::CancellationToken;
 
     fn make_orchestrator(
         data_store: MockDataStore,
@@ -130,10 +132,10 @@ mod tests {
             },
             plan_dir: String::new(),
             session_name: String::new(),
-            cancel_token: tokio_util::sync::CancellationToken::new(),
+            cancel_token: CancellationToken::new(),
             workspace_manager: crate::orchestrator::infra::workspace::WorkspaceManager::new("data"),
             perspectives: crate::ValidatedPerspectives {
-                dirs: std::collections::HashMap::new(),
+                dirs: HashMap::new(),
                 perspectives: vec![],
             },
             event_tx: tokio::sync::mpsc::unbounded_channel().0,
