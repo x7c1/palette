@@ -127,9 +127,27 @@ impl std::fmt::Display for PerspectivesValidationError {
 
 impl std::error::Error for PerspectivesValidationError {}
 
+/// Aggregated error for perspective configuration validation.
+#[derive(Debug)]
+pub struct PerspectivesConfigError {
+    pub errors: Vec<PerspectivesValidationError>,
+}
+
+impl std::fmt::Display for PerspectivesConfigError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        writeln!(f, "perspectives config validation failed:")?;
+        for e in &self.errors {
+            writeln!(f, "  {e}")?;
+        }
+        Ok(())
+    }
+}
+
+impl std::error::Error for PerspectivesConfigError {}
+
 impl PerspectivesConfig {
     /// Validate and resolve the raw configuration into runtime-ready form.
-    pub fn validate(&self) -> Result<ValidatedPerspectives, Vec<PerspectivesValidationError>> {
+    pub fn validate(&self) -> Result<ValidatedPerspectives, PerspectivesConfigError> {
         let mut errors = Vec::new();
 
         // Validate and canonicalize directories
@@ -257,7 +275,7 @@ impl PerspectivesConfig {
                 perspectives: validated_perspectives,
             })
         } else {
-            Err(errors)
+            Err(PerspectivesConfigError { errors })
         }
     }
 }
@@ -313,9 +331,9 @@ mod tests {
             perspectives_dirs: [("atelier".to_string(), "/nonexistent/path".to_string())].into(),
             perspectives: vec![],
         };
-        let errors = config.validate().unwrap_err();
+        let err = config.validate().unwrap_err();
         assert!(
-            errors
+            err.errors
                 .iter()
                 .any(|e| matches!(e, PerspectivesValidationError::DirNotFound { .. }))
         );
@@ -337,8 +355,8 @@ mod tests {
                 },
             ],
         };
-        let errors = config.validate().unwrap_err();
-        assert!(errors.iter().any(
+        let err = config.validate().unwrap_err();
+        assert!(err.errors.iter().any(
             |e| matches!(e, PerspectivesValidationError::DuplicateName { name } if name == "dup")
         ));
     }
@@ -353,9 +371,9 @@ mod tests {
                 paths: vec![],
             }],
         };
-        let errors = config.validate().unwrap_err();
+        let err = config.validate().unwrap_err();
         assert!(
-            errors
+            err.errors
                 .iter()
                 .any(|e| matches!(e, PerspectivesValidationError::EmptyPaths { .. }))
         );
@@ -371,13 +389,13 @@ mod tests {
                 paths: vec!["".to_string(), "a:".to_string()],
             }],
         };
-        let errors = config.validate().unwrap_err();
+        let err = config.validate().unwrap_err();
         assert!(
-            errors
+            err.errors
                 .iter()
                 .all(|e| matches!(e, PerspectivesValidationError::EmptyPathEntry { .. }))
         );
-        assert_eq!(errors.len(), 2);
+        assert_eq!(err.errors.len(), 2);
     }
 
     #[test]
@@ -390,9 +408,9 @@ mod tests {
                 paths: vec!["a:axioms".to_string(), "a:axioms".to_string()],
             }],
         };
-        let errors = config.validate().unwrap_err();
+        let err = config.validate().unwrap_err();
         assert!(
-            errors
+            err.errors
                 .iter()
                 .any(|e| matches!(e, PerspectivesValidationError::DuplicatePathEntry { .. }))
         );
@@ -408,8 +426,8 @@ mod tests {
                 paths: vec!["unknown:axioms".to_string()],
             }],
         };
-        let errors = config.validate().unwrap_err();
-        assert!(errors
+        let err = config.validate().unwrap_err();
+        assert!(err.errors
             .iter()
             .any(|e| matches!(e, PerspectivesValidationError::UnknownDir { dir_name, .. } if dir_name == "unknown")));
     }
@@ -424,9 +442,9 @@ mod tests {
                 paths: vec!["a:../../../etc".to_string()],
             }],
         };
-        let errors = config.validate().unwrap_err();
+        let err = config.validate().unwrap_err();
         assert!(
-            errors
+            err.errors
                 .iter()
                 .any(|e| matches!(e, PerspectivesValidationError::PathTraversal { .. }))
         );

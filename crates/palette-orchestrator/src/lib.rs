@@ -6,8 +6,8 @@ pub use docker_config::{CallbackNetwork, DockerConfig};
 
 mod perspectives_config;
 pub use perspectives_config::{
-    PerspectiveEntry, PerspectivePath, PerspectivesConfig, PerspectivesValidationError,
-    ValidatedPerspective, ValidatedPerspectives,
+    PerspectiveEntry, PerspectivePath, PerspectivesConfig, PerspectivesConfigError,
+    PerspectivesValidationError, ValidatedPerspective, ValidatedPerspectives,
 };
 
 mod orchestrator;

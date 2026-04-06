@@ -50,16 +50,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
 
     // Validate perspectives configuration
-    let validated_perspectives = config.perspectives.validate().map_err(|errors| {
-        let msgs: Vec<String> = errors.iter().map(|e| e.to_string()).collect();
-        std::io::Error::new(
-            std::io::ErrorKind::InvalidData,
-            format!(
-                "perspectives config validation failed:\n  {}",
-                msgs.join("\n  ")
-            ),
-        )
-    })?;
+    let validated_perspectives = config.perspectives.validate()?;
     let perspective_names = validated_perspectives.names();
 
     // Assemble the Interactor with concrete implementations
