@@ -34,7 +34,10 @@ pub async fn handle_submit_review(
             id: review_job_id.to_string(),
         })?;
 
-    if !matches!(job.detail, JobDetail::Review | JobDetail::ReviewIntegrate) {
+    if !matches!(
+        job.detail,
+        JobDetail::Review { .. } | JobDetail::ReviewIntegrate
+    ) {
         return Err(Error::BadRequest {
             code: ErrorCode::NotReviewJob,
             errors: vec![InputError {
@@ -75,7 +78,7 @@ pub async fn handle_submit_review(
     if is_integrator {
         let incomplete: Vec<String> = child_tasks
             .iter()
-            .filter(|child| matches!(child.job_detail, Some(JobDetail::Review)))
+            .filter(|child| matches!(child.job_detail, Some(JobDetail::Review { .. })))
             .filter_map(
                 |child| match state.interactor.data_store.get_job_by_task_id(&child.id) {
                     Ok(Some(j)) if j.status.is_done() => None,

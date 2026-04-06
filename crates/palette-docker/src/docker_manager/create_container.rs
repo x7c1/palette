@@ -29,6 +29,14 @@ pub struct ArtifactsMount {
     pub read_only: bool,
 }
 
+/// Perspective directory bind mount (always read-only).
+pub struct PerspectiveMount {
+    /// Absolute path on the host.
+    pub host_path: String,
+    /// Container-side mount target path.
+    pub container_path: String,
+}
+
 impl DockerManager {
     /// Create and start a container for a worker.
     /// Returns the container ID.
@@ -42,6 +50,7 @@ impl DockerManager {
         workspace: Option<WorkspaceVolume>,
         plan_dir: Option<PlanDirMount>,
         artifacts_dir: Option<ArtifactsMount>,
+        perspective_dirs: Vec<PerspectiveMount>,
     ) -> crate::Result<ContainerId> {
         let role_str = role.as_str();
         let labels = [
@@ -163,6 +172,12 @@ impl DockerManager {
             let suffix = if ad.read_only { ":ro" } else { "" };
             args.push("-v".to_string());
             args.push(format!("{}:/home/agent/artifacts{suffix}", ad.host_path));
+        }
+
+        // Perspective directories: read-only mounts for review criteria documents
+        for pm in &perspective_dirs {
+            args.push("-v".to_string());
+            args.push(format!("{}:{}:ro", pm.host_path, pm.container_path));
         }
 
         args.push(image.to_string());

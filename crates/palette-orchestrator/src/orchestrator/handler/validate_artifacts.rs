@@ -13,7 +13,7 @@ impl Orchestrator {
     /// This method provides observability in the orchestrator log.
     pub(super) fn log_review_artifact_status(&self, job_id: &JobId) {
         let job = match self.interactor.data_store.get_job(job_id) {
-            Ok(Some(j)) if matches!(j.detail, JobDetail::Review) => j,
+            Ok(Some(j)) if matches!(j.detail, JobDetail::Review { .. }) => j,
             _ => return,
         };
         let task_state = match self.interactor.data_store.get_task_state(&job.task_id) {
@@ -136,7 +136,7 @@ impl Orchestrator {
         let mut all_present = true;
 
         for child in &children {
-            if !matches!(child.job_detail, Some(JobDetail::Review)) {
+            if !matches!(child.job_detail, Some(JobDetail::Review { .. })) {
                 continue;
             }
             let child_job = match self.interactor.data_store.get_job_by_task_id(&child.id) {
@@ -230,7 +230,7 @@ impl Orchestrator {
         let children = task_store.get_child_tasks(task_id);
         let round = children
             .iter()
-            .filter(|c| matches!(c.job_detail, Some(JobDetail::Review)))
+            .filter(|c| matches!(c.job_detail, Some(JobDetail::Review { .. })))
             .filter_map(|c| match self.interactor.data_store.get_job_by_task_id(&c.id) {
                 Ok(j) => j,
                 Err(e) => {

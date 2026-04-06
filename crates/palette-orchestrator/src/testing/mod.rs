@@ -39,7 +39,7 @@ pub fn make_job(id: &str) -> Job {
         assignee_id: None,
         status: JobStatus::todo(JobType::Review),
         priority: None,
-        detail: palette_domain::job::JobDetail::Review,
+        detail: palette_domain::job::JobDetail::Review { perspective: None },
         created_at: now,
         updated_at: now,
         notes: None,

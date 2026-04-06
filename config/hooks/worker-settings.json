@@ -17,6 +17,8 @@
       "Bash(ls)",
       "Bash(ls *)",
       "Bash(mkdir *)",
+      "Bash(mkdir -p *)",
+      "Bash(xxd *)",
       "Bash(mv *)",
       "Bash(pwd)",
       "Bash(tail *)",

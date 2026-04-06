@@ -1,6 +1,6 @@
 use super::Orchestrator;
 use palette_domain::worker::{WorkerId, WorkerRole, WorkerState, WorkerStatus};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::hash::{Hash, Hasher};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -98,8 +98,7 @@ impl Orchestrator {
         };
 
         // Clean up snapshots/retries for workers that no longer exist
-        let active_ids: std::collections::HashSet<_> =
-            workers.iter().map(|w| w.id.clone()).collect();
+        let active_ids: HashSet<_> = workers.iter().map(|w| w.id.clone()).collect();
         pane_snapshots.retain(|id, _| active_ids.contains(id));
         crash_retries.retain(|id, _| active_ids.contains(id));
 
@@ -474,6 +473,8 @@ mod tests {
     use crate::testing::*;
     use palette_domain::job::Job;
     use palette_usecase::Interactor;
+    use std::collections::HashMap;
+    use tokio_util::sync::CancellationToken;
 
     fn make_orchestrator(
         data_store: MockDataStore,
@@ -502,8 +503,12 @@ mod tests {
             },
             plan_dir: String::new(),
             session_name: String::new(),
-            cancel_token: tokio_util::sync::CancellationToken::new(),
+            cancel_token: CancellationToken::new(),
             workspace_manager: crate::orchestrator::infra::workspace::WorkspaceManager::new("data"),
+            perspectives: crate::ValidatedPerspectives {
+                dirs: HashMap::new(),
+                perspectives: vec![],
+            },
             event_tx: tokio::sync::mpsc::unbounded_channel().0,
         })
     }

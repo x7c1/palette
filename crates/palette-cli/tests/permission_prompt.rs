@@ -87,7 +87,7 @@ async fn sequential_delivery() {
             palette_domain::job::PlanPath::parse("test/R-1").unwrap(),
             None,
             None,
-            JobDetail::Review,
+            JobDetail::Review { perspective: None },
         ))
         .unwrap();
     state
@@ -257,7 +257,7 @@ async fn queued_while_working() {
             palette_domain::job::PlanPath::parse("test/R-1").unwrap(),
             None,
             None,
-            JobDetail::Review,
+            JobDetail::Review { perspective: None },
         ))
         .unwrap();
     state
@@ -491,7 +491,7 @@ async fn concurrent_race() {
             palette_domain::job::PlanPath::parse("test/R-1").unwrap(),
             None,
             None,
-            JobDetail::Review,
+            JobDetail::Review { perspective: None },
         ))
         .unwrap();
     state

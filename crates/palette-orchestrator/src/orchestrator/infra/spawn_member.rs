@@ -1,17 +1,19 @@
 use super::Orchestrator;
-use palette_domain::job::JobType;
+use palette_domain::job::{JobDetail, JobType};
 use palette_domain::task::TaskId;
 use palette_domain::worker::{WorkerId, WorkerRole, WorkerState, WorkerStatus};
 use palette_usecase::container_runtime::{
-    ArtifactsMount, ContainerMounts, PlanDirMount, WorkspaceVolume,
+    ArtifactsMount, ContainerMounts, PerspectiveMount, PlanDirMount, WorkspaceVolume,
 };
 
 impl Orchestrator {
     /// Spawn a member container. Returns the WorkerState for DB registration.
+    #[allow(clippy::too_many_arguments)]
     pub(crate) fn spawn_member(
         &self,
         member_id: &WorkerId,
         job_type: JobType,
+        job_detail: &JobDetail,
         supervisor_id: &WorkerId,
         task_id: &TaskId,
         workspace: Option<WorkspaceVolume>,
@@ -45,6 +47,9 @@ impl Orchestrator {
             read_only: matches!(job_type, JobType::Review | JobType::ReviewIntegrate),
         };
 
+        // Resolve perspective mounts for review jobs
+        let perspective_dirs = self.resolve_perspective_mounts(job_detail);
+
         let container_id = self.interactor.container.create_container(
             member_id_str,
             &self.docker_config.member_image,
@@ -54,6 +59,7 @@ impl Orchestrator {
                 workspace,
                 plan_dir: Some(plan_dir_mount),
                 artifacts_dir,
+                perspective_dirs,
             },
         )?;
         self.interactor.container.start_container(&container_id)?;
@@ -112,5 +118,32 @@ impl Orchestrator {
             session_id: None,
             task_id: task_id.clone(),
         })
+    }
+
+    /// Resolve perspective mounts for a job's detail.
+    /// Returns an empty vec if the job has no perspective.
+    fn resolve_perspective_mounts(&self, job_detail: &JobDetail) -> Vec<PerspectiveMount> {
+        let Some(perspective_name) = job_detail.perspective() else {
+            return vec![];
+        };
+        let Some(perspective) = self.perspectives.find(perspective_name.as_ref()) else {
+            return vec![];
+        };
+        perspective
+            .paths
+            .iter()
+            .filter_map(|pp| {
+                let base_dir = self.perspectives.dirs.get(&pp.dir_name)?;
+                let host_path = base_dir.join(&pp.relative_path);
+                let container_path = format!(
+                    "/home/agent/perspective/{}/{}",
+                    pp.dir_name, pp.relative_path
+                );
+                Some(PerspectiveMount {
+                    host_path: host_path.to_string_lossy().to_string(),
+                    container_path,
+                })
+            })
+            .collect()
     }
 }

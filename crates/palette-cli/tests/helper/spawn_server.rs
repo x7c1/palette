@@ -2,11 +2,16 @@ use super::StubContainerRuntime;
 use palette_db::Database;
 use palette_domain::terminal::TerminalSessionName;
 use palette_fs::FsBlueprintReader;
-use palette_orchestrator::{CallbackNetwork, DockerConfig, Orchestrator};
+use palette_orchestrator::workspace::WorkspaceManager;
+use palette_orchestrator::{CallbackNetwork, DockerConfig, Orchestrator, ValidatedPerspectives};
 use palette_server::{AppState, create_router};
 use palette_tmux::TmuxManager;
 use palette_usecase::Interactor;
+use std::collections::{HashMap, HashSet};
+use std::path::PathBuf;
 use std::sync::Arc;
+use tokio::sync::oneshot;
+use tokio_util::sync::CancellationToken;
 
 fn test_docker_config() -> DockerConfig {
     DockerConfig {
@@ -31,14 +36,14 @@ fn test_docker_config() -> DockerConfig {
 pub async fn spawn_server(
     tmux: TmuxManager,
     session_name: &TerminalSessionName,
-) -> (String, Arc<AppState>, tokio::sync::oneshot::Sender<()>) {
+) -> (String, Arc<AppState>, oneshot::Sender<()>) {
     let db = Database::open_in_memory().unwrap();
 
     let interactor = Arc::new(Interactor {
         container: Box::new(StubContainerRuntime),
         terminal: Box::new(tmux),
         data_store: Box::new(db),
-        blueprint: Box::new(FsBlueprintReader),
+        blueprint: Box::new(FsBlueprintReader::new(HashSet::new())),
     });
 
     let (event_tx, event_rx) = tokio::sync::mpsc::unbounded_channel();
@@ -46,9 +51,9 @@ pub async fn spawn_server(
     let state = Arc::new(AppState {
         interactor: Arc::clone(&interactor),
         max_review_rounds: 5,
-        data_dir: std::path::PathBuf::from("data"),
+        data_dir: PathBuf::from("data"),
         event_log: tokio::sync::Mutex::new(Vec::new()),
-        pending_permission_events: tokio::sync::Mutex::new(std::collections::HashMap::new()),
+        pending_permission_events: tokio::sync::Mutex::new(HashMap::new()),
         event_tx: event_tx.clone(),
     });
 
@@ -57,8 +62,12 @@ pub async fn spawn_server(
         docker_config: test_docker_config(),
         plan_dir: String::new(),
         session_name: session_name.to_string(),
-        cancel_token: tokio_util::sync::CancellationToken::new(),
-        workspace_manager: palette_orchestrator::workspace::WorkspaceManager::new("data"),
+        cancel_token: CancellationToken::new(),
+        workspace_manager: WorkspaceManager::new("data"),
+        perspectives: ValidatedPerspectives {
+            dirs: HashMap::new(),
+            perspectives: vec![],
+        },
         event_tx,
     });
     let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel();

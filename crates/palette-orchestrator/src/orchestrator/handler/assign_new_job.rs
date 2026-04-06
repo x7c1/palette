@@ -66,6 +66,7 @@ impl Orchestrator {
         let member = self.spawn_member(
             &member_id,
             job_type,
+            &job.detail,
             &supervisor_id,
             &job.task_id,
             workspace,
@@ -102,7 +103,7 @@ impl Orchestrator {
         } else {
             None
         };
-        let instruction = format_job_instruction(&job, round);
+        let instruction = format_job_instruction(&job, round, &self.perspectives);
         self.interactor
             .data_store
             .enqueue_message(&member_id, &instruction)?;
@@ -256,7 +257,7 @@ impl Orchestrator {
                     read_only: false,
                 }))
             }
-            JobDetail::Review => {
+            JobDetail::Review { .. } => {
                 let task_id = &job.task_id;
                 let Some(task_state) = self.interactor.data_store.get_task_state(task_id)? else {
                     return Ok(None);

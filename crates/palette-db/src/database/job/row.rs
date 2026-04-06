@@ -6,7 +6,7 @@ use rusqlite::{Connection, params};
 
 use super::super::{corrupt, corrupt_parse, parse_datetime};
 
-pub(crate) const JOB_COLUMNS: &str = "id, task_id, type_id, title, plan_path, assignee_id, status_id, priority_id, repository, command, created_at, updated_at, notes, assigned_at";
+pub(crate) const JOB_COLUMNS: &str = "id, task_id, type_id, title, plan_path, assignee_id, status_id, priority_id, repository, command, perspective, created_at, updated_at, notes, assigned_at";
 
 /// Extract a raw DB row into a JobRow (DB-native types only).
 pub(crate) fn read_job_row(row: &rusqlite::Row) -> rusqlite::Result<JobRow> {
@@ -21,6 +21,7 @@ pub(crate) fn read_job_row(row: &rusqlite::Row) -> rusqlite::Result<JobRow> {
         priority_id: row.get("priority_id")?,
         repository: row.get("repository")?,
         command: row.get("command")?,
+        perspective: row.get("perspective")?,
         created_at: row.get("created_at")?,
         updated_at: row.get("updated_at")?,
         notes: row.get("notes")?,
@@ -54,7 +55,13 @@ pub(crate) fn into_job(row: JobRow) -> crate::Result<Job> {
                 .ok_or_else(|| corrupt(format!("craft job missing repository: {}", row.id)))?;
             JobDetail::Craft { repository }
         }
-        JobType::Review => JobDetail::Review,
+        JobType::Review => JobDetail::Review {
+            perspective: row
+                .perspective
+                .map(PerspectiveName::parse)
+                .transpose()
+                .map_err(corrupt_parse)?,
+        },
         JobType::ReviewIntegrate => JobDetail::ReviewIntegrate,
         JobType::Orchestrator => JobDetail::Orchestrator {
             command: row.command,

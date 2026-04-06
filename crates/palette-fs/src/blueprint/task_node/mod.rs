@@ -20,6 +20,8 @@ pub struct TaskNode {
     pub repository: Option<RepositoryYaml>,
     /// Command to execute for orchestrator tasks.
     pub command: Option<String>,
+    /// Perspective name for review tasks.
+    pub perspective: Option<String>,
     #[serde(default)]
     pub children: Vec<TaskNode>,
     #[serde(default)]

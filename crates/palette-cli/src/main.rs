@@ -6,13 +6,15 @@ use palette_docker::CallbackNetworkMode;
 use palette_docker::DockerManager;
 use palette_domain::terminal::TerminalSessionName;
 use palette_fs::FsBlueprintReader;
-use palette_orchestrator::CallbackNetwork;
-use palette_orchestrator::Orchestrator;
+use palette_orchestrator::workspace::WorkspaceManager;
+use palette_orchestrator::{CallbackNetwork, Orchestrator};
 use palette_server::AppState;
 use palette_tmux::TmuxManager;
 use palette_usecase::Interactor;
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use tokio_util::sync::CancellationToken;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -49,12 +51,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         callback_network_mode,
     );
 
+    // Validate perspectives configuration
+    let validated_perspectives = config.perspectives.validate()?;
+    let perspective_names = validated_perspectives.names();
+
     // Assemble the Interactor with concrete implementations
     let interactor = Arc::new(Interactor {
         container: Box::new(docker),
         terminal: Box::new(tmux),
         data_store: Box::new(db),
-        blueprint: Box::new(FsBlueprintReader),
+        blueprint: Box::new(FsBlueprintReader::new(perspective_names)),
     });
 
     let (event_tx, event_rx) = tokio::sync::mpsc::unbounded_channel();
@@ -62,24 +68,25 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let state = Arc::new(AppState {
         interactor: Arc::clone(&interactor),
         max_review_rounds: config.rules.max_review_rounds,
-        data_dir: std::path::PathBuf::from("data"),
+        data_dir: PathBuf::from("data"),
         event_log: tokio::sync::Mutex::new(Vec::new()),
-        pending_permission_events: tokio::sync::Mutex::new(std::collections::HashMap::new()),
+        pending_permission_events: tokio::sync::Mutex::new(HashMap::new()),
         event_tx: event_tx.clone(),
     });
 
     // Ensure plan_dir exists on the host
     std::fs::create_dir_all(&config.plan_dir)?;
 
-    let workspace_manager = palette_orchestrator::workspace::WorkspaceManager::new("data");
+    let workspace_manager = WorkspaceManager::new("data");
 
     let orchestrator = Arc::new(Orchestrator {
         interactor: Arc::clone(&interactor),
         docker_config: config.docker,
         plan_dir: config.plan_dir.clone(),
         session_name: config.tmux.session_name.clone(),
-        cancel_token: tokio_util::sync::CancellationToken::new(),
+        cancel_token: CancellationToken::new(),
         workspace_manager,
+        perspectives: validated_perspectives,
         event_tx,
     });
 

@@ -4,7 +4,7 @@ pub use rules_config::RulesConfig;
 mod tmux_config;
 pub use tmux_config::TmuxConfig;
 
-use palette_orchestrator::DockerConfig;
+use palette_orchestrator::{DockerConfig, PerspectivesConfig};
 use serde::Deserialize;
 use std::path::Path;
 
@@ -25,6 +25,8 @@ pub struct Config {
     #[serde(default)]
     pub rules: RulesConfig,
     pub docker: DockerConfig,
+    #[serde(default, flatten)]
+    pub perspectives: PerspectivesConfig,
 }
 
 fn default_db_path() -> String {

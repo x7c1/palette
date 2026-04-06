@@ -20,12 +20,12 @@ impl Orchestrator {
             return Ok(result);
         };
 
-        let round = if matches!(job.detail, JobDetail::Review) {
+        let round = if matches!(job.detail, JobDetail::Review { .. }) {
             Some(self.current_review_round(&job)?)
         } else {
             None
         };
-        let instruction = format_job_instruction(&job, round);
+        let instruction = format_job_instruction(&job, round, &self.perspectives);
         self.interactor
             .data_store
             .enqueue_message(member_id, &instruction)?;
@@ -33,7 +33,7 @@ impl Orchestrator {
         // and review (re-review cycle). The transition meaning differs by job type.
         let reactivated_status = match &job.detail {
             JobDetail::Craft { .. } => CraftTransition::RequestChanges.to_job_status(),
-            JobDetail::Review => ReviewTransition::Restart.to_job_status(),
+            JobDetail::Review { .. } => ReviewTransition::Restart.to_job_status(),
             // ReviewIntegrate/Orchestrator/Operator jobs don't have members to reactivate
             JobDetail::ReviewIntegrate | JobDetail::Orchestrator { .. } | JobDetail::Operator => {
                 return Ok(result);

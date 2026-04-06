@@ -93,7 +93,7 @@ mod tests {
                 PlanPath::parse("test/R-001").unwrap(),
                 None,
                 None,
-                JobDetail::Review,
+                JobDetail::Review { perspective: None },
             ))
             .unwrap();
 

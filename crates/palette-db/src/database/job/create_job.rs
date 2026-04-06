@@ -15,14 +15,15 @@ impl Database {
             .map(super::repository_row::repository_to_json);
 
         let command = req.detail.command();
+        let perspective = req.detail.perspective().map(AsRef::as_ref);
 
         let initial_status = JobStatus::todo(job_type);
 
         let tx = conn.transaction()?;
 
         tx.execute(
-            "INSERT INTO jobs (id, task_id, type_id, title, plan_path, assignee_id, status_id, priority_id, repository, command, created_at, updated_at, notes, assigned_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, NULL, NULL)",
+            "INSERT INTO jobs (id, task_id, type_id, title, plan_path, assignee_id, status_id, priority_id, repository, command, perspective, created_at, updated_at, notes, assigned_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, NULL, NULL)",
             params![
                 id.as_ref(),
                 req.task_id.as_ref(),
@@ -34,6 +35,7 @@ impl Database {
                 req.priority.map(crate::lookup::priority_id),
                 repos_json,
                 command,
+                perspective,
                 now_str,
                 now_str,
             ],

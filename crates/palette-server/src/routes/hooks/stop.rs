@@ -154,7 +154,7 @@ fn process_member_jobs(
     for job in &jobs {
         match &job.detail {
             JobDetail::Craft { .. } => handle_craft_stop(state, job),
-            JobDetail::Review => {
+            JobDetail::Review { .. } => {
                 handle_review_stop(state, job, worker_id, supervisor_id, last_message)
             }
             // ReviewIntegrate, Orchestrator, and Operator jobs don't have member workers
