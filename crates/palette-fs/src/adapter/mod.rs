@@ -1,3 +1,4 @@
+mod blueprint_validator;
 mod to_task_tree;
 pub(crate) use to_task_tree::BlueprintError;
 

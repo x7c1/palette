@@ -1,10 +1,10 @@
 use crate::blueprint::{TaskNode, TaskTreeBlueprint};
-use palette_domain::job::{
-    InvalidRepository, JobDetail, JobType, PerspectiveName, Priority, Repository,
-};
+use palette_domain::job::{InvalidRepository, JobDetail, Priority};
 use palette_domain::task::{InvalidTaskKey, TaskId, TaskKey, TaskTree, TaskTreeNode};
 use palette_domain::workflow::WorkflowId;
 use std::collections::{HashMap, HashSet};
+
+use super::blueprint_validator::BlueprintValidator;
 
 /// Blueprint validation error.
 #[derive(Debug)]
@@ -88,29 +88,20 @@ impl BlueprintError {
     }
 }
 
-/// Result of validating a Blueprint node tree.
-struct Validated<'a> {
-    keys: HashMap<&'a str, TaskKey>,
-    /// Parsed job details keyed by the raw task key string.
-    /// `None` value means the node has no job_type (composite-only).
-    job_details: HashMap<&'a str, Option<JobDetail>>,
-}
-
 /// Convert a Blueprint into a domain TaskTree.
 ///
 /// Task IDs are built as `{workflow_id}:{key_path}` where key_path
 /// is the `/`-separated path of task keys from root to the node.
 ///
 /// Validates all constraints first (collecting all errors), then builds
-/// the tree using the validated keys. `known_perspectives` is the set
-/// of perspective names defined in the server configuration; any
-/// perspective referenced in the Blueprint must be present in this set.
+/// the tree using the validated keys.
 pub(super) fn to_task_tree(
     blueprint: &TaskTreeBlueprint,
     workflow_id: &WorkflowId,
     known_perspectives: &HashSet<String>,
 ) -> Result<TaskTree, Vec<BlueprintError>> {
-    let validated = validate_tree(&blueprint.task, known_perspectives)?;
+    let validator = BlueprintValidator::new(known_perspectives);
+    let validated = validator.validate(&blueprint.task)?;
 
     let root = &blueprint.task;
     let root_key = &validated.keys[root.key.as_str()];
@@ -136,253 +127,6 @@ pub(super) fn to_task_tree(
     );
 
     Ok(TaskTree::new(root_id, nodes))
-}
-
-/// Validate all nodes recursively. Returns parsed keys and job details on
-/// success, or all collected errors on failure.
-fn validate_tree<'a>(
-    root: &'a TaskNode,
-    known_perspectives: &HashSet<String>,
-) -> Result<Validated<'a>, Vec<BlueprintError>> {
-    let (errors, keys, job_details) = validate_node(root, known_perspectives);
-    if errors.is_empty() {
-        Ok(Validated { keys, job_details })
-    } else {
-        Err(errors)
-    }
-}
-
-/// Per-node validation result.
-type NodeResult<'a> = (
-    Vec<BlueprintError>,
-    HashMap<&'a str, TaskKey>,
-    HashMap<&'a str, Option<JobDetail>>,
-);
-
-/// Validate a single node and all its descendants.
-fn validate_node<'a>(node: &'a TaskNode, known_perspectives: &HashSet<String>) -> NodeResult<'a> {
-    let (key_errors, keys) = collect_keys(node);
-    let structure_errors = check_craft_has_review(node);
-    let (repo_errors, job_detail) = build_job_detail(node, known_perspectives);
-    let dep_errors = validate_depends_on(node);
-
-    let (child_errors, child_keys, child_details) = node
-        .children
-        .iter()
-        .map(|c| validate_node(c, known_perspectives))
-        .fold(
-            (Vec::new(), HashMap::new(), HashMap::new()),
-            |(mut errs, mut keys, mut details), (ce, ck, cd)| {
-                errs.extend(ce);
-                keys.extend(ck);
-                details.extend(cd);
-                (errs, keys, details)
-            },
-        );
-
-    let errors = key_errors
-        .into_iter()
-        .chain(structure_errors)
-        .chain(repo_errors)
-        .chain(dep_errors)
-        .chain(child_errors)
-        .collect();
-
-    let mut all_keys = keys;
-    all_keys.extend(child_keys);
-
-    let mut all_details = HashMap::new();
-    all_details.insert(node.key.as_str(), job_detail);
-    all_details.extend(child_details);
-
-    (errors, all_keys, all_details)
-}
-
-/// Parse the node's own key and depends_on keys.
-/// Returns (errors, parsed_keys).
-fn collect_keys(node: &TaskNode) -> (Vec<BlueprintError>, HashMap<&str, TaskKey>) {
-    std::iter::once(node.key.as_str())
-        .chain(node.depends_on.iter().map(String::as_str))
-        .fold(
-            (Vec::new(), HashMap::new()),
-            |(mut errors, mut keys), raw| {
-                match TaskKey::parse(raw) {
-                    Ok(k) => {
-                        keys.insert(raw, k);
-                    }
-                    Err(e) => errors.push(BlueprintError::InvalidKey(e)),
-                }
-                (errors, keys)
-            },
-        )
-}
-
-/// Check that craft tasks have at least one review child.
-fn check_craft_has_review(node: &TaskNode) -> Option<BlueprintError> {
-    let job_type = node.job_type?;
-    if !matches!(JobType::from(job_type), JobType::Craft) {
-        return None;
-    }
-    let has_review = node.children.iter().any(|c| {
-        c.job_type.is_some_and(|jt| {
-            matches!(
-                JobType::from(jt),
-                JobType::Review | JobType::ReviewIntegrate
-            )
-        })
-    });
-    if has_review {
-        None
-    } else {
-        Some(BlueprintError::MissingReviewChild {
-            task_key: node.key.clone(),
-        })
-    }
-}
-
-/// Validate repository constraints and build [`JobDetail`] for this node.
-///
-/// Returns (errors, parsed job detail). On error the detail is `None`; the
-/// caller still collects the error so that all problems are reported at once.
-fn build_job_detail(
-    node: &TaskNode,
-    known_perspectives: &HashSet<String>,
-) -> (Vec<BlueprintError>, Option<JobDetail>) {
-    let Some(job_type_yaml) = node.job_type else {
-        // Validate repository format even for non-typed nodes.
-        let mut errors = validate_repository_format(node);
-        errors.extend(validate_perspective_on_non_review(node));
-        return (errors, None);
-    };
-
-    let job_type = JobType::from(job_type_yaml);
-    match job_type {
-        JobType::Craft => {
-            let mut errors: Vec<BlueprintError> = validate_perspective_on_non_review(node)
-                .into_iter()
-                .collect();
-            match node.repository.as_ref() {
-                None => {
-                    errors.push(BlueprintError::MissingRepository {
-                        task_key: node.key.clone(),
-                    });
-                    (errors, None)
-                }
-                Some(repo) => match Repository::parse(&repo.name, &repo.branch) {
-                    Ok(repository) => (errors, Some(JobDetail::Craft { repository })),
-                    Err(cause) => {
-                        errors.push(BlueprintError::InvalidRepository {
-                            task_key: node.key.clone(),
-                            cause,
-                        });
-                        (errors, None)
-                    }
-                },
-            }
-        }
-        JobType::Review => {
-            let mut errors = validate_repository_format(node);
-            let perspective = build_perspective(node, known_perspectives, &mut errors);
-            (errors, Some(JobDetail::Review { perspective }))
-        }
-        JobType::ReviewIntegrate => {
-            let mut errors = validate_repository_format(node);
-            errors.extend(validate_perspective_on_non_review(node));
-            (errors, Some(JobDetail::ReviewIntegrate))
-        }
-        JobType::Orchestrator => {
-            let mut errors = validate_repository_format(node);
-            errors.extend(validate_perspective_on_non_review(node));
-            (
-                errors,
-                Some(JobDetail::Orchestrator {
-                    command: node.command.clone(),
-                }),
-            )
-        }
-        JobType::Operator => {
-            let mut errors = validate_repository_format(node);
-            errors.extend(validate_perspective_on_non_review(node));
-            (errors, Some(JobDetail::Operator))
-        }
-    }
-}
-
-/// Parse and validate perspective for a review task node.
-/// On validation failure, pushes errors and returns `None`.
-fn build_perspective(
-    node: &TaskNode,
-    known_perspectives: &HashSet<String>,
-    errors: &mut Vec<BlueprintError>,
-) -> Option<PerspectiveName> {
-    let raw = node.perspective.as_ref()?;
-
-    if !known_perspectives.contains(raw) {
-        errors.push(BlueprintError::UnknownPerspective {
-            task_key: node.key.clone(),
-            perspective: raw.clone(),
-        });
-        return None;
-    }
-
-    match PerspectiveName::parse(raw) {
-        Ok(name) => Some(name),
-        Err(_) => {
-            errors.push(BlueprintError::UnknownPerspective {
-                task_key: node.key.clone(),
-                perspective: raw.clone(),
-            });
-            None
-        }
-    }
-}
-
-/// If a non-review node has a `perspective` field, report an error.
-fn validate_perspective_on_non_review(node: &TaskNode) -> Option<BlueprintError> {
-    node.perspective
-        .as_ref()
-        .map(|_| BlueprintError::PerspectiveOnNonReview {
-            task_key: node.key.clone(),
-        })
-}
-
-/// Validate repository format (if present) for non-craft nodes.
-fn validate_repository_format(node: &TaskNode) -> Vec<BlueprintError> {
-    let Some(repo) = node.repository.as_ref() else {
-        return vec![];
-    };
-    match Repository::parse(&repo.name, &repo.branch) {
-        Ok(_) => vec![],
-        Err(cause) => vec![BlueprintError::InvalidRepository {
-            task_key: node.key.clone(),
-            cause,
-        }],
-    }
-}
-
-/// Check depends_on for self-dependency and duplicates.
-fn validate_depends_on(node: &TaskNode) -> Vec<BlueprintError> {
-    use std::collections::HashSet;
-
-    node.depends_on
-        .iter()
-        .fold(
-            (Vec::new(), HashSet::new()),
-            |(mut errors, mut seen), dep| {
-                if dep == &node.key {
-                    errors.push(BlueprintError::SelfDependency {
-                        task_key: node.key.clone(),
-                    });
-                } else if !seen.insert(dep.as_str()) {
-                    errors.push(BlueprintError::DuplicateDependency {
-                        task_key: node.key.clone(),
-                        dep: dep.clone(),
-                    });
-                }
-                (errors, seen)
-            },
-        )
-        .0
 }
 
 fn insert_node(
