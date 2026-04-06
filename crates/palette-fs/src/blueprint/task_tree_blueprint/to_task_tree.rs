@@ -162,8 +162,7 @@ type NodeResult<'a> = (
 fn validate_node<'a>(node: &'a TaskNode, known_perspectives: &HashSet<String>) -> NodeResult<'a> {
     let (key_errors, keys) = collect_keys(node);
     let structure_errors = check_craft_has_review(node);
-    let (repo_errors, job_detail) = build_job_detail(node);
-    let perspective_errors = validate_perspective(node, known_perspectives);
+    let (repo_errors, job_detail) = build_job_detail(node, known_perspectives);
     let dep_errors = validate_depends_on(node);
 
     let (child_errors, child_keys, child_details) = node
@@ -184,7 +183,6 @@ fn validate_node<'a>(node: &'a TaskNode, known_perspectives: &HashSet<String>) -
         .into_iter()
         .chain(structure_errors)
         .chain(repo_errors)
-        .chain(perspective_errors)
         .chain(dep_errors)
         .chain(child_errors)
         .collect();
@@ -245,51 +243,55 @@ fn check_craft_has_review(node: &TaskNode) -> Option<BlueprintError> {
 ///
 /// Returns (errors, parsed job detail). On error the detail is `None`; the
 /// caller still collects the error so that all problems are reported at once.
-fn build_job_detail(node: &TaskNode) -> (Vec<BlueprintError>, Option<JobDetail>) {
+fn build_job_detail(
+    node: &TaskNode,
+    known_perspectives: &HashSet<String>,
+) -> (Vec<BlueprintError>, Option<JobDetail>) {
     let Some(job_type_yaml) = node.job_type else {
         // Validate repository format even for non-typed nodes.
-        let errors = validate_repository_format(node);
+        let mut errors = validate_repository_format(node);
+        errors.extend(validate_perspective_on_non_review(node));
         return (errors, None);
     };
 
     let job_type = JobType::from(job_type_yaml);
     match job_type {
-        JobType::Craft => match node.repository.as_ref() {
-            None => (
-                vec![BlueprintError::MissingRepository {
-                    task_key: node.key.clone(),
-                }],
-                None,
-            ),
-            Some(repo) => match Repository::parse(&repo.name, &repo.branch) {
-                Ok(repository) => (vec![], Some(JobDetail::Craft { repository })),
-                Err(cause) => (
-                    vec![BlueprintError::InvalidRepository {
+        JobType::Craft => {
+            let mut errors: Vec<BlueprintError> = validate_perspective_on_non_review(node)
+                .into_iter()
+                .collect();
+            match node.repository.as_ref() {
+                None => {
+                    errors.push(BlueprintError::MissingRepository {
                         task_key: node.key.clone(),
-                        cause,
-                    }],
-                    None,
-                ),
-            },
-        },
+                    });
+                    (errors, None)
+                }
+                Some(repo) => match Repository::parse(&repo.name, &repo.branch) {
+                    Ok(repository) => (errors, Some(JobDetail::Craft { repository })),
+                    Err(cause) => {
+                        errors.push(BlueprintError::InvalidRepository {
+                            task_key: node.key.clone(),
+                            cause,
+                        });
+                        (errors, None)
+                    }
+                },
+            }
+        }
         JobType::Review => {
-            let errors = validate_repository_format(node);
-            (
-                errors,
-                Some(JobDetail::Review {
-                    perspective: node
-                        .perspective
-                        .as_ref()
-                        .map(|s| PerspectiveName::parse(s).expect("validated")),
-                }),
-            )
+            let mut errors = validate_repository_format(node);
+            let perspective = build_perspective(node, known_perspectives, &mut errors);
+            (errors, Some(JobDetail::Review { perspective }))
         }
         JobType::ReviewIntegrate => {
-            let errors = validate_repository_format(node);
+            let mut errors = validate_repository_format(node);
+            errors.extend(validate_perspective_on_non_review(node));
             (errors, Some(JobDetail::ReviewIntegrate))
         }
         JobType::Orchestrator => {
-            let errors = validate_repository_format(node);
+            let mut errors = validate_repository_format(node);
+            errors.extend(validate_perspective_on_non_review(node));
             (
                 errors,
                 Some(JobDetail::Orchestrator {
@@ -298,10 +300,49 @@ fn build_job_detail(node: &TaskNode) -> (Vec<BlueprintError>, Option<JobDetail>)
             )
         }
         JobType::Operator => {
-            let errors = validate_repository_format(node);
+            let mut errors = validate_repository_format(node);
+            errors.extend(validate_perspective_on_non_review(node));
             (errors, Some(JobDetail::Operator))
         }
     }
+}
+
+/// Parse and validate perspective for a review task node.
+/// On validation failure, pushes errors and returns `None`.
+fn build_perspective(
+    node: &TaskNode,
+    known_perspectives: &HashSet<String>,
+    errors: &mut Vec<BlueprintError>,
+) -> Option<PerspectiveName> {
+    let raw = node.perspective.as_ref()?;
+
+    if !known_perspectives.contains(raw) {
+        errors.push(BlueprintError::UnknownPerspective {
+            task_key: node.key.clone(),
+            perspective: raw.clone(),
+        });
+        return None;
+    }
+
+    match PerspectiveName::parse(raw) {
+        Ok(name) => Some(name),
+        Err(_) => {
+            errors.push(BlueprintError::UnknownPerspective {
+                task_key: node.key.clone(),
+                perspective: raw.clone(),
+            });
+            None
+        }
+    }
+}
+
+/// If a non-review node has a `perspective` field, report an error.
+fn validate_perspective_on_non_review(node: &TaskNode) -> Option<BlueprintError> {
+    node.perspective
+        .as_ref()
+        .map(|_| BlueprintError::PerspectiveOnNonReview {
+            task_key: node.key.clone(),
+        })
 }
 
 /// Validate repository format (if present) for non-craft nodes.
@@ -316,39 +357,6 @@ fn validate_repository_format(node: &TaskNode) -> Vec<BlueprintError> {
             cause,
         }],
     }
-}
-
-/// Validate perspective usage: only allowed on review tasks, and must
-/// reference a known perspective name from server configuration.
-fn validate_perspective(
-    node: &TaskNode,
-    known_perspectives: &HashSet<String>,
-) -> Vec<BlueprintError> {
-    let Some(ref perspective) = node.perspective else {
-        return vec![];
-    };
-
-    let mut errors = vec![];
-
-    // perspective is only allowed on review tasks
-    let is_review = node
-        .job_type
-        .is_some_and(|jt| matches!(JobType::from(jt), JobType::Review));
-    if !is_review {
-        errors.push(BlueprintError::PerspectiveOnNonReview {
-            task_key: node.key.clone(),
-        });
-    }
-
-    // perspective name must exist in server config
-    if !known_perspectives.contains(perspective) {
-        errors.push(BlueprintError::UnknownPerspective {
-            task_key: node.key.clone(),
-            perspective: perspective.clone(),
-        });
-    }
-
-    errors
 }
 
 /// Check depends_on for self-dependency and duplicates.
