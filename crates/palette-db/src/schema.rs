@@ -67,7 +67,6 @@ CREATE TABLE IF NOT EXISTS jobs (
     priority_id INTEGER,
     repository TEXT,
     command TEXT,
-    pr_url TEXT,
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL,
     notes TEXT,

@@ -6,6 +6,8 @@ use rusqlite::{Connection, params};
 
 use super::super::{corrupt, corrupt_parse, parse_datetime};
 
+pub(crate) const JOB_COLUMNS: &str = "id, task_id, type_id, title, plan_path, assignee_id, status_id, priority_id, repository, command, created_at, updated_at, notes, assigned_at";
+
 /// Extract a raw DB row into a JobRow (DB-native types only).
 pub(crate) fn read_job_row(row: &rusqlite::Row) -> rusqlite::Result<JobRow> {
     Ok(JobRow {
@@ -19,7 +21,6 @@ pub(crate) fn read_job_row(row: &rusqlite::Row) -> rusqlite::Result<JobRow> {
         priority_id: row.get("priority_id")?,
         repository: row.get("repository")?,
         command: row.get("command")?,
-        pr_url: row.get("pr_url")?,
         created_at: row.get("created_at")?,
         updated_at: row.get("updated_at")?,
         notes: row.get("notes")?,
@@ -47,10 +48,23 @@ pub(crate) fn into_job(row: JobRow) -> crate::Result<Job> {
     let title = Title::parse(row.title).map_err(corrupt_parse)?;
     let plan_path = PlanPath::parse(row.plan_path).map_err(corrupt_parse)?;
 
+    let detail = match job_type {
+        JobType::Craft => {
+            let repository = repository
+                .ok_or_else(|| corrupt(format!("craft job missing repository: {}", row.id)))?;
+            JobDetail::Craft { repository }
+        }
+        JobType::Review => JobDetail::Review,
+        JobType::ReviewIntegrate => JobDetail::ReviewIntegrate,
+        JobType::Orchestrator => JobDetail::Orchestrator {
+            command: row.command,
+        },
+        JobType::Operator => JobDetail::Operator,
+    };
+
     Ok(Job {
         id: JobId::parse(row.id).map_err(corrupt_parse)?,
         task_id,
-        job_type,
         title,
         plan_path,
         assignee_id: row
@@ -60,9 +74,7 @@ pub(crate) fn into_job(row: JobRow) -> crate::Result<Job> {
             .map_err(corrupt_parse)?,
         status,
         priority,
-        repository,
-        command: row.command,
-        pr_url: row.pr_url,
+        detail,
         created_at: parse_datetime(&row.created_at),
         updated_at: parse_datetime(&row.updated_at),
         notes: row.notes,
@@ -72,10 +84,7 @@ pub(crate) fn into_job(row: JobRow) -> crate::Result<Job> {
 
 /// Query a single job by ID.
 pub(crate) fn query_job(conn: &Connection, id: &JobId) -> crate::Result<Option<Job>> {
-    let mut stmt = conn.prepare(
-        "SELECT id, task_id, type_id, title, plan_path, assignee_id, status_id, priority_id, repository, command, pr_url, created_at, updated_at, notes, assigned_at
-         FROM jobs WHERE id = ?1",
-    )?;
+    let mut stmt = conn.prepare(&format!("SELECT {JOB_COLUMNS} FROM jobs WHERE id = ?1"))?;
     stmt.query_map(params![id.as_ref()], read_job_row)?
         .next()
         .transpose()?

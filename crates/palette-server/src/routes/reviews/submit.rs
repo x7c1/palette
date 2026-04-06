@@ -7,7 +7,7 @@ use axum::{
     extract::{Path, State},
     http::StatusCode,
 };
-use palette_domain::job::{JobId, JobType};
+use palette_domain::job::{JobDetail, JobId};
 use palette_domain::server::ServerEvent;
 use std::sync::Arc;
 
@@ -34,7 +34,7 @@ pub async fn handle_submit_review(
             id: review_job_id.to_string(),
         })?;
 
-    if !matches!(job.job_type, JobType::Review | JobType::ReviewIntegrate) {
+    if !matches!(job.detail, JobDetail::Review | JobDetail::ReviewIntegrate) {
         return Err(Error::BadRequest {
             code: ErrorCode::NotReviewJob,
             errors: vec![InputError {
@@ -49,7 +49,7 @@ pub async fn handle_submit_review(
     // or a regular reviewer submission. Must happen before submit_review so we can
     // reject integrator submissions when child reviewers are incomplete (preventing
     // the submission from being recorded and avoiding round number drift).
-    let is_integrator = job.job_type == JobType::ReviewIntegrate;
+    let is_integrator = matches!(job.detail, JobDetail::ReviewIntegrate);
     let child_tasks = if is_integrator {
         match state.interactor.data_store.get_task_state(&job.task_id) {
             Ok(Some(ts)) => match state.interactor.create_task_store(&ts.workflow_id) {
@@ -75,7 +75,7 @@ pub async fn handle_submit_review(
     if is_integrator {
         let incomplete: Vec<String> = child_tasks
             .iter()
-            .filter(|child| child.job_type == Some(JobType::Review))
+            .filter(|child| matches!(child.job_detail, Some(JobDetail::Review)))
             .filter_map(
                 |child| match state.interactor.data_store.get_job_by_task_id(&child.id) {
                     Ok(Some(j)) if j.status.is_done() => None,
@@ -205,7 +205,7 @@ fn find_reviewer_artifact_path(
             .data_store
             .get_job_by_task_id(&current_id)
             .ok()??;
-        if j.job_type == JobType::Craft {
+        if matches!(j.detail, JobDetail::Craft { .. }) {
             break j;
         }
         current_id = task_store.get_task(&current_id)?.parent_id?;

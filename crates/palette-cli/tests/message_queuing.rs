@@ -1,8 +1,8 @@
 mod helper;
 
-use helper::{CreateJobRequest, CreateTaskRequest, JobStatus, JobType, ReviewStatus};
+use helper::{CreateJobRequest, CreateTaskRequest, JobDetail, JobStatus, JobType, ReviewStatus};
 use helper::{WorkerRole, WorkerStatus, WorkflowId};
-use helper::{capture_pane, insert_worker, jid, spawn_server, test_session_name_with_guard, wid};
+use helper::{capture_pane, insert_worker, spawn_server, test_session_name_with_guard, wid};
 use palette_domain::task::TaskId;
 use palette_tmux::TmuxManager;
 use serde_json::json;
@@ -91,56 +91,50 @@ async fn message_queuing_to_supervisor() {
     let client = reqwest::Client::new();
 
     // Create review jobs and assign them
-    state
+    let job_a = state
         .interactor
         .data_store
         .create_job(&CreateJobRequest::new(
-            Some(jid("R-A")),
             task_a,
-            JobType::Review,
             palette_domain::job::Title::parse("Review A").unwrap(),
             palette_domain::job::PlanPath::parse("test/R-A").unwrap(),
             None,
             None,
-            None,
-            None,
+            JobDetail::Review,
         ))
         .unwrap();
-    state
+    let job_b = state
         .interactor
         .data_store
         .create_job(&CreateJobRequest::new(
-            Some(jid("R-B")),
             task_b,
-            JobType::Review,
             palette_domain::job::Title::parse("Review B").unwrap(),
             palette_domain::job::PlanPath::parse("test/R-B").unwrap(),
             None,
             None,
-            None,
-            None,
+            JobDetail::Review,
         ))
         .unwrap();
 
     state
         .interactor
         .data_store
-        .update_job_status(&jid("R-A"), JobStatus::Review(ReviewStatus::Todo))
+        .update_job_status(&job_a.id, JobStatus::Review(ReviewStatus::Todo))
         .unwrap();
     state
         .interactor
         .data_store
-        .assign_job(&jid("R-A"), &wid("member-a"), JobType::Review)
+        .assign_job(&job_a.id, &wid("member-a"), JobType::Review)
         .unwrap();
     state
         .interactor
         .data_store
-        .update_job_status(&jid("R-B"), JobStatus::Review(ReviewStatus::Todo))
+        .update_job_status(&job_b.id, JobStatus::Review(ReviewStatus::Todo))
         .unwrap();
     state
         .interactor
         .data_store
-        .assign_job(&jid("R-B"), &wid("member-b"), JobType::Review)
+        .assign_job(&job_b.id, &wid("member-b"), JobType::Review)
         .unwrap();
 
     // --- Both review members stop while review integrator is Working ---
@@ -196,7 +190,10 @@ async fn message_queuing_to_supervisor() {
 
     let content = capture_pane(&ri_pane);
     assert!(
-        content.contains("[review] member=member-a job=R-A type=review_complete"),
+        content.contains(&format!(
+            "[review] member=member-a job={} type=review_complete",
+            job_a.id
+        )),
         "first stop should deliver member-a review, got: {content}"
     );
 
@@ -225,7 +222,10 @@ async fn message_queuing_to_supervisor() {
 
     let content = capture_pane(&ri_pane);
     assert!(
-        content.contains("[review] member=member-b job=R-B type=review_complete"),
+        content.contains(&format!(
+            "[review] member=member-b job={} type=review_complete",
+            job_b.id
+        )),
         "second stop should deliver member-b review, got: {content}"
     );
 

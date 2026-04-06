@@ -12,10 +12,6 @@ pub fn test_db() -> Database {
     Database::open_in_memory().unwrap()
 }
 
-pub fn jid(s: &str) -> JobId {
-    JobId::parse(s).unwrap()
-}
-
 pub fn wid(s: &str) -> WorkerId {
     WorkerId::parse(s).unwrap()
 }
@@ -55,34 +51,30 @@ pub fn setup_worker(db: &Database, worker_id: &str) {
     .unwrap();
 }
 
-pub fn create_craft(db: &Database, id: &str, priority: Option<Priority>) {
+pub fn create_craft(db: &Database, id: &str, priority: Option<Priority>) -> Job {
     let task_id = setup_task(db, &format!("wf-test:task-{id}"));
     db.create_job(&CreateJobRequest::new(
-        Some(jid(id)),
         task_id,
-        JobType::Craft,
         Title::parse(format!("Job {id}")).unwrap(),
         PlanPath::parse(format!("test/{id}")).unwrap(),
         None,
         priority,
-        None,
-        None,
+        JobDetail::Craft {
+            repository: Repository::parse("x7c1/palette-demo", "main").unwrap(),
+        },
     ))
-    .unwrap();
+    .unwrap()
 }
 
-pub fn create_review(db: &Database, id: &str) {
+pub fn create_review(db: &Database, id: &str) -> Job {
     let task_id = setup_task(db, &format!("wf-test:task-{id}"));
     db.create_job(&CreateJobRequest::new(
-        Some(jid(id)),
         task_id,
-        JobType::Review,
         Title::parse(format!("Review {id}")).unwrap(),
         PlanPath::parse(format!("test/{id}")).unwrap(),
         None,
         None,
-        None,
-        None,
+        JobDetail::Review,
     ))
-    .unwrap();
+    .unwrap()
 }

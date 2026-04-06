@@ -1,5 +1,5 @@
 use super::super::*;
-use super::row::{into_job, read_job_row};
+use super::row::{JOB_COLUMNS, into_job, read_job_row};
 
 impl Database {
     /// Find jobs that are assignable: status = 'todo' with no assignee_id.
@@ -20,8 +20,8 @@ impl Database {
         let operator_todo = crate::lookup::job_status_id(palette_domain::job::JobStatus::Operator(
             palette_domain::job::MechanizedStatus::Todo,
         ));
-        let mut stmt = conn.prepare(
-            "SELECT t.id, t.task_id, t.type_id, t.title, t.plan_path, t.assignee_id, t.status_id, t.priority_id, t.repository, t.command, t.pr_url, t.created_at, t.updated_at, t.notes, t.assigned_at
+        let mut stmt = conn.prepare(&format!(
+            "SELECT {JOB_COLUMNS}
              FROM jobs t
              WHERE t.status_id IN (?1, ?2, ?3, ?4) AND t.assignee_id IS NULL
              ORDER BY
@@ -30,8 +30,8 @@ impl Database {
                  WHEN 2 THEN 1
                  WHEN 3 THEN 2
                  ELSE 3
-               END",
-        )?;
+               END"
+        ))?;
         stmt.query_map(
             params![craft_todo, review_todo, orchestrator_todo, operator_todo],
             read_job_row,
@@ -51,36 +51,36 @@ mod tests {
     fn find_assignable_craft_jobs() {
         let db = test_db();
         setup_worker(&db, "m-a");
-        create_craft(&db, "C-001", Some(Priority::High));
-        create_craft(&db, "C-002", Some(Priority::Low));
+        let craft1 = create_craft(&db, "C-001", Some(Priority::High));
+        let craft2 = create_craft(&db, "C-002", Some(Priority::Low));
 
         // Both start as Todo — assignable immediately
         let assignable = db.find_assignable_jobs().unwrap();
         assert_eq!(assignable.len(), 2);
-        assert_eq!(assignable[0].id, jid("C-001")); // high priority first
-        assert_eq!(assignable[1].id, jid("C-002")); // low priority second
+        assert_eq!(assignable[0].id, craft1.id); // high priority first
+        assert_eq!(assignable[1].id, craft2.id); // low priority second
 
         // Assign one — only the other remains assignable
-        db.assign_job(&jid("C-001"), &wid("m-a"), JobType::Craft)
+        db.assign_job(&craft1.id, &wid("m-a"), JobType::Craft)
             .unwrap();
         let assignable = db.find_assignable_jobs().unwrap();
         assert_eq!(assignable.len(), 1);
-        assert_eq!(assignable[0].id, jid("C-002"));
+        assert_eq!(assignable[0].id, craft2.id);
     }
 
     #[test]
     fn find_assignable_review_jobs() {
         let db = test_db();
         setup_worker(&db, "m-r");
-        create_review(&db, "R-001");
+        let review = create_review(&db, "R-001");
 
         // Review starts as Todo — assignable
         let assignable = db.find_assignable_jobs().unwrap();
         assert_eq!(assignable.len(), 1);
-        assert_eq!(assignable[0].id, jid("R-001"));
+        assert_eq!(assignable[0].id, review.id);
 
         // Assign review — no longer assignable
-        db.assign_job(&jid("R-001"), &wid("m-r"), JobType::Review)
+        db.assign_job(&review.id, &wid("m-r"), JobType::Review)
             .unwrap();
         let assignable = db.find_assignable_jobs().unwrap();
         assert!(assignable.is_empty());

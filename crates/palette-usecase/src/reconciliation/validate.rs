@@ -159,10 +159,8 @@ mod tests {
                 parent_id: None,
                 key: TaskKey::parse("root").unwrap(),
                 plan_path: None,
-                job_type: None,
                 priority: None,
-                repository: None,
-                command: None,
+                job_detail: None,
                 children: children
                     .iter()
                     .map(|k| rid.child(&TaskKey::parse(*k).unwrap()))
@@ -180,10 +178,8 @@ mod tests {
                     parent_id: Some(rid.clone()),
                     key: TaskKey::parse(*key).unwrap(),
                     plan_path: None,
-                    job_type: None,
                     priority: None,
-                    repository: None,
-                    command: None,
+                    job_detail: None,
                     children: vec![],
                     depends_on: vec![],
                 },

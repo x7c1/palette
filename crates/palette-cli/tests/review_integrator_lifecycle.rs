@@ -20,6 +20,9 @@ task:
     - key: craft
       type: craft
       plan_path: test/craft
+      repository:
+        name: x7c1/palette-demo
+        branch: main
       children:
         - key: review-integrate
           type: review_integrate
@@ -137,7 +140,7 @@ task:
         .unwrap();
     let review_jobs: Vec<_> = all_jobs
         .iter()
-        .filter(|j| j.job_type == JobType::Review)
+        .filter(|j| matches!(j.detail, palette_domain::job::JobDetail::Review))
         .collect();
     assert!(
         review_jobs.len() >= 2,

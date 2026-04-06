@@ -1,7 +1,7 @@
 use super::Orchestrator;
 use super::PendingActions;
 use super::job_instruction::format_job_instruction;
-use palette_domain::job::{Job, JobId, JobType};
+use palette_domain::job::{Job, JobDetail, JobId, JobType};
 use palette_domain::worker::WorkerId;
 use palette_usecase::container_runtime::{ArtifactsMount, WorkspaceVolume};
 use palette_usecase::data_store::InsertWorkerRequest;
@@ -42,8 +42,10 @@ impl Orchestrator {
             return Ok(result);
         }
 
+        let job_type = job.detail.job_type();
+
         // Mechanized jobs (Orchestrator/Operator) don't spawn worker containers
-        if !job.job_type.needs_worker() {
+        if !job_type.needs_worker() {
             self.handle_mechanized_job(&job)?;
             return Ok(result);
         }
@@ -63,7 +65,7 @@ impl Orchestrator {
         let member_id = WorkerId::next_member(seq);
         let member = self.spawn_member(
             &member_id,
-            job.job_type,
+            job_type,
             &supervisor_id,
             &job.task_id,
             workspace,
@@ -87,7 +89,7 @@ impl Orchestrator {
         // Assign job
         self.interactor
             .data_store
-            .assign_job(job_id, &member_id, job.job_type)?;
+            .assign_job(job_id, &member_id, job_type)?;
         tracing::info!(
             job_id = %job_id,
             member_id = %member_id,
@@ -95,7 +97,7 @@ impl Orchestrator {
         );
 
         // Build job instruction message
-        let round = if job.job_type == palette_domain::job::JobType::Review {
+        let round = if job_type == JobType::Review {
             Some(self.current_review_round(&job)?)
         } else {
             None
@@ -153,12 +155,12 @@ impl Orchestrator {
     /// Handle a mechanized job (Orchestrator or Operator).
     /// These jobs don't spawn worker containers.
     fn handle_mechanized_job(&self, job: &Job) -> crate::Result<()> {
-        match job.job_type {
-            JobType::Orchestrator => {
-                tracing::info!(job_id = %job.id, command = ?job.command, "executing orchestrator task");
+        match &job.detail {
+            JobDetail::Orchestrator { command } => {
+                tracing::info!(job_id = %job.id, command = ?command, "executing orchestrator task");
                 self.execute_orchestrator_task(job, &self.event_tx);
             }
-            JobType::Operator => {
+            JobDetail::Operator => {
                 self.interactor.data_store.update_job_status(
                     &job.id,
                     palette_domain::job::JobStatus::Operator(
@@ -177,7 +179,8 @@ impl Orchestrator {
     /// Review jobs get a read-write mount of the artifacts directory.
     /// Craft jobs get a read-only mount (to read review feedback).
     fn resolve_artifacts_mount(&self, job: &Job) -> crate::Result<Option<ArtifactsMount>> {
-        let (workflow_id, craft_job_id) = match job.job_type {
+        let job_type = job.detail.job_type();
+        let (workflow_id, craft_job_id) = match job_type {
             JobType::Craft => {
                 let Some(task_state) = self.interactor.data_store.get_task_state(&job.task_id)?
                 else {
@@ -210,7 +213,7 @@ impl Orchestrator {
 
         // For review jobs, pre-create the round and reviewer subdirectories
         // so the container (which may run as a different user) can write there.
-        if job.job_type == JobType::Review {
+        if job_type == JobType::Review {
             let round = self.current_review_round(job)?;
             let reviewer_dir = artifacts_path
                 .join(format!("round-{round}"))
@@ -224,7 +227,7 @@ impl Orchestrator {
 
         Ok(Some(ArtifactsMount {
             host_path: abs_path.to_string_lossy().to_string(),
-            read_only: job.job_type == JobType::Craft,
+            read_only: job_type == JobType::Craft,
         }))
     }
 
@@ -239,22 +242,21 @@ impl Orchestrator {
     /// Craft jobs get a new workspace via `git clone --shared` from the bare cache.
     /// Review jobs share the parent craft job's workspace as read-only.
     fn resolve_workspace(&self, job: &Job) -> crate::Result<Option<WorkspaceVolume>> {
-        match job.job_type {
-            JobType::ReviewIntegrate | JobType::Orchestrator | JobType::Operator => Ok(None),
-            JobType::Craft => {
-                let Some(ref repo) = job.repository else {
-                    return Ok(None);
-                };
+        match &job.detail {
+            JobDetail::ReviewIntegrate | JobDetail::Orchestrator { .. } | JobDetail::Operator => {
+                Ok(None)
+            }
+            JobDetail::Craft { repository } => {
                 let info = self
                     .workspace_manager
-                    .create_workspace(job.id.as_ref(), repo)?;
+                    .create_workspace(job.id.as_ref(), repository)?;
                 Ok(Some(WorkspaceVolume {
                     host_path: info.host_path,
                     repo_cache_path: info.repo_cache_path,
                     read_only: false,
                 }))
             }
-            JobType::Review => {
+            JobDetail::Review => {
                 let task_id = &job.task_id;
                 let Some(task_state) = self.interactor.data_store.get_task_state(task_id)? else {
                     return Ok(None);
@@ -264,10 +266,10 @@ impl Orchestrator {
                     Some(j) => j,
                     None => return Ok(None),
                 };
-                let Some(ref repo) = craft_job.repository else {
+                let JobDetail::Craft { ref repository } = craft_job.detail else {
                     return Ok(None);
                 };
-                let cache_path = self.workspace_manager.repo_cache_path(repo);
+                let cache_path = self.workspace_manager.repo_cache_path(repository);
                 let ws_path = self.workspace_manager.workspace_path(craft_job.id.as_ref());
                 let cache_abs = std::fs::canonicalize(&cache_path)
                     .map_err(|e| crate::Error::External(Box::new(e)))?;

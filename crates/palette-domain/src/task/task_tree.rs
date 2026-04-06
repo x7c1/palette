@@ -1,5 +1,5 @@
 use super::{TaskId, TaskKey};
-use crate::job::{JobType, Priority, Repository};
+use crate::job::{JobDetail, Priority};
 use std::collections::HashMap;
 
 /// Static structure of a task hierarchy, extracted from a Blueprint.
@@ -17,13 +17,10 @@ pub struct TaskTreeNode {
     pub parent_id: Option<TaskId>,
     pub key: TaskKey,
     pub plan_path: Option<String>,
-    pub job_type: Option<JobType>,
     pub priority: Option<Priority>,
-    pub repository: Option<Repository>,
-    /// Command for orchestrator tasks (e.g., "docker compose run --rm check").
-    pub command: Option<String>,
     pub children: Vec<TaskId>,
     pub depends_on: Vec<TaskId>,
+    pub job_detail: Option<JobDetail>,
 }
 
 impl TaskTree {
@@ -69,7 +66,7 @@ impl TaskTree {
     pub fn sibling_craft(&self, id: &TaskId) -> Option<&TaskTreeNode> {
         self.siblings(id)
             .into_iter()
-            .find(|s| s.job_type == Some(JobType::Craft))
+            .find(|s| matches!(s.job_detail, Some(JobDetail::Craft { .. })))
     }
 
     /// Find a node by its key.

@@ -27,6 +27,9 @@ task:
         - key: api-plan
           type: craft
           plan_path: 2026/feature-x/planning/api-plan/README.md
+          repository:
+            name: x7c1/palette-demo
+            branch: main
           children:
             - key: api-plan-review
               type: review
@@ -37,6 +40,9 @@ task:
         - key: api-impl
           type: craft
           plan_path: 2026/feature-x/execution/api-impl/README.md
+          repository:
+            name: x7c1/palette-demo
+            branch: main
           children:
             - key: api-impl-review
               type: review
@@ -126,7 +132,10 @@ async fn workflow_start_creates_task_tree() {
     // Only api-plan should have a job (composite craft task with job_type)
     assert_eq!(jobs.len(), 1);
     assert_eq!(jobs[0].task_id, tid(wf_id, "feature-x/planning/api-plan"));
-    assert_eq!(jobs[0].job_type, palette_domain::job::JobType::Craft);
+    assert!(matches!(
+        jobs[0].detail,
+        palette_domain::job::JobDetail::Craft { .. }
+    ));
     assert_eq!(
         jobs[0].status,
         palette_domain::job::JobStatus::Craft(palette_domain::job::CraftStatus::Todo)
@@ -191,6 +200,9 @@ task:
     - key: step-a
       type: craft
       plan_path: test/step-a/README.md
+      repository:
+        name: x7c1/palette-demo
+        branch: main
       children:
         - key: review
           type: review
@@ -198,6 +210,9 @@ task:
       type: craft
       plan_path: test/step-b/README.md
       depends_on: [step-a]
+      repository:
+        name: x7c1/palette-demo
+        branch: main
       children:
         - key: review
           type: review
@@ -327,7 +342,7 @@ task:
         .iter()
         .find(|j| {
             j.task_id.as_ref() == tid(wf_id, "cascade-test/step-b").to_string()
-                && j.job_type == JobType::Craft
+                && matches!(j.detail, palette_domain::job::JobDetail::Craft { .. })
         })
         .expect("step-b craft job should exist (auto-created)");
     let step_b_job_id = step_b_job.id.clone();
@@ -420,6 +435,9 @@ task:
     - key: craft
       type: craft
       plan_path: test/craft/README.md
+      repository:
+        name: x7c1/palette-demo
+        branch: main
       children:
         - key: review
           type: review
@@ -429,6 +447,9 @@ task:
         - key: craft
           type: craft
           plan_path: test/step-b/README.md-craft
+          repository:
+            name: x7c1/palette-demo
+            branch: main
           children:
             - key: review
               type: review
@@ -555,6 +576,9 @@ task:
     - key: step-a
       type: craft
       plan_path: test/a-craft/README.md
+      repository:
+        name: x7c1/palette-demo
+        branch: main
       children:
         - key: review
           type: review
@@ -562,6 +586,9 @@ task:
       depends_on: [step-a]
       type: craft
       plan_path: test/b-craft/README.md
+      repository:
+        name: x7c1/palette-demo
+        branch: main
       children:
         - key: review
           type: review
@@ -872,6 +899,9 @@ task:
     - key: craft
       type: craft
       plan_path: test/craft/README.md
+      repository:
+        name: x7c1/palette-demo
+        branch: main
       children:
         - key: review-1
           type: review
@@ -1041,6 +1071,9 @@ task:
     - key: impl
       type: craft
       plan_path: test/impl/README.md
+      repository:
+        name: x7c1/palette-demo
+        branch: main
       children:
         - key: review
           type: review

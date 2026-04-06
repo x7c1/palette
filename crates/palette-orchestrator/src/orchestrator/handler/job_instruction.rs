@@ -1,4 +1,4 @@
-use palette_domain::job::Job;
+use palette_domain::job::{Job, JobDetail};
 
 /// Container-side mount point for the shared plan directory.
 const PLAN_DIR_MOUNT: &str = "/home/agent/plans";
@@ -14,10 +14,10 @@ pub(crate) fn format_job_instruction(job: &Job, round: Option<u32>) -> String {
         "## Task: {}\n\nID: {}\nPlan: {}/{}\n",
         job.title, job.id, PLAN_DIR_MOUNT, job.plan_path
     );
-    if let Some(ref repo) = job.repository {
+    if let JobDetail::Craft { ref repository } = job.detail {
         msg.push_str(&format!(
             "\nRepository: {} (branch: {})\n",
-            repo.name, repo.branch
+            repository.name, repository.branch
         ));
     }
     if let Some(round) = round {

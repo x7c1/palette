@@ -1,6 +1,6 @@
 use super::Orchestrator;
 use super::PendingActions;
-use palette_domain::job::{JobId, JobType, ReviewTransition};
+use palette_domain::job::{JobDetail, JobId, ReviewTransition};
 use palette_domain::review::Verdict;
 use palette_domain::server::ServerEvent;
 use std::sync::Arc;
@@ -117,7 +117,7 @@ impl Orchestrator {
                 }
             };
 
-            let is_integrator = job.job_type == JobType::ReviewIntegrate;
+            let is_integrator = matches!(job.detail, JobDetail::ReviewIntegrate);
 
             // Validate artifacts. Integrator submissions are validated by the
             // orchestrator (all child review.md must exist). Individual reviewer
