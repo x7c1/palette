@@ -3,7 +3,7 @@ use palette_domain::job::{JobDetail, JobType, PerspectiveName, Repository};
 use palette_domain::task::TaskKey;
 use std::collections::{HashMap, HashSet};
 
-use super::to_task_tree::BlueprintError;
+use super::blueprint_error::BlueprintError;
 
 pub(super) struct BlueprintValidator<'a> {
     known_perspectives: &'a HashSet<String>,

@@ -1,6 +1,7 @@
+mod blueprint_error;
 mod blueprint_validator;
 mod to_task_tree;
-pub(crate) use to_task_tree::BlueprintError;
+pub(crate) use blueprint_error::BlueprintError;
 
 use palette_core::{InputError, Location};
 use palette_domain::task::TaskTree;
