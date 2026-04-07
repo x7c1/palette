@@ -2,13 +2,15 @@ use palette_usecase::github_review::{GitHubReviewPort, ReviewEvent, ReviewFileCo
 use std::process::Command;
 
 /// GitHub review client that uses the `gh` CLI.
-pub struct GhCliReviewClient {
-    token: String,
-}
+///
+/// Relies on the host's `gh` authentication (e.g., `gh auth login`).
+/// No explicit token management needed.
+#[derive(Default)]
+pub struct GhCliReviewClient;
 
 impl GhCliReviewClient {
-    pub fn new(token: String) -> Self {
-        Self { token }
+    pub fn new() -> Self {
+        Self
     }
 }
 
@@ -49,7 +51,6 @@ impl GitHubReviewPort for GhCliReviewClient {
                 "--input",
                 "-",
             ])
-            .env("GH_TOKEN", &self.token)
             .stdin(std::process::Stdio::piped())
             .stdout(std::process::Stdio::piped())
             .stderr(std::process::Stdio::piped())
@@ -97,7 +98,6 @@ impl GitHubReviewPort for GhCliReviewClient {
                 "--jq",
                 ".[].filename",
             ])
-            .env("GH_TOKEN", &self.token)
             .output()?;
 
         if !output.status.success() {
