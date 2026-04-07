@@ -163,6 +163,11 @@ impl Orchestrator {
                 }
             }
 
+            // Post PR review comments for integrator submissions
+            if is_integrator {
+                self.post_pr_review_comments(review_job_id);
+            }
+
             // Handle the verdict and cascade task completion
             self.handle_review_verdict(review_job_id, verdict)
         })();

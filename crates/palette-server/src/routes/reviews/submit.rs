@@ -199,16 +199,20 @@ fn find_reviewer_artifact_path(
         .create_task_store(&task_state.workflow_id)
         .ok()?;
 
-    // Walk up the task tree to find the ancestor craft job.
-    // Reviewer task → composite review task → craft task.
+    // Walk up the task tree to find the artifact anchor job.
+    // For Craft-parented reviews: reviewer → composite review → craft.
+    // For standalone PR reviews: reviewer → review-integrate (anchor).
     let mut current_id = task_store.get_task(&job.task_id)?.parent_id?;
-    let craft_job = loop {
+    let anchor_job = loop {
         let j = state
             .interactor
             .data_store
             .get_job_by_task_id(&current_id)
             .ok()??;
-        if matches!(j.detail, JobDetail::Craft { .. }) {
+        if matches!(
+            j.detail,
+            JobDetail::Craft { .. } | JobDetail::ReviewIntegrate { .. }
+        ) {
             break j;
         }
         current_id = task_store.get_task(&current_id)?.parent_id?;
@@ -227,7 +231,7 @@ fn find_reviewer_artifact_path(
         .data_dir
         .join("artifacts")
         .join(task_state.workflow_id.as_ref())
-        .join(craft_job.id.as_ref())
+        .join(anchor_job.id.as_ref())
         .join(format!("round-{round}"))
         .join(job.id.to_string())
         .join("review.md");

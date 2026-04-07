@@ -69,6 +69,7 @@ pub async fn spawn_server(
             perspectives: vec![],
         },
         event_tx,
+        github_review: None,
     });
     let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel();
     let _ = orchestrator.start(event_rx, shutdown_rx);

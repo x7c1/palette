@@ -121,6 +121,9 @@ impl Orchestrator {
     }
 
     /// Resolve perspective mounts for a job's detail.
+    ///
+    /// Mounts entire base directories rather than individual paths, so
+    /// relative links between perspective documents resolve correctly.
     /// Returns an empty vec if the job has no perspective.
     fn resolve_perspective_mounts(&self, job_detail: &JobDetail) -> Vec<PerspectiveMount> {
         let Some(perspective_name) = job_detail.perspective() else {
@@ -129,18 +132,18 @@ impl Orchestrator {
         let Some(perspective) = self.perspectives.find(perspective_name.as_ref()) else {
             return vec![];
         };
+
+        // Collect unique dir_names used by this perspective
+        let mut seen = std::collections::HashSet::new();
         perspective
             .paths
             .iter()
+            .filter(|pp| seen.insert(pp.dir_name.clone()))
             .filter_map(|pp| {
                 let base_dir = self.perspectives.dirs.get(&pp.dir_name)?;
-                let host_path = base_dir.join(&pp.relative_path);
-                let container_path = format!(
-                    "/home/agent/perspective/{}/{}",
-                    pp.dir_name, pp.relative_path
-                );
+                let container_path = format!("/home/agent/perspective/{}", pp.dir_name);
                 Some(PerspectiveMount {
-                    host_path: host_path.to_string_lossy().to_string(),
+                    host_path: base_dir.to_string_lossy().to_string(),
                     container_path,
                 })
             })

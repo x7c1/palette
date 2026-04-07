@@ -13,6 +13,9 @@ pub use suspend::handle_suspend_workflow;
 mod apply_blueprint;
 pub use apply_blueprint::handle_apply_blueprint;
 
+mod start_pr_review;
+pub use start_pr_review::handle_start_pr_review;
+
 use crate::Error;
 use crate::api_types::{ErrorCode, InputError, Location};
 use palette_usecase::ReadBlueprintError;

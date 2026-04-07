@@ -7,6 +7,7 @@ mod handle_event;
 pub(crate) mod job_instruction;
 mod orchestrator_task;
 mod pending_actions;
+mod post_pr_comments;
 mod reactivate_member;
 mod review_verdict;
 mod validate_artifacts;

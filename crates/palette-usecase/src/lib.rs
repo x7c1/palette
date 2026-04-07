@@ -19,5 +19,8 @@ pub use task_rule_engine::{TaskCompletionResult, TaskRuleEngine};
 pub mod interactor;
 pub use interactor::Interactor;
 
+pub mod github_review;
+pub use github_review::GitHubReviewPort;
+
 pub mod reconciliation;
 pub mod task_store;

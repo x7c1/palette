@@ -510,6 +510,7 @@ mod tests {
                 perspectives: vec![],
             },
             event_tx: tokio::sync::mpsc::unbounded_channel().0,
+            github_review: None,
         })
     }
 

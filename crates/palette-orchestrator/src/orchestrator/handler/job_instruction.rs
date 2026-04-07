@@ -30,6 +30,12 @@ pub(crate) fn format_job_instruction(
             repository.name, repository.branch
         ));
     }
+    if let Some(pr) = job.detail.pull_request() {
+        msg.push_str(&format!(
+            "\nPull Request: {}\nWorkspace: /home/agent/workspace (read-only checkout of PR branch)\n",
+            pr,
+        ));
+    }
     if let Some(round) = round {
         msg.push_str(&format!(
             "\nRound: {round}\nArtifacts: {ARTIFACTS_MOUNT}/round-{round}/{}/\n",

@@ -31,6 +31,10 @@ pub fn create_router(state: Arc<AppState>) -> Router {
         // Workflow API
         .route("/workflows/start", post(workflows::handle_start_workflow))
         .route(
+            "/workflows/start-pr-review",
+            post(workflows::handle_start_pr_review),
+        )
+        .route(
             "/workflows/{id}/suspend",
             post(workflows::handle_suspend_workflow),
         )
