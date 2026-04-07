@@ -23,10 +23,15 @@ pub fn spawn_permission_timeout_checker(state: Arc<AppState>) {
 async fn check_idle_supervisor_with_pending(state: &AppState) {
     let pending: Vec<(String, crate::PendingPermission)> = {
         let events = state.pending_permission_events.lock().await;
-        events
-            .iter()
+        let all: Vec<_> = events.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
+        if !all.is_empty() {
+            tracing::debug!(
+                count = all.len(),
+                "permission timeout check: pending events"
+            );
+        }
+        all.into_iter()
             .filter(|(_, p)| p.supervisor_id.is_some())
-            .map(|(k, v)| (k.clone(), v.clone()))
             .collect()
     };
 
@@ -40,6 +45,13 @@ async fn check_idle_supervisor_with_pending(state: &AppState) {
             Ok(Some(w)) => w,
             _ => continue,
         };
+
+        tracing::debug!(
+            worker_id = %worker_id,
+            supervisor_id = %supervisor_id,
+            supervisor_status = ?supervisor.status,
+            "permission timeout check: evaluating"
+        );
 
         if supervisor.status != WorkerStatus::Idle {
             continue;

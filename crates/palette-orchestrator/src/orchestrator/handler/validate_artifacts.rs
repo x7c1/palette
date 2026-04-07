@@ -305,7 +305,16 @@ impl Orchestrator {
             return Some(craft_job);
         }
 
-        // Fallback: walk up to find a ReviewIntegrate ancestor
+        // Fallback: check if the task itself is ReviewIntegrate, then walk up
+        if let Some(job) = self
+            .interactor
+            .data_store
+            .get_job_by_task_id(task_id)
+            .ok()?
+            && matches!(job.detail, JobDetail::ReviewIntegrate { .. })
+        {
+            return Some(job);
+        }
         let mut current_id = task_store.get_task(task_id)?.parent_id?;
         loop {
             let job = self

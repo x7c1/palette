@@ -50,6 +50,13 @@ pub async fn handle_send_permission(
         ));
     }
 
+    tracing::info!(
+        worker_id = worker_id.as_ref(),
+        event_id = %req.event_id,
+        choice = %req.choice,
+        "sending permission choice to worker"
+    );
+
     state
         .interactor
         .terminal
