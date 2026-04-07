@@ -8,7 +8,8 @@
 #
 # Checks:
 # - POST /workflows/start-pr-review creates workflow and tasks
-# - Task count is correct (root + review-integrate + N reviewers)
+# - Two reviewers with different perspectives (architecture, type-safety)
+# - Task count is correct (root + review-integrate + 2 reviewers)
 # - No Craft jobs are created (standalone)
 # - Review and ReviewIntegrate jobs are created
 # - A PENDING review with inline comments can be posted to the PR via GitHub API
@@ -66,8 +67,8 @@ HTTP_CODE=$(curl -s -o /tmp/palette-e2e-response.json -w '%{http_code}' \
     \"repo\": \"$PR_REPO\",
     \"number\": $PR_NUMBER,
     \"reviewers\": [
-      {\"perspective\": null},
-      {\"perspective\": null}
+      {\"perspective\": \"architecture\"},
+      {\"perspective\": \"type-safety\"}
     ]
   }")
 RESPONSE=$(cat /tmp/palette-e2e-response.json)

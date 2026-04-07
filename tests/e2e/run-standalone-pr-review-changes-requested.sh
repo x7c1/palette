@@ -60,7 +60,7 @@ HTTP_CODE=$(curl -s -o /tmp/palette-e2e-response.json -w '%{http_code}' \
     \"repo\": \"$PR_REPO\",
     \"number\": $PR_NUMBER,
     \"reviewers\": [
-      {\"perspective\": null}
+      {\"perspective\": \"architecture\"}
     ]
   }")
 RESPONSE=$(cat /tmp/palette-e2e-response.json)
