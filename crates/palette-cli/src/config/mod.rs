@@ -25,6 +25,7 @@ pub struct Config {
     #[serde(default)]
     pub rules: RulesConfig,
     pub docker: DockerConfig,
+    pub github_token: Option<String>,
     #[serde(default, flatten)]
     pub perspectives: PerspectivesConfig,
 }

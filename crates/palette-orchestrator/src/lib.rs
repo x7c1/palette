@@ -10,6 +10,8 @@ pub use perspectives_config::{
     PerspectivesValidationError, ValidatedPerspective, ValidatedPerspectives,
 };
 
+pub mod github_client;
+
 mod orchestrator;
 pub use orchestrator::Orchestrator;
 pub use orchestrator::infra::workspace;

@@ -88,7 +88,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         workspace_manager,
         perspectives: validated_perspectives,
         event_tx,
-        github_review: None,
+        github_review: config.github_token.map(|token| {
+            Box::new(palette_orchestrator::github_client::GhCliReviewClient::new(
+                token,
+            )) as Box<dyn palette_usecase::GitHubReviewPort>
+        }),
     });
 
     // Clean up orphan containers from previous crash/forced exit
