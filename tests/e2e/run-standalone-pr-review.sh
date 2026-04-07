@@ -4,15 +4,16 @@
 # Uses merged PR x7c1/palette#44 as the review target.
 #
 # Two reviewers with different perspectives (architecture, type-safety)
-# review the PR, then the ReviewIntegrator consolidates findings.
+# review the PR, then the ReviewIntegrator consolidates findings,
+# and the orchestrator posts a pending review to the PR via GitHub API.
 #
 # Checks:
 # - Workflow created via start-pr-review endpoint
 # - Task count: root + review-integrate + 2 reviewers = 4
 # - No Craft jobs created (standalone)
-# - Reviewer containers spawn and receive workspace + perspective mounts
 # - review.md files created per reviewer
 # - integrated-review.json created and is valid JSON
+# - Pending review posted to GitHub PR
 # - Workflow completes
 set -euo pipefail
 
@@ -34,7 +35,7 @@ CONFIG_PATH="$ROOT_DIR/data/palette-e2e.toml"
 LOG_FILE="data/palette.log"
 PID_FILE="data/palette.pid"
 POLL_INTERVAL=5
-STALL_THRESHOLD="${STALL_THRESHOLD:-24}"
+STALL_THRESHOLD="${STALL_THRESHOLD:-60}"
 
 # Target: merged PR x7c1/palette#44 (refactor: introduce JobDetail enum)
 PR_OWNER="x7c1"
@@ -50,7 +51,16 @@ worker_summary() {
     || echo ""
 }
 
+# --- Step 0: Clean up stale pending reviews on PR ---
+echo "=== Step 0: Clean up stale pending reviews ==="
+PENDING_REVIEWS=$(gh api "repos/$PR_OWNER/$PR_REPO/pulls/$PR_NUMBER/reviews" --jq '[.[] | select(.state == "PENDING")] | .[].id' 2>/dev/null || true)
+for review_id in $PENDING_REVIEWS; do
+  echo "Deleting stale pending review $review_id"
+  gh api "repos/$PR_OWNER/$PR_REPO/pulls/$PR_NUMBER/reviews/$review_id" -X DELETE > /dev/null 2>&1 || true
+done
+
 # --- Step 1: Reset and build ---
+echo ""
 echo "=== Step 1: Reset and build ==="
 scripts/reset.sh 2>&1
 rm -f "$LOG_FILE"
@@ -63,13 +73,14 @@ if [[ -n "$GH_TOKEN" ]]; then
   echo "github_token = \"$GH_TOKEN\"" >> "$CONFIG_PATH"
   echo "GitHub token injected into config"
 else
-  echo "WARN: No GitHub token available, PR comment posting will be skipped"
+  echo "FAIL: GitHub token required for PR comment posting"
+  exit 1
 fi
 
 # --- Step 2: Start Palette with PR review config ---
 echo ""
 echo "=== Step 2: Start Palette ==="
-RUST_LOG="${RUST_LOG:-info}" cargo run -- "$CONFIG_PATH" >> "$LOG_FILE" 2>&1 &
+RUST_LOG="${RUST_LOG:-info,palette_server::permission_timeout=debug}" cargo run -- "$CONFIG_PATH" >> "$LOG_FILE" 2>&1 &
 echo $! > "$PID_FILE"
 
 for i in $(seq 1 30); do
@@ -118,7 +129,6 @@ echo "PASS: Task count is 4"
 echo ""
 echo "=== Step 4: Verify initial jobs ==="
 
-# Wait for jobs to be created (may take time for task activation + container spawn)
 for i in $(seq 1 30); do
   JOBS=$(curl -sf "$PALETTE_URL/jobs" 2>/dev/null || echo "[]")
   REVIEW_COUNT=$(echo "$JOBS" | jq '[.[] | select(.type == "review")] | length')
@@ -144,14 +154,13 @@ echo "PASS: No Craft jobs (standalone)"
 echo "PASS: 2 Review jobs created"
 echo "PASS: 1 ReviewIntegrate job created"
 
-# --- Step 5: Monitor workflow ---
+# --- Step 5: Wait for workflow completion ---
 echo ""
-echo "=== Step 5: Monitor workflow ==="
+echo "=== Step 5: Wait for workflow completion ==="
 
 prev_snapshot=""
 stall_count=0
 iteration=0
-artifacts_checked=false
 
 while true; do
   iteration=$((iteration + 1))
@@ -165,20 +174,6 @@ while true; do
   job_summary=$(echo "$JOBS" | jq -r '[.[] | .status] | group_by(.) | map("\(.[0]):\(length)") | join(" ")' 2>/dev/null || echo "no jobs")
   echo "[${elapsed}s] jobs: ${job_summary} | workers: ${WORKERS:-none} | stall: ${stall_count}/${STALL_THRESHOLD}"
 
-  # Check artifacts mid-run
-  if [[ "$artifacts_checked" == "false" ]]; then
-    RI_JOB_ID=$(echo "$JOBS" | jq -r '.[] | select(.type == "review_integrate") | .id' | head -1)
-    if [[ -n "$RI_JOB_ID" ]] && [[ -d "data/artifacts/$WORKFLOW_ID/$RI_JOB_ID/round-1" ]]; then
-      REVIEW_MD_COUNT=$(find "data/artifacts/$WORKFLOW_ID/$RI_JOB_ID/round-1" -name "review.md" 2>/dev/null | wc -l | tr -d ' ')
-      if [[ "$REVIEW_MD_COUNT" -gt 0 ]]; then
-        echo ""
-        echo "--- Mid-run artifact check ---"
-        echo "PASS: Found $REVIEW_MD_COUNT review.md file(s) in round-1"
-        artifacts_checked=true
-      fi
-    fi
-  fi
-
   if [[ "$snapshot" == "$prev_snapshot" ]]; then
     stall_count=$((stall_count + 1))
   else
@@ -187,8 +182,9 @@ while true; do
   prev_snapshot="$snapshot"
 
   if [[ $stall_count -ge $STALL_THRESHOLD ]]; then
-    echo "Stall detected — proceeding to verification"
-    break
+    echo "FAIL: Stall detected — workflow did not complete"
+    tail -30 "$LOG_FILE"
+    exit 1
   fi
 
   if grep -q "workflow completed" "$LOG_FILE" 2>/dev/null; then
@@ -197,16 +193,15 @@ while true; do
   fi
 done
 
-# --- Step 6: Verify final artifacts ---
+# --- Step 6: Verify artifacts ---
 echo ""
-echo "=== Step 6: Verify final artifacts ==="
+echo "=== Step 6: Verify artifacts ==="
 
 RI_JOB_ID=$(curl -sf "$PALETTE_URL/jobs" | jq -r '.[] | select(.type == "review_integrate") | .id' | head -1)
 ARTIFACTS_DIR="data/artifacts/$WORKFLOW_ID/$RI_JOB_ID"
 
 if [[ ! -d "$ARTIFACTS_DIR" ]]; then
   echo "FAIL: Artifacts directory not found: $ARTIFACTS_DIR"
-  find data/artifacts/ -type d 2>/dev/null | head -20
   exit 1
 fi
 echo "PASS: Artifacts directory exists (anchored to ReviewIntegrate job)"
@@ -216,35 +211,49 @@ find "$ARTIFACTS_DIR" -type f | sort | while read -r f; do
   echo "  $f"
 done
 
-if [[ -d "$ARTIFACTS_DIR/round-1" ]]; then
-  echo "PASS: round-1 directory exists"
-else
+if [[ ! -d "$ARTIFACTS_DIR/round-1" ]]; then
   echo "FAIL: round-1 directory not found"
   exit 1
 fi
+echo "PASS: round-1 directory exists"
 
 REVIEW_MD_COUNT=$(find "$ARTIFACTS_DIR/round-1" -name "review.md" 2>/dev/null | wc -l | tr -d ' ')
-if [[ "$REVIEW_MD_COUNT" -ge 1 ]]; then
-  echo "PASS: Found $REVIEW_MD_COUNT review.md file(s) in round-1"
+if [[ "$REVIEW_MD_COUNT" -ge 2 ]]; then
+  echo "PASS: Found $REVIEW_MD_COUNT review.md files in round-1"
 else
-  echo "FAIL: Expected at least 1 review.md file, found 0"
+  echo "FAIL: Expected at least 2 review.md files, found $REVIEW_MD_COUNT"
   exit 1
 fi
 
-# integrated-review.json is only written after all reviewers complete and RI runs.
-# If one reviewer got ChangesRequested, RI may not have run yet.
 if [[ -f "$ARTIFACTS_DIR/round-1/integrated-review.json" ]]; then
   echo "PASS: integrated-review.json exists in round-1"
-  if head -1 "$ARTIFACTS_DIR/round-1/integrated-review.json" | grep -q "^{"; then
+  if python3 -c "import json; json.load(open('$ARTIFACTS_DIR/round-1/integrated-review.json'))" 2>/dev/null; then
     echo "PASS: integrated-review.json is valid JSON"
+  else
+    echo "FAIL: integrated-review.json is not valid JSON"
+    exit 1
   fi
 else
-  echo "INFO: integrated-review.json not found (RI may not have run yet — expected if ChangesRequested)"
+  echo "FAIL: integrated-review.json not found"
+  exit 1
 fi
 
-# --- Step 7: Verify no panics ---
+# --- Step 7: Verify pending review on GitHub PR ---
 echo ""
-echo "=== Step 7: Verify server health ==="
+echo "=== Step 7: Verify pending review on PR ==="
+
+PENDING_REVIEWS=$(gh api "repos/$PR_OWNER/$PR_REPO/pulls/$PR_NUMBER/reviews" --jq '[.[] | select(.state == "PENDING")] | length' 2>/dev/null || echo "0")
+if [[ "$PENDING_REVIEWS" -ge 1 ]]; then
+  echo "PASS: Found $PENDING_REVIEWS pending review(s) on PR #$PR_NUMBER"
+else
+  echo "FAIL: No pending review found on PR #$PR_NUMBER"
+  grep -E "post.*pr.*review|posted PR|pending|gh api|github" "$LOG_FILE" | tail -10
+  exit 1
+fi
+
+# --- Step 8: Verify no panics ---
+echo ""
+echo "=== Step 8: Verify server health ==="
 
 if grep -q "panic" "$LOG_FILE" 2>/dev/null; then
   echo "FAIL: Panic detected in logs"
