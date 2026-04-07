@@ -16,15 +16,18 @@ impl Database {
 
         let command = req.detail.command();
         let perspective = req.detail.perspective().map(AsRef::as_ref);
-        let pr = req.detail.pull_request();
+        let pr_json = req
+            .detail
+            .pull_request()
+            .map(super::pull_request_row::pull_request_to_json);
 
         let initial_status = JobStatus::todo(job_type);
 
         let tx = conn.transaction()?;
 
         tx.execute(
-            "INSERT INTO jobs (id, task_id, type_id, title, plan_path, assignee_id, status_id, priority_id, repository, command, perspective, pull_request_owner, pull_request_repo, pull_request_number, created_at, updated_at, notes, assigned_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, NULL, NULL)",
+            "INSERT INTO jobs (id, task_id, type_id, title, plan_path, assignee_id, status_id, priority_id, repository, command, perspective, pull_request, created_at, updated_at, notes, assigned_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, NULL, NULL)",
             params![
                 id.as_ref(),
                 req.task_id.as_ref(),
@@ -37,9 +40,7 @@ impl Database {
                 repos_json,
                 command,
                 perspective,
-                pr.map(|p| p.owner.as_str()),
-                pr.map(|p| p.repo.as_str()),
-                pr.map(|p| p.number as i64),
+                pr_json,
                 now_str,
                 now_str,
             ],
