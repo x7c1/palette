@@ -93,7 +93,10 @@ mod tests {
                 Some(PlanPath::parse("test/R-001").unwrap()),
                 None,
                 None,
-                JobDetail::Review { perspective: None },
+                JobDetail::Review {
+                    perspective: None,
+                    target: ReviewTarget::CraftOutput,
+                },
             ))
             .unwrap();
 

@@ -117,7 +117,7 @@ impl Orchestrator {
                 }
             };
 
-            let is_integrator = matches!(job.detail, JobDetail::ReviewIntegrate);
+            let is_integrator = matches!(job.detail, JobDetail::ReviewIntegrate { .. });
 
             // Validate artifacts. Integrator submissions are validated by the
             // orchestrator (all child review.md must exist). Individual reviewer

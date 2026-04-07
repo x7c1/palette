@@ -60,7 +60,7 @@ mod tests {
     use super::*;
     use crate::perspectives_config::{PerspectivePath, ValidatedPerspective};
     use palette_domain::job::{
-        JobId, JobStatus, JobType, PerspectiveName, PlanPath, Repository, Title,
+        JobId, JobStatus, JobType, PerspectiveName, PlanPath, Repository, ReviewTarget, Title,
     };
     use palette_domain::task::TaskId;
     use std::collections::HashMap;
@@ -76,7 +76,10 @@ mod tests {
             assignee_id: None,
             status: JobStatus::todo(JobType::Review),
             priority: None,
-            detail: JobDetail::Review { perspective },
+            detail: JobDetail::Review {
+                perspective,
+                target: ReviewTarget::CraftOutput,
+            },
             created_at: now,
             updated_at: now,
             notes: None,

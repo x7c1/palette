@@ -325,7 +325,7 @@ task:
         let review = tree.find_by_key("my-review").unwrap();
         assert!(matches!(
             &review.job_detail,
-            Some(JobDetail::Review { perspective: Some(p) }) if p.as_ref() == "rust-review"
+            Some(JobDetail::Review { perspective: Some(p), .. }) if p.as_ref() == "rust-review"
         ));
     }
 

@@ -87,7 +87,10 @@ async fn sequential_delivery() {
             Some(palette_domain::job::PlanPath::parse("test/R-1").unwrap()),
             None,
             None,
-            JobDetail::Review { perspective: None },
+            JobDetail::Review {
+                perspective: None,
+                target: palette_domain::job::ReviewTarget::CraftOutput,
+            },
         ))
         .unwrap();
     state
@@ -257,7 +260,10 @@ async fn queued_while_working() {
             Some(palette_domain::job::PlanPath::parse("test/R-1").unwrap()),
             None,
             None,
-            JobDetail::Review { perspective: None },
+            JobDetail::Review {
+                perspective: None,
+                target: palette_domain::job::ReviewTarget::CraftOutput,
+            },
         ))
         .unwrap();
     state
@@ -491,7 +497,10 @@ async fn concurrent_race() {
             Some(palette_domain::job::PlanPath::parse("test/R-1").unwrap()),
             None,
             None,
-            JobDetail::Review { perspective: None },
+            JobDetail::Review {
+                perspective: None,
+                target: palette_domain::job::ReviewTarget::CraftOutput,
+            },
         ))
         .unwrap();
     state

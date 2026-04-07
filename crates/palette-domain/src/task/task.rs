@@ -110,7 +110,10 @@ mod tests {
     #[test]
     fn creates_job_request_from_review_task() {
         let task = test_task(
-            Some(JobDetail::Review { perspective: None }),
+            Some(JobDetail::Review {
+                perspective: None,
+                target: crate::job::ReviewTarget::CraftOutput,
+            }),
             Some("plans/review"),
         );
         let req = task.to_create_job_request().unwrap();

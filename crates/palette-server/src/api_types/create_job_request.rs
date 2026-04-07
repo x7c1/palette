@@ -1,5 +1,7 @@
 use super::{InputError, JobType, Priority, Repository};
-use palette_domain::job::{CreateJobRequest as DomainCreateJobRequest, JobDetail, PlanPath, Title};
+use palette_domain::job::{
+    CreateJobRequest as DomainCreateJobRequest, JobDetail, PlanPath, ReviewTarget, Title,
+};
 use palette_domain::task::TaskId;
 use palette_domain::worker::WorkerId;
 use serde::{Deserialize, Serialize};
@@ -47,8 +49,13 @@ impl CreateJobRequest {
                     None
                 }
             },
-            palette_domain::job::JobType::Review => Some(JobDetail::Review { perspective: None }),
-            palette_domain::job::JobType::ReviewIntegrate => Some(JobDetail::ReviewIntegrate),
+            palette_domain::job::JobType::Review => Some(JobDetail::Review {
+                perspective: None,
+                target: ReviewTarget::CraftOutput,
+            }),
+            palette_domain::job::JobType::ReviewIntegrate => Some(JobDetail::ReviewIntegrate {
+                target: ReviewTarget::CraftOutput,
+            }),
             palette_domain::job::JobType::Orchestrator => Some(JobDetail::Orchestrator {
                 command: self.command.clone(),
             }),

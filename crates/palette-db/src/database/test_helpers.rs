@@ -74,7 +74,10 @@ pub fn create_review(db: &Database, id: &str) -> Job {
         Some(PlanPath::parse(format!("test/{id}")).unwrap()),
         None,
         None,
-        JobDetail::Review { perspective: None },
+        JobDetail::Review {
+            perspective: None,
+            target: ReviewTarget::CraftOutput,
+        },
     ))
     .unwrap()
 }

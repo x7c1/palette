@@ -244,9 +244,9 @@ impl Orchestrator {
     /// Review jobs share the parent craft job's workspace as read-only.
     fn resolve_workspace(&self, job: &Job) -> crate::Result<Option<WorkspaceVolume>> {
         match &job.detail {
-            JobDetail::ReviewIntegrate | JobDetail::Orchestrator { .. } | JobDetail::Operator => {
-                Ok(None)
-            }
+            JobDetail::ReviewIntegrate { .. }
+            | JobDetail::Orchestrator { .. }
+            | JobDetail::Operator => Ok(None),
             JobDetail::Craft { repository } => {
                 let info = self
                     .workspace_manager

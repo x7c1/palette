@@ -50,6 +50,12 @@ pub use perspective_name::{InvalidPerspectiveName, PerspectiveName};
 mod plan_path;
 pub use plan_path::{InvalidPlanPath, PlanPath};
 
+mod pull_request;
+pub use pull_request::{InvalidPullRequest, PullRequest};
+
+mod review_target;
+pub use review_target::ReviewTarget;
+
 mod title;
 pub use title::{InvalidTitle, Title};
 

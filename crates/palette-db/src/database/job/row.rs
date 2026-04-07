@@ -6,7 +6,7 @@ use rusqlite::{Connection, params};
 
 use super::super::{corrupt, corrupt_parse, parse_datetime};
 
-pub(crate) const JOB_COLUMNS: &str = "id, task_id, type_id, title, plan_path, assignee_id, status_id, priority_id, repository, command, perspective, created_at, updated_at, notes, assigned_at";
+pub(crate) const JOB_COLUMNS: &str = "id, task_id, type_id, title, plan_path, assignee_id, status_id, priority_id, repository, command, perspective, pull_request_owner, pull_request_repo, pull_request_number, created_at, updated_at, notes, assigned_at";
 
 /// Extract a raw DB row into a JobRow (DB-native types only).
 pub(crate) fn read_job_row(row: &rusqlite::Row) -> rusqlite::Result<JobRow> {
@@ -22,6 +22,9 @@ pub(crate) fn read_job_row(row: &rusqlite::Row) -> rusqlite::Result<JobRow> {
         repository: row.get("repository")?,
         command: row.get("command")?,
         perspective: row.get("perspective")?,
+        pull_request_owner: row.get("pull_request_owner")?,
+        pull_request_repo: row.get("pull_request_repo")?,
+        pull_request_number: row.get("pull_request_number")?,
         created_at: row.get("created_at")?,
         updated_at: row.get("updated_at")?,
         notes: row.get("notes")?,
@@ -53,6 +56,18 @@ pub(crate) fn into_job(row: JobRow) -> crate::Result<Job> {
         .transpose()
         .map_err(corrupt_parse)?;
 
+    let review_target = match (
+        row.pull_request_owner,
+        row.pull_request_repo,
+        row.pull_request_number,
+    ) {
+        (Some(owner), Some(repo), Some(number)) => {
+            let pr = PullRequest::parse(owner, repo, number as u64).map_err(corrupt_parse)?;
+            ReviewTarget::PullRequest(pr)
+        }
+        _ => ReviewTarget::CraftOutput,
+    };
+
     let detail = match job_type {
         JobType::Craft => {
             let repository = repository
@@ -65,8 +80,11 @@ pub(crate) fn into_job(row: JobRow) -> crate::Result<Job> {
                 .map(PerspectiveName::parse)
                 .transpose()
                 .map_err(corrupt_parse)?,
+            target: review_target,
         },
-        JobType::ReviewIntegrate => JobDetail::ReviewIntegrate,
+        JobType::ReviewIntegrate => JobDetail::ReviewIntegrate {
+            target: review_target,
+        },
         JobType::Orchestrator => JobDetail::Orchestrator {
             command: row.command,
         },

@@ -36,7 +36,7 @@ pub async fn handle_submit_review(
 
     if !matches!(
         job.detail,
-        JobDetail::Review { .. } | JobDetail::ReviewIntegrate
+        JobDetail::Review { .. } | JobDetail::ReviewIntegrate { .. }
     ) {
         return Err(Error::BadRequest {
             code: ErrorCode::NotReviewJob,
@@ -52,7 +52,7 @@ pub async fn handle_submit_review(
     // or a regular reviewer submission. Must happen before submit_review so we can
     // reject integrator submissions when child reviewers are incomplete (preventing
     // the submission from being recorded and avoiding round number drift).
-    let is_integrator = matches!(job.detail, JobDetail::ReviewIntegrate);
+    let is_integrator = matches!(job.detail, JobDetail::ReviewIntegrate { .. });
     let child_tasks = if is_integrator {
         match state.interactor.data_store.get_task_state(&job.task_id) {
             Ok(Some(ts)) => match state.interactor.create_task_store(&ts.workflow_id) {

@@ -158,7 +158,9 @@ fn process_member_jobs(
                 handle_review_stop(state, job, worker_id, supervisor_id, last_message)
             }
             // ReviewIntegrate, Orchestrator, and Operator jobs don't have member workers
-            JobDetail::ReviewIntegrate | JobDetail::Orchestrator { .. } | JobDetail::Operator => {}
+            JobDetail::ReviewIntegrate { .. }
+            | JobDetail::Orchestrator { .. }
+            | JobDetail::Operator => {}
         }
     }
 }

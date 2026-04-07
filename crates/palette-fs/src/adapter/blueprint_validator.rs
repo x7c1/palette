@@ -1,5 +1,5 @@
 use crate::blueprint::TaskNode;
-use palette_domain::job::{JobDetail, JobType, PerspectiveName, Repository};
+use palette_domain::job::{JobDetail, JobType, PerspectiveName, Repository, ReviewTarget};
 use palette_domain::task::TaskKey;
 use std::collections::{HashMap, HashSet};
 
@@ -113,12 +113,23 @@ impl<'a> BlueprintValidator<'a> {
             JobType::Review => {
                 let mut errors = validate_repository_format(node);
                 let perspective = self.build_perspective(node, &mut errors);
-                (errors, Some(JobDetail::Review { perspective }))
+                (
+                    errors,
+                    Some(JobDetail::Review {
+                        perspective,
+                        target: ReviewTarget::CraftOutput,
+                    }),
+                )
             }
             JobType::ReviewIntegrate => {
                 let mut errors = validate_repository_format(node);
                 errors.extend(perspective_on_non_review(node));
-                (errors, Some(JobDetail::ReviewIntegrate))
+                (
+                    errors,
+                    Some(JobDetail::ReviewIntegrate {
+                        target: ReviewTarget::CraftOutput,
+                    }),
+                )
             }
             JobType::Orchestrator => {
                 let mut errors = validate_repository_format(node);
