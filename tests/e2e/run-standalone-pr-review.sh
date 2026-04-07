@@ -68,14 +68,15 @@ cargo build 2>&1
 
 # Generate config with github_token from gh CLI
 GH_TOKEN=$(gh auth token 2>/dev/null || true)
-cp "$CONFIG_TEMPLATE" "$CONFIG_PATH"
-if [[ -n "$GH_TOKEN" ]]; then
-  echo "github_token = \"$GH_TOKEN\"" >> "$CONFIG_PATH"
-  echo "GitHub token injected into config"
-else
+if [[ -z "$GH_TOKEN" ]]; then
   echo "FAIL: GitHub token required for PR comment posting"
   exit 1
 fi
+{
+  echo "github_token = \"$GH_TOKEN\""
+  cat "$CONFIG_TEMPLATE"
+} > "$CONFIG_PATH"
+echo "GitHub token injected into config"
 
 # --- Step 2: Start Palette with PR review config ---
 echo ""
