@@ -1,18 +1,18 @@
 #!/usr/bin/env bash
 # E2E: Review Artifacts Persistence (012/002)
 # Verify that reviewers write review.md and the integrator writes
-# integrated-review.md in the correct round-based directory structure.
+# integrated-review.json in the correct round-based directory structure.
 #
 # Blueprint: 1 Crafter + 2 Reviewers (with ReviewIntegrator)
 # Expected: ChangesRequested in round 1, Approved in round 2
 #
 # Checks:
 # - Round 1: review.md files created per reviewer
-# - Round 1: integrated-review.md created
-# - Round 1 files have YAML frontmatter
+# - Round 1: integrated-review.json created
+# - Round 1 review.md files have YAML frontmatter, integrated-review.json is valid JSON
 # - Round 2: new round directory created on re-review
 # - Round 1 files preserved (audit trail)
-# - Crafter can read integrated-review.md
+# - Crafter can read integrated-review.json
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -138,11 +138,11 @@ while true; do
         round1_verified=true
       fi
 
-      # Check integrated-review.md
-      if [[ -f "data/artifacts/$WORKFLOW_ID/$CRAFT_JOB/round-1/integrated-review.md" ]]; then
-        echo "PASS: integrated-review.md exists in round-1"
-        if head -1 "data/artifacts/$WORKFLOW_ID/$CRAFT_JOB/round-1/integrated-review.md" | grep -q "^---"; then
-          echo "PASS: integrated-review.md has YAML frontmatter"
+      # Check integrated-review.json
+      if [[ -f "data/artifacts/$WORKFLOW_ID/$CRAFT_JOB/round-1/integrated-review.json" ]]; then
+        echo "PASS: integrated-review.json exists in round-1"
+        if head -1 "data/artifacts/$WORKFLOW_ID/$CRAFT_JOB/round-1/integrated-review.json" | grep -q "^{"; then
+          echo "PASS: integrated-review.json is valid JSON"
         fi
       fi
     fi

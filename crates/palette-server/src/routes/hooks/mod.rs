@@ -8,7 +8,7 @@ mod stop;
 pub use stop::handle_stop;
 
 use palette_domain::worker::{WorkerId, WorkerSessionId};
-use palette_usecase::data_store::DataStore;
+use palette_usecase::DataStore;
 
 #[derive(serde::Deserialize)]
 pub(crate) struct HookQuery {

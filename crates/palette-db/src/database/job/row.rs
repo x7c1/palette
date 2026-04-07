@@ -6,7 +6,7 @@ use rusqlite::{Connection, params};
 
 use super::super::{corrupt, corrupt_parse, parse_datetime};
 
-pub(crate) const JOB_COLUMNS: &str = "id, task_id, type_id, title, plan_path, assignee_id, status_id, priority_id, repository, command, perspective, created_at, updated_at, notes, assigned_at";
+pub(crate) const JOB_COLUMNS: &str = "id, task_id, type_id, title, plan_path, assignee_id, status_id, priority_id, repository, command, perspective, pull_request, created_at, updated_at, assigned_at";
 
 /// Extract a raw DB row into a JobRow (DB-native types only).
 pub(crate) fn read_job_row(row: &rusqlite::Row) -> rusqlite::Result<JobRow> {
@@ -22,9 +22,9 @@ pub(crate) fn read_job_row(row: &rusqlite::Row) -> rusqlite::Result<JobRow> {
         repository: row.get("repository")?,
         command: row.get("command")?,
         perspective: row.get("perspective")?,
+        pull_request: row.get("pull_request")?,
         created_at: row.get("created_at")?,
         updated_at: row.get("updated_at")?,
-        notes: row.get("notes")?,
         assigned_at: row.get("assigned_at")?,
     })
 }
@@ -47,7 +47,19 @@ pub(crate) fn into_job(row: JobRow) -> crate::Result<Job> {
 
     let task_id = TaskId::parse(row.task_id).map_err(corrupt_parse)?;
     let title = Title::parse(row.title).map_err(corrupt_parse)?;
-    let plan_path = PlanPath::parse(row.plan_path).map_err(corrupt_parse)?;
+    let plan_path = row
+        .plan_path
+        .map(PlanPath::parse)
+        .transpose()
+        .map_err(corrupt_parse)?;
+
+    let review_target = match row.pull_request {
+        Some(json) => {
+            let pr = super::pull_request_row::pull_request_from_json(&json)?;
+            ReviewTarget::PullRequest(pr)
+        }
+        None => ReviewTarget::CraftOutput,
+    };
 
     let detail = match job_type {
         JobType::Craft => {
@@ -61,8 +73,11 @@ pub(crate) fn into_job(row: JobRow) -> crate::Result<Job> {
                 .map(PerspectiveName::parse)
                 .transpose()
                 .map_err(corrupt_parse)?,
+            target: review_target,
         },
-        JobType::ReviewIntegrate => JobDetail::ReviewIntegrate,
+        JobType::ReviewIntegrate => JobDetail::ReviewIntegrate {
+            target: review_target,
+        },
         JobType::Orchestrator => JobDetail::Orchestrator {
             command: row.command,
         },
@@ -84,7 +99,6 @@ pub(crate) fn into_job(row: JobRow) -> crate::Result<Job> {
         detail,
         created_at: parse_datetime(&row.created_at),
         updated_at: parse_datetime(&row.updated_at),
-        notes: row.notes,
         assigned_at: row.assigned_at.map(|s| parse_datetime(&s)),
     })
 }

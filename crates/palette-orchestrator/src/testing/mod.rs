@@ -1,11 +1,13 @@
 mod mock_blueprint_reader;
 mod mock_container_runtime;
 mod mock_data_store;
+mod mock_github_review;
 mod mock_terminal_session;
 
 pub use mock_blueprint_reader::MockBlueprintReader;
 pub use mock_container_runtime::MockContainerRuntime;
 pub use mock_data_store::MockDataStore;
+pub use mock_github_review::MockGitHubReview;
 pub use mock_terminal_session::MockTerminalSession;
 
 use palette_domain::job::{Job, JobId, JobStatus, JobType};
@@ -35,14 +37,16 @@ pub fn make_job(id: &str) -> Job {
         id: JobId::parse(id).unwrap(),
         task_id: TaskId::parse(format!("wf-test:{id}")).unwrap(),
         title: palette_domain::job::Title::parse(id).unwrap(),
-        plan_path: palette_domain::job::PlanPath::parse(format!("test/{id}")).unwrap(),
+        plan_path: Some(palette_domain::job::PlanPath::parse(format!("test/{id}")).unwrap()),
         assignee_id: None,
         status: JobStatus::todo(JobType::Review),
         priority: None,
-        detail: palette_domain::job::JobDetail::Review { perspective: None },
+        detail: palette_domain::job::JobDetail::Review {
+            perspective: None,
+            target: palette_domain::job::ReviewTarget::CraftOutput,
+        },
         created_at: now,
         updated_at: now,
-        notes: None,
         assigned_at: None,
     }
 }

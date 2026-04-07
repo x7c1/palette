@@ -1,8 +1,7 @@
 use super::Orchestrator;
 use palette_domain::task::TaskId;
 use palette_domain::worker::{ContainerId, WorkerId, WorkerRole, WorkerStatus};
-use palette_usecase::container_runtime::{ArtifactsMount, ContainerMounts};
-use palette_usecase::data_store::InsertWorkerRequest;
+use palette_usecase::{ArtifactsMount, ContainerMounts, InsertWorkerRequest};
 
 impl Orchestrator {
     /// Spawn a dynamic supervisor for a composite task.
@@ -132,8 +131,9 @@ impl Orchestrator {
     }
 
     /// Resolve the artifacts mount for a ReviewIntegrator supervisor.
-    /// The supervisor's task_id is the review composite task,
-    /// whose parent is the craft task.
+    ///
+    /// For Craft-parented reviews, the anchor is the parent Craft job.
+    /// For standalone PR reviews, the anchor is the ReviewIntegrate job itself.
     fn resolve_supervisor_artifacts(
         &self,
         task_id: &TaskId,
@@ -142,19 +142,13 @@ impl Orchestrator {
             return Ok(None);
         };
         let task_store = self.interactor.create_task_store(&task_state.workflow_id)?;
-        let Some(task) = task_store.get_task(task_id) else {
-            return Ok(None);
-        };
-        let Some(ref parent_id) = task.parent_id else {
-            return Ok(None);
-        };
-        let Some(craft_job) = self.interactor.data_store.get_job_by_task_id(parent_id)? else {
+        let Some(anchor_job) = self.find_artifact_anchor(&task_store, task_id) else {
             return Ok(None);
         };
 
         let artifacts_path = self
             .workspace_manager
-            .artifacts_path(task_state.workflow_id.as_ref(), craft_job.id.as_ref());
+            .artifacts_path(task_state.workflow_id.as_ref(), anchor_job.id.as_ref());
         std::fs::create_dir_all(&artifacts_path)
             .map_err(|e| crate::Error::External(Box::new(e)))?;
         let abs_path = std::fs::canonicalize(&artifacts_path)

@@ -7,7 +7,7 @@ use crate::worker::WorkerId;
 pub struct CreateJobRequest {
     pub task_id: TaskId,
     pub title: Title,
-    pub plan_path: PlanPath,
+    pub plan_path: Option<PlanPath>,
     pub assignee_id: Option<WorkerId>,
     pub priority: Option<Priority>,
     pub detail: JobDetail,
@@ -17,7 +17,7 @@ impl CreateJobRequest {
     pub fn new(
         task_id: TaskId,
         title: Title,
-        plan_path: PlanPath,
+        plan_path: Option<PlanPath>,
         assignee_id: Option<WorkerId>,
         priority: Option<Priority>,
         detail: JobDetail,

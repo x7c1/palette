@@ -4,7 +4,7 @@ use palette_domain::terminal::TerminalTarget;
 use palette_domain::worker::{ContainerId, WorkerId, WorkerRole, WorkerStatus};
 use palette_domain::workflow::WorkflowId;
 use palette_server::api_types::{CreateJobRequest, JobStatus, JobType, UpdateJobRequest};
-use palette_usecase::data_store::InsertWorkerRequest;
+use palette_usecase::InsertWorkerRequest;
 
 pub fn wid(s: &str) -> WorkerId {
     WorkerId::parse(s).unwrap()
@@ -77,7 +77,7 @@ pub fn create_craft(id: &str, title: &str, task_id: &str) -> CreateJobRequest {
         task_id: task_id.to_string(),
         job_type: JobType::Craft,
         title: title.to_string(),
-        plan_path: format!("test/{id}"),
+        plan_path: Some(format!("test/{id}")),
         assignee_id: None,
         priority: None,
         repository: Some(palette_server::api_types::Repository {
@@ -93,7 +93,7 @@ pub fn create_review(id: &str, title: &str, task_id: &str) -> CreateJobRequest {
         task_id: task_id.to_string(),
         job_type: JobType::Review,
         title: title.to_string(),
-        plan_path: format!("test/{id}"),
+        plan_path: Some(format!("test/{id}")),
         assignee_id: None,
         priority: None,
         repository: None,

@@ -1,5 +1,7 @@
 use super::{InputError, JobType, Priority, Repository};
-use palette_domain::job::{CreateJobRequest as DomainCreateJobRequest, JobDetail, PlanPath, Title};
+use palette_domain::job::{
+    CreateJobRequest as DomainCreateJobRequest, JobDetail, PlanPath, ReviewTarget, Title,
+};
 use palette_domain::task::TaskId;
 use palette_domain::worker::WorkerId;
 use serde::{Deserialize, Serialize};
@@ -10,7 +12,7 @@ pub struct CreateJobRequest {
     #[serde(rename = "type")]
     pub job_type: JobType,
     pub title: String,
-    pub plan_path: String,
+    pub plan_path: Option<String>,
     pub assignee_id: Option<String>,
     pub priority: Option<Priority>,
     pub repository: Option<Repository>,
@@ -47,19 +49,36 @@ impl CreateJobRequest {
                     None
                 }
             },
-            palette_domain::job::JobType::Review => Some(JobDetail::Review { perspective: None }),
-            palette_domain::job::JobType::ReviewIntegrate => Some(JobDetail::ReviewIntegrate),
+            palette_domain::job::JobType::Review => Some(JobDetail::Review {
+                perspective: None,
+                target: ReviewTarget::CraftOutput,
+            }),
+            palette_domain::job::JobType::ReviewIntegrate => Some(JobDetail::ReviewIntegrate {
+                target: ReviewTarget::CraftOutput,
+            }),
             palette_domain::job::JobType::Orchestrator => Some(JobDetail::Orchestrator {
                 command: self.command.clone(),
             }),
             palette_domain::job::JobType::Operator => Some(JobDetail::Operator),
         };
 
+        // Parse plan_path outside the macro since it's Option<String>
+        let parsed_plan_path: Result<Option<PlanPath>, _> =
+            self.plan_path.as_deref().map(PlanPath::parse).transpose();
+        if let Err(ref e) = parsed_plan_path {
+            detail_errors.push(InputError {
+                location: palette_core::Location::Body,
+                hint: "plan_path".into(),
+                reason: palette_core::ReasonKey::reason_key(e),
+            });
+        }
+
         // Use the macro for standard field validation
         let result = palette_macros::validate!(DomainCreateJobRequest::new {
             task_id: TaskId::parse(&self.task_id),
             title: Title::parse(&self.title),
-            plan_path: PlanPath::parse(&self.plan_path),
+            #[plain]
+            plan_path: parsed_plan_path.unwrap_or(None),
             assignee_id: self.assignee_id.as_deref().map(WorkerId::parse).transpose(),
             #[plain]
             priority: self.priority.map(palette_domain::job::Priority::from),

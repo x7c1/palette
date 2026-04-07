@@ -107,9 +107,9 @@ impl Orchestrator {
         if !own_job_done {
             // For review-integrate tasks: all child reviewers are done.
             // Spawn the ReviewIntegrator to read review.md files and
-            // write integrated-review.md.
+            // write integrated-review.json.
             if let Some(task) = task_store.get_task(task_id)
-                && matches!(task.job_detail, Some(JobDetail::ReviewIntegrate))
+                && matches!(task.job_detail, Some(JobDetail::ReviewIntegrate { .. }))
             {
                 tracing::info!(
                     task_id = %task_id,

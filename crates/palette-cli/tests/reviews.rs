@@ -5,7 +5,7 @@ use palette_domain::task::TaskId;
 use palette_domain::workflow::WorkflowId;
 use palette_server::api_types::{ReviewCommentInput, SubmitReviewRequest, Verdict};
 use palette_tmux::TmuxManager;
-use palette_usecase::data_store::CreateTaskRequest;
+use palette_usecase::CreateTaskRequest;
 
 fn setup_review_task(state: &palette_server::AppState, task_id_str: &str) -> TaskId {
     let task_id = TaskId::parse(task_id_str).unwrap();
@@ -40,10 +40,13 @@ async fn review_submit_and_get_submissions() {
         .create_job(&CreateJobRequest::new(
             task_id,
             palette_domain::job::Title::parse("Review").unwrap(),
-            palette_domain::job::PlanPath::parse("test/R-001").unwrap(),
+            Some(palette_domain::job::PlanPath::parse("test/R-001").unwrap()),
             None,
             None,
-            JobDetail::Review { perspective: None },
+            JobDetail::Review {
+                perspective: None,
+                target: palette_domain::job::ReviewTarget::CraftOutput,
+            },
         ))
         .unwrap();
     let review_job_id = review_job.id.clone();
@@ -123,10 +126,13 @@ async fn review_approved_completes_review_job() {
         .create_job(&CreateJobRequest::new(
             task_id,
             palette_domain::job::Title::parse("Review").unwrap(),
-            palette_domain::job::PlanPath::parse("test/R-001").unwrap(),
+            Some(palette_domain::job::PlanPath::parse("test/R-001").unwrap()),
             None,
             None,
-            JobDetail::Review { perspective: None },
+            JobDetail::Review {
+                perspective: None,
+                target: palette_domain::job::ReviewTarget::CraftOutput,
+            },
         ))
         .unwrap();
     let review_job_id = review_job.id.clone();

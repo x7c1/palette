@@ -7,7 +7,7 @@ use palette_domain::task::TaskId;
 use palette_domain::workflow::WorkflowId;
 use palette_server::api_types::{CreateJobRequest, JobStatus, JobType};
 use palette_tmux::TmuxManager;
-use palette_usecase::data_store::CreateTaskRequest;
+use palette_usecase::CreateTaskRequest;
 
 #[tokio::test]
 async fn job_api_create_and_list() {
@@ -52,7 +52,7 @@ async fn job_api_create_and_list() {
             task_id: "wf-jobapi:task-w-001".to_string(),
             job_type: JobType::Craft,
             title: "Implement feature".to_string(),
-            plan_path: "test/W-001".to_string(),
+            plan_path: Some("test/W-001".to_string()),
             assignee_id: Some("member-a".to_string()),
             priority: Some(palette_server::api_types::Priority::High),
             repository: Some(palette_server::api_types::Repository {
@@ -78,7 +78,7 @@ async fn job_api_create_and_list() {
             task_id: "wf-jobapi:task-r-001".to_string(),
             job_type: JobType::Review,
             title: "Review feature".to_string(),
-            plan_path: "test/R-001".to_string(),
+            plan_path: Some("test/R-001".to_string()),
             assignee_id: None,
             priority: None,
             repository: None,

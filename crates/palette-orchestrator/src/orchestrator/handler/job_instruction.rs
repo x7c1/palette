@@ -20,21 +20,35 @@ pub(crate) fn format_job_instruction(
     round: Option<u32>,
     perspectives: &ValidatedPerspectives,
 ) -> String {
-    let mut msg = format!(
-        "## Task: {}\n\nID: {}\nPlan: {}/{}\n",
-        job.title, job.id, PLAN_DIR_MOUNT, job.plan_path
-    );
+    let mut msg = format!("## Task: {}\n\nID: {}\n", job.title, job.id);
+    if let Some(ref plan_path) = job.plan_path {
+        msg.push_str(&format!("Plan: {PLAN_DIR_MOUNT}/{plan_path}\n"));
+    }
     if let JobDetail::Craft { ref repository } = job.detail {
         msg.push_str(&format!(
             "\nRepository: {} (branch: {})\n",
             repository.name, repository.branch
         ));
     }
-    if let Some(round) = round {
+    if let Some(pr) = job.detail.pull_request() {
         msg.push_str(&format!(
-            "\nRound: {round}\nArtifacts: {ARTIFACTS_MOUNT}/round-{round}/{}/\n",
-            job.id
+            "\nPull Request: {}\nWorkspace: /home/agent/workspace (read-only checkout of PR branch)\n",
+            pr,
         ));
+    }
+    if let Some(round) = round {
+        if matches!(job.detail, JobDetail::ReviewIntegrate { .. }) {
+            // ReviewIntegrator writes to round-{N}/ directly (not a subdirectory)
+            msg.push_str(&format!(
+                "\nRound: {round}\nArtifacts: {ARTIFACTS_MOUNT}/round-{round}/\n",
+            ));
+        } else {
+            // Individual reviewers write to round-{N}/{job_id}/
+            msg.push_str(&format!(
+                "\nRound: {round}\nArtifacts: {ARTIFACTS_MOUNT}/round-{round}/{}/\n",
+                job.id
+            ));
+        }
     }
     if let Some(perspective_name) = job.detail.perspective() {
         msg.push_str(&format!("\nPerspective: {perspective_name}\n"));
@@ -60,7 +74,7 @@ mod tests {
     use super::*;
     use crate::perspectives_config::{PerspectivePath, ValidatedPerspective};
     use palette_domain::job::{
-        JobId, JobStatus, JobType, PerspectiveName, PlanPath, Repository, Title,
+        JobId, JobStatus, JobType, PerspectiveName, PlanPath, Repository, ReviewTarget, Title,
     };
     use palette_domain::task::TaskId;
     use std::collections::HashMap;
@@ -72,14 +86,16 @@ mod tests {
             id: JobId::parse("R-001").unwrap(),
             task_id: TaskId::parse("wf-test:review-a").unwrap(),
             title: Title::parse("Review API").unwrap(),
-            plan_path: PlanPath::parse("plans/api").unwrap(),
+            plan_path: Some(PlanPath::parse("plans/api").unwrap()),
             assignee_id: None,
             status: JobStatus::todo(JobType::Review),
             priority: None,
-            detail: JobDetail::Review { perspective },
+            detail: JobDetail::Review {
+                perspective,
+                target: ReviewTarget::CraftOutput,
+            },
             created_at: now,
             updated_at: now,
-            notes: None,
             assigned_at: None,
         }
     }
@@ -90,7 +106,7 @@ mod tests {
             id: JobId::parse("C-001").unwrap(),
             task_id: TaskId::parse("wf-test:craft-a").unwrap(),
             title: Title::parse("Implement API").unwrap(),
-            plan_path: PlanPath::parse("plans/api").unwrap(),
+            plan_path: Some(PlanPath::parse("plans/api").unwrap()),
             assignee_id: None,
             status: JobStatus::todo(JobType::Craft),
             priority: None,
@@ -99,7 +115,6 @@ mod tests {
             },
             created_at: now,
             updated_at: now,
-            notes: None,
             assigned_at: None,
         }
     }

@@ -7,7 +7,7 @@ use palette_domain::worker::{ContainerId, WorkerRole, WorkerStatus};
 use palette_domain::workflow::WorkflowId;
 use palette_server::api_types::{SendPermissionRequest, SendRequest};
 use palette_tmux::TmuxManager;
-use palette_usecase::data_store::InsertWorkerRequest;
+use palette_usecase::InsertWorkerRequest;
 use serde_json::json;
 
 fn register_worker(
@@ -166,11 +166,15 @@ async fn send_permission_requires_matching_event_id() {
     let (base_url, state, _shutdown_tx) = spawn_server(tmux, &session).await;
     register_worker(&state, "worker", &target, WorkerStatus::WaitingPermission);
 
-    state
-        .pending_permission_events
-        .lock()
-        .await
-        .insert("worker".to_string(), "perm-expected".to_string());
+    state.pending_permission_events.lock().await.insert(
+        "worker".to_string(),
+        palette_server::PendingPermission {
+            event_id: "perm-expected".to_string(),
+            created_at: std::time::Instant::now(),
+            supervisor_id: None,
+            notification: String::new(),
+        },
+    );
 
     let client = reqwest::Client::new();
     let resp = client
@@ -196,11 +200,15 @@ async fn send_permission_delivers_choice_without_enter() {
     let (base_url, state, _shutdown_tx) = spawn_server(tmux, &session).await;
     register_worker(&state, "worker", &target, WorkerStatus::WaitingPermission);
 
-    state
-        .pending_permission_events
-        .lock()
-        .await
-        .insert("worker".to_string(), "perm-ok".to_string());
+    state.pending_permission_events.lock().await.insert(
+        "worker".to_string(),
+        palette_server::PendingPermission {
+            event_id: "perm-ok".to_string(),
+            created_at: std::time::Instant::now(),
+            supervisor_id: None,
+            notification: String::new(),
+        },
+    );
 
     let client = reqwest::Client::new();
     let resp = client

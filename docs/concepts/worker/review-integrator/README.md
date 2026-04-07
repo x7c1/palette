@@ -2,7 +2,7 @@
 
 ## Definition
 
-The Review Integrator is a [Worker](../) that consolidates findings from multiple [Reviewers](../member/reviewer/) into a single verdict. It reads all `review.md` files produced by Reviewers, deduplicates findings, prioritizes them by severity, writes an `integrated-review.md`, and submits a unified review result. The Review Integrator is spawned only after all Reviewers have completed, so all inputs are available at startup.
+The Review Integrator is a [Worker](../) that consolidates findings from multiple [Reviewers](../member/reviewer/) into a single verdict. It reads all `review.md` files produced by Reviewers, deduplicates findings, prioritizes them by severity, writes an `integrated-review.json`, and submits a unified review result. The Review Integrator is spawned only after all Reviewers have completed, so all inputs are available at startup.
 
 The Review Integrator is **not** a [Supervisor](../supervisor/) — it does not receive permission prompts from Members. Permission prompts from Reviewers are handled by the [Approver](../supervisor/approver/).
 

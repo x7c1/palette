@@ -47,7 +47,7 @@ pub async fn handle_stop(
         pending.remove(worker_id.as_ref());
     }
 
-    // If the stopping worker is a ReviewIntegrator, validate integrated-review.md
+    // If the stopping worker is a ReviewIntegrator, validate integrated-review.json
     if let Ok(Some(worker)) = state.interactor.data_store.find_worker(&worker_id)
         && worker.role == WorkerRole::ReviewIntegrator
     {
@@ -158,7 +158,9 @@ fn process_member_jobs(
                 handle_review_stop(state, job, worker_id, supervisor_id, last_message)
             }
             // ReviewIntegrate, Orchestrator, and Operator jobs don't have member workers
-            JobDetail::ReviewIntegrate | JobDetail::Orchestrator { .. } | JobDetail::Operator => {}
+            JobDetail::ReviewIntegrate { .. }
+            | JobDetail::Orchestrator { .. }
+            | JobDetail::Operator => {}
         }
     }
 }

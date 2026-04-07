@@ -4,6 +4,9 @@ pub use job_type_yaml::JobTypeYaml;
 mod priority_yaml;
 pub use priority_yaml::PriorityYaml;
 
+mod pull_request_yaml;
+pub use pull_request_yaml::PullRequestYaml;
+
 mod repository_yaml;
 pub use repository_yaml::RepositoryYaml;
 
@@ -22,6 +25,8 @@ pub struct TaskNode {
     pub command: Option<String>,
     /// Perspective name for review tasks.
     pub perspective: Option<String>,
+    /// Pull request for standalone PR review tasks.
+    pub pull_request: Option<PullRequestYaml>,
     #[serde(default)]
     pub children: Vec<TaskNode>,
     #[serde(default)]

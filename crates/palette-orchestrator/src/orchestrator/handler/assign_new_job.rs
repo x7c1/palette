@@ -3,8 +3,7 @@ use super::PendingActions;
 use super::job_instruction::format_job_instruction;
 use palette_domain::job::{Job, JobDetail, JobId, JobType};
 use palette_domain::worker::WorkerId;
-use palette_usecase::container_runtime::{ArtifactsMount, WorkspaceVolume};
-use palette_usecase::data_store::InsertWorkerRequest;
+use palette_usecase::{ArtifactsMount, InsertWorkerRequest, WorkspaceVolume};
 
 impl Orchestrator {
     /// Assign a new job to a freshly spawned member.
@@ -181,7 +180,7 @@ impl Orchestrator {
     /// Craft jobs get a read-only mount (to read review feedback).
     fn resolve_artifacts_mount(&self, job: &Job) -> crate::Result<Option<ArtifactsMount>> {
         let job_type = job.detail.job_type();
-        let (workflow_id, craft_job_id) = match job_type {
+        let (workflow_id, anchor_job_id) = match job_type {
             JobType::Craft => {
                 let Some(task_state) = self.interactor.data_store.get_task_state(&job.task_id)?
                 else {
@@ -198,17 +197,17 @@ impl Orchestrator {
                     return Ok(None);
                 };
                 let task_store = self.interactor.create_task_store(&task_state.workflow_id)?;
-                let craft_job = match self.find_ancestor_craft_job(&task_store, &job.task_id) {
+                let anchor_job = match self.find_artifact_anchor(&task_store, &job.task_id) {
                     Some(j) => j,
                     None => return Ok(None),
                 };
-                (task_state.workflow_id, craft_job.id)
+                (task_state.workflow_id, anchor_job.id)
             }
         };
 
         let artifacts_path = self
             .workspace_manager
-            .artifacts_path(workflow_id.as_ref(), craft_job_id.as_ref());
+            .artifacts_path(workflow_id.as_ref(), anchor_job_id.as_ref());
         std::fs::create_dir_all(&artifacts_path)
             .map_err(|e| crate::Error::External(Box::new(e)))?;
 
@@ -244,9 +243,9 @@ impl Orchestrator {
     /// Review jobs share the parent craft job's workspace as read-only.
     fn resolve_workspace(&self, job: &Job) -> crate::Result<Option<WorkspaceVolume>> {
         match &job.detail {
-            JobDetail::ReviewIntegrate | JobDetail::Orchestrator { .. } | JobDetail::Operator => {
-                Ok(None)
-            }
+            JobDetail::ReviewIntegrate { .. }
+            | JobDetail::Orchestrator { .. }
+            | JobDetail::Operator => Ok(None),
             JobDetail::Craft { repository } => {
                 let info = self
                     .workspace_manager
@@ -257,30 +256,44 @@ impl Orchestrator {
                     read_only: false,
                 }))
             }
-            JobDetail::Review { .. } => {
-                let task_id = &job.task_id;
-                let Some(task_state) = self.interactor.data_store.get_task_state(task_id)? else {
-                    return Ok(None);
-                };
-                let task_store = self.interactor.create_task_store(&task_state.workflow_id)?;
-                let craft_job = match self.find_ancestor_craft_job(&task_store, task_id) {
-                    Some(j) => j,
-                    None => return Ok(None),
-                };
-                let JobDetail::Craft { ref repository } = craft_job.detail else {
-                    return Ok(None);
-                };
-                let cache_path = self.workspace_manager.repo_cache_path(repository);
-                let ws_path = self.workspace_manager.workspace_path(craft_job.id.as_ref());
-                let cache_abs = std::fs::canonicalize(&cache_path)
-                    .map_err(|e| crate::Error::External(Box::new(e)))?;
-                let ws_abs = std::fs::canonicalize(&ws_path)
-                    .map_err(|e| crate::Error::External(Box::new(e)))?;
-                Ok(Some(WorkspaceVolume {
-                    host_path: ws_abs.to_string_lossy().to_string(),
-                    repo_cache_path: cache_abs.to_string_lossy().to_string(),
-                    read_only: true,
-                }))
+            JobDetail::Review { target, .. } => {
+                if let Some(pr) = target.pull_request() {
+                    // Standalone PR review: clone and checkout PR head commit
+                    let info = self
+                        .workspace_manager
+                        .create_pr_workspace(job.id.as_ref(), pr)?;
+                    Ok(Some(WorkspaceVolume {
+                        host_path: info.host_path,
+                        repo_cache_path: info.repo_cache_path,
+                        read_only: true,
+                    }))
+                } else {
+                    // Craft-parented review: share the crafter's workspace read-only
+                    let task_id = &job.task_id;
+                    let Some(task_state) = self.interactor.data_store.get_task_state(task_id)?
+                    else {
+                        return Ok(None);
+                    };
+                    let task_store = self.interactor.create_task_store(&task_state.workflow_id)?;
+                    let craft_job = match self.find_ancestor_craft_job(&task_store, task_id) {
+                        Some(j) => j,
+                        None => return Ok(None),
+                    };
+                    let JobDetail::Craft { ref repository } = craft_job.detail else {
+                        return Ok(None);
+                    };
+                    let cache_path = self.workspace_manager.repo_cache_path(repository);
+                    let ws_path = self.workspace_manager.workspace_path(craft_job.id.as_ref());
+                    let cache_abs = std::fs::canonicalize(&cache_path)
+                        .map_err(|e| crate::Error::External(Box::new(e)))?;
+                    let ws_abs = std::fs::canonicalize(&ws_path)
+                        .map_err(|e| crate::Error::External(Box::new(e)))?;
+                    Ok(Some(WorkspaceVolume {
+                        host_path: ws_abs.to_string_lossy().to_string(),
+                        repo_cache_path: cache_abs.to_string_lossy().to_string(),
+                        read_only: true,
+                    }))
+                }
             }
         }
     }

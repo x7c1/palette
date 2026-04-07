@@ -24,7 +24,7 @@ impl Orchestrator {
             Ok(s) => s,
             Err(_) => return,
         };
-        let craft_job = match self.find_ancestor_craft_job(&task_store, &job.task_id) {
+        let anchor_job = match self.find_artifact_anchor(&task_store, &job.task_id) {
             Some(j) => j,
             None => return,
         };
@@ -36,7 +36,7 @@ impl Orchestrator {
 
         let artifacts_base = self
             .workspace_manager
-            .artifacts_path(task_state.workflow_id.as_ref(), craft_job.id.as_ref());
+            .artifacts_path(task_state.workflow_id.as_ref(), anchor_job.id.as_ref());
         let review_md = artifacts_base
             .join(format!("round-{round}"))
             .join(job.id.to_string())
@@ -87,22 +87,10 @@ impl Orchestrator {
             }
         };
 
-        // Find parent craft job for artifacts path
-        let task = match task_store.get_task(&job.task_id) {
-            Some(t) => t,
+        // Find artifact anchor job (Craft parent or ReviewIntegrate self)
+        let anchor_job = match self.find_artifact_anchor(&task_store, &job.task_id) {
+            Some(j) => j,
             None => return true,
-        };
-        let parent_id = match task.parent_id.as_ref() {
-            Some(id) => id,
-            None => return true,
-        };
-        let craft_job = match self.interactor.data_store.get_job_by_task_id(parent_id) {
-            Ok(Some(j)) => j,
-            Ok(None) => return true,
-            Err(e) => {
-                tracing::error!(error = %e, "failed to get craft job for integrator validation");
-                return true;
-            }
         };
 
         // Determine current round
@@ -121,7 +109,7 @@ impl Orchestrator {
 
         let artifacts_base = self
             .workspace_manager
-            .artifacts_path(task_state.workflow_id.as_ref(), craft_job.id.as_ref());
+            .artifacts_path(task_state.workflow_id.as_ref(), anchor_job.id.as_ref());
 
         // If the round directory doesn't exist, no reviewer has written
         // artifacts yet — skip validation. The base directory may exist
@@ -196,7 +184,7 @@ impl Orchestrator {
         all_present
     }
 
-    /// Validate that a ReviewIntegrator wrote integrated-review.md.
+    /// Validate that a ReviewIntegrator wrote integrated-review.json.
     ///
     /// Called after a ReviewIntegrator's stop hook fires. The task_id is the
     /// review composite task whose parent is the craft task.
@@ -213,17 +201,9 @@ impl Orchestrator {
             Ok(s) => s,
             Err(_) => return,
         };
-        let task = match task_store.get_task(task_id) {
-            Some(t) => t,
+        let anchor_job = match self.find_artifact_anchor(&task_store, task_id) {
+            Some(j) => j,
             None => return,
-        };
-        let parent_id = match task.parent_id.as_ref() {
-            Some(id) => id,
-            None => return,
-        };
-        let craft_job = match self.interactor.data_store.get_job_by_task_id(parent_id) {
-            Ok(Some(j)) => j,
-            _ => return,
         };
 
         // Find the latest round from any child review job's submissions
@@ -254,28 +234,28 @@ impl Orchestrator {
 
         let artifacts_base = self
             .workspace_manager
-            .artifacts_path(task_state.workflow_id.as_ref(), craft_job.id.as_ref());
-        let integrated_md = artifacts_base
+            .artifacts_path(task_state.workflow_id.as_ref(), anchor_job.id.as_ref());
+        let integrated_json = artifacts_base
             .join(format!("round-{round}"))
-            .join("integrated-review.md");
+            .join("integrated-review.json");
 
-        if integrated_md.exists() {
+        if integrated_json.exists() {
             tracing::debug!(
                 task_id = %task_id,
-                path = %integrated_md.display(),
-                "integrated-review.md artifact validated"
+                path = %integrated_json.display(),
+                "integrated-review.json artifact validated"
             );
         } else {
             tracing::warn!(
                 task_id = %task_id,
                 worker_id = %worker_id,
-                path = %integrated_md.display(),
-                "integrated-review.md artifact missing after integrator stop"
+                path = %integrated_json.display(),
+                "integrated-review.json artifact missing after integrator stop"
             );
             let msg = format!(
                 "## Missing Artifact\n\n\
-                 Your integrated-review.md file was not found at the expected location.\n\
-                 Please write the integrated review to: /home/agent/artifacts/round-{round}/integrated-review.md\n\n\
+                 Your integrated-review.json file was not found at the expected location.\n\
+                 Please write the integrated review to: /home/agent/artifacts/round-{round}/integrated-review.json\n\n\
                  Follow the format described in your prompt.",
             );
             if let Err(e) = self.interactor.data_store.enqueue_message(worker_id, &msg) {
@@ -307,6 +287,48 @@ impl Orchestrator {
                 return Some(job);
             }
             current_id = task_store.get_task(&current_id)?.parent_id?;
+        }
+    }
+
+    /// Find the job whose ID anchors the artifact path for a review task.
+    ///
+    /// For Craft-parented reviews, this is the ancestor Craft job (existing behavior).
+    /// For standalone PR reviews (no Craft ancestor), this is the ReviewIntegrate
+    /// job that serves as the review composite root.
+    pub(crate) fn find_artifact_anchor(
+        &self,
+        task_store: &TaskStore<'_>,
+        task_id: &TaskId,
+    ) -> Option<Job> {
+        // First, try the existing Craft-ancestor path
+        if let Some(craft_job) = self.find_ancestor_craft_job(task_store, task_id) {
+            return Some(craft_job);
+        }
+
+        // Fallback: check if the task itself is ReviewIntegrate, then walk up
+        if let Some(job) = self
+            .interactor
+            .data_store
+            .get_job_by_task_id(task_id)
+            .ok()?
+            && matches!(job.detail, JobDetail::ReviewIntegrate { .. })
+        {
+            return Some(job);
+        }
+        let mut current_id = task_store.get_task(task_id)?.parent_id?;
+        loop {
+            let job = self
+                .interactor
+                .data_store
+                .get_job_by_task_id(&current_id)
+                .ok()??;
+            if matches!(job.detail, JobDetail::ReviewIntegrate { .. }) {
+                return Some(job);
+            }
+            match task_store.get_task(&current_id)?.parent_id {
+                Some(pid) => current_id = pid,
+                None => return None,
+            }
         }
     }
 }

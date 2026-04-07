@@ -56,7 +56,7 @@ pub fn create_craft(db: &Database, id: &str, priority: Option<Priority>) -> Job 
     db.create_job(&CreateJobRequest::new(
         task_id,
         Title::parse(format!("Job {id}")).unwrap(),
-        PlanPath::parse(format!("test/{id}")).unwrap(),
+        Some(PlanPath::parse(format!("test/{id}")).unwrap()),
         None,
         priority,
         JobDetail::Craft {
@@ -71,10 +71,13 @@ pub fn create_review(db: &Database, id: &str) -> Job {
     db.create_job(&CreateJobRequest::new(
         task_id,
         Title::parse(format!("Review {id}")).unwrap(),
-        PlanPath::parse(format!("test/{id}")).unwrap(),
+        Some(PlanPath::parse(format!("test/{id}")).unwrap()),
         None,
         None,
-        JobDetail::Review { perspective: None },
+        JobDetail::Review {
+            perspective: None,
+            target: ReviewTarget::CraftOutput,
+        },
     ))
     .unwrap()
 }

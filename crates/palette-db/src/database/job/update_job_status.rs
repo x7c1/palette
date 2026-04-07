@@ -31,7 +31,7 @@ mod tests {
             .create_job(&CreateJobRequest::new(
                 task_id,
                 Title::parse("Craft").unwrap(),
-                PlanPath::parse("test/C-001").unwrap(),
+                Some(PlanPath::parse("test/C-001").unwrap()),
                 None,
                 None,
                 JobDetail::Craft {

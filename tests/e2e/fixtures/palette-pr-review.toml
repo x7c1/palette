@@ -1,0 +1,27 @@
+port = 7100
+operator_api_url = "http://127.0.0.1:7100"
+server_bind_addr = "0.0.0.0:7100"
+db_path = "data/palette.db"
+plan_dir = "data/plans"
+
+[tmux]
+session_name = "palette"
+
+[rules]
+max_review_rounds = 5
+
+[docker]
+worker_callback_url = "http://127.0.0.1:7100"
+callback_network = "auto"
+max_workers = 50
+
+[perspectives_dirs]
+e2e = "tests/e2e/fixtures/perspectives"
+
+[[perspectives]]
+name = "architecture"
+paths = ["e2e:architecture/review-criteria.md"]
+
+[[perspectives]]
+name = "type-safety"
+paths = ["e2e:type-safety/review-criteria.md"]

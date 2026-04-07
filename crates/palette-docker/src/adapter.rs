@@ -1,7 +1,6 @@
 use crate::{DockerManager, is_container_running, read_container_file};
 use palette_domain::worker::{ContainerId, WorkerRole, WorkerSessionId};
-use palette_usecase::ContainerRuntime;
-use palette_usecase::container_runtime::ContainerMounts;
+use palette_usecase::{ContainerMounts, ContainerRuntime};
 use std::path::Path;
 
 impl ContainerRuntime for DockerManager {

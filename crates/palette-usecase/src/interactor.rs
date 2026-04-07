@@ -1,17 +1,18 @@
 use crate::task_store::TaskStore;
-use crate::{BlueprintReader, ContainerRuntime, DataStore, TerminalSession};
+use crate::{BlueprintReader, ContainerRuntime, DataStore, GitHubReviewPort, TerminalSession};
 use palette_domain::workflow::WorkflowId;
 
 /// Mediates all external resource access for the application.
 ///
 /// Holds trait objects for container runtime, terminal session, data store,
-/// and blueprint reader. The orchestrator and server access external
-/// resources exclusively through this struct.
+/// blueprint reader, and GitHub review port. The orchestrator and server
+/// access external resources exclusively through this struct.
 pub struct Interactor {
     pub container: Box<dyn ContainerRuntime>,
     pub terminal: Box<dyn TerminalSession>,
     pub data_store: Box<dyn DataStore>,
     pub blueprint: Box<dyn BlueprintReader>,
+    pub github_review_port: Box<dyn GitHubReviewPort>,
 }
 
 impl Interactor {

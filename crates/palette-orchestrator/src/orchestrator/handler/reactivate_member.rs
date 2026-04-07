@@ -35,7 +35,9 @@ impl Orchestrator {
             JobDetail::Craft { .. } => CraftTransition::RequestChanges.to_job_status(),
             JobDetail::Review { .. } => ReviewTransition::Restart.to_job_status(),
             // ReviewIntegrate/Orchestrator/Operator jobs don't have members to reactivate
-            JobDetail::ReviewIntegrate | JobDetail::Orchestrator { .. } | JobDetail::Operator => {
+            JobDetail::ReviewIntegrate { .. }
+            | JobDetail::Orchestrator { .. }
+            | JobDetail::Operator => {
                 return Ok(result);
             }
         };

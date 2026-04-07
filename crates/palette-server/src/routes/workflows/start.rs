@@ -8,7 +8,7 @@ use axum::{
 use palette_domain::server::ServerEvent;
 use palette_domain::task::TaskTree;
 use palette_domain::workflow::WorkflowId;
-use palette_usecase::data_store::CreateTaskRequest;
+use palette_usecase::CreateTaskRequest;
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 use std::sync::Arc;
@@ -60,7 +60,7 @@ pub async fn handle_start_workflow(
 }
 
 /// Create the workflow and register all task IDs (with Pending status) in the DB.
-fn register_tasks(
+pub(super) fn register_tasks(
     state: &AppState,
     workflow_id: &WorkflowId,
     tree: &TaskTree,

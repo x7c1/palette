@@ -39,19 +39,17 @@ impl Task {
             .ok_or_else(|| TaskToJobError::MissingJobType {
                 task_id: self.id.clone(),
             })?;
-        let plan_path_str =
-            self.plan_path
-                .as_deref()
-                .ok_or_else(|| TaskToJobError::MissingPlanPath {
-                    task_id: self.id.clone(),
-                })?;
         let title =
             Title::parse(self.key.to_string()).map_err(|e| TaskToJobError::InvalidField {
                 task_id: self.id.clone(),
                 detail: e.reason_key(),
             })?;
-        let plan_path =
-            PlanPath::parse(plan_path_str).map_err(|e| TaskToJobError::InvalidField {
+        let plan_path = self
+            .plan_path
+            .as_deref()
+            .map(PlanPath::parse)
+            .transpose()
+            .map_err(|e| TaskToJobError::InvalidField {
                 task_id: self.id.clone(),
                 detail: e.reason_key(),
             })?;
@@ -71,7 +69,6 @@ impl Task {
 #[derive(Debug, palette_macros::ReasonKey)]
 pub enum TaskToJobError {
     MissingJobType { task_id: TaskId },
-    MissingPlanPath { task_id: TaskId },
     InvalidField { task_id: TaskId, detail: String },
 }
 
@@ -105,7 +102,7 @@ mod tests {
         assert_eq!(req.task_id, task.id);
         assert_eq!(req.detail.job_type(), JobType::Craft);
         assert_eq!(req.title.as_ref(), "my-task");
-        assert_eq!(req.plan_path.as_ref(), "plans/my-task");
+        assert_eq!(req.plan_path.unwrap().as_ref(), "plans/my-task");
         assert_eq!(req.priority, Some(Priority::High));
         assert!(req.assignee_id.is_none());
     }
@@ -113,7 +110,10 @@ mod tests {
     #[test]
     fn creates_job_request_from_review_task() {
         let task = test_task(
-            Some(JobDetail::Review { perspective: None }),
+            Some(JobDetail::Review {
+                perspective: None,
+                target: crate::job::ReviewTarget::CraftOutput,
+            }),
             Some("plans/review"),
         );
         let req = task.to_create_job_request().unwrap();
@@ -128,12 +128,12 @@ mod tests {
     }
 
     #[test]
-    fn fails_without_plan_path() {
+    fn succeeds_without_plan_path() {
         let detail = JobDetail::Craft {
             repository: Repository::parse("x7c1/palette-demo", "main").unwrap(),
         };
         let task = test_task(Some(detail), None);
-        let err = task.to_create_job_request().unwrap_err();
-        assert!(matches!(err, TaskToJobError::MissingPlanPath { .. }));
+        let req = task.to_create_job_request().unwrap();
+        assert!(req.plan_path.is_none());
     }
 }

@@ -61,7 +61,7 @@ Brief summary of your review findings.
 - `[blocking]`: Must be fixed. Leads to `changes_requested` verdict.
 - `[suggestion]`: Nice to have. Does not block approval.
 
-On re-review rounds, check the previous round's `integrated-review.md`. Do not repeat resolved findings.
+On re-review rounds, check the previous round's `integrated-review.json`. Do not repeat resolved findings.
 
 ## Completion
 

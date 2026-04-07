@@ -168,8 +168,18 @@ fn verify_blueprint_hash(state: &AppState, workflow_id: &WorkflowId) -> crate::R
         })?;
 
     let blueprint_path = std::path::Path::new(&workflow.blueprint_path);
+    verify_blueprint(state, workflow_id, blueprint_path, &workflow.blueprint_hash)?;
 
-    match &workflow.blueprint_hash {
+    Ok(())
+}
+
+fn verify_blueprint(
+    state: &AppState,
+    workflow_id: &WorkflowId,
+    blueprint_path: &std::path::Path,
+    blueprint_hash: &Option<String>,
+) -> crate::Result<()> {
+    match blueprint_hash {
         Some(stored_hash) => {
             // Apply was called — verify the file hasn't changed since
             let content = std::fs::read(blueprint_path).map_err(Error::internal)?;

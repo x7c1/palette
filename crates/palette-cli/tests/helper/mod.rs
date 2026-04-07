@@ -18,4 +18,4 @@ pub use palette_domain::task::TaskId;
 pub use palette_domain::terminal::TerminalTarget;
 pub use palette_domain::worker::{ContainerId, WorkerRole, WorkerStatus};
 pub use palette_domain::workflow::WorkflowId;
-pub use palette_usecase::data_store::{CreateTaskRequest, InsertWorkerRequest};
+pub use palette_usecase::{CreateTaskRequest, InsertWorkerRequest};

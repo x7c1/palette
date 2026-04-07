@@ -16,26 +16,31 @@ impl Database {
 
         let command = req.detail.command();
         let perspective = req.detail.perspective().map(AsRef::as_ref);
+        let pr_json = req
+            .detail
+            .pull_request()
+            .map(super::pull_request_row::pull_request_to_json);
 
         let initial_status = JobStatus::todo(job_type);
 
         let tx = conn.transaction()?;
 
         tx.execute(
-            "INSERT INTO jobs (id, task_id, type_id, title, plan_path, assignee_id, status_id, priority_id, repository, command, perspective, created_at, updated_at, notes, assigned_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, NULL, NULL)",
+            "INSERT INTO jobs (id, task_id, type_id, title, plan_path, assignee_id, status_id, priority_id, repository, command, perspective, pull_request, created_at, updated_at, assigned_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, NULL)",
             params![
                 id.as_ref(),
                 req.task_id.as_ref(),
                 crate::lookup::job_type_id(job_type),
                 req.title.as_ref(),
-                req.plan_path.as_ref(),
+                req.plan_path.as_ref().map(AsRef::as_ref) as Option<&str>,
                 req.assignee_id.as_ref().map(|a| a.as_ref()),
                 crate::lookup::job_status_id(initial_status),
                 req.priority.map(crate::lookup::priority_id),
                 repos_json,
                 command,
                 perspective,
+                pr_json,
                 now_str,
                 now_str,
             ],
@@ -64,7 +69,7 @@ mod tests {
             .create_job(&CreateJobRequest::new(
                 task_id,
                 Title::parse("Implement feature").unwrap(),
-                PlanPath::parse("2026/feature-x/api-impl").unwrap(),
+                Some(PlanPath::parse("2026/feature-x/api-impl").unwrap()),
                 Some(wid("member-a")),
                 Some(Priority::High),
                 JobDetail::Craft {

@@ -36,7 +36,7 @@ pub async fn handle_submit_review(
 
     if !matches!(
         job.detail,
-        JobDetail::Review { .. } | JobDetail::ReviewIntegrate
+        JobDetail::Review { .. } | JobDetail::ReviewIntegrate { .. }
     ) {
         return Err(Error::BadRequest {
             code: ErrorCode::NotReviewJob,
@@ -52,7 +52,7 @@ pub async fn handle_submit_review(
     // or a regular reviewer submission. Must happen before submit_review so we can
     // reject integrator submissions when child reviewers are incomplete (preventing
     // the submission from being recorded and avoiding round number drift).
-    let is_integrator = matches!(job.detail, JobDetail::ReviewIntegrate);
+    let is_integrator = matches!(job.detail, JobDetail::ReviewIntegrate { .. });
     let child_tasks = if is_integrator {
         match state.interactor.data_store.get_task_state(&job.task_id) {
             Ok(Some(ts)) => match state.interactor.create_task_store(&ts.workflow_id) {
@@ -199,19 +199,43 @@ fn find_reviewer_artifact_path(
         .create_task_store(&task_state.workflow_id)
         .ok()?;
 
-    // Walk up the task tree to find the ancestor craft job.
-    // Reviewer task → composite review task → craft task.
-    let mut current_id = task_store.get_task(&job.task_id)?.parent_id?;
-    let craft_job = loop {
-        let j = state
-            .interactor
-            .data_store
-            .get_job_by_task_id(&current_id)
-            .ok()??;
-        if matches!(j.detail, JobDetail::Craft { .. }) {
-            break j;
+    // Walk up the task tree to find the artifact anchor job.
+    // First try Craft (existing flow), then fall back to ReviewIntegrate (PR review).
+    let anchor_job = {
+        // Try Craft ancestor first
+        let mut current_id = task_store.get_task(&job.task_id)?.parent_id?;
+        let craft = loop {
+            let j = state
+                .interactor
+                .data_store
+                .get_job_by_task_id(&current_id)
+                .ok()??;
+            if matches!(j.detail, JobDetail::Craft { .. }) {
+                break Some(j);
+            }
+            match task_store.get_task(&current_id)?.parent_id {
+                Some(pid) => current_id = pid,
+                None => break None,
+            }
+        };
+        match craft {
+            Some(j) => j,
+            None => {
+                // Fall back to ReviewIntegrate (self or ancestor)
+                let mut cid = job.task_id.clone();
+                loop {
+                    let j = state
+                        .interactor
+                        .data_store
+                        .get_job_by_task_id(&cid)
+                        .ok()??;
+                    if matches!(j.detail, JobDetail::ReviewIntegrate { .. }) {
+                        break j;
+                    }
+                    cid = task_store.get_task(&cid)?.parent_id?;
+                }
+            }
         }
-        current_id = task_store.get_task(&current_id)?.parent_id?;
     };
 
     // Round = existing submissions count + 1 (next round).
@@ -227,7 +251,7 @@ fn find_reviewer_artifact_path(
         .data_dir
         .join("artifacts")
         .join(task_state.workflow_id.as_ref())
-        .join(craft_job.id.as_ref())
+        .join(anchor_job.id.as_ref())
         .join(format!("round-{round}"))
         .join(job.id.to_string())
         .join("review.md");

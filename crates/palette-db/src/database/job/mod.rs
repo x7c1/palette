@@ -7,6 +7,7 @@ mod get_job_by_task;
 mod get_review_comments;
 mod get_review_submissions;
 mod list_jobs;
+pub(crate) mod pull_request_row;
 pub(crate) mod repository_row;
 pub(crate) mod row;
 mod submit_review;

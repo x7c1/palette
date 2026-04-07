@@ -25,12 +25,35 @@ impl Orchestrator {
         Ok(result)
     }
 
-    /// When a review requests changes: revert the parent craft job to InProgress.
+    /// When a review requests changes: revert the parent craft job to InProgress,
+    /// or escalate to Operator if there is no Craft parent (standalone PR review).
     fn handle_review_changes_requested(
         &self,
         review_job_id: &JobId,
     ) -> crate::Result<PendingActions> {
-        self.revert_parent_craft_to_in_progress(review_job_id)
+        let Some(review_job) = self.interactor.data_store.get_job(review_job_id)? else {
+            return Ok(PendingActions::new());
+        };
+        let review_task_id = &review_job.task_id;
+        let Some(task_state) = self.interactor.data_store.get_task_state(review_task_id)? else {
+            return Ok(PendingActions::new());
+        };
+
+        let task_store = self.interactor.create_task_store(&task_state.workflow_id)?;
+
+        // Check if there is a Craft ancestor
+        if let Some(craft_job) = self.find_ancestor_craft_job(&task_store, review_task_id) {
+            return self.revert_craft_to_in_progress(review_job_id, &craft_job);
+        }
+
+        // No Craft parent — standalone PR review.
+        // The review job is already Done (set by handle_review_submitted).
+        // Proceed with task completion so ReviewIntegrator can run.
+        tracing::info!(
+            review_job_id = %review_job_id,
+            "standalone review changes_requested — proceeding to task completion"
+        );
+        self.try_complete_task_by_job(review_job_id)
     }
 
     /// When a review job becomes Done, check if all sibling review tasks under
@@ -61,6 +84,8 @@ impl Orchestrator {
         let Some(craft_job) = self.interactor.data_store.get_job_by_task_id(parent_id)? else {
             return Ok(PendingActions::new());
         };
+
+        // Only relevant for Craft-parented reviews
         if craft_job.status != JobStatus::Craft(CraftStatus::InReview) {
             return Ok(PendingActions::new());
         }
@@ -101,38 +126,16 @@ impl Orchestrator {
         self.try_complete_task_by_job(&craft_job.id)
     }
 
-    /// When a review job gets ChangesRequested, move the parent craft job
-    /// from InReview back to InProgress so the crafter can address feedback.
-    fn revert_parent_craft_to_in_progress(
+    /// Revert a Craft job from InReview back to InProgress and notify the crafter.
+    fn revert_craft_to_in_progress(
         &self,
         review_job_id: &JobId,
+        craft_job: &palette_domain::job::Job,
     ) -> crate::Result<PendingActions> {
-        let Some(review_job) = self.interactor.data_store.get_job(review_job_id)? else {
-            return Ok(PendingActions::new());
-        };
-        let review_task_id = &review_job.task_id;
-        let Some(task_state) = self.interactor.data_store.get_task_state(review_task_id)? else {
-            return Ok(PendingActions::new());
-        };
-
-        let task_store = self.interactor.create_task_store(&task_state.workflow_id)?;
-
-        let Some(review_task) = task_store.get_task(review_task_id) else {
-            return Ok(PendingActions::new());
-        };
-
-        let Some(ref parent_id) = review_task.parent_id else {
-            return Ok(PendingActions::new());
-        };
-
-        let Some(craft_job) = self.interactor.data_store.get_job_by_task_id(parent_id)? else {
-            return Ok(PendingActions::new());
-        };
         if craft_job.status != JobStatus::Craft(CraftStatus::InReview) {
             return Ok(PendingActions::new());
         }
 
-        // Move craft job back to InProgress
         self.interactor.data_store.update_job_status(
             &craft_job.id,
             CraftTransition::RequestChanges.to_job_status(),
@@ -145,17 +148,13 @@ impl Orchestrator {
 
         // Enqueue review feedback to the crafter
         if let Some(ref assignee) = craft_job.assignee_id {
-            let submissions = self
-                .interactor
-                .data_store
-                .get_review_submissions(review_job_id)?;
-            let feedback = submissions
-                .last()
-                .and_then(|s| s.summary.clone())
-                .unwrap_or_else(|| "Changes requested (no summary provided)".to_string());
             let msg = format!(
-                "## Review Feedback (changes requested)\n\nReview job {} has requested changes:\n\n{}\n\nPlease address the feedback and complete the task.",
-                review_job_id, feedback
+                "## Review Feedback (changes requested)\n\n\
+                 Review job {} has requested changes.\n\n\
+                 Read `/home/agent/artifacts/round-{{N}}/integrated-review.json` for detailed feedback.\n\
+                 The `comments` array contains file-specific issues to address.\n\n\
+                 Please address the feedback and complete the task.",
+                review_job_id,
             );
             self.interactor.data_store.enqueue_message(assignee, &msg)?;
         }

@@ -1,4 +1,4 @@
-use super::{JobType, PerspectiveName, Repository};
+use super::{JobType, PerspectiveName, PullRequest, Repository, ReviewTarget};
 
 /// Job-type-specific fields, replacing the flat `job_type` / `repository` / `command`
 /// combination. Each variant carries only the fields relevant to that job type.
@@ -9,8 +9,11 @@ pub enum JobDetail {
     },
     Review {
         perspective: Option<PerspectiveName>,
+        target: ReviewTarget,
     },
-    ReviewIntegrate,
+    ReviewIntegrate {
+        target: ReviewTarget,
+    },
     Orchestrator {
         command: Option<String>,
     },
@@ -23,7 +26,7 @@ impl JobDetail {
         match self {
             JobDetail::Craft { .. } => JobType::Craft,
             JobDetail::Review { .. } => JobType::Review,
-            JobDetail::ReviewIntegrate => JobType::ReviewIntegrate,
+            JobDetail::ReviewIntegrate { .. } => JobType::ReviewIntegrate,
             JobDetail::Orchestrator { .. } => JobType::Orchestrator,
             JobDetail::Operator => JobType::Operator,
         }
@@ -34,7 +37,7 @@ impl JobDetail {
         match self {
             JobDetail::Craft { repository } => Some(repository),
             JobDetail::Review { .. }
-            | JobDetail::ReviewIntegrate
+            | JobDetail::ReviewIntegrate { .. }
             | JobDetail::Orchestrator { .. }
             | JobDetail::Operator => None,
         }
@@ -43,9 +46,9 @@ impl JobDetail {
     /// Return the perspective name if this variant carries one.
     pub fn perspective(&self) -> Option<&PerspectiveName> {
         match self {
-            JobDetail::Review { perspective } => perspective.as_ref(),
+            JobDetail::Review { perspective, .. } => perspective.as_ref(),
             JobDetail::Craft { .. }
-            | JobDetail::ReviewIntegrate
+            | JobDetail::ReviewIntegrate { .. }
             | JobDetail::Orchestrator { .. }
             | JobDetail::Operator => None,
         }
@@ -57,8 +60,23 @@ impl JobDetail {
             JobDetail::Orchestrator { command } => command.as_deref(),
             JobDetail::Craft { .. }
             | JobDetail::Review { .. }
-            | JobDetail::ReviewIntegrate
+            | JobDetail::ReviewIntegrate { .. }
             | JobDetail::Operator => None,
         }
+    }
+
+    /// Return the review target if this is a Review or ReviewIntegrate variant.
+    pub fn review_target(&self) -> Option<&ReviewTarget> {
+        match self {
+            JobDetail::Review { target, .. } | JobDetail::ReviewIntegrate { target } => {
+                Some(target)
+            }
+            _ => None,
+        }
+    }
+
+    /// Return the pull request if this is a PR review.
+    pub fn pull_request(&self) -> Option<&PullRequest> {
+        self.review_target().and_then(ReviewTarget::pull_request)
     }
 }

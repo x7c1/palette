@@ -48,7 +48,10 @@ impl Orchestrator {
             // Approver to handle reviewer permission prompts.
             // The ReviewIntegrator is spawned later when all reviewers complete.
             if let Some(child_task) = task_store.get_task(ready_id)
-                && matches!(child_task.job_detail, Some(JobDetail::ReviewIntegrate))
+                && matches!(
+                    child_task.job_detail,
+                    Some(JobDetail::ReviewIntegrate { .. })
+                )
             {
                 tracing::info!(task_id = %ready_id, "spawning Approver for review-integrate composite");
                 match self.handle_spawn_supervisor(ready_id, WorkerRole::Approver) {

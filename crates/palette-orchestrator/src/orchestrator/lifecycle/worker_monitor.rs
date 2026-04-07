@@ -487,6 +487,7 @@ mod tests {
                 terminal: Box::new(terminal),
                 data_store: Box::new(data_store),
                 blueprint: Box::new(MockBlueprintReader),
+                github_review_port: Box::new(MockGitHubReview),
             }),
             docker_config: crate::DockerConfig {
                 worker_callback_url: String::new(),

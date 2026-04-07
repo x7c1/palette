@@ -21,7 +21,7 @@ pub async fn handle_send_permission(
 
     let expected_event_id = {
         let events = state.pending_permission_events.lock().await;
-        events.get(worker_id.as_ref()).cloned()
+        events.get(worker_id.as_ref()).map(|p| p.event_id.clone())
     };
     let Some(expected_event_id) = expected_event_id else {
         return Err(Error::invalid_body("event_id")(
@@ -49,6 +49,13 @@ pub async fn handle_send_permission(
             PermissionSendError::NotWaitingPermission,
         ));
     }
+
+    tracing::info!(
+        worker_id = worker_id.as_ref(),
+        event_id = %req.event_id,
+        choice = %req.choice,
+        "sending permission choice to worker"
+    );
 
     state
         .interactor

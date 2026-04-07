@@ -1,23 +1,29 @@
-pub mod container_runtime;
-pub use container_runtime::ContainerRuntime;
+mod container_runtime;
+pub use container_runtime::{
+    ArtifactsMount, ContainerMounts, ContainerRuntime, PerspectiveMount, PlanDirMount,
+    WorkspaceVolume,
+};
 
-pub mod data_store;
-pub use data_store::DataStore;
+mod data_store;
+pub use data_store::{CreateTaskRequest, DataStore, InsertWorkerRequest};
 
-pub mod terminal_session;
+mod terminal_session;
 pub use terminal_session::TerminalSession;
 
-pub mod blueprint_reader;
+mod blueprint_reader;
 pub use blueprint_reader::{BlueprintReader, ReadBlueprintError};
 
-pub mod task_store_error;
+mod task_store_error;
 pub use task_store_error::TaskStoreError;
 
 mod task_rule_engine;
 pub use task_rule_engine::{TaskCompletionResult, TaskRuleEngine};
 
-pub mod interactor;
+mod interactor;
 pub use interactor::Interactor;
+
+mod github_review_port;
+pub use github_review_port::{GitHubReviewPort, ReviewEvent, ReviewFileComment};
 
 pub mod reconciliation;
 pub mod task_store;
