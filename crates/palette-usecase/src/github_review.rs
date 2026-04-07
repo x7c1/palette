@@ -13,6 +13,14 @@ pub trait GitHubReviewPort: Send + Sync {
         comments: &[ReviewFileComment],
         event: ReviewEvent,
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>>;
+
+    /// Return the list of files changed in a pull request.
+    fn get_diff_files(
+        &self,
+        owner: &str,
+        repo: &str,
+        number: u64,
+    ) -> Result<Vec<String>, Box<dyn std::error::Error + Send + Sync>>;
 }
 
 pub struct ReviewFileComment {

@@ -88,22 +88,56 @@ impl Orchestrator {
             _ => ReviewEvent::RequestChanges,
         };
 
-        let comments: Vec<ReviewFileComment> = review
-            .comments
-            .into_iter()
-            .map(|c| ReviewFileComment {
-                path: c.path,
-                line: c.line,
-                body: c.body,
-            })
-            .collect();
+        // Get PR diff files to filter inline comments
+        let diff_files: std::collections::HashSet<String> = match github
+            .get_diff_files(&pr.owner, &pr.repo, pr.number)
+        {
+            Ok(files) => files.into_iter().collect(),
+            Err(e) => {
+                tracing::warn!(error = %e, "failed to get PR diff files, all comments go to body");
+                std::collections::HashSet::new()
+            }
+        };
+
+        // Split comments: diff-eligible go as inline, others fold into body
+        let mut inline_comments = Vec::new();
+        let mut body_extra = String::new();
+
+        for c in &review.comments {
+            if diff_files.contains(&c.path) {
+                inline_comments.push(ReviewFileComment {
+                    path: c.path.clone(),
+                    line: c.line,
+                    body: c.body.clone(),
+                });
+            } else {
+                body_extra.push_str(&format!("\n\n**{}:{}** — {}", c.path, c.line, c.body));
+            }
+        }
+
+        let body = if body_extra.is_empty() {
+            review.body.clone()
+        } else {
+            format!(
+                "{}\n\n---\n\nComments on files outside this PR's diff:{body_extra}",
+                review.body
+            )
+        };
+
+        if !body_extra.is_empty() {
+            tracing::info!(
+                inline = inline_comments.len(),
+                folded = review.comments.len() - inline_comments.len(),
+                "split comments: inline vs body fallback"
+            );
+        }
 
         if let Err(e) = github.post_review(
             &pr.owner,
             &pr.repo,
             pr.number,
-            &review.body,
-            &comments,
+            &body,
+            &inline_comments,
             event,
         ) {
             tracing::error!(
@@ -114,8 +148,8 @@ impl Orchestrator {
         } else {
             tracing::info!(
                 pr = %pr,
-                comments = comments.len(),
-                "posted PR review comments"
+                inline = inline_comments.len(),
+                "posted pending review"
             );
         }
     }

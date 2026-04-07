@@ -83,4 +83,29 @@ impl GitHubReviewPort for GhCliReviewClient {
 
         Ok(())
     }
+
+    fn get_diff_files(
+        &self,
+        owner: &str,
+        repo: &str,
+        number: u64,
+    ) -> Result<Vec<String>, Box<dyn std::error::Error + Send + Sync>> {
+        let output = Command::new("gh")
+            .args([
+                "api",
+                &format!("repos/{owner}/{repo}/pulls/{number}/files"),
+                "--jq",
+                ".[].filename",
+            ])
+            .env("GH_TOKEN", &self.token)
+            .output()?;
+
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            return Err(format!("gh api failed: {stderr}").into());
+        }
+
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        Ok(stdout.lines().map(String::from).collect())
+    }
 }
