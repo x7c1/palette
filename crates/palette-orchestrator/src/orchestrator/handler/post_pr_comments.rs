@@ -1,6 +1,6 @@
 use super::Orchestrator;
 use palette_domain::job::{JobDetail, JobId, ReviewTarget};
-use palette_usecase::github_review::{ReviewEvent, ReviewFileComment};
+use palette_usecase::{ReviewEvent, ReviewFileComment};
 
 impl Orchestrator {
     /// Post PR review comments after a ReviewIntegrate verdict for a PR review workflow.

@@ -1,4 +1,4 @@
-use palette_usecase::github_review::{GitHubReviewPort, ReviewEvent, ReviewFileComment};
+use palette_usecase::{GitHubReviewPort, ReviewEvent, ReviewFileComment};
 use std::process::Command;
 
 /// GitHub review client that uses the `gh` CLI.
