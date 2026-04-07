@@ -37,10 +37,18 @@ pub(crate) fn format_job_instruction(
         ));
     }
     if let Some(round) = round {
-        msg.push_str(&format!(
-            "\nRound: {round}\nArtifacts: {ARTIFACTS_MOUNT}/round-{round}/{}/\n",
-            job.id
-        ));
+        if matches!(job.detail, JobDetail::ReviewIntegrate { .. }) {
+            // ReviewIntegrator writes to round-{N}/ directly (not a subdirectory)
+            msg.push_str(&format!(
+                "\nRound: {round}\nArtifacts: {ARTIFACTS_MOUNT}/round-{round}/\n",
+            ));
+        } else {
+            // Individual reviewers write to round-{N}/{job_id}/
+            msg.push_str(&format!(
+                "\nRound: {round}\nArtifacts: {ARTIFACTS_MOUNT}/round-{round}/{}/\n",
+                job.id
+            ));
+        }
     }
     if let Some(perspective_name) = job.detail.perspective() {
         msg.push_str(&format!("\nPerspective: {perspective_name}\n"));

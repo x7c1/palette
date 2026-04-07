@@ -225,16 +225,19 @@ else
   exit 1
 fi
 
-if [[ -f "$ARTIFACTS_DIR/round-1/integrated-review.json" ]]; then
-  echo "PASS: integrated-review.json exists in round-1"
-  if python3 -c "import json; json.load(open('$ARTIFACTS_DIR/round-1/integrated-review.json'))" 2>/dev/null; then
+INTEGRATED_JSON="$ARTIFACTS_DIR/round-1/integrated-review.json"
+if [[ -f "$INTEGRATED_JSON" ]]; then
+  echo "PASS: integrated-review.json exists"
+  if python3 -c "import json; json.load(open('$INTEGRATED_JSON'))" 2>/dev/null; then
     echo "PASS: integrated-review.json is valid JSON"
   else
     echo "FAIL: integrated-review.json is not valid JSON"
     exit 1
   fi
 else
-  echo "FAIL: integrated-review.json not found"
+  echo "FAIL: integrated-review.json not found at $INTEGRATED_JSON"
+  echo "Artifact contents:"
+  find "$ARTIFACTS_DIR" -type f | sort
   exit 1
 fi
 
