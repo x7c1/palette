@@ -12,7 +12,7 @@ pub struct Interactor {
     pub terminal: Box<dyn TerminalSession>,
     pub data_store: Box<dyn DataStore>,
     pub blueprint: Box<dyn BlueprintReader>,
-    pub github_review: Box<dyn GitHubReviewPort>,
+    pub github_review_port: Box<dyn GitHubReviewPort>,
 }
 
 impl Interactor {

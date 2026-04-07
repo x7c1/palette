@@ -45,7 +45,7 @@ pub async fn spawn_server(
         terminal: Box::new(tmux),
         data_store: Box::new(db),
         blueprint: Box::new(FsBlueprintReader::new(HashSet::new())),
-        github_review: GhCliReviewClient::boxed(),
+        github_review_port: GhCliReviewClient::boxed(),
     });
 
     let (event_tx, event_rx) = tokio::sync::mpsc::unbounded_channel();

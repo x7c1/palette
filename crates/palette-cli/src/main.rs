@@ -10,6 +10,7 @@ use palette_orchestrator::github_client::GhCliReviewClient;
 use palette_orchestrator::workspace::WorkspaceManager;
 use palette_orchestrator::{CallbackNetwork, Orchestrator};
 use palette_server::AppState;
+use palette_server::permission_timeout::spawn_permission_timeout_checker;
 use palette_tmux::TmuxManager;
 use palette_usecase::Interactor;
 use std::collections::HashMap;
@@ -62,7 +63,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         terminal: Box::new(tmux),
         data_store: Box::new(db),
         blueprint: Box::new(FsBlueprintReader::new(perspective_names)),
-        github_review: GhCliReviewClient::boxed(),
+        github_review_port: GhCliReviewClient::boxed(),
     });
 
     let (event_tx, event_rx) = tokio::sync::mpsc::unbounded_channel();
@@ -106,7 +107,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let orchestrator_handle = orchestrator.start(event_rx, shutdown_rx);
 
     // Start permission timeout checker
-    palette_server::permission_timeout::spawn_permission_timeout_checker(Arc::clone(&state));
+    spawn_permission_timeout_checker(Arc::clone(&state));
 
     // Start HTTP server with graceful shutdown
     let app = palette_server::create_router(state);
