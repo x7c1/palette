@@ -5,7 +5,7 @@ pub(crate) struct JobRow {
     pub task_id: String,
     pub type_id: i64,
     pub title: String,
-    pub plan_path: String,
+    pub plan_path: Option<String>,
     pub assignee_id: Option<String>,
     pub status_id: i64,
     pub priority_id: Option<i64>,

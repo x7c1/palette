@@ -145,17 +145,13 @@ impl Orchestrator {
 
         // Enqueue review feedback to the crafter
         if let Some(ref assignee) = craft_job.assignee_id {
-            let submissions = self
-                .interactor
-                .data_store
-                .get_review_submissions(review_job_id)?;
-            let feedback = submissions
-                .last()
-                .and_then(|s| s.summary.clone())
-                .unwrap_or_else(|| "Changes requested (no summary provided)".to_string());
             let msg = format!(
-                "## Review Feedback (changes requested)\n\nReview job {} has requested changes:\n\n{}\n\nPlease address the feedback and complete the task.",
-                review_job_id, feedback
+                "## Review Feedback (changes requested)\n\n\
+                 Review job {} has requested changes.\n\n\
+                 Read `/home/agent/artifacts/round-{{N}}/integrated-review.json` for detailed feedback.\n\
+                 The `comments` array contains file-specific issues to address.\n\n\
+                 Please address the feedback and complete the task.",
+                review_job_id,
             );
             self.interactor.data_store.enqueue_message(assignee, &msg)?;
         }

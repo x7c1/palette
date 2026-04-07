@@ -26,7 +26,7 @@ async fn message_queuing_to_supervisor() {
     state
         .interactor
         .data_store
-        .create_workflow(&wf_id, "test/blueprint.yaml")
+        .create_workflow(&wf_id, Some("test/blueprint.yaml"))
         .unwrap();
     let task_a = TaskId::parse("wf-scenario3:task-R-A").unwrap();
     let task_b = TaskId::parse("wf-scenario3:task-R-B").unwrap();
@@ -97,7 +97,7 @@ async fn message_queuing_to_supervisor() {
         .create_job(&CreateJobRequest::new(
             task_a,
             palette_domain::job::Title::parse("Review A").unwrap(),
-            palette_domain::job::PlanPath::parse("test/R-A").unwrap(),
+            Some(palette_domain::job::PlanPath::parse("test/R-A").unwrap()),
             None,
             None,
             JobDetail::Review { perspective: None },
@@ -109,7 +109,7 @@ async fn message_queuing_to_supervisor() {
         .create_job(&CreateJobRequest::new(
             task_b,
             palette_domain::job::Title::parse("Review B").unwrap(),
-            palette_domain::job::PlanPath::parse("test/R-B").unwrap(),
+            Some(palette_domain::job::PlanPath::parse("test/R-B").unwrap()),
             None,
             None,
             JobDetail::Review { perspective: None },

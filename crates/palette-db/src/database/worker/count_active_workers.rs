@@ -36,7 +36,7 @@ mod tests {
         status: WorkerStatus,
     ) {
         let wf_id = WorkflowId::parse("wf-test").unwrap();
-        let _ = db.create_workflow(&wf_id, "test/blueprint.yaml");
+        let _ = db.create_workflow(&wf_id, Some("test/blueprint.yaml"));
         db.insert_worker(&InsertWorkerRequest {
             id: WorkerId::parse(id).unwrap(),
             workflow_id: wf_id,

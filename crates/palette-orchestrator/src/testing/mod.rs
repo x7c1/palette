@@ -35,7 +35,7 @@ pub fn make_job(id: &str) -> Job {
         id: JobId::parse(id).unwrap(),
         task_id: TaskId::parse(format!("wf-test:{id}")).unwrap(),
         title: palette_domain::job::Title::parse(id).unwrap(),
-        plan_path: palette_domain::job::PlanPath::parse(format!("test/{id}")).unwrap(),
+        plan_path: Some(palette_domain::job::PlanPath::parse(format!("test/{id}")).unwrap()),
         assignee_id: None,
         status: JobStatus::todo(JobType::Review),
         priority: None,

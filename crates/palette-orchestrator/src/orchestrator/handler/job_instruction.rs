@@ -20,10 +20,10 @@ pub(crate) fn format_job_instruction(
     round: Option<u32>,
     perspectives: &ValidatedPerspectives,
 ) -> String {
-    let mut msg = format!(
-        "## Task: {}\n\nID: {}\nPlan: {}/{}\n",
-        job.title, job.id, PLAN_DIR_MOUNT, job.plan_path
-    );
+    let mut msg = format!("## Task: {}\n\nID: {}\n", job.title, job.id);
+    if let Some(ref plan_path) = job.plan_path {
+        msg.push_str(&format!("Plan: {PLAN_DIR_MOUNT}/{plan_path}\n"));
+    }
     if let JobDetail::Craft { ref repository } = job.detail {
         msg.push_str(&format!(
             "\nRepository: {} (branch: {})\n",
@@ -72,7 +72,7 @@ mod tests {
             id: JobId::parse("R-001").unwrap(),
             task_id: TaskId::parse("wf-test:review-a").unwrap(),
             title: Title::parse("Review API").unwrap(),
-            plan_path: PlanPath::parse("plans/api").unwrap(),
+            plan_path: Some(PlanPath::parse("plans/api").unwrap()),
             assignee_id: None,
             status: JobStatus::todo(JobType::Review),
             priority: None,
@@ -90,7 +90,7 @@ mod tests {
             id: JobId::parse("C-001").unwrap(),
             task_id: TaskId::parse("wf-test:craft-a").unwrap(),
             title: Title::parse("Implement API").unwrap(),
-            plan_path: PlanPath::parse("plans/api").unwrap(),
+            plan_path: Some(PlanPath::parse("plans/api").unwrap()),
             assignee_id: None,
             status: JobStatus::todo(JobType::Craft),
             priority: None,

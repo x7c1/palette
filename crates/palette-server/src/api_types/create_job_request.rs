@@ -10,7 +10,7 @@ pub struct CreateJobRequest {
     #[serde(rename = "type")]
     pub job_type: JobType,
     pub title: String,
-    pub plan_path: String,
+    pub plan_path: Option<String>,
     pub assignee_id: Option<String>,
     pub priority: Option<Priority>,
     pub repository: Option<Repository>,
@@ -55,11 +55,23 @@ impl CreateJobRequest {
             palette_domain::job::JobType::Operator => Some(JobDetail::Operator),
         };
 
+        // Parse plan_path outside the macro since it's Option<String>
+        let parsed_plan_path: Result<Option<PlanPath>, _> =
+            self.plan_path.as_deref().map(PlanPath::parse).transpose();
+        if let Err(ref e) = parsed_plan_path {
+            detail_errors.push(InputError {
+                location: palette_core::Location::Body,
+                hint: "plan_path".into(),
+                reason: palette_core::ReasonKey::reason_key(e),
+            });
+        }
+
         // Use the macro for standard field validation
         let result = palette_macros::validate!(DomainCreateJobRequest::new {
             task_id: TaskId::parse(&self.task_id),
             title: Title::parse(&self.title),
-            plan_path: PlanPath::parse(&self.plan_path),
+            #[plain]
+            plan_path: parsed_plan_path.unwrap_or(None),
             assignee_id: self.assignee_id.as_deref().map(WorkerId::parse).transpose(),
             #[plain]
             priority: self.priority.map(palette_domain::job::Priority::from),

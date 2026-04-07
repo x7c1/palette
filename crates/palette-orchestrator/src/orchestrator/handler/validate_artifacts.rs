@@ -196,7 +196,7 @@ impl Orchestrator {
         all_present
     }
 
-    /// Validate that a ReviewIntegrator wrote integrated-review.md.
+    /// Validate that a ReviewIntegrator wrote integrated-review.json.
     ///
     /// Called after a ReviewIntegrator's stop hook fires. The task_id is the
     /// review composite task whose parent is the craft task.
@@ -255,27 +255,27 @@ impl Orchestrator {
         let artifacts_base = self
             .workspace_manager
             .artifacts_path(task_state.workflow_id.as_ref(), craft_job.id.as_ref());
-        let integrated_md = artifacts_base
+        let integrated_json = artifacts_base
             .join(format!("round-{round}"))
-            .join("integrated-review.md");
+            .join("integrated-review.json");
 
-        if integrated_md.exists() {
+        if integrated_json.exists() {
             tracing::debug!(
                 task_id = %task_id,
-                path = %integrated_md.display(),
-                "integrated-review.md artifact validated"
+                path = %integrated_json.display(),
+                "integrated-review.json artifact validated"
             );
         } else {
             tracing::warn!(
                 task_id = %task_id,
                 worker_id = %worker_id,
-                path = %integrated_md.display(),
-                "integrated-review.md artifact missing after integrator stop"
+                path = %integrated_json.display(),
+                "integrated-review.json artifact missing after integrator stop"
             );
             let msg = format!(
                 "## Missing Artifact\n\n\
-                 Your integrated-review.md file was not found at the expected location.\n\
-                 Please write the integrated review to: /home/agent/artifacts/round-{round}/integrated-review.md\n\n\
+                 Your integrated-review.json file was not found at the expected location.\n\
+                 Please write the integrated review to: /home/agent/artifacts/round-{round}/integrated-review.json\n\n\
                  Follow the format described in your prompt.",
             );
             if let Err(e) = self.interactor.data_store.enqueue_message(worker_id, &msg) {

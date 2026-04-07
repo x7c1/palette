@@ -29,7 +29,7 @@ impl Database {
                 req.task_id.as_ref(),
                 crate::lookup::job_type_id(job_type),
                 req.title.as_ref(),
-                req.plan_path.as_ref(),
+                req.plan_path.as_ref().map(AsRef::as_ref) as Option<&str>,
                 req.assignee_id.as_ref().map(|a| a.as_ref()),
                 crate::lookup::job_status_id(initial_status),
                 req.priority.map(crate::lookup::priority_id),
@@ -64,7 +64,7 @@ mod tests {
             .create_job(&CreateJobRequest::new(
                 task_id,
                 Title::parse("Implement feature").unwrap(),
-                PlanPath::parse("2026/feature-x/api-impl").unwrap(),
+                Some(PlanPath::parse("2026/feature-x/api-impl").unwrap()),
                 Some(wid("member-a")),
                 Some(Priority::High),
                 JobDetail::Craft {

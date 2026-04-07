@@ -47,7 +47,11 @@ pub(crate) fn into_job(row: JobRow) -> crate::Result<Job> {
 
     let task_id = TaskId::parse(row.task_id).map_err(corrupt_parse)?;
     let title = Title::parse(row.title).map_err(corrupt_parse)?;
-    let plan_path = PlanPath::parse(row.plan_path).map_err(corrupt_parse)?;
+    let plan_path = row
+        .plan_path
+        .map(PlanPath::parse)
+        .transpose()
+        .map_err(corrupt_parse)?;
 
     let detail = match job_type {
         JobType::Craft => {

@@ -45,7 +45,18 @@ pub async fn handle_apply_blueprint(
         })?;
 
     // Read Blueprint file content for hashing
-    let blueprint_path = std::path::Path::new(&workflow.blueprint_path);
+    let bp_str = workflow
+        .blueprint_path
+        .as_deref()
+        .ok_or_else(|| Error::BadRequest {
+            code: crate::api_types::ErrorCode::BlueprintInvalid,
+            errors: vec![crate::api_types::InputError {
+                location: crate::api_types::Location::Path,
+                hint: "id".into(),
+                reason: "workflow has no blueprint (PR review workflow)".into(),
+            }],
+        })?;
+    let blueprint_path = std::path::Path::new(bp_str);
     let blueprint_content = std::fs::read(blueprint_path).map_err(Error::internal)?;
 
     // Re-read Blueprint from disk (parsed into TaskTree)

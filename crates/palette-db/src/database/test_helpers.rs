@@ -25,7 +25,7 @@ pub fn setup_task(db: &Database, task_id: &str) -> TaskId {
     let wf_part = task_id.split(':').next().unwrap();
     let wf_id = WorkflowId::parse(wf_part).unwrap();
     // Ignore errors if workflow already exists
-    let _ = db.create_workflow(&wf_id, "test/blueprint.yaml");
+    let _ = db.create_workflow(&wf_id, Some("test/blueprint.yaml"));
     let _ = db.create_task(&CreateTaskRequest {
         id: t_id.clone(),
         workflow_id: wf_id,
@@ -36,7 +36,7 @@ pub fn setup_task(db: &Database, task_id: &str) -> TaskId {
 /// Insert a worker record for FK-constrained tests.
 pub fn setup_worker(db: &Database, worker_id: &str) {
     let wf_id = WorkflowId::parse("wf-test").unwrap();
-    let _ = db.create_workflow(&wf_id, "test/blueprint.yaml");
+    let _ = db.create_workflow(&wf_id, Some("test/blueprint.yaml"));
     db.insert_worker(&InsertWorkerRequest {
         id: WorkerId::parse(worker_id).unwrap(),
         workflow_id: wf_id,
@@ -56,7 +56,7 @@ pub fn create_craft(db: &Database, id: &str, priority: Option<Priority>) -> Job 
     db.create_job(&CreateJobRequest::new(
         task_id,
         Title::parse(format!("Job {id}")).unwrap(),
-        PlanPath::parse(format!("test/{id}")).unwrap(),
+        Some(PlanPath::parse(format!("test/{id}")).unwrap()),
         None,
         priority,
         JobDetail::Craft {
@@ -71,7 +71,7 @@ pub fn create_review(db: &Database, id: &str) -> Job {
     db.create_job(&CreateJobRequest::new(
         task_id,
         Title::parse(format!("Review {id}")).unwrap(),
-        PlanPath::parse(format!("test/{id}")).unwrap(),
+        Some(PlanPath::parse(format!("test/{id}")).unwrap()),
         None,
         None,
         JobDetail::Review { perspective: None },

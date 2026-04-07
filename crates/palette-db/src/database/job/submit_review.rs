@@ -76,7 +76,7 @@ mod tests {
         db.create_job(&CreateJobRequest::new(
             craft_task,
             Title::parse("Craft").unwrap(),
-            PlanPath::parse("test/C-001").unwrap(),
+            Some(PlanPath::parse("test/C-001").unwrap()),
             None,
             None,
             JobDetail::Craft {
@@ -90,7 +90,7 @@ mod tests {
             .create_job(&CreateJobRequest::new(
                 review_task,
                 Title::parse("Review").unwrap(),
-                PlanPath::parse("test/R-001").unwrap(),
+                Some(PlanPath::parse("test/R-001").unwrap()),
                 None,
                 None,
                 JobDetail::Review { perspective: None },

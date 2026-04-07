@@ -14,7 +14,7 @@ fn setup_review_task(state: &palette_server::AppState, task_id_str: &str) -> Tas
     let _ = state
         .interactor
         .data_store
-        .create_workflow(&wf_id, "test/blueprint.yaml");
+        .create_workflow(&wf_id, Some("test/blueprint.yaml"));
     let _ = state.interactor.data_store.create_task(&CreateTaskRequest {
         id: task_id.clone(),
         workflow_id: wf_id,
@@ -40,7 +40,7 @@ async fn review_submit_and_get_submissions() {
         .create_job(&CreateJobRequest::new(
             task_id,
             palette_domain::job::Title::parse("Review").unwrap(),
-            palette_domain::job::PlanPath::parse("test/R-001").unwrap(),
+            Some(palette_domain::job::PlanPath::parse("test/R-001").unwrap()),
             None,
             None,
             JobDetail::Review { perspective: None },
@@ -123,7 +123,7 @@ async fn review_approved_completes_review_job() {
         .create_job(&CreateJobRequest::new(
             task_id,
             palette_domain::job::Title::parse("Review").unwrap(),
-            palette_domain::job::PlanPath::parse("test/R-001").unwrap(),
+            Some(palette_domain::job::PlanPath::parse("test/R-001").unwrap()),
             None,
             None,
             JobDetail::Review { perspective: None },

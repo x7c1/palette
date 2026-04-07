@@ -179,14 +179,14 @@ impl DataStore for MockDataStore {
     fn delete_jobs_by_task_id(&self, _: &TaskId) -> Result<(), BoxErr> {
         unimplemented!()
     }
-    fn create_workflow(&self, _: &WorkflowId, _: &str) -> Result<(), BoxErr> {
+    fn create_workflow(&self, _: &WorkflowId, _: Option<&str>) -> Result<(), BoxErr> {
         unimplemented!()
     }
     fn get_workflow(&self, id: &WorkflowId) -> Result<Option<Workflow>, BoxErr> {
         Ok(Some(Workflow {
             id: id.clone(),
             status: WorkflowStatus::Active,
-            blueprint_path: String::new(),
+            blueprint_path: None,
             started_at: chrono::Utc::now(),
             blueprint_hash: None,
         }))

@@ -31,6 +31,16 @@ Read the Plan document, then carry out the work as specified.
 
 Do NOT push to the remote. Reviewers access your work via the shared workspace.
 
+## Re-review
+
+When you receive a "changes requested" notification, read the integrated review feedback:
+
+```
+/home/agent/artifacts/round-{N}/integrated-review.json
+```
+
+The `comments` array contains file-and-line-specific issues. Address each `[blocking]` item.
+
 ## Guidelines
 
 - Read the Plan before starting work

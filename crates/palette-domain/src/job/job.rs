@@ -9,7 +9,7 @@ pub struct Job {
     pub id: JobId,
     pub task_id: TaskId,
     pub title: Title,
-    pub plan_path: PlanPath,
+    pub plan_path: Option<PlanPath>,
     pub assignee_id: Option<WorkerId>,
     pub status: JobStatus,
     pub priority: Option<Priority>,

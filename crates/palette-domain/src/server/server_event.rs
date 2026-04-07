@@ -20,7 +20,7 @@ pub enum ServerEvent {
     /// validate artifacts and handle the verdict.
     ReviewSubmitted { review_job_id: JobId },
     /// A ReviewIntegrator worker has stopped. Orchestrator should validate
-    /// that integrated-review.md was written.
+    /// that integrated-review.json was written.
     ReviewIntegratorStopped {
         task_id: TaskId,
         worker_id: WorkerId,

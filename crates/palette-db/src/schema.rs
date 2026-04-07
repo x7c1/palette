@@ -40,7 +40,7 @@ CREATE TABLE IF NOT EXISTS priorities (
 
 CREATE TABLE IF NOT EXISTS workflows (
     id TEXT PRIMARY KEY,
-    blueprint_path TEXT NOT NULL,
+    blueprint_path TEXT,
     status_id INTEGER NOT NULL,
     worker_counter INTEGER NOT NULL DEFAULT 0,
     started_at TEXT NOT NULL,
@@ -61,7 +61,7 @@ CREATE TABLE IF NOT EXISTS jobs (
     task_id TEXT NOT NULL,
     type_id INTEGER NOT NULL,
     title TEXT NOT NULL,
-    plan_path TEXT NOT NULL,
+    plan_path TEXT,
     assignee_id TEXT,
     status_id INTEGER NOT NULL,
     priority_id INTEGER,

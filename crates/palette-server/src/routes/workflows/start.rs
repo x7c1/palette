@@ -35,7 +35,7 @@ pub async fn handle_start_workflow(
         .read_blueprint(Path::new(&req.blueprint_path), &workflow_id)
         .map_err(super::blueprint_read_error_to_server_error)?;
 
-    let task_count = register_tasks(&state, &workflow_id, &tree, &req.blueprint_path)?;
+    let task_count = register_tasks(&state, &workflow_id, &tree, Some(&req.blueprint_path))?;
 
     // Send domain event — orchestrator handles task activation
     let _ = state.event_tx.send(ServerEvent::ActivateWorkflow {
@@ -60,11 +60,11 @@ pub async fn handle_start_workflow(
 }
 
 /// Create the workflow and register all task IDs (with Pending status) in the DB.
-fn register_tasks(
+pub(super) fn register_tasks(
     state: &AppState,
     workflow_id: &WorkflowId,
     tree: &TaskTree,
-    blueprint_path: &str,
+    blueprint_path: Option<&str>,
 ) -> crate::Result<usize> {
     state
         .interactor
