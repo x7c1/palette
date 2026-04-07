@@ -259,16 +259,10 @@ impl Orchestrator {
             }
             JobDetail::Review { target, .. } => {
                 if let Some(pr) = target.pull_request() {
-                    // Standalone PR review: clone the PR repository
-                    let repo_name = format!("{}/{}", pr.owner, pr.repo);
-                    let repository = palette_domain::job::Repository::parse(&repo_name, "main")
-                        .map_err(|e| crate::Error::InvalidTaskState {
-                            task_id: job.task_id.clone(),
-                            detail: format!("invalid PR repository: {e:?}"),
-                        })?;
+                    // Standalone PR review: clone and checkout PR head commit
                     let info = self
                         .workspace_manager
-                        .create_workspace(job.id.as_ref(), &repository)?;
+                        .create_pr_workspace(job.id.as_ref(), pr)?;
                     Ok(Some(WorkspaceVolume {
                         host_path: info.host_path,
                         repo_cache_path: info.repo_cache_path,

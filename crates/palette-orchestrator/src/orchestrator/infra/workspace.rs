@@ -1,7 +1,7 @@
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use palette_domain::job::Repository;
+use palette_domain::job::{PullRequest, Repository};
 
 /// Container-side mount point for the repo cache.
 const CONTAINER_REPO_CACHE: &str = "/home/agent/repo-cache";
@@ -124,6 +124,95 @@ impl WorkspaceManager {
             .map_err(|e| crate::Error::External(Box::new(e)))?;
 
         // Disable push: set pushurl to a sentinel value
+        run_git(
+            &ws_path,
+            &["config", "remote.origin.pushurl", "PUSH_DISABLED"],
+            "disable pushurl",
+        )?;
+
+        let cache_abs =
+            std::fs::canonicalize(&cache_path).map_err(|e| crate::Error::External(Box::new(e)))?;
+        let ws_abs =
+            std::fs::canonicalize(&ws_path).map_err(|e| crate::Error::External(Box::new(e)))?;
+
+        Ok(WorkspaceInfo {
+            host_path: ws_abs.to_string_lossy().to_string(),
+            repo_cache_path: cache_abs.to_string_lossy().to_string(),
+        })
+    }
+
+    /// Create a workspace for a PR review job.
+    ///
+    /// Fetches the PR head ref into the bare cache, then creates a shared clone
+    /// workspace checked out at the PR's head commit.
+    pub fn create_pr_workspace(
+        &self,
+        job_id: &str,
+        pr: &PullRequest,
+    ) -> crate::Result<WorkspaceInfo> {
+        let repo_name = format!("{}/{}", pr.owner, pr.repo);
+        let repo = Repository::parse(&repo_name, "main")
+            .map_err(|e| crate::Error::External(format!("invalid PR repository: {e:?}").into()))?;
+
+        let cache_path = self.ensure_repo_cache(&repo)?;
+
+        // Fetch the PR head ref into the bare cache
+        let pr_ref = format!("refs/pull/{}/head", pr.number);
+        tracing::info!(pr = %pr, pr_ref = %pr_ref, "fetching PR ref into bare cache");
+        run_git(&cache_path, &["fetch", "origin", &pr_ref], "fetch PR ref")?;
+
+        // Get the SHA of FETCH_HEAD
+        let sha_output = Command::new("git")
+            .args(["rev-parse", "FETCH_HEAD"])
+            .current_dir(&cache_path)
+            .output()
+            .map_err(|e| crate::Error::External(Box::new(e)))?;
+        if !sha_output.status.success() {
+            let stderr = String::from_utf8_lossy(&sha_output.stderr);
+            return Err(crate::Error::External(
+                format!("git rev-parse FETCH_HEAD failed: {stderr}").into(),
+            ));
+        }
+        let sha = String::from_utf8_lossy(&sha_output.stdout)
+            .trim()
+            .to_string();
+
+        // Create shared clone workspace
+        let ws_path = self.workspace_path(job_id);
+        if ws_path.exists() {
+            std::fs::remove_dir_all(&ws_path).map_err(|e| crate::Error::External(Box::new(e)))?;
+        }
+        let ws_parent = ws_path.parent().expect("workspace path must have parent");
+        std::fs::create_dir_all(ws_parent).map_err(|e| crate::Error::External(Box::new(e)))?;
+
+        tracing::info!(
+            job_id = %job_id,
+            pr = %pr,
+            sha = %sha,
+            "creating shared clone workspace for PR review"
+        );
+        run_git(
+            ws_parent,
+            &[
+                "clone",
+                "--shared",
+                "--no-checkout",
+                &cache_path.to_string_lossy(),
+                &ws_path.file_name().unwrap().to_string_lossy(),
+            ],
+            "shared clone for PR",
+        )?;
+
+        // Checkout the PR commit (detached HEAD)
+        run_git(&ws_path, &["checkout", &sha], "checkout PR commit")?;
+
+        // Rewrite alternates to use the container-side path
+        let alternates_path = ws_path.join(".git/objects/info/alternates");
+        let container_alternates = format!("{CONTAINER_REPO_CACHE}/objects\n");
+        std::fs::write(&alternates_path, &container_alternates)
+            .map_err(|e| crate::Error::External(Box::new(e)))?;
+
+        // Disable push
         run_git(
             &ws_path,
             &["config", "remote.origin.pushurl", "PUSH_DISABLED"],
