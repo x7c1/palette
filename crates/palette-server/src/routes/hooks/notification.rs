@@ -102,11 +102,6 @@ pub async fn handle_notification(
         now(),
         PERMISSION_EVENT_SEQ.fetch_add(1, Ordering::Relaxed)
     );
-    {
-        let mut pending = state.pending_permission_events.lock().await;
-        pending.insert(worker_id.to_string(), event_id.clone());
-    }
-
     // Build notification message
     let mut notification =
         format!("[event] member={worker_id} type=permission_prompt event_id={event_id}");
@@ -115,6 +110,19 @@ pub async fn handle_notification(
     }
     if let Some(ref pane) = pane_content {
         notification.push_str(&format!(" pane=[{pane}]"));
+    }
+
+    {
+        let mut pending = state.pending_permission_events.lock().await;
+        pending.insert(
+            worker_id.to_string(),
+            crate::PendingPermission {
+                event_id: event_id.clone(),
+                created_at: std::time::Instant::now(),
+                supervisor_id: worker_context.supervisor_id.clone(),
+                notification: notification.clone(),
+            },
+        );
     }
 
     if let Some(ref supervisor_id) = worker_context.supervisor_id {

@@ -104,6 +104,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel();
     let orchestrator_handle = orchestrator.start(event_rx, shutdown_rx);
 
+    // Start permission timeout checker
+    palette_server::permission_timeout::spawn_permission_timeout_checker(Arc::clone(&state));
+
     // Start HTTP server with graceful shutdown
     let app = palette_server::create_router(state);
     tracing::info!(%bind_addr, %operator_api_url, "starting server");
