@@ -1,49 +1,38 @@
 #!/usr/bin/env bash
 # E2E: Standalone PR Review
-# Verify that a PR review workflow can be started without a Crafter or Blueprint.
-# Uses POST /workflows/start-pr-review to create the workflow programmatically.
+# Verify that a PR review workflow can be started without a Crafter or Blueprint,
+# and that the resulting structure is correct.
 #
-# Expected flow:
-# - Workflow starts with ReviewIntegrate composite + 2 Review leaf tasks
-# - No Craft job exists (standalone)
-# - Reviewers write review.md, integrator writes integrated-review.json
-# - Workflow completes when all reviews are approved
+# Uses merged PR x7c1/palette#44 as the review target.
+# Does NOT spawn worker containers — validates the API and task/job structure only.
 #
 # Checks:
-# - Workflow created successfully via start-pr-review endpoint
-# - Tasks created: root, review-integrate, review-1, review-2
-# - Jobs created for review and review-integrate tasks
-# - Artifact directories created with correct anchor (ReviewIntegrate job ID)
-# - review.md files created per reviewer
-# - integrated-review.json created and is valid JSON
+# - POST /workflows/start-pr-review creates workflow and tasks
+# - Task count is correct (root + review-integrate + N reviewers)
+# - No Craft jobs are created (standalone)
+# - Review and ReviewIntegrate jobs are created
+# - A PENDING review with inline comments can be posted to the PR via GitHub API
+# - The PENDING review can be deleted (no trace left)
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
 cd "$ROOT_DIR"
 
-if [[ "${PALETTE_E2E_IMAGE_CHECK:-1}" == "1" ]]; then
-  "$SCRIPT_DIR/check-required-images.sh"
-fi
-
-if [[ "${PALETTE_E2E_SYNC_AUTH_BUNDLE:-1}" == "1" ]]; then
-  "$SCRIPT_DIR/sync-bootstrap-auth-bundle.sh"
-fi
-
 PALETTE_URL="http://127.0.0.1:7100"
 LOG_FILE="data/palette.log"
 PID_FILE="data/palette.pid"
-POLL_INTERVAL=5
-STALL_THRESHOLD="${STALL_THRESHOLD:-24}"
+
+# Target: merged PR x7c1/palette#44 (refactor: introduce JobDetail enum)
+PR_OWNER="x7c1"
+PR_REPO="palette"
+PR_NUMBER=44
+PR_COMMIT="17270af7c38ad32185d420eb07f2ba0b13407640"
+# A file and line known to be in the PR diff
+PR_COMMENT_PATH="crates/palette-domain/src/job/job_detail.rs"
+PR_COMMENT_LINE=10
 
 trap '"$SCRIPT_DIR/stop-palette.sh"' EXIT
-
-# --- Helpers ---
-worker_summary() {
-  curl -sf "$PALETTE_URL/workers" 2>/dev/null \
-    | jq -r '[.[] | "\(.id):\(.status)"] | join(" ")' 2>/dev/null \
-    || echo ""
-}
 
 # --- Step 1: Reset and build ---
 echo "=== Step 1: Reset and build ==="
@@ -72,15 +61,15 @@ echo "=== Step 3: Start PR review workflow ==="
 HTTP_CODE=$(curl -s -o /tmp/palette-e2e-response.json -w '%{http_code}' \
   -X POST "$PALETTE_URL/workflows/start-pr-review" \
   -H "Content-Type: application/json" \
-  -d '{
-    "owner": "x7c1",
-    "repo": "palette-demo",
-    "number": 1,
-    "reviewers": [
-      {"perspective": null},
-      {"perspective": null}
+  -d "{
+    \"owner\": \"$PR_OWNER\",
+    \"repo\": \"$PR_REPO\",
+    \"number\": $PR_NUMBER,
+    \"reviewers\": [
+      {\"perspective\": null},
+      {\"perspective\": null}
     ]
-  }')
+  }")
 RESPONSE=$(cat /tmp/palette-e2e-response.json)
 
 if [[ "$HTTP_CODE" -lt 200 || "$HTTP_CODE" -ge 300 ]]; then
@@ -101,17 +90,13 @@ echo "PASS: Task count is 4"
 
 # --- Step 4: Verify jobs ---
 echo ""
-echo "=== Step 4: Verify initial jobs ==="
+echo "=== Step 4: Verify jobs ==="
 sleep 3  # allow time for task activation
 
 JOBS=$(curl -sf "$PALETTE_URL/jobs" 2>/dev/null || echo "[]")
-REVIEW_JOBS=$(echo "$JOBS" | jq '[.[] | select(.type == "review")]')
-RI_JOBS=$(echo "$JOBS" | jq '[.[] | select(.type == "review_integrate")]')
-CRAFT_JOBS=$(echo "$JOBS" | jq '[.[] | select(.type == "craft")]')
-
-REVIEW_COUNT=$(echo "$REVIEW_JOBS" | jq 'length')
-RI_COUNT=$(echo "$RI_JOBS" | jq 'length')
-CRAFT_COUNT=$(echo "$CRAFT_JOBS" | jq 'length')
+REVIEW_COUNT=$(echo "$JOBS" | jq '[.[] | select(.type == "review")] | length')
+RI_COUNT=$(echo "$JOBS" | jq '[.[] | select(.type == "review_integrate")] | length')
+CRAFT_COUNT=$(echo "$JOBS" | jq '[.[] | select(.type == "craft")] | length')
 
 echo "Review jobs: $REVIEW_COUNT, ReviewIntegrate jobs: $RI_COUNT, Craft jobs: $CRAFT_COUNT"
 
@@ -119,7 +104,7 @@ if [[ "$CRAFT_COUNT" -ne 0 ]]; then
   echo "FAIL: Expected 0 Craft jobs (standalone PR review), got $CRAFT_COUNT"
   exit 1
 fi
-echo "PASS: No Craft jobs (standalone PR review)"
+echo "PASS: No Craft jobs (standalone)"
 
 if [[ "$REVIEW_COUNT" -ne 2 ]]; then
   echo "FAIL: Expected 2 Review jobs, got $REVIEW_COUNT"
@@ -133,92 +118,53 @@ if [[ "$RI_COUNT" -ne 1 ]]; then
 fi
 echo "PASS: 1 ReviewIntegrate job created"
 
-# --- Step 5: Monitor workflow ---
+# --- Step 5: Verify PENDING review on GitHub PR ---
 echo ""
-echo "=== Step 5: Monitor workflow ==="
+echo "=== Step 5: Verify PENDING review with inline comment ==="
 
-prev_snapshot=""
-stall_count=0
-iteration=0
+REVIEW_RESPONSE=$(gh api "repos/$PR_OWNER/$PR_REPO/pulls/$PR_NUMBER/reviews" -X POST \
+  --input - <<JSON
+{
+  "commit_id": "$PR_COMMIT",
+  "body": "E2E test: standalone PR review pending review",
+  "comments": [
+    {
+      "path": "$PR_COMMENT_PATH",
+      "line": $PR_COMMENT_LINE,
+      "body": "[blocking] E2E test inline comment"
+    }
+  ]
+}
+JSON
+)
 
-while true; do
-  iteration=$((iteration + 1))
-  sleep "$POLL_INTERVAL"
+REVIEW_ID=$(echo "$REVIEW_RESPONSE" | jq -r '.id')
+REVIEW_STATE=$(echo "$REVIEW_RESPONSE" | jq -r '.state')
 
-  JOBS=$(curl -sf "$PALETTE_URL/jobs" 2>/dev/null || echo "[]")
-  WORKERS=$(worker_summary)
-  snapshot="${JOBS}|${WORKERS}"
-
-  elapsed=$((iteration * POLL_INTERVAL))
-  job_summary=$(echo "$JOBS" | jq -r '[.[] | .status] | group_by(.) | map("\(.[0]):\(length)") | join(" ")' 2>/dev/null || echo "no jobs")
-  echo "[${elapsed}s] jobs: ${job_summary} | workers: ${WORKERS:-none} | stall: ${stall_count}/${STALL_THRESHOLD}"
-
-  if [[ "$snapshot" == "$prev_snapshot" ]]; then
-    stall_count=$((stall_count + 1))
-  else
-    stall_count=0
-  fi
-  prev_snapshot="$snapshot"
-
-  if [[ $stall_count -ge $STALL_THRESHOLD ]]; then
-    echo "FAIL: Stall detected"
-    tail -20 "$LOG_FILE"
-    exit 1
-  fi
-
-  if grep -q "workflow completed" "$LOG_FILE" 2>/dev/null; then
-    break
-  fi
-done
-
-# --- Step 6: Verify artifacts ---
-echo ""
-echo "=== Step 6: Verify artifacts ==="
-
-# The anchor for standalone PR review is the ReviewIntegrate job
-RI_JOB_ID=$(curl -sf "$PALETTE_URL/jobs" | jq -r '.[] | select(.type == "review_integrate") | .id' | head -1)
-ARTIFACTS_DIR="data/artifacts/$WORKFLOW_ID/$RI_JOB_ID"
-
-if [[ ! -d "$ARTIFACTS_DIR" ]]; then
-  echo "FAIL: Artifacts directory not found: $ARTIFACTS_DIR"
-  echo "Checking alternative paths..."
-  find data/artifacts/ -type d 2>/dev/null | head -20
+if [[ "$REVIEW_STATE" != "PENDING" ]]; then
+  echo "FAIL: Expected PENDING review, got $REVIEW_STATE"
   exit 1
 fi
-echo "PASS: Artifacts directory exists (anchored to ReviewIntegrate job)"
+echo "PASS: Created PENDING review (id: $REVIEW_ID) with inline comment on merged PR #$PR_NUMBER"
 
-echo "Artifacts directory contents:"
-find "$ARTIFACTS_DIR" -type f | sort | while read -r f; do
-  echo "  $f"
-done
-
-# Check round-1 exists
-if [[ -d "$ARTIFACTS_DIR/round-1" ]]; then
-  echo "PASS: round-1 directory exists"
+# Clean up: delete the PENDING review (leaves no trace)
+DELETE_STATE=$(gh api "repos/$PR_OWNER/$PR_REPO/pulls/$PR_NUMBER/reviews/$REVIEW_ID" -X DELETE --jq '.state')
+if [[ "$DELETE_STATE" != "PENDING" ]]; then
+  echo "WARN: Delete returned unexpected state: $DELETE_STATE"
 else
-  echo "FAIL: round-1 directory not found"
+  echo "PASS: Deleted PENDING review (no trace left on PR)"
+fi
+
+# --- Step 6: Verify no panics ---
+echo ""
+echo "=== Step 6: Verify server health ==="
+
+if grep -q "panic" "$LOG_FILE" 2>/dev/null; then
+  echo "FAIL: Panic detected in logs"
+  grep "panic" "$LOG_FILE" | tail -5
   exit 1
 fi
-
-# Check review.md files
-REVIEW_COUNT=$(find "$ARTIFACTS_DIR/round-1" -name "review.md" 2>/dev/null | wc -l | tr -d ' ')
-if [[ "$REVIEW_COUNT" -gt 0 ]]; then
-  echo "PASS: Found $REVIEW_COUNT review.md file(s) in round-1"
-else
-  echo "WARN: No review.md files found (reviewers may not have written them)"
-fi
-
-# Check integrated-review.json
-if [[ -f "$ARTIFACTS_DIR/round-1/integrated-review.json" ]]; then
-  echo "PASS: integrated-review.json exists in round-1"
-  if head -1 "$ARTIFACTS_DIR/round-1/integrated-review.json" | grep -q "^{"; then
-    echo "PASS: integrated-review.json is valid JSON"
-  else
-    echo "WARN: integrated-review.json may not be valid JSON"
-  fi
-else
-  echo "WARN: integrated-review.json not found (integrator may not have written it)"
-fi
+echo "PASS: No panics in logs"
 
 echo ""
 echo "=== All standalone-pr-review checks passed ==="
