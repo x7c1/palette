@@ -1,5 +1,7 @@
 use crate::blueprint::TaskNode;
-use palette_domain::job::{JobDetail, JobType, PerspectiveName, Repository, ReviewTarget};
+use palette_domain::job::{
+    JobDetail, JobType, PerspectiveName, PullRequest, Repository, ReviewTarget,
+};
 use palette_domain::task::TaskKey;
 use std::collections::{HashMap, HashSet};
 
@@ -113,23 +115,20 @@ impl<'a> BlueprintValidator<'a> {
             JobType::Review => {
                 let mut errors = validate_repository_format(node);
                 let perspective = self.build_perspective(node, &mut errors);
+                let target = self.build_review_target(node, &mut errors);
                 (
                     errors,
                     Some(JobDetail::Review {
                         perspective,
-                        target: ReviewTarget::CraftOutput,
+                        target,
                     }),
                 )
             }
             JobType::ReviewIntegrate => {
                 let mut errors = validate_repository_format(node);
                 errors.extend(perspective_on_non_review(node));
-                (
-                    errors,
-                    Some(JobDetail::ReviewIntegrate {
-                        target: ReviewTarget::CraftOutput,
-                    }),
-                )
+                let target = self.build_review_target(node, &mut errors);
+                (errors, Some(JobDetail::ReviewIntegrate { target }))
             }
             JobType::Orchestrator => {
                 let mut errors = validate_repository_format(node);
@@ -174,6 +173,28 @@ impl<'a> BlueprintValidator<'a> {
                     perspective: raw.clone(),
                 });
                 None
+            }
+        }
+    }
+
+    /// Build [`ReviewTarget`] from the node's `pull_request` field.
+    /// Returns `CraftOutput` when no pull_request is specified.
+    fn build_review_target(
+        &self,
+        node: &TaskNode,
+        errors: &mut Vec<BlueprintError>,
+    ) -> ReviewTarget {
+        let Some(pr_yaml) = node.pull_request.clone() else {
+            return ReviewTarget::CraftOutput;
+        };
+        match PullRequest::parse(pr_yaml.owner, pr_yaml.repo, pr_yaml.number) {
+            Ok(pr) => ReviewTarget::PullRequest(pr),
+            Err(cause) => {
+                errors.push(BlueprintError::InvalidPullRequest {
+                    task_key: node.key.clone(),
+                    cause,
+                });
+                ReviewTarget::CraftOutput
             }
         }
     }

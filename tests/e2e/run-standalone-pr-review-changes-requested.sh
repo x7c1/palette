@@ -103,11 +103,20 @@ echo "PASS: Task count is 3"
 # --- Step 4: Verify jobs ---
 echo ""
 echo "=== Step 4: Verify jobs ==="
-sleep 3
 
-JOBS=$(curl -sf "$PALETTE_URL/jobs" 2>/dev/null || echo "[]")
-CRAFT_COUNT=$(echo "$JOBS" | jq '[.[] | select(.type == "craft")] | length')
-REVIEW_COUNT=$(echo "$JOBS" | jq '[.[] | select(.type == "review")] | length')
+for i in $(seq 1 30); do
+  JOBS=$(curl -sf "$PALETTE_URL/jobs" 2>/dev/null || echo "[]")
+  CRAFT_COUNT=$(echo "$JOBS" | jq '[.[] | select(.type == "craft")] | length')
+  REVIEW_COUNT=$(echo "$JOBS" | jq '[.[] | select(.type == "review")] | length')
+  if [[ "$REVIEW_COUNT" -ge 1 ]]; then
+    break
+  fi
+  if [[ $i -eq 30 ]]; then
+    echo "FAIL: Timed out waiting for jobs (review=$REVIEW_COUNT, craft=$CRAFT_COUNT)"
+    exit 1
+  fi
+  sleep 2
+done
 
 if [[ "$CRAFT_COUNT" -ne 0 ]]; then
   echo "FAIL: Found $CRAFT_COUNT Craft jobs (standalone review should have none)"

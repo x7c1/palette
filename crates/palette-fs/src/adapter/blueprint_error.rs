@@ -1,4 +1,4 @@
-use palette_domain::job::InvalidRepository;
+use palette_domain::job::{InvalidPullRequest, InvalidRepository};
 use palette_domain::task::InvalidTaskKey;
 
 /// Blueprint validation error.
@@ -21,6 +21,11 @@ pub enum BlueprintError {
     DuplicateDependency { task_key: String, dep: String },
     /// Perspective specified on a non-review task.
     PerspectiveOnNonReview { task_key: String },
+    /// Pull request has invalid owner, repo, or number.
+    InvalidPullRequest {
+        task_key: String,
+        cause: InvalidPullRequest,
+    },
     /// Perspective name not found in server configuration.
     UnknownPerspective {
         task_key: String,
@@ -51,6 +56,9 @@ impl BlueprintError {
             BlueprintError::DuplicateDependency { task_key, dep } => {
                 format!("tasks[key={task_key}].depends_on[{dep}]")
             }
+            BlueprintError::InvalidPullRequest { task_key, .. } => {
+                format!("tasks[key={task_key}].pull_request")
+            }
             BlueprintError::PerspectiveOnNonReview { task_key } => {
                 format!("tasks[key={task_key}].perspective")
             }
@@ -69,6 +77,7 @@ impl BlueprintError {
             }
             BlueprintError::MissingRepository { .. } => "blueprint/missing_repository".to_string(),
             BlueprintError::InvalidRepository { cause, .. } => cause.reason_key(),
+            BlueprintError::InvalidPullRequest { cause, .. } => cause.reason_key(),
             BlueprintError::SelfDependency { .. } => "blueprint/self_dependency".to_string(),
             BlueprintError::DuplicateDependency { .. } => {
                 "blueprint/duplicate_dependency".to_string()
