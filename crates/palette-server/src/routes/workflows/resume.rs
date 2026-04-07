@@ -167,11 +167,8 @@ fn verify_blueprint_hash(state: &AppState, workflow_id: &WorkflowId) -> crate::R
             id: workflow_id.to_string(),
         })?;
 
-    // Blueprint validation is only needed for blueprint-based workflows
-    if let Some(ref bp_str) = workflow.blueprint_path {
-        let blueprint_path = std::path::Path::new(bp_str);
-        verify_blueprint(state, workflow_id, blueprint_path, &workflow.blueprint_hash)?;
-    }
+    let blueprint_path = std::path::Path::new(&workflow.blueprint_path);
+    verify_blueprint(state, workflow_id, blueprint_path, &workflow.blueprint_hash)?;
 
     Ok(())
 }

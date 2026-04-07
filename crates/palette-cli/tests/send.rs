@@ -20,7 +20,7 @@ fn register_worker(
     let _ = state
         .interactor
         .data_store
-        .create_workflow(&wf_id, Some("test/blueprint.yaml"));
+        .create_workflow(&wf_id, "test/blueprint.yaml");
     state
         .interactor
         .data_store

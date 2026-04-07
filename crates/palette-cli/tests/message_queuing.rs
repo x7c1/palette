@@ -26,7 +26,7 @@ async fn message_queuing_to_supervisor() {
     state
         .interactor
         .data_store
-        .create_workflow(&wf_id, Some("test/blueprint.yaml"))
+        .create_workflow(&wf_id, "test/blueprint.yaml")
         .unwrap();
     let task_a = TaskId::parse("wf-scenario3:task-R-A").unwrap();
     let task_b = TaskId::parse("wf-scenario3:task-R-B").unwrap();

@@ -69,7 +69,7 @@ pub async fn handle_start_pr_review(
         .map_err(super::blueprint_read_error_to_server_error)?;
 
     let task_count =
-        super::start::register_tasks(&state, &workflow_id, &tree, Some(&blueprint_path_str))?;
+        super::start::register_tasks(&state, &workflow_id, &tree, &blueprint_path_str)?;
 
     let _ = state.event_tx.send(ServerEvent::ActivateWorkflow {
         workflow_id: workflow_id.clone(),

@@ -22,7 +22,7 @@ async fn job_api_create_and_list() {
     state
         .interactor
         .data_store
-        .create_workflow(&wf_id, Some("test/blueprint.yaml"))
+        .create_workflow(&wf_id, "test/blueprint.yaml")
         .unwrap();
     state
         .interactor
@@ -128,7 +128,7 @@ async fn job_api_update_with_rules() {
     state
         .interactor
         .data_store
-        .create_workflow(&wf_id, Some("test/blueprint.yaml"))
+        .create_workflow(&wf_id, "test/blueprint.yaml")
         .unwrap();
     state
         .interactor

@@ -10,8 +10,6 @@ pub enum TaskStoreError {
     Blueprint(ReadBlueprintError),
     /// Referenced workflow does not exist.
     WorkflowNotFound { workflow_id: WorkflowId },
-    /// Workflow has no blueprint_path (e.g., PR review workflow).
-    BlueprintNotAvailable { workflow_id: WorkflowId },
 }
 
 impl fmt::Display for TaskStoreError {
@@ -21,9 +19,6 @@ impl fmt::Display for TaskStoreError {
             TaskStoreError::Blueprint(e) => write!(f, "blueprint error: {e}"),
             TaskStoreError::WorkflowNotFound { workflow_id } => {
                 write!(f, "workflow not found: {workflow_id}")
-            }
-            TaskStoreError::BlueprintNotAvailable { workflow_id } => {
-                write!(f, "blueprint not available for workflow: {workflow_id}")
             }
         }
     }

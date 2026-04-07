@@ -12,7 +12,7 @@ pub struct ListWorkflowsQuery {
 #[derive(Debug, Serialize)]
 pub struct WorkflowResponse {
     pub id: String,
-    pub blueprint_path: Option<String>,
+    pub blueprint_path: String,
     pub status: String,
     pub started_at: String,
 }

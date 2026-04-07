@@ -7,7 +7,7 @@ use super::{WorkflowId, WorkflowStatus};
 #[derive(Debug, Clone)]
 pub struct Workflow {
     pub id: WorkflowId,
-    pub blueprint_path: Option<String>,
+    pub blueprint_path: String,
     pub status: WorkflowStatus,
     pub started_at: DateTime<Utc>,
     /// SHA-256 hash of the Blueprint file at the time of the last apply.

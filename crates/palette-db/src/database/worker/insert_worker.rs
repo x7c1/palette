@@ -52,7 +52,7 @@ pub(crate) mod tests {
 
     pub fn insert_test_worker(db: &Database, id: &str, role: WorkerRole, workflow_id: &str) {
         let wf_id = WorkflowId::parse(workflow_id).unwrap();
-        let _ = db.create_workflow(&wf_id, Some("test/blueprint.yaml"));
+        let _ = db.create_workflow(&wf_id, "test/blueprint.yaml");
         db.insert_worker(&InsertWorkerRequest {
             id: WorkerId::parse(id).unwrap(),
             workflow_id: wf_id,

@@ -28,7 +28,7 @@ pub fn write_blueprint_file(yaml: &str) -> tempfile::NamedTempFile {
 /// Insert a worker record to satisfy FK constraints.
 pub fn setup_worker(db: &dyn palette_usecase::DataStore, worker_id: &str) {
     let wf_id = WorkflowId::parse("wf-test").unwrap();
-    let _ = db.create_workflow(&wf_id, Some("test/blueprint.yaml"));
+    let _ = db.create_workflow(&wf_id, "test/blueprint.yaml");
     db.insert_worker(&InsertWorkerRequest {
         id: WorkerId::parse(worker_id).unwrap(),
         workflow_id: wf_id,

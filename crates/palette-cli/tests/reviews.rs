@@ -14,7 +14,7 @@ fn setup_review_task(state: &palette_server::AppState, task_id_str: &str) -> Tas
     let _ = state
         .interactor
         .data_store
-        .create_workflow(&wf_id, Some("test/blueprint.yaml"));
+        .create_workflow(&wf_id, "test/blueprint.yaml");
     let _ = state.interactor.data_store.create_task(&CreateTaskRequest {
         id: task_id.clone(),
         workflow_id: wf_id,

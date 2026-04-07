@@ -45,12 +45,8 @@ impl<'a> TaskStore<'a> {
                 workflow_id: workflow_id.clone(),
             })?;
 
-        let blueprint_path = workflow.blueprint_path.ok_or_else(|| {
-            crate::TaskStoreError::BlueprintNotAvailable {
-                workflow_id: workflow_id.clone(),
-            }
-        })?;
-        let tree = blueprint.read_blueprint(std::path::Path::new(&blueprint_path), workflow_id)?;
+        let tree = blueprint
+            .read_blueprint(std::path::Path::new(&workflow.blueprint_path), workflow_id)?;
         let statuses = data_store
             .get_task_statuses(workflow_id)
             .map_err(crate::TaskStoreError::DataStore)?;
