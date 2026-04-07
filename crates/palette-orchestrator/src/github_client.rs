@@ -9,8 +9,8 @@ use std::process::Command;
 pub struct GhCliReviewClient;
 
 impl GhCliReviewClient {
-    pub fn new() -> Self {
-        Self
+    pub fn boxed() -> Box<dyn GitHubReviewPort> {
+        Box::new(Self)
     }
 }
 

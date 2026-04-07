@@ -8,9 +8,7 @@ impl Orchestrator {
     /// Reads `integrated-review.json` from the artifacts directory and posts
     /// comments to the GitHub PR via the configured GitHubReviewPort.
     pub(crate) fn post_pr_review_comments(&self, review_job_id: &JobId) {
-        let Some(github) = self.github_review.as_ref() else {
-            return;
-        };
+        let github = &self.interactor.github_review;
 
         let job = match self.interactor.data_store.get_job(review_job_id) {
             Ok(Some(j)) => j,

@@ -6,6 +6,7 @@ use palette_docker::CallbackNetworkMode;
 use palette_docker::DockerManager;
 use palette_domain::terminal::TerminalSessionName;
 use palette_fs::FsBlueprintReader;
+use palette_orchestrator::github_client::GhCliReviewClient;
 use palette_orchestrator::workspace::WorkspaceManager;
 use palette_orchestrator::{CallbackNetwork, Orchestrator};
 use palette_server::AppState;
@@ -61,6 +62,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         terminal: Box::new(tmux),
         data_store: Box::new(db),
         blueprint: Box::new(FsBlueprintReader::new(perspective_names)),
+        github_review: GhCliReviewClient::boxed(),
     });
 
     let (event_tx, event_rx) = tokio::sync::mpsc::unbounded_channel();
@@ -88,10 +90,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         workspace_manager,
         perspectives: validated_perspectives,
         event_tx,
-        github_review: Some(
-            Box::new(palette_orchestrator::github_client::GhCliReviewClient::new())
-                as Box<dyn palette_usecase::GitHubReviewPort>,
-        ),
     });
 
     // Clean up orphan containers from previous crash/forced exit

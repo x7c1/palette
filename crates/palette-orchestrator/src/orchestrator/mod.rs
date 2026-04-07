@@ -11,7 +11,6 @@ use tokio_util::sync::CancellationToken;
 use crate::DockerConfig;
 use crate::perspectives_config::ValidatedPerspectives;
 use infra::workspace::WorkspaceManager;
-use palette_usecase::GitHubReviewPort;
 
 pub struct Orchestrator {
     pub interactor: Arc<Interactor>,
@@ -24,6 +23,4 @@ pub struct Orchestrator {
     /// Sender for events back to the orchestrator event loop.
     /// Used by orchestrator tasks to report command completion.
     pub event_tx: mpsc::UnboundedSender<ServerEvent>,
-    /// Optional GitHub review client for posting PR review comments.
-    pub github_review: Option<Box<dyn GitHubReviewPort>>,
 }

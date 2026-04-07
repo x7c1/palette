@@ -116,6 +116,7 @@ mod tests {
                 terminal: Box::new(terminal),
                 data_store: Box::new(data_store),
                 blueprint: Box::new(MockBlueprintReader),
+                github_review: Box::new(MockGitHubReview),
             }),
             docker_config: crate::DockerConfig {
                 worker_callback_url: String::new(),
@@ -139,7 +140,6 @@ mod tests {
                 perspectives: vec![],
             },
             event_tx: tokio::sync::mpsc::unbounded_channel().0,
-            github_review: None,
         })
     }
 

@@ -2,6 +2,7 @@ use super::StubContainerRuntime;
 use palette_db::Database;
 use palette_domain::terminal::TerminalSessionName;
 use palette_fs::FsBlueprintReader;
+use palette_orchestrator::github_client::GhCliReviewClient;
 use palette_orchestrator::workspace::WorkspaceManager;
 use palette_orchestrator::{CallbackNetwork, DockerConfig, Orchestrator, ValidatedPerspectives};
 use palette_server::{AppState, create_router};
@@ -44,6 +45,7 @@ pub async fn spawn_server(
         terminal: Box::new(tmux),
         data_store: Box::new(db),
         blueprint: Box::new(FsBlueprintReader::new(HashSet::new())),
+        github_review: GhCliReviewClient::boxed(),
     });
 
     let (event_tx, event_rx) = tokio::sync::mpsc::unbounded_channel();
@@ -69,7 +71,6 @@ pub async fn spawn_server(
             perspectives: vec![],
         },
         event_tx,
-        github_review: None,
     });
     let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel();
     let _ = orchestrator.start(event_rx, shutdown_rx);
