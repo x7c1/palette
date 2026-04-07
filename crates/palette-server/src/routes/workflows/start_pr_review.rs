@@ -40,7 +40,7 @@ pub async fn handle_start_pr_review(
             errors: vec![crate::api_types::InputError {
                 location: crate::api_types::Location::Body,
                 hint: "reviewers".into(),
-                reason: "at least one reviewer is required".into(),
+                reason: "reviewers/empty".into(),
             }],
         });
     }
