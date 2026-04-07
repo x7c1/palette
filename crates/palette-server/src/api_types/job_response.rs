@@ -20,7 +20,6 @@ pub struct JobResponse {
     pub command: Option<String>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
-    pub notes: Option<String>,
     pub assigned_at: Option<DateTime<Utc>>,
 }
 
@@ -38,7 +37,6 @@ impl From<domain::job::Job> for JobResponse {
             command: t.detail.command().map(String::from),
             created_at: t.created_at,
             updated_at: t.updated_at,
-            notes: t.notes,
             assigned_at: t.assigned_at,
         }
     }

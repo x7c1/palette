@@ -96,7 +96,6 @@ mod tests {
             },
             created_at: now,
             updated_at: now,
-            notes: None,
             assigned_at: None,
         }
     }
@@ -116,7 +115,6 @@ mod tests {
             },
             created_at: now,
             updated_at: now,
-            notes: None,
             assigned_at: None,
         }
     }

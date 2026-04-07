@@ -47,7 +47,6 @@ pub fn make_job(id: &str) -> Job {
         },
         created_at: now,
         updated_at: now,
-        notes: None,
         assigned_at: None,
     }
 }

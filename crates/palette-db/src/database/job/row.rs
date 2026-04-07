@@ -6,7 +6,7 @@ use rusqlite::{Connection, params};
 
 use super::super::{corrupt, corrupt_parse, parse_datetime};
 
-pub(crate) const JOB_COLUMNS: &str = "id, task_id, type_id, title, plan_path, assignee_id, status_id, priority_id, repository, command, perspective, pull_request, created_at, updated_at, notes, assigned_at";
+pub(crate) const JOB_COLUMNS: &str = "id, task_id, type_id, title, plan_path, assignee_id, status_id, priority_id, repository, command, perspective, pull_request, created_at, updated_at, assigned_at";
 
 /// Extract a raw DB row into a JobRow (DB-native types only).
 pub(crate) fn read_job_row(row: &rusqlite::Row) -> rusqlite::Result<JobRow> {
@@ -25,7 +25,6 @@ pub(crate) fn read_job_row(row: &rusqlite::Row) -> rusqlite::Result<JobRow> {
         pull_request: row.get("pull_request")?,
         created_at: row.get("created_at")?,
         updated_at: row.get("updated_at")?,
-        notes: row.get("notes")?,
         assigned_at: row.get("assigned_at")?,
     })
 }
@@ -100,7 +99,6 @@ pub(crate) fn into_job(row: JobRow) -> crate::Result<Job> {
         detail,
         created_at: parse_datetime(&row.created_at),
         updated_at: parse_datetime(&row.updated_at),
-        notes: row.notes,
         assigned_at: row.assigned_at.map(|s| parse_datetime(&s)),
     })
 }

@@ -71,7 +71,6 @@ CREATE TABLE IF NOT EXISTS jobs (
     pull_request TEXT,
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL,
-    notes TEXT,
     assigned_at TEXT,
     FOREIGN KEY (task_id) REFERENCES tasks(id),
     FOREIGN KEY (type_id) REFERENCES job_types(id),

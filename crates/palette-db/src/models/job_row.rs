@@ -15,6 +15,5 @@ pub(crate) struct JobRow {
     pub pull_request: Option<String>,
     pub created_at: String,
     pub updated_at: String,
-    pub notes: Option<String>,
     pub assigned_at: Option<String>,
 }

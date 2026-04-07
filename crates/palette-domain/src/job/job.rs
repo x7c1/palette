@@ -16,6 +16,5 @@ pub struct Job {
     pub detail: JobDetail,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
-    pub notes: Option<String>,
     pub assigned_at: Option<DateTime<Utc>>,
 }
