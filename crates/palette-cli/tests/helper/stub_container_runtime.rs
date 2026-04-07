@@ -1,5 +1,5 @@
 use palette_domain::worker::{ContainerId, WorkerRole, WorkerSessionId};
-use palette_usecase::container_runtime::ContainerMounts;
+use palette_usecase::ContainerMounts;
 
 /// Stub container runtime for integration tests.
 /// All container operations are no-ops; `is_claude_running` always returns

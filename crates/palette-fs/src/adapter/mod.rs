@@ -7,8 +7,7 @@ mod blueprint_validator;
 use palette_core::{InputError, Location};
 use palette_domain::task::TaskTree;
 use palette_domain::workflow::WorkflowId;
-use palette_usecase::BlueprintReader;
-use palette_usecase::blueprint_reader::ReadBlueprintError;
+use palette_usecase::{BlueprintReader, ReadBlueprintError};
 use std::collections::HashSet;
 use std::path::Path;
 

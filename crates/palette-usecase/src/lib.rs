@@ -1,13 +1,16 @@
-pub mod container_runtime;
-pub use container_runtime::ContainerRuntime;
+mod container_runtime;
+pub use container_runtime::{
+    ArtifactsMount, ContainerMounts, ContainerRuntime, PerspectiveMount, PlanDirMount,
+    WorkspaceVolume,
+};
 
-pub mod data_store;
-pub use data_store::DataStore;
+mod data_store;
+pub use data_store::{CreateTaskRequest, DataStore, InsertWorkerRequest};
 
 mod terminal_session;
 pub use terminal_session::TerminalSession;
 
-pub mod blueprint_reader;
+mod blueprint_reader;
 pub use blueprint_reader::{BlueprintReader, ReadBlueprintError};
 
 mod task_store_error;

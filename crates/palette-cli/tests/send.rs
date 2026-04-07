@@ -7,7 +7,7 @@ use palette_domain::worker::{ContainerId, WorkerRole, WorkerStatus};
 use palette_domain::workflow::WorkflowId;
 use palette_server::api_types::{SendPermissionRequest, SendRequest};
 use palette_tmux::TmuxManager;
-use palette_usecase::data_store::InsertWorkerRequest;
+use palette_usecase::InsertWorkerRequest;
 use serde_json::json;
 
 fn register_worker(

@@ -5,7 +5,7 @@ use palette_domain::task::TaskId;
 use palette_domain::workflow::WorkflowId;
 use palette_server::api_types::{ReviewCommentInput, SubmitReviewRequest, Verdict};
 use palette_tmux::TmuxManager;
-use palette_usecase::data_store::CreateTaskRequest;
+use palette_usecase::CreateTaskRequest;
 
 fn setup_review_task(state: &palette_server::AppState, task_id_str: &str) -> TaskId {
     let task_id = TaskId::parse(task_id_str).unwrap();

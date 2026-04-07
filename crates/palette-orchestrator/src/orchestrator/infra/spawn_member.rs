@@ -2,7 +2,7 @@ use super::Orchestrator;
 use palette_domain::job::{JobDetail, JobType};
 use palette_domain::task::TaskId;
 use palette_domain::worker::{WorkerId, WorkerRole, WorkerState, WorkerStatus};
-use palette_usecase::container_runtime::{
+use palette_usecase::{
     ArtifactsMount, ContainerMounts, PerspectiveMount, PlanDirMount, WorkspaceVolume,
 };
 

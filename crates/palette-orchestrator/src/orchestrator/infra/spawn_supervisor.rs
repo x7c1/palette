@@ -1,8 +1,7 @@
 use super::Orchestrator;
 use palette_domain::task::TaskId;
 use palette_domain::worker::{ContainerId, WorkerId, WorkerRole, WorkerStatus};
-use palette_usecase::container_runtime::{ArtifactsMount, ContainerMounts};
-use palette_usecase::data_store::InsertWorkerRequest;
+use palette_usecase::{ArtifactsMount, ContainerMounts, InsertWorkerRequest};
 
 impl Orchestrator {
     /// Spawn a dynamic supervisor for a composite task.

@@ -1,6 +1,5 @@
 use palette_domain::worker::{ContainerId, WorkerRole, WorkerSessionId};
-use palette_usecase::ContainerRuntime;
-use palette_usecase::container_runtime::ContainerMounts;
+use palette_usecase::{ContainerMounts, ContainerRuntime};
 use std::collections::HashSet;
 use std::path::Path;
 use std::sync::Mutex;

@@ -4,7 +4,7 @@ use palette_domain::terminal::TerminalTarget;
 use palette_domain::worker::{ContainerId, WorkerId, WorkerRole, WorkerStatus};
 use palette_domain::workflow::WorkflowId;
 use palette_server::api_types::{CreateJobRequest, JobStatus, JobType, UpdateJobRequest};
-use palette_usecase::data_store::InsertWorkerRequest;
+use palette_usecase::InsertWorkerRequest;
 
 pub fn wid(s: &str) -> WorkerId {
     WorkerId::parse(s).unwrap()

@@ -3,8 +3,7 @@ use super::PendingActions;
 use super::job_instruction::format_job_instruction;
 use palette_domain::job::{Job, JobDetail, JobId, JobType};
 use palette_domain::worker::WorkerId;
-use palette_usecase::container_runtime::{ArtifactsMount, WorkspaceVolume};
-use palette_usecase::data_store::InsertWorkerRequest;
+use palette_usecase::{ArtifactsMount, InsertWorkerRequest, WorkspaceVolume};
 
 impl Orchestrator {
     /// Assign a new job to a freshly spawned member.

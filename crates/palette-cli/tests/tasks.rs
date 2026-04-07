@@ -7,7 +7,7 @@ use palette_domain::task::TaskId;
 use palette_domain::workflow::WorkflowId;
 use palette_server::api_types::{CreateJobRequest, JobStatus, JobType};
 use palette_tmux::TmuxManager;
-use palette_usecase::data_store::CreateTaskRequest;
+use palette_usecase::CreateTaskRequest;
 
 #[tokio::test]
 async fn job_api_create_and_list() {
