@@ -108,11 +108,14 @@ impl WorkspaceManager {
             &[
                 "clone",
                 "--shared",
+                "--no-checkout",
                 &cache_path.to_string_lossy(),
                 &ws_path.file_name().unwrap().to_string_lossy(),
             ],
             "shared clone",
         )?;
+
+        run_git(&ws_path, &["checkout", &repo.branch], "checkout branch")?;
 
         // Rewrite alternates to use the container-side path
         let alternates_path = ws_path.join(".git/objects/info/alternates");
