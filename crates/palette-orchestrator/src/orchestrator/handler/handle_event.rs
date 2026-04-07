@@ -144,15 +144,24 @@ impl Orchestrator {
                 })?;
             let verdict = submission.verdict;
 
-            // Apply status transition
+            // Apply status transition.
+            // For standalone PR reviews (no Craft parent), both verdicts
+            // complete the review job and destroy the member so the workflow
+            // progresses to ReviewIntegrator.
+            let is_standalone = job
+                .detail
+                .review_target()
+                .is_some_and(|t| t.is_pull_request());
+
             match verdict {
-                Verdict::ChangesRequested => {
+                Verdict::ChangesRequested if !is_standalone => {
                     self.interactor.data_store.update_job_status(
                         review_job_id,
                         ReviewTransition::RequestChanges.to_job_status(),
                     )?;
                 }
-                Verdict::Approved => {
+                _ => {
+                    // Approved (always) or ChangesRequested (standalone): mark Done
                     self.interactor.data_store.update_job_status(
                         review_job_id,
                         ReviewTransition::Approve.to_job_status(),

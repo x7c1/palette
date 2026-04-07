@@ -46,14 +46,14 @@ impl Orchestrator {
             return self.revert_craft_to_in_progress(review_job_id, &craft_job);
         }
 
-        // No Craft parent — standalone PR review. Escalate: log and do nothing further.
-        // The ReviewIntegrate verdict (ChangesRequested) is already recorded.
-        // Future: create an Operator task for human intervention.
+        // No Craft parent — standalone PR review.
+        // The review job is already Done (set by handle_review_submitted).
+        // Proceed with task completion so ReviewIntegrator can run.
         tracing::info!(
             review_job_id = %review_job_id,
-            "standalone review changes_requested — no crafter to revert"
+            "standalone review changes_requested — proceeding to task completion"
         );
-        Ok(PendingActions::new())
+        self.try_complete_task_by_job(review_job_id)
     }
 
     /// When a review job becomes Done, check if all sibling review tasks under
