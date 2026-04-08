@@ -45,7 +45,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     match cli.command {
         Some(Command::Doctor { json }) => {
-            if !doctor::run(json)? {
+            if !doctor::run(json).await? {
                 std::process::exit(1);
             }
             Ok(())
