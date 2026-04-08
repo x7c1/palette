@@ -23,7 +23,7 @@ if [[ "${PALETTE_E2E_IMAGE_CHECK:-1}" == "1" ]]; then
 fi
 
 if [[ "${PALETTE_E2E_SYNC_AUTH_BUNDLE:-1}" == "1" ]]; then
-  "$SCRIPT_DIR/sync-bootstrap-auth-bundle.sh"
+  "$ROOT_DIR/scripts/sync-bootstrap-auth-bundle.sh"
 fi
 
 PALETTE_URL="http://127.0.0.1:7100"

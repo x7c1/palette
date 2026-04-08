@@ -23,19 +23,20 @@ const LIVENESS_CHECK_EVERY: u64 = 3;
 /// 10 seconds of no change reliably indicates a permission prompt or hang.
 const STALL_TIMEOUT: Duration = Duration::from_secs(10);
 
-/// Interval between repeated stall alerts for the same worker.
-/// Ensures long-running stalls (e.g. auth errors) remain visible in logs
-/// rather than being reported once and forgotten.
-const STALL_REALERT_INTERVAL: Duration = Duration::from_secs(60);
+/// Interval between repeated stall/auth-error alerts for the same worker.
+/// Ensures long-running issues remain visible in logs rather than being
+/// reported once and forgotten.
+const REALERT_INTERVAL: Duration = Duration::from_secs(60);
 
 /// Maximum crash recovery attempts per worker before escalation.
 const CRASH_RETRY_LIMIT: u32 = 3;
 
-/// Tracks pane content hash and last change time for stall detection.
+/// Tracks pane content hash and last change time for stall/auth-error detection.
 struct PaneSnapshot {
     hash: u64,
     last_changed: Instant,
     stall_alerted_at: Option<Instant>,
+    auth_error_alerted_at: Option<Instant>,
 }
 
 impl Orchestrator {
@@ -286,7 +287,7 @@ impl Orchestrator {
         }
     }
 
-    /// Check if a worker's pane content has changed; detect stalls.
+    /// Check if a worker's pane content has changed; detect stalls and auth errors.
     fn check_stall(&self, worker: &WorkerState, snapshots: &mut HashMap<WorkerId, PaneSnapshot>) {
         // Only check stalls for actively working workers
         if worker.status != WorkerStatus::Working {
@@ -316,12 +317,33 @@ impl Orchestrator {
             hash,
             last_changed: now,
             stall_alerted_at: None,
+            auth_error_alerted_at: None,
         });
 
         if snapshot.hash != hash {
             snapshot.hash = hash;
             snapshot.last_changed = now;
             snapshot.stall_alerted_at = None;
+            snapshot.auth_error_alerted_at = None;
+            return;
+        }
+
+        // Check for authentication error before generic stall detection.
+        // When auth error is detected, skip stall alert (auth error is more specific).
+        if pane_content.contains("authentication_error") {
+            let should_alert = match snapshot.auth_error_alerted_at {
+                None => true,
+                Some(last_alert) => now.duration_since(last_alert) >= REALERT_INTERVAL,
+            };
+            if should_alert {
+                snapshot.auth_error_alerted_at = Some(now);
+                tracing::error!(
+                    worker_id = %worker.id,
+                    role = %worker.role,
+                    "authentication error detected: worker credentials have expired. \
+                     Run /palette:login to refresh the auth token",
+                );
+            }
             return;
         }
 
@@ -333,7 +355,7 @@ impl Orchestrator {
 
         let should_alert = match snapshot.stall_alerted_at {
             None => true,
-            Some(last_alert) => now.duration_since(last_alert) >= STALL_REALERT_INTERVAL,
+            Some(last_alert) => now.duration_since(last_alert) >= REALERT_INTERVAL,
         };
 
         if should_alert {
@@ -658,7 +680,7 @@ mod tests {
         orch.check_all_workers(false, &mut snapshots, &mut retries);
 
         // Backdate to trigger initial stall alert
-        let stall_start = Instant::now() - STALL_REALERT_INTERVAL - STALL_TIMEOUT;
+        let stall_start = Instant::now() - REALERT_INTERVAL - STALL_TIMEOUT;
         snapshots
             .get_mut(&WorkerId::parse("m-1").unwrap())
             .unwrap()
@@ -683,7 +705,7 @@ mod tests {
         snapshots
             .get_mut(&WorkerId::parse("m-1").unwrap())
             .unwrap()
-            .stall_alerted_at = Some(Instant::now() - STALL_REALERT_INTERVAL);
+            .stall_alerted_at = Some(Instant::now() - REALERT_INTERVAL);
 
         orch.check_all_workers(false, &mut snapshots, &mut retries);
         let second_alert = snapshots[&WorkerId::parse("m-1").unwrap()]
@@ -751,6 +773,78 @@ mod tests {
 
         // No snapshot created for idle worker
         assert!(!snapshots.contains_key(&WorkerId::parse("m-1").unwrap()));
+    }
+
+    // -- Authentication error detection tests --
+
+    #[test]
+    fn auth_error_detected_from_pane_content() {
+        let worker = make_worker("m-1", WorkerRole::Member, WorkerStatus::Working);
+        let data_store = MockDataStore::with_workers(vec![worker]);
+        let container = MockContainerRuntime::with_running(&["container-m-1"]);
+        let terminal = MockTerminalSession::new();
+        terminal.set_pane_content(
+            "pane-m-1",
+            r#"{"type":"error","error":{"type":"authentication_error","message":"Invalid authentication credentials"}}"#,
+        );
+
+        let orch = make_orchestrator(data_store, container, terminal);
+        let mut snapshots = HashMap::new();
+        let mut retries = HashMap::new();
+
+        // First check: establishes baseline
+        orch.check_all_workers(false, &mut snapshots, &mut retries);
+
+        // Second check: same content, auth error should be detected
+        orch.check_all_workers(false, &mut snapshots, &mut retries);
+        let snapshot = &snapshots[&WorkerId::parse("m-1").unwrap()];
+        assert!(
+            snapshot.auth_error_alerted_at.is_some(),
+            "auth error should be detected"
+        );
+        // Stall should NOT be alerted (auth error takes precedence)
+        assert!(
+            snapshot.stall_alerted_at.is_none(),
+            "stall alert should not fire when auth error is detected"
+        );
+    }
+
+    #[test]
+    fn auth_error_resets_on_pane_change() {
+        let worker = make_worker("m-1", WorkerRole::Member, WorkerStatus::Working);
+        let data_store = MockDataStore::with_workers(vec![worker]);
+        let container = MockContainerRuntime::with_running(&["container-m-1"]);
+        let terminal = MockTerminalSession::new();
+        terminal.set_pane_content(
+            "pane-m-1",
+            r#"{"type":"error","error":{"type":"authentication_error","message":"Invalid authentication credentials"}}"#,
+        );
+
+        let orch = make_orchestrator(data_store, container, terminal);
+        let mut snapshots = HashMap::new();
+        let mut retries = HashMap::new();
+
+        // Trigger auth error detection
+        orch.check_all_workers(false, &mut snapshots, &mut retries);
+        orch.check_all_workers(false, &mut snapshots, &mut retries);
+        assert!(
+            snapshots[&WorkerId::parse("m-1").unwrap()]
+                .auth_error_alerted_at
+                .is_some()
+        );
+
+        // Simulate pane content change (worker recovered)
+        snapshots
+            .get_mut(&WorkerId::parse("m-1").unwrap())
+            .unwrap()
+            .hash = 0;
+        orch.check_all_workers(false, &mut snapshots, &mut retries);
+        assert!(
+            snapshots[&WorkerId::parse("m-1").unwrap()]
+                .auth_error_alerted_at
+                .is_none(),
+            "auth error alert should reset when pane content changes"
+        );
     }
 
     // -- All-idle detection tests --
