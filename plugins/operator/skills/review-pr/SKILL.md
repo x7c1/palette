@@ -30,15 +30,15 @@ If no `[[perspectives]]` entries exist, tell the Operator:
 > Example:
 > ```toml
 > [perspectives_dirs]
-> atelier = "/path/to/knowledge-base"
+> docs = "/path/to/knowledge-base"
 >
 > [[perspectives]]
 > name = "architecture"
-> paths = ["atelier:architecture.md"]
+> paths = ["docs:architecture.md"]
 >
 > [[perspectives]]
 > name = "type-safety"
-> paths = ["atelier:type-safety.md"]
+> paths = ["docs:type-safety.md"]
 > ```
 >
 > After adding perspectives, run `/palette:doctor` to verify.
