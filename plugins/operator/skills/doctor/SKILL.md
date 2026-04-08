@@ -20,6 +20,6 @@ Parse the JSON output and present the results to the Operator in a readable form
 
 - Show each check with its status (pass/fail) and message
 - If all checks pass, confirm the system is ready
-- If any checks fail, explain what is missing and suggest how to fix it (e.g., install the tool, start Docker, run `scripts/build-images.sh`)
+- If any checks fail, explain what is missing and suggest how to fix it (e.g., install the tool, start Docker, run `/palette:setup` to rebuild)
 
 If the binary does not exist at `~/.config/palette/repo/target/release/palette`, tell the Operator to run `/palette:setup` first.
