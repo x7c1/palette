@@ -2,11 +2,11 @@ use crate::config::Config;
 use palette_db::Database;
 use palette_docker::CallbackNetworkMode;
 use palette_docker::DockerManager;
+use palette_domain::server::ServerEvent;
 use palette_domain::terminal::TerminalSessionName;
 use palette_fs::FsBlueprintReader;
 use palette_orchestrator::github_client::GhCliReviewClient;
 use palette_orchestrator::workspace::WorkspaceManager;
-use palette_domain::server::ServerEvent;
 use palette_orchestrator::{CallbackNetwork, Orchestrator, ValidatedPerspectives};
 use palette_server::AppState;
 use palette_server::permission_timeout::spawn_permission_timeout_checker;
@@ -39,7 +39,14 @@ pub async fn run(config_path: &str) -> Result<(), Box<dyn std::error::Error>> {
     orchestrator.resume_booting_watchers();
     orchestrator.recover_from_crash();
 
-    serve(orchestrator, event_rx, state, &config.server_bind_addr, &config.operator_api_url).await
+    serve(
+        orchestrator,
+        event_rx,
+        state,
+        &config.server_bind_addr,
+        &config.operator_api_url,
+    )
+    .await
 }
 
 fn build_interactor(

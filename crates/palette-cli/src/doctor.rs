@@ -35,8 +35,7 @@ pub fn run(json: bool) -> io::Result<bool> {
     let report = DoctorReport { all_ok, checks };
 
     if json {
-        let output = serde_json::to_string_pretty(&report)
-            .map_err(io::Error::other)?;
+        let output = serde_json::to_string_pretty(&report).map_err(io::Error::other)?;
         println!("{output}");
     } else {
         print_human_report(&report);
