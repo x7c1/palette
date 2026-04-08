@@ -1,6 +1,7 @@
 use palette_domain::job::JobError;
 use palette_domain::review::ReviewError;
 use std::fmt;
+use std::path::PathBuf;
 
 pub type Result<T> = std::result::Result<T, Error>;
 
@@ -17,6 +18,8 @@ pub enum Error {
     Io(std::io::Error),
     /// Lock acquisition failed (Mutex poisoned).
     LockPoisoned,
+    /// Another Palette instance is already running on the same data directory.
+    InstanceAlreadyRunning { db_path: PathBuf },
     /// Stored data violates domain constraints (e.g., invalid ID format,
     /// unknown enum value). Indicates data corruption or schema mismatch.
     DataCorruption {
@@ -33,6 +36,11 @@ impl fmt::Display for Error {
             Error::Review(e) => write!(f, "{e}"),
             Error::Io(e) => write!(f, "io error: {e}"),
             Error::LockPoisoned => write!(f, "database lock poisoned"),
+            Error::InstanceAlreadyRunning { db_path } => write!(
+                f,
+                "another Palette instance is already running on {}",
+                db_path.display()
+            ),
             Error::DataCorruption { reason } => write!(f, "data corruption: {reason}"),
         }
     }
