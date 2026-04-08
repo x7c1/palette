@@ -1,7 +1,7 @@
 ---
 name: start
 description: Start the Palette Orchestrator. Checks health first and skips if already running. Launches via tmux.
-user_invocable: true
+user-invocable: true
 ---
 
 # /palette:start

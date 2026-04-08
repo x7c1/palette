@@ -1,7 +1,7 @@
 ---
 name: doctor
 description: Check Palette prerequisites and system health. Reports which tools and images are available.
-user_invocable: true
+user-invocable: true
 ---
 
 # /palette:doctor

@@ -1,7 +1,7 @@
 ---
 name: setup
 description: Install and set up Palette on the local machine. Clones the repository, builds the binary, and builds Docker images.
-user_invocable: true
+user-invocable: true
 ---
 
 # /palette:setup

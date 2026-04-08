@@ -1,7 +1,7 @@
 ---
 name: status
 description: Check Palette workflow and job progress. Shows running workflows and their job statuses.
-user_invocable: true
+user-invocable: true
 ---
 
 # /palette:status
@@ -16,7 +16,7 @@ curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:7100/health
 
 If the Orchestrator is not running (no `200` response), tell the Operator:
 
-> Orchestrator が起動していません。`/palette:start` で起動してください。
+> Orchestrator is not running. Start it with `/palette:start`.
 
 Then stop.
 

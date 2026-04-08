@@ -1,7 +1,7 @@
 ---
 name: review-pr
 description: Start a standalone PR review. Selects perspectives, ensures the Orchestrator is running, and calls the review API.
-user_invocable: true
+user-invocable: true
 ---
 
 # /palette:review-pr
@@ -23,11 +23,11 @@ Read `~/.config/palette/repo/config/palette.toml` and look for `[[perspectives]]
 
 If no `[[perspectives]]` entries exist, tell the Operator:
 
-> Perspective の設定がありません。レビューを実行するには、設定ファイルに perspective を追加してください。
+> No perspectives are configured. To run a review, add perspective entries to the config file.
 >
-> 設定ファイル: `~/.config/palette/repo/config/palette.toml`
+> Config file: `~/.config/palette/repo/config/palette.toml`
 >
-> 記述例:
+> Example:
 > ```toml
 > [perspectives_dirs]
 > atelier = "/path/to/knowledge-base"
@@ -41,7 +41,7 @@ If no `[[perspectives]]` entries exist, tell the Operator:
 > paths = ["atelier:type-safety.md"]
 > ```
 >
-> 設定後、`/palette:doctor` で検証してください。
+> After adding perspectives, run `/palette:doctor` to verify.
 
 Then stop.
 
@@ -56,13 +56,13 @@ gh pr view <number> --repo <owner>/<repo> --json title,body -q '.title + "\n" + 
 
 3. Based on the PR content, recommend which perspectives to use. Present the recommendation:
 
-> 以下の perspective でレビューします。変更があれば教えてください。
+> The following perspectives will be used for the review. Let me know if you want to change anything.
 >
 > 1. [x] architecture
 > 2. [x] type-safety
 > 3. [ ] performance
 
-4. Wait for the Operator to confirm or adjust (e.g., "3 番も追加して", "全部でいい", "1 だけ外して")
+4. Wait for the Operator to confirm or adjust
 5. Finalize the selected perspectives
 
 ## Step 4: Ensure Orchestrator is Running
@@ -104,12 +104,12 @@ curl -s -X POST http://127.0.0.1:7100/workflows/start-pr-review \
 
 ## Step 6: Report Result
 
-On success, parse the JSON response and tell the Operator:
+On success, parse the JSON response and report to the Operator:
 
-> PR レビューを開始しました。
+> PR review started.
 > - Workflow ID: `<workflow_id>`
-> - タスク数: `<task_count>`
+> - Task count: `<task_count>`
 >
-> 進捗は `/palette:status` で確認できます。
+> Use `/palette:status` to check progress.
 
 On error, parse the error response and explain the cause (e.g., perspective name mismatch, empty reviewers).
