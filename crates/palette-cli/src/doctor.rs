@@ -163,12 +163,19 @@ async fn check_docker() -> CheckResult {
                 },
             }
         }
-        Err(msg) => CheckResult {
-            name: "Docker".to_string(),
-            ok: false,
-            version: None,
-            message: msg,
-        },
+        Err(msg) => {
+            let hint = if msg.contains("timed out") {
+                format!("{msg} — try restarting Docker Desktop")
+            } else {
+                msg
+            };
+            CheckResult {
+                name: "Docker".to_string(),
+                ok: false,
+                version: None,
+                message: hint,
+            }
+        }
     }
 }
 
