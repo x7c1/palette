@@ -40,19 +40,9 @@ Done when this appears:
 
 `PASS: synced auth bundle from <container> -> <output_dir>`
 
-## How It Works
-
-On macOS, Claude Code stores credentials in the system Keychain — no `.credentials.json` file exists on the host. Worker containers run Linux and require `.credentials.json`, so authentication must be performed inside a Linux bootstrap container.
-
-The bootstrap container generates `.credentials.json`, which is then synced to `~/.config/palette/claude-auth-bundle/`. Worker containers mount this directory via bind mount (read-only), so updates are reflected immediately without restarting containers.
-
 ## Token Refresh
 
-When worker credentials expire (401 errors), repeat the same process:
-
-1. Run `/palette:login` (or follow the manual steps above)
-2. The Orchestrator's worker monitor detects authentication errors and logs guidance
-3. Use `/palette:status` to check if any workers are affected
+When worker credentials expire (401 errors), repeat the same process. The Orchestrator's worker monitor detects authentication errors and logs guidance.
 
 ## Worker CLAUDE.md Customization (Per User, Not in Git)
 
