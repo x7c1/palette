@@ -18,7 +18,7 @@ To use operator skills (`/palette:setup`, `/palette:doctor`, etc.) in Claude Cod
 
 ```bash
 # Add the marketplace
-/plugin marketplace add x7c1/palette
+claude plugin marketplace add x7c1/palette
 
 # Install the plugin
 claude plugin install palette@palette
