@@ -16,6 +16,8 @@ use std::sync::Arc;
 
 pub fn create_router(state: Arc<AppState>) -> Router {
     Router::new()
+        // Health
+        .route("/health", get(handle_health))
         // Hooks
         .route("/hooks/stop", post(hooks::handle_stop))
         .route("/hooks/notification", post(hooks::handle_notification))
@@ -66,6 +68,10 @@ pub fn create_router(state: Arc<AppState>) -> Router {
 async fn handle_events(State(state): State<Arc<AppState>>) -> Json<Vec<EventRecord>> {
     let events = state.event_log.lock().await;
     Json(events.clone())
+}
+
+async fn handle_health() -> &'static str {
+    "ok"
 }
 
 fn now() -> String {

@@ -1,7 +1,7 @@
 ---
 name: setup
 description: Install and set up Palette on the local machine. Clones the repository, builds the binary, and builds Docker images.
-user_invocable: true
+user-invocable: true
 ---
 
 # /palette:setup
@@ -15,7 +15,7 @@ Run `~/.config/palette/repo/target/release/palette doctor` if the binary already
 ```bash
 git --version
 cargo --version
-docker info
+docker version
 tmux -V
 gh auth status
 ```
@@ -33,7 +33,14 @@ else
 fi
 ```
 
-## Step 3: Build Binary
+## Step 3: Sync User Config
+
+The user config lives at `~/.config/palette/config.toml`. The bundled default is at `~/.config/palette/repo/config/palette.toml`.
+
+- If the user config does not exist, copy the bundled default to create it
+- If the user config already exists, compare it with the bundled default. If the bundled default contains new fields or sections that are missing from the user config, add them to the user config with their default values. Do not overwrite fields the Operator has already customized
+
+## Step 4: Build Binary
 
 ```bash
 cd ~/.config/palette/repo && cargo build --release
@@ -41,13 +48,13 @@ cd ~/.config/palette/repo && cargo build --release
 
 This produces `~/.config/palette/repo/target/release/palette`.
 
-## Step 4: Build Docker Images
+## Step 5: Build Docker Images
 
 ```bash
 cd ~/.config/palette/repo && scripts/build-images.sh
 ```
 
-## Step 5: Verify
+## Step 6: Verify
 
 ```bash
 ~/.config/palette/repo/target/release/palette doctor

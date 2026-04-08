@@ -4,8 +4,6 @@ mod start;
 
 use clap::{Parser, Subcommand};
 
-const DEFAULT_CONFIG_PATH: &str = "config/palette.toml";
-
 #[derive(Parser)]
 #[command(name = "palette", about = "Autonomous AI agent orchestration system")]
 struct Cli {
@@ -17,9 +15,9 @@ struct Cli {
 enum Command {
     /// Start the Orchestrator
     Start {
-        /// Path to the configuration file
-        #[arg(short, long, default_value = DEFAULT_CONFIG_PATH)]
-        config: String,
+        /// Path to the configuration file (overrides the default user config)
+        #[arg(short, long)]
+        config: Option<String>,
     },
     /// Check prerequisites and system health (outputs JSON)
     Doctor,
@@ -46,7 +44,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
             Ok(())
         }
-        Some(Command::Start { config }) => start::run(&config).await,
-        None => start::run(DEFAULT_CONFIG_PATH).await,
+        Some(Command::Start { config }) => start::run(config.as_deref()).await,
+        None => start::run(None).await,
     }
 }
