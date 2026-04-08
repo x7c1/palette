@@ -1,20 +1,13 @@
 {
   "name": "palette",
-  "description": "Marketplace for Palette operator plugins",
   "owner": {
-    "name": "x7c1",
-    "email": ""
+    "name": "x7c1"
   },
   "plugins": [
     {
       "name": "palette",
       "description": "Operator skills for Palette orchestrator setup and management",
-      "version": "1.0.0",
-      "source": "./plugins/operator",
-      "author": {
-        "name": "x7c1",
-        "email": ""
-      }
+      "source": "./plugins/operator"
     }
   ]
 }
