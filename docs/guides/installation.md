@@ -14,25 +14,25 @@ Ensure Docker daemon is running and `gh auth login` has been completed.
 
 ## Plugin Installation
 
-Operator skills (`/palette:setup`, `/palette:doctor` など) を Claude Code で使うには、プラグインをインストールする:
+To use operator skills (`/palette:setup`, `/palette:doctor`, etc.) in Claude Code, install the plugin:
 
 ```bash
-# marketplace を追加
+# Add the marketplace
 /plugin marketplace add x7c1/palette
 
-# プラグインをインストール
+# Install the plugin
 claude plugin install palette@palette
 ```
 
 ## Quick Setup (via Claude Code)
 
-プラグインのインストール後、以下を実行するだけでセットアップが完了する:
+After installing the plugin, run:
 
 ```
 /palette:setup
 ```
 
-これにより以下の Manual Installation の手順がすべて自動で実行される。
+This automatically performs all steps in the Manual Installation section below.
 
 ## Manual Installation
 
