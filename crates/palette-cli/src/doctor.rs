@@ -36,7 +36,7 @@ pub async fn run() -> io::Result<bool> {
     let image_names = [
         "palette-base:latest",
         "palette-member:latest",
-        "palette-leader:latest",
+        "palette-supervisor:latest",
     ];
     if docker_ok {
         for image in &image_names {

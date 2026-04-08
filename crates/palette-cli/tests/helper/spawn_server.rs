@@ -18,11 +18,11 @@ fn test_docker_config() -> DockerConfig {
     DockerConfig {
         worker_callback_url: "http://127.0.0.1:0".to_string(),
         callback_network: CallbackNetwork::Host,
-        approver_image: "palette-leader:latest".to_string(),
+        approver_image: "palette-supervisor:latest".to_string(),
         member_image: "palette-member:latest".to_string(),
         settings_template: "plugins/worker/settings.json".to_string(),
         approver_prompt: "prompts/approver.md".to_string(),
-        review_integrator_image: "palette-leader:latest".to_string(),
+        review_integrator_image: "palette-supervisor:latest".to_string(),
         review_integrator_prompt: "prompts/review-integrator.md".to_string(),
         crafter_prompt: "prompts/crafter.md".to_string(),
         reviewer_prompt: "prompts/reviewer.md".to_string(),

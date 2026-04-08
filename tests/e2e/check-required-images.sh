@@ -3,7 +3,7 @@
 set -euo pipefail
 
 required_images=(
-  "palette-leader:latest"
+  "palette-supervisor:latest"
   "palette-member:latest"
 )
 
