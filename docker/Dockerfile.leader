@@ -1,4 +1,0 @@
-FROM palette-base:latest
-
-# Leader is identical to base for now.
-# Future phases may add leader-specific tools.

@@ -72,11 +72,11 @@ worker_callback_url = "http://127.0.0.1:7100"
         assert_eq!(config.server_bind_addr, "0.0.0.0:7100");
         assert_eq!(config.docker.worker_callback_url, "http://127.0.0.1:7100");
         assert_eq!(config.docker.callback_network, CallbackNetwork::Auto);
-        assert_eq!(config.docker.approver_image, "palette-leader:latest");
+        assert_eq!(config.docker.approver_image, "palette-supervisor:latest");
         assert_eq!(config.docker.member_image, "palette-member:latest");
         assert_eq!(
             config.docker.review_integrator_image,
-            "palette-leader:latest"
+            "palette-supervisor:latest"
         );
         assert_eq!(
             config.docker.review_integrator_prompt,

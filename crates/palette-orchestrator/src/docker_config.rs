@@ -44,7 +44,7 @@ fn default_max_workers() -> usize {
 }
 
 fn default_approver_image() -> String {
-    "palette-leader:latest".to_string()
+    "palette-supervisor:latest".to_string()
 }
 
 fn default_member_image() -> String {
@@ -60,7 +60,7 @@ fn default_approver_prompt() -> String {
 }
 
 fn default_review_integrator_image() -> String {
-    "palette-leader:latest".to_string()
+    "palette-supervisor:latest".to_string()
 }
 
 fn default_review_integrator_prompt() -> String {

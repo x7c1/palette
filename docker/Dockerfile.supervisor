@@ -1,0 +1,4 @@
+FROM palette-base:latest
+
+# Supervisor is identical to base for now.
+# Future phases may add supervisor-specific tools.
