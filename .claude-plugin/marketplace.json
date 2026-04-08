@@ -6,7 +6,6 @@
   "plugins": [
     {
       "name": "palette",
-      "description": "Operator skills for Palette orchestrator setup and management",
       "source": "./plugins/operator"
     }
   ]
