@@ -17,12 +17,6 @@ use std::sync::Arc;
 use tokio_util::sync::CancellationToken;
 
 pub async fn run(config_path: &str) -> Result<(), Box<dyn std::error::Error>> {
-    tracing_subscriber::fmt()
-        .with_env_filter(
-            tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| "info".into()),
-        )
-        .init();
-
     let config = Config::load(Path::new(config_path))?;
     tracing::info!(?config, "loaded config");
     let bind_addr = config.server_bind_addr.clone();

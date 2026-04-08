@@ -1,6 +1,7 @@
 use serde::Serialize;
 use std::io;
 use std::process::Command;
+use tracing::{info, warn};
 
 #[derive(Serialize)]
 struct CheckResult {
@@ -159,14 +160,16 @@ fn check_docker_image(image: &str) -> CheckResult {
 
 fn print_human_report(report: &DoctorReport) {
     for check in &report.checks {
-        let icon = if check.ok { "ok" } else { "FAIL" };
-        println!("[{icon:>4}] {}: {}", check.name, check.message);
+        if check.ok {
+            info!(name = %check.name, "{}", check.message);
+        } else {
+            warn!(name = %check.name, "{}", check.message);
+        }
     }
-    println!();
     if report.all_ok {
-        println!("All checks passed.");
+        info!("All checks passed.");
     } else {
         let failed = report.checks.iter().filter(|c| !c.ok).count();
-        println!("{failed} check(s) failed.");
+        warn!("{failed} check(s) failed.");
     }
 }
