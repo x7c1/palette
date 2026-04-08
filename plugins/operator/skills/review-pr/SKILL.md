@@ -13,7 +13,7 @@ Start a standalone PR review workflow. Guides the Operator through perspective s
 Ask the Operator which PR to review. Accept either:
 
 - A PR URL (e.g., `https://github.com/owner/repo/pull/123`)
-- An `owner/repo#number` reference (e.g., `haco-studio/stencil#42`)
+- An `owner/repo#number` reference (e.g., `octocat/hello-world#42`)
 
 Extract `owner`, `repo`, and `number` from the input.
 
