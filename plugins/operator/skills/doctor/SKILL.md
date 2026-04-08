@@ -13,7 +13,7 @@ Check whether all prerequisites for running Palette are met.
 Run the doctor command:
 
 ```bash
-~/.config/palette/repo/target/release/palette doctor --json
+~/.config/palette/repo/target/release/palette doctor
 ```
 
 Parse the JSON output and present the results to the Operator in a readable format:

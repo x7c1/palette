@@ -2,7 +2,6 @@ use serde::Serialize;
 use std::io;
 use std::time::Duration;
 use tokio::process::Command;
-use tracing::{info, warn};
 
 const COMMAND_TIMEOUT: Duration = Duration::from_secs(5);
 
@@ -20,9 +19,9 @@ struct DoctorReport {
     checks: Vec<CheckResult>,
 }
 
-/// Runs all prerequisite checks and prints results.
+/// Runs all prerequisite checks and prints results as JSON.
 /// Returns Ok(true) if all checks passed, Ok(false) if any failed.
-pub async fn run(json: bool) -> io::Result<bool> {
+pub async fn run() -> io::Result<bool> {
     let docker_check = check_docker().await;
     let docker_ok = docker_check.ok;
 
@@ -57,12 +56,8 @@ pub async fn run(json: bool) -> io::Result<bool> {
     let all_ok = checks.iter().all(|c| c.ok);
     let report = DoctorReport { all_ok, checks };
 
-    if json {
-        let output = serde_json::to_string_pretty(&report).map_err(io::Error::other)?;
-        println!("{output}");
-    } else {
-        print_human_report(&report);
-    }
+    let output = serde_json::to_string_pretty(&report).map_err(io::Error::other)?;
+    println!("{output}");
 
     Ok(report.all_ok)
 }
@@ -222,21 +217,5 @@ async fn check_docker_image(image: &str) -> CheckResult {
             version: None,
             message: msg,
         },
-    }
-}
-
-fn print_human_report(report: &DoctorReport) {
-    for check in &report.checks {
-        if check.ok {
-            info!(name = %check.name, "{}", check.message);
-        } else {
-            warn!(name = %check.name, "{}", check.message);
-        }
-    }
-    if report.all_ok {
-        info!("All checks passed.");
-    } else {
-        let failed = report.checks.iter().filter(|c| !c.ok).count();
-        warn!("{failed} check(s) failed.");
     }
 }

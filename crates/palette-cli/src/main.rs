@@ -21,12 +21,8 @@ enum Command {
         #[arg(short, long, default_value = DEFAULT_CONFIG_PATH)]
         config: String,
     },
-    /// Check prerequisites and system health
-    Doctor {
-        /// Output results as JSON
-        #[arg(long)]
-        json: bool,
-    },
+    /// Check prerequisites and system health (outputs JSON)
+    Doctor,
 }
 
 fn init_tracing() {
@@ -44,8 +40,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     init_tracing();
 
     match cli.command {
-        Some(Command::Doctor { json }) => {
-            if !doctor::run(json).await? {
+        Some(Command::Doctor) => {
+            if !doctor::run().await? {
                 std::process::exit(1);
             }
             Ok(())

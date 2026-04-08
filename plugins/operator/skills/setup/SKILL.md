@@ -10,7 +10,7 @@ Install Palette on this machine. Run each step below in order. If any step fails
 
 ## Step 1: Check Prerequisites
 
-Run `~/.config/palette/repo/target/release/palette doctor --json` if the binary already exists. Otherwise, check manually:
+Run `~/.config/palette/repo/target/release/palette doctor` if the binary already exists. Otherwise, check manually:
 
 ```bash
 git --version
