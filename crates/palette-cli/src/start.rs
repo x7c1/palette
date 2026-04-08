@@ -137,7 +137,7 @@ async fn serve(
 /// Uses `~/.config/palette/config.toml` as the user config.
 /// If it does not exist, copies the bundled default from `config/palette.toml`.
 fn resolve_config_path() -> Result<PathBuf, Box<dyn std::error::Error>> {
-    let home = std::env::var("HOME").map_err(|_| "HOME environment variable is not set")?;
+    let home = std::env::var("HOME").map_err(|e| format!("HOME environment variable: {e}"))?;
     let user_config = PathBuf::from(&home).join(USER_CONFIG_RELATIVE);
 
     if !user_config.exists() {
