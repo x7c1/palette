@@ -6,7 +6,8 @@ use palette_domain::terminal::TerminalSessionName;
 use palette_fs::FsBlueprintReader;
 use palette_orchestrator::github_client::GhCliReviewClient;
 use palette_orchestrator::workspace::WorkspaceManager;
-use palette_orchestrator::{CallbackNetwork, Orchestrator};
+use palette_domain::server::ServerEvent;
+use palette_orchestrator::{CallbackNetwork, Orchestrator, ValidatedPerspectives};
 use palette_server::AppState;
 use palette_server::permission_timeout::spawn_permission_timeout_checker;
 use palette_tmux::TmuxManager;
@@ -19,9 +20,32 @@ use tokio_util::sync::CancellationToken;
 pub async fn run(config_path: &str) -> Result<(), Box<dyn std::error::Error>> {
     let config = Config::load(Path::new(config_path))?;
     tracing::info!(?config, "loaded config");
-    let bind_addr = config.server_bind_addr.clone();
-    let operator_api_url = config.operator_api_url.clone();
 
+    let validated_perspectives = config.perspectives.validate()?;
+    let interactor = build_interactor(&config, &validated_perspectives)?;
+    let (event_tx, event_rx) = tokio::sync::mpsc::unbounded_channel();
+
+    let state = Arc::new(AppState {
+        interactor: Arc::clone(&interactor),
+        max_review_rounds: config.rules.max_review_rounds,
+        data_dir: PathBuf::from("data"),
+        event_log: tokio::sync::Mutex::new(Vec::new()),
+        pending_permission_events: tokio::sync::Mutex::new(HashMap::new()),
+        event_tx: event_tx.clone(),
+    });
+
+    let orchestrator = build_orchestrator(&config, &interactor, validated_perspectives, event_tx)?;
+    orchestrator.clean_orphan_containers();
+    orchestrator.resume_booting_watchers();
+    orchestrator.recover_from_crash();
+
+    serve(orchestrator, event_rx, state, &config.server_bind_addr, &config.operator_api_url).await
+}
+
+fn build_interactor(
+    config: &Config,
+    perspectives: &ValidatedPerspectives,
+) -> Result<Arc<Interactor>, Box<dyn std::error::Error>> {
     let session_name = TerminalSessionName::new(&config.tmux.session_name);
     let tmux = TmuxManager::new(session_name.clone());
     tmux.create_session(&session_name)?;
@@ -39,72 +63,55 @@ pub async fn run(config_path: &str) -> Result<(), Box<dyn std::error::Error>> {
         callback_network_mode,
     );
 
-    // Validate perspectives configuration
-    let validated_perspectives = config.perspectives.validate()?;
-    let perspective_names = validated_perspectives.names();
-
-    // Assemble the Interactor with concrete implementations
-    let interactor = Arc::new(Interactor {
+    Ok(Arc::new(Interactor {
         container: Box::new(docker),
         terminal: Box::new(tmux),
         data_store: Box::new(db),
-        blueprint: Box::new(FsBlueprintReader::new(perspective_names)),
+        blueprint: Box::new(FsBlueprintReader::new(perspectives.names())),
         github_review_port: GhCliReviewClient::boxed(),
-    });
+    }))
+}
 
-    let (event_tx, event_rx) = tokio::sync::mpsc::unbounded_channel();
-
-    let state = Arc::new(AppState {
-        interactor: Arc::clone(&interactor),
-        max_review_rounds: config.rules.max_review_rounds,
-        data_dir: PathBuf::from("data"),
-        event_log: tokio::sync::Mutex::new(Vec::new()),
-        pending_permission_events: tokio::sync::Mutex::new(HashMap::new()),
-        event_tx: event_tx.clone(),
-    });
-
-    // Ensure plan_dir exists on the host
+fn build_orchestrator(
+    config: &Config,
+    interactor: &Arc<Interactor>,
+    perspectives: ValidatedPerspectives,
+    event_tx: tokio::sync::mpsc::UnboundedSender<ServerEvent>,
+) -> Result<Arc<Orchestrator>, Box<dyn std::error::Error>> {
     std::fs::create_dir_all(&config.plan_dir)?;
 
-    let workspace_manager = WorkspaceManager::new("data");
-
-    let orchestrator = Arc::new(Orchestrator {
-        interactor: Arc::clone(&interactor),
-        docker_config: config.docker,
+    Ok(Arc::new(Orchestrator {
+        interactor: Arc::clone(interactor),
+        docker_config: config.docker.clone(),
         plan_dir: config.plan_dir.clone(),
         session_name: config.tmux.session_name.clone(),
         cancel_token: CancellationToken::new(),
-        workspace_manager,
-        perspectives: validated_perspectives,
+        workspace_manager: WorkspaceManager::new("data"),
+        perspectives,
         event_tx,
-    });
+    }))
+}
 
-    // Clean up orphan containers from previous crash/forced exit
-    orchestrator.clean_orphan_containers();
-
-    // Resume readiness watchers for workers that were booting when we last shut down
-    orchestrator.resume_booting_watchers();
-
-    // Recover from previous Orchestrator crash (health check, message delivery, consistency)
-    orchestrator.recover_from_crash();
-
-    // Start orchestrator event loop with shutdown signal
+async fn serve(
+    orchestrator: Arc<Orchestrator>,
+    event_rx: tokio::sync::mpsc::UnboundedReceiver<ServerEvent>,
+    state: Arc<AppState>,
+    bind_addr: &str,
+    operator_api_url: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
     let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel();
     let orchestrator_handle = orchestrator.start(event_rx, shutdown_rx);
 
-    // Start permission timeout checker
     spawn_permission_timeout_checker(Arc::clone(&state));
 
-    // Start HTTP server with graceful shutdown
     let app = palette_server::create_router(state);
     tracing::info!(%bind_addr, %operator_api_url, "starting server");
 
-    let listener = tokio::net::TcpListener::bind(&bind_addr).await?;
+    let listener = tokio::net::TcpListener::bind(bind_addr).await?;
     axum::serve(listener, app)
         .with_graceful_shutdown(shutdown_signal())
         .await?;
 
-    // Server has stopped; tell the orchestrator to shut down and wait for completion
     let _ = shutdown_tx.send(());
     let _ = orchestrator_handle.await;
 
