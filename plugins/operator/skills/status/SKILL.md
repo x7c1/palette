@@ -46,10 +46,25 @@ Present the jobs grouped by type (review, review_integrate, craft, etc.):
 | Job ID | Type | Title | Status | Assignee |
 |---|---|---|---|---|
 
-## Step 4: Summary
+## Step 4: Check for Authentication Errors
+
+Check the Orchestrator log for recent authentication errors:
+
+```bash
+tail -200 ~/.config/palette/repo/data/palette.log | grep -i 'authentication error detected'
+```
+
+If any matches are found, display a prominent warning:
+
+> **Authentication Error Detected**
+>
+> One or more workers have expired credentials. Run `/palette:login` to refresh the auth token.
+
+## Step 5: Summary
 
 Provide a brief summary:
 
 - Total workflows (active / completed / suspended)
 - Total jobs by status (in_progress / done / todo)
 - If all jobs in a workflow are done, note that the workflow is complete
+- If authentication errors were detected in Step 4, remind the Operator to run `/palette:login`

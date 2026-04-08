@@ -1,33 +1,48 @@
 # Claude Login Bootstrap (macOS/Linux)
 
-Run `claude login` once in the `palette` bootstrap container to create runtime auth artifacts.  
-This flow works on both macOS and Linux.
+## Quick Method (Recommended)
 
-## Prerequisites
+Run the `/palette:login` skill in Claude Code. It automates the entire flow — you only need to open a URL in your browser:
 
-- `~/.claude/CLAUDE.md` exists
-- `~/.claude/settings.json` exists
-- (Only when needed) extra CA certificates are placed in `~/.config/palette/certs/`
-
-## Minimal Steps
-
-```bash
-cd <palette-repo-root>
-HOST_HOME=$HOME docker compose up -d claude-code
-docker exec -it palette-claude-code-1 bash
-claude login
+```
+/palette:login
 ```
 
-After login completes, verify auth bundle propagation:
+## Manual Steps
+
+If `/palette:login` is not available (e.g., plugin not installed), follow these steps:
+
+### 1. Start the Bootstrap Container
 
 ```bash
-cd <palette-repo-root>
-./tests/e2e/check-linux-bootstrap-auth-bundle.sh
+cd ~/.config/palette/repo
+HOST_HOME=$HOME docker compose up -d claude-code
+```
+
+### 2. Run Login
+
+```bash
+docker exec palette-claude-code-1 claude auth login
+```
+
+The command will display an OAuth URL. Open it in your browser and complete authentication.
+
+### 3. Sync Auth Bundle
+
+After login completes:
+
+```bash
+cd ~/.config/palette/repo
+scripts/sync-bootstrap-auth-bundle.sh
 ```
 
 Done when this appears:
 
-`PASS: bootstrap bundle export and mount propagation succeeded`
+`PASS: synced auth bundle from <container> -> <output_dir>`
+
+## Token Refresh
+
+When worker credentials expire (401 errors), repeat the same process. The Orchestrator's worker monitor detects authentication errors and logs guidance.
 
 ## Worker CLAUDE.md Customization (Per User, Not in Git)
 
