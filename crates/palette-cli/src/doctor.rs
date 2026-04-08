@@ -68,16 +68,46 @@ pub async fn run(json: bool) -> io::Result<bool> {
 }
 
 async fn run_command(cmd: &str, args: &[&str]) -> Result<std::process::Output, String> {
-    let child = Command::new(cmd).args(args).output();
+    let mut child = Command::new(cmd)
+        .args(args)
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .kill_on_drop(true)
+        .spawn()
+        .map_err(|e| format!("{cmd}: {e}"))?;
 
-    match tokio::time::timeout(COMMAND_TIMEOUT, child).await {
-        Ok(Ok(output)) => Ok(output),
+    match tokio::time::timeout(COMMAND_TIMEOUT, child.wait()).await {
+        Ok(Ok(status)) => {
+            let stdout = match child.stdout.take() {
+                Some(s) => read_async(s).await,
+                None => Vec::new(),
+            };
+            let stderr = match child.stderr.take() {
+                Some(s) => read_async(s).await,
+                None => Vec::new(),
+            };
+            Ok(std::process::Output {
+                status,
+                stdout,
+                stderr,
+            })
+        }
         Ok(Err(e)) => Err(format!("{cmd}: {e}")),
-        Err(_) => Err(format!(
-            "{cmd}: timed out after {}s",
-            COMMAND_TIMEOUT.as_secs()
-        )),
+        Err(_) => {
+            let _ = child.kill().await;
+            Err(format!(
+                "{cmd}: timed out after {}s",
+                COMMAND_TIMEOUT.as_secs()
+            ))
+        }
     }
+}
+
+async fn read_async(mut reader: impl tokio::io::AsyncRead + Unpin) -> Vec<u8> {
+    use tokio::io::AsyncReadExt;
+    let mut buf = Vec::new();
+    let _ = reader.read_to_end(&mut buf).await;
+    buf
 }
 
 async fn check_command(cmd: &str, args: &[&str], label: &str) -> CheckResult {
