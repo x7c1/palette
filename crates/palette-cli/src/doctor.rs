@@ -15,7 +15,8 @@ struct DoctorReport {
     checks: Vec<CheckResult>,
 }
 
-pub async fn run(json: bool) {
+/// Returns true if all checks passed, false otherwise.
+pub fn run(json: bool) -> bool {
     let checks = vec![
         check_command("git", &["--version"], "git"),
         check_command("cargo", &["--version"], "Rust toolchain"),
@@ -36,9 +37,7 @@ pub async fn run(json: bool) {
         print_human_report(&report);
     }
 
-    if !report.all_ok {
-        std::process::exit(1);
-    }
+    report.all_ok
 }
 
 fn check_command(cmd: &str, args: &[&str], label: &str) -> CheckResult {
@@ -49,7 +48,7 @@ fn check_command(cmd: &str, args: &[&str], label: &str) -> CheckResult {
                 name: label.to_string(),
                 ok: true,
                 version: Some(stdout.clone()),
-                message: stdout,
+                message: format!("{label} is available"),
             }
         }
         Ok(output) => CheckResult {
