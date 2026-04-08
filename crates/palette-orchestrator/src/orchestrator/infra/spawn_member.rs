@@ -83,12 +83,12 @@ impl Orchestrator {
         )?;
         self.interactor.container.copy_dir_to_container(
             &container_id,
-            std::path::Path::new("claude-code-plugin"),
-            "/home/agent/claude-code-plugin",
+            std::path::Path::new("plugins/worker"),
+            "/home/agent/plugins/worker",
         )?;
         self.interactor.container.copy_file_to_container(
             &container_id,
-            std::path::Path::new("config/hooks/guard-cd-chain.sh"),
+            std::path::Path::new("plugins/worker/hooks/guard-cd-chain.sh"),
             "/home/agent/.claude/hooks/guard-cd-chain.sh",
         )?;
 

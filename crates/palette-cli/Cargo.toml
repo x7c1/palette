@@ -9,6 +9,7 @@ name = "palette"
 path = "src/main.rs"
 
 [dependencies]
+clap.workspace = true
 axum.workspace = true
 palette-db = { path = "../palette-db" }
 palette-docker = { path = "../palette-docker" }

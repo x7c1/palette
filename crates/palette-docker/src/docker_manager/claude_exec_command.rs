@@ -17,7 +17,7 @@ impl DockerManager {
         let wd = workdir
             .map(|d| format!(" --workdir {d}"))
             .unwrap_or_default();
-        let plugin_flag = " --plugin-dir /home/agent/claude-code-plugin";
+        let plugin_flag = " --plugin-dir /home/agent/plugins/worker";
         if role.skip_permissions() {
             format!(
                 "docker exec -it{wd} {cid} claude --dangerously-skip-permissions --append-system-prompt-file {prompt_file}{plugin_flag}"
@@ -42,7 +42,7 @@ impl DockerManager {
         let wd = workdir
             .map(|d| format!(" --workdir {d}"))
             .unwrap_or_default();
-        let plugin_flag = " --plugin-dir /home/agent/claude-code-plugin";
+        let plugin_flag = " --plugin-dir /home/agent/plugins/worker";
         if role.skip_permissions() {
             format!(
                 "docker exec -it{wd} {cid} claude --resume {sid} --dangerously-skip-permissions{plugin_flag}"
@@ -70,7 +70,7 @@ mod tests {
         assert!(cmd.contains("docker exec -it abc123 claude"));
         assert!(cmd.contains("--dangerously-skip-permissions"));
         assert!(cmd.contains("--append-system-prompt-file /home/agent/prompts/approver.md"));
-        assert!(cmd.contains("--plugin-dir /home/agent/claude-code-plugin"));
+        assert!(cmd.contains("--plugin-dir /home/agent/plugins/worker"));
     }
 
     #[test]
@@ -85,7 +85,7 @@ mod tests {
         assert!(cmd.contains("docker exec -it abc123 claude"));
         assert!(!cmd.contains("--dangerously-skip-permissions"));
         assert!(cmd.contains("--append-system-prompt-file /home/agent/prompts/member.md"));
-        assert!(cmd.contains("--plugin-dir /home/agent/claude-code-plugin"));
+        assert!(cmd.contains("--plugin-dir /home/agent/plugins/worker"));
     }
 
     #[test]
@@ -125,7 +125,7 @@ mod tests {
         assert!(cmd.contains("docker exec -it abc123 claude"));
         assert!(cmd.contains("--resume session-xyz"));
         assert!(!cmd.contains("--dangerously-skip-permissions"));
-        assert!(cmd.contains("--plugin-dir /home/agent/claude-code-plugin"));
+        assert!(cmd.contains("--plugin-dir /home/agent/plugins/worker"));
     }
 
     #[test]
