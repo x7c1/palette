@@ -23,16 +23,36 @@ struct DoctorReport {
 /// Runs all prerequisite checks and prints results.
 /// Returns Ok(true) if all checks passed, Ok(false) if any failed.
 pub async fn run(json: bool) -> io::Result<bool> {
-    let checks = vec![
+    let docker_check = check_docker().await;
+    let docker_ok = docker_check.ok;
+
+    let mut checks = vec![
         check_command("git", &["--version"], "git").await,
         check_command("cargo", &["--version"], "Rust toolchain").await,
-        check_docker().await,
+        docker_check,
         check_command("tmux", &["-V"], "tmux").await,
         check_gh_auth().await,
-        check_docker_image("palette-base:latest").await,
-        check_docker_image("palette-member:latest").await,
-        check_docker_image("palette-leader:latest").await,
     ];
+
+    let image_names = [
+        "palette-base:latest",
+        "palette-member:latest",
+        "palette-leader:latest",
+    ];
+    if docker_ok {
+        for image in &image_names {
+            checks.push(check_docker_image(image).await);
+        }
+    } else {
+        for image in &image_names {
+            checks.push(CheckResult {
+                name: format!("Docker image: {image}"),
+                ok: false,
+                version: None,
+                message: "Skipped — Docker is not available".to_string(),
+            });
+        }
+    };
 
     let all_ok = checks.iter().all(|c| c.ok);
     let report = DoctorReport { all_ok, checks };
