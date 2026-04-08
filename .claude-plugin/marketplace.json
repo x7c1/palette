@@ -1,0 +1,12 @@
+{
+  "name": "palette",
+  "owner": {
+    "name": "x7c1"
+  },
+  "plugins": [
+    {
+      "name": "palette",
+      "source": "./plugins/operator"
+    }
+  ]
+}

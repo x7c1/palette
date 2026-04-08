@@ -1,0 +1,221 @@
+use serde::Serialize;
+use std::io;
+use std::time::Duration;
+use tokio::process::Command;
+
+const COMMAND_TIMEOUT: Duration = Duration::from_secs(5);
+
+#[derive(Serialize)]
+struct CheckResult {
+    name: String,
+    ok: bool,
+    version: Option<String>,
+    message: String,
+}
+
+#[derive(Serialize)]
+struct DoctorReport {
+    all_ok: bool,
+    checks: Vec<CheckResult>,
+}
+
+/// Runs all prerequisite checks and prints results as JSON.
+/// Returns Ok(true) if all checks passed, Ok(false) if any failed.
+pub async fn run() -> io::Result<bool> {
+    let docker_check = check_docker().await;
+    let docker_ok = docker_check.ok;
+
+    let mut checks = vec![
+        check_command("git", &["--version"], "git").await,
+        check_command("cargo", &["--version"], "Rust toolchain").await,
+        docker_check,
+        check_command("tmux", &["-V"], "tmux").await,
+        check_gh_auth().await,
+    ];
+
+    let image_names = [
+        "palette-base:latest",
+        "palette-member:latest",
+        "palette-leader:latest",
+    ];
+    if docker_ok {
+        for image in &image_names {
+            checks.push(check_docker_image(image).await);
+        }
+    } else {
+        for image in &image_names {
+            checks.push(CheckResult {
+                name: format!("Docker image: {image}"),
+                ok: false,
+                version: None,
+                message: "Skipped — Docker is not available".to_string(),
+            });
+        }
+    };
+
+    let all_ok = checks.iter().all(|c| c.ok);
+    let report = DoctorReport { all_ok, checks };
+
+    let output = serde_json::to_string_pretty(&report).map_err(io::Error::other)?;
+    println!("{output}");
+
+    Ok(report.all_ok)
+}
+
+async fn run_command(cmd: &str, args: &[&str]) -> Result<std::process::Output, String> {
+    let mut child = Command::new(cmd)
+        .args(args)
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .kill_on_drop(true)
+        .spawn()
+        .map_err(|e| format!("{cmd}: {e}"))?;
+
+    match tokio::time::timeout(COMMAND_TIMEOUT, child.wait()).await {
+        Ok(Ok(status)) => {
+            let stdout = match child.stdout.take() {
+                Some(s) => read_async(s).await,
+                None => Vec::new(),
+            };
+            let stderr = match child.stderr.take() {
+                Some(s) => read_async(s).await,
+                None => Vec::new(),
+            };
+            Ok(std::process::Output {
+                status,
+                stdout,
+                stderr,
+            })
+        }
+        Ok(Err(e)) => Err(format!("{cmd}: {e}")),
+        Err(_) => {
+            let _ = child.kill().await;
+            Err(format!(
+                "{cmd}: timed out after {}s",
+                COMMAND_TIMEOUT.as_secs()
+            ))
+        }
+    }
+}
+
+async fn read_async(mut reader: impl tokio::io::AsyncRead + Unpin) -> Vec<u8> {
+    use tokio::io::AsyncReadExt;
+    let mut buf = Vec::new();
+    let _ = reader.read_to_end(&mut buf).await;
+    buf
+}
+
+async fn check_command(cmd: &str, args: &[&str], label: &str) -> CheckResult {
+    match run_command(cmd, args).await {
+        Ok(output) if output.status.success() => {
+            let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
+            CheckResult {
+                name: label.to_string(),
+                ok: true,
+                version: Some(stdout),
+                message: format!("{label} is available"),
+            }
+        }
+        Ok(output) => CheckResult {
+            name: label.to_string(),
+            ok: false,
+            version: None,
+            message: format!("{cmd} exited with {}", output.status.code().unwrap_or(-1)),
+        },
+        Err(msg) => CheckResult {
+            name: label.to_string(),
+            ok: false,
+            version: None,
+            message: msg,
+        },
+    }
+}
+
+async fn check_docker() -> CheckResult {
+    // Use `docker version` instead of `docker info` — it only checks
+    // client/server version and is far less likely to hang on macOS
+    // where `docker info` can stall collecting system details.
+    match run_command("docker", &["version", "--format", "{{.Server.Version}}"]).await {
+        Ok(output) if output.status.success() => {
+            let version = String::from_utf8_lossy(&output.stdout).trim().to_string();
+            CheckResult {
+                name: "Docker".to_string(),
+                ok: true,
+                version: Some(version),
+                message: "Docker daemon is running".to_string(),
+            }
+        }
+        Ok(output) => {
+            let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+            CheckResult {
+                name: "Docker".to_string(),
+                ok: false,
+                version: None,
+                message: if stderr.is_empty() {
+                    "Docker daemon is not running".to_string()
+                } else {
+                    format!("Docker daemon is not running: {stderr}")
+                },
+            }
+        }
+        Err(msg) => {
+            let hint = if msg.contains("timed out") {
+                format!("{msg} — try restarting Docker Desktop")
+            } else {
+                msg
+            };
+            CheckResult {
+                name: "Docker".to_string(),
+                ok: false,
+                version: None,
+                message: hint,
+            }
+        }
+    }
+}
+
+async fn check_gh_auth() -> CheckResult {
+    match run_command("gh", &["auth", "status"]).await {
+        Ok(output) if output.status.success() => CheckResult {
+            name: "GitHub CLI auth".to_string(),
+            ok: true,
+            version: None,
+            message: "Authenticated".to_string(),
+        },
+        Ok(_) => CheckResult {
+            name: "GitHub CLI auth".to_string(),
+            ok: false,
+            version: None,
+            message: "Not authenticated — run `gh auth login`".to_string(),
+        },
+        Err(msg) => CheckResult {
+            name: "GitHub CLI auth".to_string(),
+            ok: false,
+            version: None,
+            message: msg,
+        },
+    }
+}
+
+async fn check_docker_image(image: &str) -> CheckResult {
+    match run_command("docker", &["image", "inspect", image]).await {
+        Ok(output) if output.status.success() => CheckResult {
+            name: format!("Docker image: {image}"),
+            ok: true,
+            version: None,
+            message: "Found".to_string(),
+        },
+        Ok(_) => CheckResult {
+            name: format!("Docker image: {image}"),
+            ok: false,
+            version: None,
+            message: "Not found — run `scripts/build-images.sh`".to_string(),
+        },
+        Err(msg) => CheckResult {
+            name: format!("Docker image: {image}"),
+            ok: false,
+            version: None,
+            message: msg,
+        },
+    }
+}

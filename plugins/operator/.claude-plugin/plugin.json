@@ -1,0 +1,8 @@
+{
+  "name": "palette",
+  "description": "Operator skills for Palette orchestrator setup and management",
+  "version": "1.0.0",
+  "author": {
+    "name": "x7c1"
+  }
+}
