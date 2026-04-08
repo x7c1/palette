@@ -87,17 +87,16 @@ async fn check_command(cmd: &str, args: &[&str], label: &str) -> CheckResult {
 }
 
 async fn check_docker() -> CheckResult {
-    match run_command("docker", &["info"]).await {
+    // Use `docker version` instead of `docker info` — it only checks
+    // client/server version and is far less likely to hang on macOS
+    // where `docker info` can stall collecting system details.
+    match run_command("docker", &["version", "--format", "{{.Server.Version}}"]).await {
         Ok(output) if output.status.success() => {
-            let version = run_command("docker", &["--version"])
-                .await
-                .ok()
-                .filter(|o| o.status.success())
-                .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string());
+            let version = String::from_utf8_lossy(&output.stdout).trim().to_string();
             CheckResult {
                 name: "Docker".to_string(),
                 ok: true,
-                version,
+                version: Some(version),
                 message: "Docker daemon is running".to_string(),
             }
         }
