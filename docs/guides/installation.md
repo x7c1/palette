@@ -7,7 +7,7 @@
 | git | Repository clone and updates | [git-scm.com](https://git-scm.com/) |
 | Rust (cargo) | Build the Palette binary | [rustup.rs](https://rustup.rs/) |
 | Docker | Run Worker containers | [docs.docker.com](https://docs.docker.com/get-docker/) |
-| tmux | Manage Worker terminal sessions | `brew install tmux` (macOS) |
+| tmux | Manage Worker terminal sessions | OS のパッケージマネージャでインストール |
 | GitHub CLI (gh) | GitHub API access | [cli.github.com](https://cli.github.com/) |
 
 Ensure Docker daemon is running and `gh auth login` has been completed.
