@@ -19,13 +19,13 @@ Extract `owner`, `repo`, and `number` from the input.
 
 ## Step 2: Check Perspective Configuration
 
-Read `~/.config/palette/repo/config/palette.toml` and look for `[[perspectives]]` entries.
+Read `~/.config/palette/config.toml` and look for `[[perspectives]]` entries.
 
 If no `[[perspectives]]` entries exist, tell the Operator:
 
 > No perspectives are configured. To run a review, add perspective entries to the config file.
 >
-> Config file: `~/.config/palette/repo/config/palette.toml`
+> Config file: `~/.config/palette/config.toml`
 >
 > Example:
 > ```toml
@@ -76,7 +76,7 @@ curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:7100/health
 If not running, follow the `/palette:start` procedure:
 
 1. Run `~/.config/palette/repo/target/release/palette doctor` — if it fails, stop and report
-2. Read the tmux session name from `~/.config/palette/repo/config/palette.toml`
+2. Read the tmux session name from `~/.config/palette/config.toml`
 3. Launch via tmux:
 
 ```bash

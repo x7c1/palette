@@ -17,9 +17,16 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tokio_util::sync::CancellationToken;
 
-pub async fn run(config_path: &str) -> Result<(), Box<dyn std::error::Error>> {
-    let config = Config::load(Path::new(config_path))?;
-    tracing::info!(?config, "loaded config");
+const BUNDLED_CONFIG_PATH: &str = "config/palette.toml";
+const USER_CONFIG_RELATIVE: &str = ".config/palette/config.toml";
+
+pub async fn run(config_override: Option<&str>) -> Result<(), Box<dyn std::error::Error>> {
+    let config_path = match config_override {
+        Some(p) => PathBuf::from(p),
+        None => resolve_config_path()?,
+    };
+    let config = Config::load(&config_path)?;
+    tracing::info!(?config, path = %config_path.display(), "loaded config");
 
     let validated_perspectives = config.perspectives.validate()?;
     let interactor = build_interactor(&config, &validated_perspectives)?;
@@ -123,6 +130,36 @@ async fn serve(
     let _ = orchestrator_handle.await;
 
     Ok(())
+}
+
+/// Resolve the config path for `palette start`.
+///
+/// Uses `~/.config/palette/config.toml` as the user config.
+/// If it does not exist, copies the bundled default from `config/palette.toml`.
+fn resolve_config_path() -> Result<PathBuf, Box<dyn std::error::Error>> {
+    let home = std::env::var("HOME").map_err(|_| "HOME environment variable is not set")?;
+    let user_config = PathBuf::from(&home).join(USER_CONFIG_RELATIVE);
+
+    if !user_config.exists() {
+        let bundled = Path::new(BUNDLED_CONFIG_PATH);
+        if bundled.exists() {
+            std::fs::copy(bundled, &user_config)?;
+            tracing::info!(
+                src = %bundled.display(),
+                dest = %user_config.display(),
+                "copied default config to user config",
+            );
+        } else {
+            return Err(format!(
+                "no config found: {} does not exist and bundled default {} is missing",
+                user_config.display(),
+                bundled.display(),
+            )
+            .into());
+        }
+    }
+
+    Ok(user_config)
 }
 
 async fn shutdown_signal() {

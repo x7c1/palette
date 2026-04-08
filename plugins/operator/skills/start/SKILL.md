@@ -28,7 +28,7 @@ If any check fails, show the failures and stop. Do not attempt to start.
 
 ## Step 3: Start via tmux
 
-Read the tmux session name from `~/.config/palette/repo/config/palette.toml` (the `[tmux] session_name` field). Default to `"palette"` if not found.
+Read the tmux session name from `~/.config/palette/config.toml` (the `[tmux] session_name` field). Default to `"palette"` if not found.
 
 ```bash
 tmux new-session -d -s <session_name> -n orchestrator \
