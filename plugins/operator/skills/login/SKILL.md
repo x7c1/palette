@@ -8,26 +8,17 @@ user-invocable: true
 
 Refresh or set up Claude authentication credentials for Palette worker containers.
 
-On macOS, `.credentials.json` does not exist on the host filesystem (Claude Code uses the system Keychain). Worker containers require `.credentials.json`, so authentication must be performed inside a Linux bootstrap container. This skill automates the entire flow — the Operator only needs to open a URL in their browser.
+On macOS, `.credentials.json` does not exist on the host filesystem (Claude Code uses the system Keychain). Worker containers require `.credentials.json`, so authentication must be performed inside a Linux container. This skill automates the entire flow — the Operator only needs to open a URL in their browser.
 
-## Step 1: Start Bootstrap Container
+## Step 1: Run claude auth login
 
-```bash
-docker compose -f ~/.config/palette/repo/docker-compose.yml up -d claude-code
-```
-
-If this fails, tell the Operator:
-
-> Failed to start bootstrap container. Ensure Docker is running and `~/.config/palette/repo/docker-compose.yml` exists.
-
-Then stop.
-
-## Step 2: Run claude auth login
-
-Run the login command in the background and capture its output:
+Run the login command in a temporary container that writes credentials directly to the auth bundle directory:
 
 ```bash
-docker exec palette-claude-code-1 claude auth login 2>&1
+docker run --rm \
+  -v ~/.config/palette/claude-auth-bundle/.claude:/home/agent/.claude \
+  palette-base:latest \
+  claude auth login
 ```
 
 This command blocks until authentication completes. Run it with a long timeout (up to 5 minutes) or in the background.
@@ -40,7 +31,7 @@ If the browser didn't open, visit: https://claude.com/cai/oauth/authorize?...
 
 Extract the URL from that line.
 
-## Step 3: Present URL to Operator
+## Step 2: Present URL to Operator
 
 Tell the Operator:
 
@@ -52,7 +43,7 @@ Tell the Operator:
 
 Wait for the `claude auth login` command to complete.
 
-If it succeeds (exit code 0), proceed to Step 4.
+If it succeeds (exit code 0), proceed to Step 3.
 
 If it fails or times out, tell the Operator:
 
@@ -60,45 +51,26 @@ If it fails or times out, tell the Operator:
 
 Then stop.
 
-## Step 4: Sync Auth Bundle
+## Step 3: Verify
+
+Check that the credentials file was created:
 
 ```bash
-~/.config/palette/repo/scripts/sync-bootstrap-auth-bundle.sh
+test -f ~/.config/palette/claude-auth-bundle/.claude/.credentials.json && echo "OK"
 ```
 
-If it fails, tell the Operator:
+If the file does not exist, tell the Operator:
 
-> Auth bundle sync failed. Check the error output above and try running the script manually:
-> `~/.config/palette/repo/scripts/sync-bootstrap-auth-bundle.sh`
+> Credentials file was not created. Please try again with `/palette:login`.
 
 Then stop.
 
-## Step 5: Restart Auth-Error Workers
-
-Check if the Orchestrator is running:
-
-```bash
-curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:7100/health
-```
-
-If the Orchestrator is running (`200`), check for workers that may need restarting. Fetch the Orchestrator log for recent `authentication_error` entries:
-
-```bash
-tail -100 ~/.config/palette/repo/data/palette.log | grep -i 'authentication_error\|auth.*error'
-```
-
-If auth errors were found, tell the Operator:
-
-> Credentials updated. Workers with authentication errors will be detected and restarted by the Orchestrator's crash recovery on their next monitoring cycle.
-
-If no auth errors were found (e.g., this was a proactive token refresh), tell the Operator:
-
-> Credentials updated. No authentication errors detected in recent logs.
-
-## Step 6: Report Result
+## Step 4: Report Result
 
 Tell the Operator:
 
 > Authentication complete.
-> - Auth bundle synced to `~/.config/palette/claude-auth-bundle/`
+> - Credentials written to `~/.config/palette/claude-auth-bundle/.claude/.credentials.json`
 > - Worker containers will pick up new credentials automatically (bind mount).
+>
+> If workers are currently showing authentication errors, they will recover on the next monitoring cycle.
