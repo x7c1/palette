@@ -10,7 +10,7 @@ Refresh or set up Claude authentication credentials for Palette worker container
 
 On macOS, `.credentials.json` does not exist on the host filesystem (Claude Code uses the system Keychain). Worker containers require `.credentials.json`, so authentication must be performed inside a Linux container.
 
-`claude auth login` requires interactive stdin (to paste the authorization code after browser authentication), so the Operator must run the Docker command themselves.
+`claude auth login` requires an interactive terminal (TTY for stdin/stdout), so it must be run in a separate terminal window — not through Claude Code.
 
 ## Step 1: Prepare Auth Bundle Directory
 
@@ -22,13 +22,16 @@ mkdir -p ~/.config/palette/claude-auth-bundle/.claude
 
 Tell the Operator:
 
-> Run the following command with the `!` prefix. It will display a URL — open it in your browser, authenticate, then paste the authorization code back into the terminal.
+> Open a separate terminal and run:
 >
 > ```
-> ! docker run --rm -it -v ~/.config/palette/claude-auth-bundle/.claude:/home/agent/.claude palette-base:latest claude auth login
+> docker run --rm -it \
+>   -v ~/.config/palette/claude-auth-bundle/.claude:/home/agent/.claude \
+>   palette-base:latest \
+>   claude auth login
 > ```
 >
-> After authentication completes, let me know.
+> It will display an OAuth URL — open it in your browser, authenticate, then paste the authorization code back into the terminal. Let me know when it completes.
 
 Wait for the Operator to confirm completion.
 
