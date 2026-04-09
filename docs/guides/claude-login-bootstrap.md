@@ -18,10 +18,10 @@ mkdir -p ~/.config/palette/claude-auth-bundle/.claude
 docker run --rm -it \
   -v ~/.config/palette/claude-auth-bundle/.claude:/home/agent/.claude \
   palette-base:latest \
-  claude auth login
+  claude /login
 ```
 
-The command will display an OAuth URL. Open it in your browser, authenticate, then paste the authorization code back into the terminal. Credentials are written directly to `~/.config/palette/claude-auth-bundle/`.
+Claude Code will start and execute the login flow. Follow the on-screen instructions — open the URL in your browser, authenticate, then paste the authorization code back into Claude Code. Credentials are written directly to `~/.config/palette/claude-auth-bundle/`.
 
 ## Token Refresh
 
