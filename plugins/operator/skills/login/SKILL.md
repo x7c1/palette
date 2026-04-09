@@ -1,6 +1,6 @@
 ---
 name: login
-description: Refresh Claude authentication token for Palette workers. Runs bootstrap login and syncs credentials.
+description: Refresh Claude authentication token for Palette workers. Guides operator through interactive login.
 user-invocable: true
 ---
 
@@ -8,52 +8,29 @@ user-invocable: true
 
 Refresh or set up Claude authentication credentials for Palette worker containers.
 
-On macOS, `.credentials.json` does not exist on the host filesystem (Claude Code uses the system Keychain). Worker containers require `.credentials.json`, so authentication must be performed inside a Linux container. This skill automates the entire flow — the Operator only needs to open a URL in their browser.
+On macOS, `.credentials.json` does not exist on the host filesystem (Claude Code uses the system Keychain). Worker containers require `.credentials.json`, so authentication must be performed inside a Linux container.
 
-## Step 1: Run claude auth login
+`claude auth login` requires interactive stdin (to paste the authorization code after browser authentication), so the Operator must run the Docker command themselves.
 
-Ensure the auth bundle directory exists, then run the login command in a temporary container:
+## Step 1: Prepare Auth Bundle Directory
 
 ```bash
 mkdir -p ~/.config/palette/claude-auth-bundle/.claude
 ```
 
-```bash
-docker run --rm \
-  -v ~/.config/palette/claude-auth-bundle/.claude:/home/agent/.claude \
-  palette-base:latest \
-  claude auth login
-```
-
-This command blocks until authentication completes. Run it with a long timeout (up to 5 minutes) or in the background.
-
-The command will output a line like:
-
-```
-If the browser didn't open, visit: https://claude.com/cai/oauth/authorize?...
-```
-
-Extract the URL from that line.
-
-## Step 2: Present URL to Operator
+## Step 2: Instruct the Operator
 
 Tell the Operator:
 
-> Open this URL in your browser to authenticate:
+> Run the following command with the `!` prefix. It will display a URL — open it in your browser, authenticate, then paste the authorization code back into the terminal.
 >
-> `<extracted URL>`
+> ```
+> ! docker run --rm -it -v ~/.config/palette/claude-auth-bundle/.claude:/home/agent/.claude palette-base:latest claude auth login
+> ```
 >
-> After completing authentication in the browser, wait a moment for the process to finish.
+> After authentication completes, let me know.
 
-Wait for the `claude auth login` command to complete.
-
-If it succeeds (exit code 0), proceed to Step 3.
-
-If it fails or times out, tell the Operator:
-
-> Authentication did not complete. Please try again with `/palette:login`.
-
-Then stop.
+Wait for the Operator to confirm completion.
 
 ## Step 3: Verify
 
@@ -65,7 +42,7 @@ test -f ~/.config/palette/claude-auth-bundle/.claude/.credentials.json && echo "
 
 If the file does not exist, tell the Operator:
 
-> Credentials file was not created. Please try again with `/palette:login`.
+> Credentials file was not created. Please try running the command again.
 
 Then stop.
 
