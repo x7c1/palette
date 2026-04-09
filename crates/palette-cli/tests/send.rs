@@ -1,6 +1,6 @@
 mod helper;
 
-use helper::{capture_pane, spawn_server, test_session_name_with_guard, wid};
+use helper::{capture_pane, simulate_prompt, spawn_server, test_session_name_with_guard, wid};
 use palette_domain::task::TaskId;
 use palette_domain::terminal::TerminalTarget;
 use palette_domain::worker::{ContainerId, WorkerRole, WorkerStatus};
@@ -139,6 +139,7 @@ async fn send_queues_when_member_is_working() {
     assert_eq!(body["queued"], true);
 
     // Stop hook should deliver the queued message.
+    simulate_prompt(&target);
     let resp = client
         .post(format!("{base_url}/hooks/stop?worker_id=worker"))
         .json(&json!({}))

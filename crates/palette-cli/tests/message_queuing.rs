@@ -2,7 +2,9 @@ mod helper;
 
 use helper::{CreateJobRequest, CreateTaskRequest, JobDetail, JobStatus, JobType, ReviewStatus};
 use helper::{WorkerRole, WorkerStatus, WorkflowId};
-use helper::{capture_pane, insert_worker, spawn_server, test_session_name_with_guard, wid};
+use helper::{
+    capture_pane, insert_worker, simulate_prompt, spawn_server, test_session_name_with_guard, wid,
+};
 use palette_domain::task::TaskId;
 use palette_tmux::TmuxManager;
 use serde_json::json;
@@ -182,6 +184,7 @@ async fn message_queuing_to_supervisor() {
     );
 
     // --- RI stops (first time) → first queued message delivered ---
+    simulate_prompt(&ri_pane);
     let resp = client
         .post(format!(
             "{base_url}/hooks/stop?worker_id=review-integrator-1"
@@ -214,6 +217,7 @@ async fn message_queuing_to_supervisor() {
     );
 
     // --- RI stops (second time) → second queued message delivered ---
+    simulate_prompt(&ri_pane);
     let resp = client
         .post(format!(
             "{base_url}/hooks/stop?worker_id=review-integrator-1"

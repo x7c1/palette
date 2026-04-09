@@ -66,6 +66,24 @@ impl Orchestrator {
             self.spawn_readiness_watcher(target_id.clone());
             return Ok(false);
         }
+
+        // Verify Claude Code is ready to accept input (❯ prompt visible).
+        // After a stop hook, there is a brief delay before the prompt
+        // reappears. Delivering during this gap causes the message to be
+        // lost because Claude Code is not yet in input-accepting state.
+        let pane_content = self
+            .interactor
+            .terminal
+            .capture_pane(&terminal_target)
+            .unwrap_or_default();
+        if !pane_content.contains('❯') {
+            tracing::debug!(
+                target_id = %target_id,
+                "delivery deferred: prompt not ready"
+            );
+            self.spawn_readiness_watcher(target_id.clone());
+            return Ok(false);
+        }
         if let Some(msg) = self.interactor.data_store.dequeue_message(target_id)? {
             self.interactor.terminal.send_keys(&terminal_target, &msg)?;
             self.interactor
