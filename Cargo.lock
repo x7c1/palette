@@ -1020,6 +1020,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "axum",
+ "chrono",
  "clap",
  "palette-db",
  "palette-docker",
@@ -1030,6 +1031,7 @@ dependencies = [
  "palette-tmux",
  "palette-usecase",
  "reqwest",
+ "rusqlite",
  "serde",
  "serde_json",
  "tempfile",
