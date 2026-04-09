@@ -1031,7 +1031,6 @@ dependencies = [
  "palette-tmux",
  "palette-usecase",
  "reqwest",
- "rusqlite",
  "serde",
  "serde_json",
  "tempfile",

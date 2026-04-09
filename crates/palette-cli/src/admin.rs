@@ -1,7 +1,11 @@
 use crate::config::Config;
-use chrono::{DateTime, Duration, Utc};
+use chrono::{Duration, Utc};
 use clap::{Args, Subcommand};
-use rusqlite::Connection;
+use palette_db::Database;
+use palette_domain::task::TaskId;
+use palette_domain::worker::WorkerId;
+use palette_domain::workflow::{WorkflowId, WorkflowStatus};
+use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
 const USER_CONFIG_RELATIVE: &str = ".config/palette/config.toml";
@@ -49,6 +53,25 @@ pub struct GcArgs {
     yes: bool,
 }
 
+#[derive(Default)]
+struct DeletedCounts {
+    workflows: usize,
+    tasks: usize,
+    jobs: usize,
+    workers: usize,
+    review_submissions: usize,
+    review_comments: usize,
+    message_queue: usize,
+}
+
+struct CleanupPlan {
+    workflow_ids: Vec<WorkflowId>,
+    task_ids: Vec<TaskId>,
+    job_ids: Vec<String>,
+    worker_ids: Vec<WorkerId>,
+    file_paths: Vec<PathBuf>,
+}
+
 pub fn run(command: AdminCommand) -> Result<(), Box<dyn std::error::Error>> {
     match command {
         AdminCommand::Reset(args) => run_reset(args),
@@ -64,10 +87,13 @@ fn run_reset(args: ResetArgs) -> Result<(), Box<dyn std::error::Error>> {
     let config_path = resolve_config_path(args.config.as_deref())?;
     let config = Config::load(&config_path)?;
     let data_dir = data_dir_from_db_path(&config.db_path);
-    let mut conn = open_db_for_admin(&config.db_path)?;
-
-    let workflow_ids = list_workflow_ids(&conn)?;
-    let plan = gather_cleanup_plan(&conn, &workflow_ids, &data_dir)?;
+    let db = open_db_for_admin(&config.db_path)?;
+    let workflow_ids = db
+        .list_workflows(None)?
+        .into_iter()
+        .map(|w| w.id)
+        .collect::<Vec<_>>();
+    let plan = gather_cleanup_plan(&db, &workflow_ids, &data_dir)?;
     print_plan("reset", &plan);
 
     if args.dry_run {
@@ -75,17 +101,7 @@ fn run_reset(args: ResetArgs) -> Result<(), Box<dyn std::error::Error>> {
         return Ok(());
     }
 
-    let tx = conn.transaction()?;
-    let mut deleted = DeletedCounts::default();
-    deleted.message_queue += tx.execute("DELETE FROM message_queue", [])?;
-    deleted.review_comments += tx.execute("DELETE FROM review_comments", [])?;
-    deleted.review_submissions += tx.execute("DELETE FROM review_submissions", [])?;
-    deleted.jobs += tx.execute("DELETE FROM jobs", [])?;
-    deleted.workers += tx.execute("DELETE FROM workers", [])?;
-    deleted.tasks += tx.execute("DELETE FROM tasks", [])?;
-    deleted.workflows += tx.execute("DELETE FROM workflows", [])?;
-    tx.commit()?;
-
+    let deleted = execute_cleanup(&db, &plan.workflow_ids)?;
     let removed_files = remove_paths(&plan.file_paths);
     print_deleted(&deleted, removed_files);
     Ok(())
@@ -99,10 +115,10 @@ fn run_gc(args: GcArgs) -> Result<(), Box<dyn std::error::Error>> {
     let config_path = resolve_config_path(args.config.as_deref())?;
     let config = Config::load(&config_path)?;
     let data_dir = data_dir_from_db_path(&config.db_path);
-    let mut conn = open_db_for_admin(&config.db_path)?;
+    let db = open_db_for_admin(&config.db_path)?;
 
     let selected = select_gc_workflows(
-        &conn,
+        &db,
         &args.workflow_ids,
         args.include_active,
         args.older_than_hours,
@@ -112,8 +128,7 @@ fn run_gc(args: GcArgs) -> Result<(), Box<dyn std::error::Error>> {
         return Ok(());
     }
 
-    let workflow_ids: Vec<String> = selected.into_iter().map(|w| w.id).collect();
-    let plan = gather_cleanup_plan(&conn, &workflow_ids, &data_dir)?;
+    let plan = gather_cleanup_plan(&db, &selected, &data_dir)?;
     print_plan("gc", &plan);
 
     if args.dry_run {
@@ -121,86 +136,10 @@ fn run_gc(args: GcArgs) -> Result<(), Box<dyn std::error::Error>> {
         return Ok(());
     }
 
-    let tx = conn.transaction()?;
-    let mut deleted = DeletedCounts::default();
-    for workflow_id in &workflow_ids {
-        deleted.message_queue += tx.execute(
-            "DELETE FROM message_queue
-             WHERE target_id IN (SELECT id FROM workers WHERE workflow_id = ?1)",
-            [workflow_id],
-        )?;
-        deleted.review_comments += tx.execute(
-            "DELETE FROM review_comments
-             WHERE submission_id IN (
-               SELECT rs.id
-               FROM review_submissions rs
-               JOIN jobs j ON j.id = rs.review_job_id
-               JOIN tasks t ON t.id = j.task_id
-               WHERE t.workflow_id = ?1
-             )",
-            [workflow_id],
-        )?;
-        deleted.review_submissions += tx.execute(
-            "DELETE FROM review_submissions
-             WHERE review_job_id IN (
-               SELECT j.id
-               FROM jobs j
-               JOIN tasks t ON t.id = j.task_id
-               WHERE t.workflow_id = ?1
-             )",
-            [workflow_id],
-        )?;
-        deleted.jobs += tx.execute(
-            "DELETE FROM jobs
-             WHERE task_id IN (SELECT id FROM tasks WHERE workflow_id = ?1)",
-            [workflow_id],
-        )?;
-        deleted.workers +=
-            tx.execute("DELETE FROM workers WHERE workflow_id = ?1", [workflow_id])?;
-        deleted.tasks += tx.execute("DELETE FROM tasks WHERE workflow_id = ?1", [workflow_id])?;
-        deleted.workflows += tx.execute("DELETE FROM workflows WHERE id = ?1", [workflow_id])?;
-    }
-    tx.commit()?;
-
+    let deleted = execute_cleanup(&db, &plan.workflow_ids)?;
     let removed_files = remove_paths(&plan.file_paths);
     print_deleted(&deleted, removed_files);
     Ok(())
-}
-
-#[derive(Debug)]
-struct WorkflowEntry {
-    id: String,
-    status: String,
-    started_at: Option<DateTime<Utc>>,
-}
-
-#[derive(Default)]
-struct DeletedCounts {
-    workflows: usize,
-    tasks: usize,
-    jobs: usize,
-    workers: usize,
-    review_submissions: usize,
-    review_comments: usize,
-    message_queue: usize,
-}
-
-struct CleanupPlan {
-    workflow_ids: Vec<String>,
-    job_ids: Vec<String>,
-    worker_ids: Vec<String>,
-    file_paths: Vec<PathBuf>,
-}
-
-fn open_db_for_admin(db_path: &str) -> Result<Connection, Box<dyn std::error::Error>> {
-    let conn = Connection::open(db_path).map_err(|e| {
-        format!(
-            "failed to open db '{}': {e}. stop palette process and retry",
-            db_path
-        )
-    })?;
-    conn.execute_batch("PRAGMA foreign_keys=ON;")?;
-    Ok(conn)
 }
 
 fn resolve_config_path(
@@ -225,129 +164,152 @@ fn data_dir_from_db_path(db_path: &str) -> PathBuf {
         .unwrap_or_else(|| PathBuf::from("data"))
 }
 
-fn list_workflow_ids(conn: &Connection) -> Result<Vec<String>, Box<dyn std::error::Error>> {
-    let mut stmt = conn.prepare("SELECT id FROM workflows ORDER BY started_at DESC")?;
-    let rows = stmt.query_map([], |row| row.get::<_, String>(0))?;
-    let mut out = Vec::new();
-    for row in rows {
-        out.push(row?);
-    }
-    Ok(out)
-}
-
-fn list_workflows(conn: &Connection) -> Result<Vec<WorkflowEntry>, Box<dyn std::error::Error>> {
-    let mut stmt = conn.prepare(
-        "SELECT w.id, ws.name, w.started_at
-         FROM workflows w
-         JOIN workflow_statuses ws ON ws.id = w.status_id
-         ORDER BY w.started_at DESC",
-    )?;
-    let rows = stmt.query_map([], |row| {
-        let started: String = row.get(2)?;
-        Ok(WorkflowEntry {
-            id: row.get(0)?,
-            status: row.get(1)?,
-            started_at: DateTime::parse_from_rfc3339(&started)
-                .ok()
-                .map(|dt| dt.with_timezone(&Utc)),
-        })
-    })?;
-    let mut out = Vec::new();
-    for row in rows {
-        out.push(row?);
-    }
-    Ok(out)
+fn open_db_for_admin(db_path: &str) -> Result<Database, Box<dyn std::error::Error>> {
+    Database::open(Path::new(db_path)).map_err(|e| {
+        format!(
+            "failed to open database '{}': {}. stop `palette start` and retry",
+            db_path, e
+        )
+        .into()
+    })
 }
 
 fn select_gc_workflows(
-    conn: &Connection,
+    db: &Database,
     explicit_ids: &[String],
     include_active: bool,
     older_than_hours: Option<i64>,
-) -> Result<Vec<WorkflowEntry>, Box<dyn std::error::Error>> {
-    let workflows = list_workflows(conn)?;
-    let threshold = older_than_hours.map(|h| Utc::now() - Duration::hours(h));
+) -> Result<Vec<WorkflowId>, Box<dyn std::error::Error>> {
+    if !explicit_ids.is_empty() {
+        return explicit_ids
+            .iter()
+            .map(|id| {
+                WorkflowId::parse(id.clone())
+                    .map_err(|e| format!("invalid workflow-id '{id}': {e:?}").into())
+            })
+            .collect();
+    }
 
+    let threshold = older_than_hours.map(|h| Utc::now() - Duration::hours(h));
     let mut selected = Vec::new();
-    for wf in workflows {
-        if !explicit_ids.is_empty() && !explicit_ids.iter().any(|id| id == &wf.id) {
-            continue;
-        }
-        if explicit_ids.is_empty()
-            && !matches!(wf.status.as_str(), "suspended" | "completed")
-            && !(include_active && matches!(wf.status.as_str(), "active" | "suspending"))
-        {
+    for wf in db.list_workflows(None)? {
+        let eligible_status = matches!(
+            wf.status,
+            WorkflowStatus::Suspended | WorkflowStatus::Completed
+        ) || (include_active
+            && matches!(
+                wf.status,
+                WorkflowStatus::Active | WorkflowStatus::Suspending
+            ));
+        if !eligible_status {
             continue;
         }
         if let Some(t) = threshold
-            && let Some(started) = wf.started_at
-            && started > t
+            && wf.started_at > t
         {
             continue;
         }
-        selected.push(wf);
+        selected.push(wf.id);
     }
     Ok(selected)
 }
 
 fn gather_cleanup_plan(
-    conn: &Connection,
-    workflow_ids: &[String],
+    db: &Database,
+    workflow_ids: &[WorkflowId],
     data_dir: &Path,
 ) -> Result<CleanupPlan, Box<dyn std::error::Error>> {
+    let all_workers = db.list_all_workers()?;
+    let all_workflows = db.list_workflows(None)?;
+
+    let mut task_ids = Vec::new();
     let mut job_ids = Vec::new();
     let mut worker_ids = Vec::new();
-    let mut blueprint_paths = Vec::new();
+    let mut file_paths = BTreeSet::new();
 
     for workflow_id in workflow_ids {
-        {
-            let mut stmt = conn.prepare(
-                "SELECT j.id
-                 FROM jobs j
-                 JOIN tasks t ON t.id = j.task_id
-                 WHERE t.workflow_id = ?1",
-            )?;
-            let rows = stmt.query_map([workflow_id], |row| row.get::<_, String>(0))?;
-            for row in rows {
-                job_ids.push(row?);
+        let tasks = db.get_task_statuses(workflow_id)?;
+        let mut workflow_job_ids = Vec::new();
+        for task_id in tasks.keys() {
+            task_ids.push(task_id.clone());
+            if let Some(job) = db.get_job_by_task_id(task_id)? {
+                let jid = job.id.to_string();
+                workflow_job_ids.push(jid.clone());
+                job_ids.push(jid);
             }
         }
-        {
-            let mut stmt = conn.prepare("SELECT id FROM workers WHERE workflow_id = ?1")?;
-            let rows = stmt.query_map([workflow_id], |row| row.get::<_, String>(0))?;
-            for row in rows {
-                worker_ids.push(row?);
-            }
-        }
-        {
-            let mut stmt = conn.prepare("SELECT blueprint_path FROM workflows WHERE id = ?1")?;
-            let rows = stmt.query_map([workflow_id], |row| row.get::<_, String>(0))?;
-            for row in rows {
-                blueprint_paths.push(row?);
-            }
-        }
-    }
 
-    let mut file_paths = Vec::new();
-    for workflow_id in workflow_ids {
-        file_paths.push(data_dir.join("artifacts").join(workflow_id));
-    }
-    for job_id in &job_ids {
-        file_paths.push(data_dir.join("workspace").join(job_id));
-    }
-    for worker_id in &worker_ids {
-        file_paths.push(data_dir.join("transcripts").join(worker_id));
-    }
-    for blueprint in blueprint_paths {
-        file_paths.push(resolve_path_like(&blueprint));
+        let mut workflow_worker_ids = Vec::new();
+        for worker in all_workers.iter().filter(|w| w.workflow_id == *workflow_id) {
+            worker_ids.push(worker.id.clone());
+            workflow_worker_ids.push(worker.id.clone());
+        }
+
+        file_paths.insert(data_dir.join("artifacts").join(workflow_id.as_ref()));
+        for job_id in &workflow_job_ids {
+            file_paths.insert(data_dir.join("workspace").join(job_id));
+        }
+        for worker_id in &workflow_worker_ids {
+            file_paths.insert(data_dir.join("transcripts").join(worker_id.as_ref()));
+        }
+        if let Some(wf) = all_workflows.iter().find(|w| w.id == *workflow_id) {
+            file_paths.insert(resolve_path_like(&wf.blueprint_path));
+        }
     }
 
     Ok(CleanupPlan {
         workflow_ids: workflow_ids.to_vec(),
+        task_ids,
         job_ids,
         worker_ids,
-        file_paths,
+        file_paths: file_paths.into_iter().collect(),
     })
+}
+
+fn execute_cleanup(
+    db: &Database,
+    workflow_ids: &[WorkflowId],
+) -> Result<DeletedCounts, Box<dyn std::error::Error>> {
+    let mut deleted = DeletedCounts::default();
+    for workflow_id in workflow_ids {
+        let task_ids = db
+            .get_task_statuses(workflow_id)?
+            .into_keys()
+            .collect::<Vec<_>>();
+        let worker_ids = db
+            .list_all_workers()?
+            .into_iter()
+            .filter(|w| w.workflow_id == *workflow_id)
+            .map(|w| w.id)
+            .collect::<Vec<_>>();
+
+        deleted.message_queue += db.delete_messages_by_targets(&worker_ids)?;
+        let (deleted_comments, deleted_submissions) =
+            db.delete_review_data_by_workflow(workflow_id)?;
+        deleted.review_comments += deleted_comments;
+        deleted.review_submissions += deleted_submissions;
+
+        for task_id in &task_ids {
+            if db.get_job_by_task_id(task_id)?.is_some() {
+                deleted.jobs += 1;
+            }
+            db.delete_jobs_by_task_id(task_id)?;
+        }
+
+        for worker_id in &worker_ids {
+            if db.remove_worker(worker_id)?.is_some() {
+                deleted.workers += 1;
+            }
+        }
+
+        for task_id in &task_ids {
+            db.delete_task(task_id)?;
+            deleted.tasks += 1;
+        }
+
+        deleted.workflows += db.delete_workflow(workflow_id)?;
+    }
+    Ok(deleted)
 }
 
 fn resolve_path_like(path: &str) -> PathBuf {
@@ -383,13 +345,12 @@ fn remove_paths(paths: &[PathBuf]) -> usize {
 fn print_plan(mode: &str, plan: &CleanupPlan) {
     println!("admin {} plan:", mode);
     println!("  workflows: {}", plan.workflow_ids.len());
-    println!("  tasks/jobs: {} jobs", plan.job_ids.len());
+    println!("  tasks: {}", plan.task_ids.len());
+    println!("  jobs: {}", plan.job_ids.len());
     println!("  workers: {}", plan.worker_ids.len());
     println!("  filesystem targets: {}", plan.file_paths.len());
-    if !plan.workflow_ids.is_empty() {
-        for id in &plan.workflow_ids {
-            println!("    - {}", id);
-        }
+    for id in &plan.workflow_ids {
+        println!("    - {}", id);
     }
 }
 
