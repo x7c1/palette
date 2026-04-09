@@ -18,18 +18,17 @@ The login flow requires Claude Code's interactive TUI (to paste the authorizatio
 mkdir -p ~/.config/palette/claude-auth-bundle/.claude
 ```
 
-## Step 2: Instruct the Operator
+## Step 2: Copy Command and Instruct the Operator
+
+Copy the docker command to the clipboard so the Operator can paste it in another terminal:
+
+```bash
+echo -n 'docker run --rm -it -v ~/.config/palette/claude-auth-bundle/.claude:/home/agent/.claude palette-base:latest claude /login' | pbcopy
+```
 
 Tell the Operator:
 
-> Open a separate terminal and run:
->
-> ```
-> docker run --rm -it \
->   -v ~/.config/palette/claude-auth-bundle/.claude:/home/agent/.claude \
->   palette-base:latest \
->   claude /login
-> ```
+> The login command has been copied to your clipboard. Open a separate terminal, paste and run it.
 >
 > Claude Code will start and execute the login flow. Follow the on-screen instructions — open the URL in your browser, authenticate, then paste the authorization code back into Claude Code. Let me know when it completes.
 
