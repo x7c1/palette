@@ -6,9 +6,9 @@ use palette_domain::terminal::{TerminalSessionName, TerminalTarget};
 use palette_domain::worker::{ContainerId, WorkerRole, WorkerSessionId};
 use palette_domain::workflow::WorkflowId;
 use palette_usecase::{
-    AdminCleanupPlan, AdminDeletedCounts, AdminGcOptions, BlueprintReader, ContainerMounts,
-    ContainerRuntime, GitHubReviewPort, Interactor, ReadBlueprintError, ReviewEvent,
-    ReviewFileComment, TerminalSession,
+    AdminCleanupPlan, AdminDeletedCounts, AdminGcOptions, AdminMaintenanceError, BlueprintReader,
+    ContainerMounts, ContainerRuntime, GitHubReviewPort, Interactor, ReadBlueprintError,
+    ReviewEvent, ReviewFileComment, TerminalSession,
 };
 use std::path::{Path, PathBuf};
 
@@ -77,7 +77,7 @@ fn run_reset(args: ResetArgs) -> Result<(), Box<dyn std::error::Error>> {
 
     let plan = interactor
         .admin_plan_reset(&data_dir)
-        .map_err(|e| -> Box<dyn std::error::Error> { e })?;
+        .map_err(to_box_error)?;
     print_plan("reset", &plan);
 
     if args.dry_run {
@@ -87,7 +87,7 @@ fn run_reset(args: ResetArgs) -> Result<(), Box<dyn std::error::Error>> {
 
     let deleted = interactor
         .admin_execute_cleanup(&plan.workflow_ids)
-        .map_err(|e| -> Box<dyn std::error::Error> { e })?;
+        .map_err(to_box_error)?;
     let removed_files = remove_paths(&plan.file_paths);
     print_deleted(&deleted, removed_files);
     Ok(())
@@ -118,7 +118,7 @@ fn run_gc(args: GcArgs) -> Result<(), Box<dyn std::error::Error>> {
     };
     let plan = interactor
         .admin_plan_gc(&data_dir, &options)
-        .map_err(|e| -> Box<dyn std::error::Error> { e })?;
+        .map_err(to_box_error)?;
     if plan.workflow_ids.is_empty() {
         println!("gc: no matching workflows");
         return Ok(());
@@ -132,7 +132,7 @@ fn run_gc(args: GcArgs) -> Result<(), Box<dyn std::error::Error>> {
 
     let deleted = interactor
         .admin_execute_cleanup(&plan.workflow_ids)
-        .map_err(|e| -> Box<dyn std::error::Error> { e })?;
+        .map_err(to_box_error)?;
     let removed_files = remove_paths(&plan.file_paths);
     print_deleted(&deleted, removed_files);
     Ok(())
@@ -218,6 +218,10 @@ fn print_deleted(deleted: &AdminDeletedCounts, removed_files: usize) {
     println!("  review_comments: {}", deleted.review_comments);
     println!("  message_queue: {}", deleted.message_queue);
     println!("  filesystem entries removed: {}", removed_files);
+}
+
+fn to_box_error(e: AdminMaintenanceError) -> Box<dyn std::error::Error> {
+    Box::new(e)
 }
 
 fn unsupported<T>(name: &str) -> Result<T, BoxErr> {
