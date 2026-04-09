@@ -14,6 +14,16 @@ pub fn test_session_name_with_guard(test_name: &str) -> (TerminalSessionName, Se
     (name, guard)
 }
 
+/// Simulate the Claude Code prompt character in a pane.
+/// `deliver_queued_messages` checks for `❯` before sending to avoid
+/// delivering while Claude Code is still transitioning after a stop hook.
+pub fn simulate_prompt(target: &TerminalTarget) {
+    Command::new("tmux")
+        .args(["send-keys", "-t", target.as_ref(), "❯", ""])
+        .output()
+        .expect("failed to send prompt to pane");
+}
+
 /// Capture the content of a tmux pane (including scrollback buffer).
 pub fn capture_pane(target: &TerminalTarget) -> String {
     let output = Command::new("tmux")

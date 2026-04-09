@@ -2,7 +2,9 @@ mod helper;
 
 use helper::{CreateJobRequest, CreateTaskRequest, JobDetail, JobStatus, JobType, ReviewStatus};
 use helper::{WorkerRole, WorkerStatus, WorkflowId};
-use helper::{capture_pane, insert_worker, spawn_server, test_session_name_with_guard, wid};
+use helper::{
+    capture_pane, insert_worker, simulate_prompt, spawn_server, test_session_name_with_guard, wid,
+};
 use palette_domain::task::TaskId;
 use palette_tmux::TmuxManager;
 use serde_json::json;
@@ -108,6 +110,7 @@ async fn sequential_delivery() {
 
     // Run 4 cycles of: notification → delivery → RI stop
     for round in 1..=4 {
+        simulate_prompt(&ri_pane);
         // Reviewer sends permission prompt notification
         let resp = client
             .post(format!(
@@ -312,6 +315,7 @@ async fn queued_while_working() {
     );
 
     // --- RI stops (first time) → first queued message delivered ---
+    simulate_prompt(&ri_pane);
     let resp = client
         .post(format!("{base_url}/hooks/stop?worker_id=ri-1"))
         .json(&json!({}))
@@ -339,6 +343,7 @@ async fn queued_while_working() {
     );
 
     // --- RI stops (second time) → second queued message delivered ---
+    simulate_prompt(&ri_pane);
     let resp = client
         .post(format!("{base_url}/hooks/stop?worker_id=ri-1"))
         .json(&json!({}))
@@ -534,6 +539,7 @@ async fn concurrent_race() {
         }
 
         // Fire notification and stop concurrently
+        simulate_prompt(&ri_pane);
         let notification_fut = client
             .post(format!(
                 "{base_url}/hooks/notification?worker_id=reviewer-1"
@@ -572,6 +578,7 @@ async fn concurrent_race() {
                 .unwrap()
                 .unwrap();
             if ri.status == WorkerStatus::Working {
+                simulate_prompt(&ri_pane);
                 let resp = client
                     .post(format!("{base_url}/hooks/stop?worker_id=ri-1"))
                     .json(&json!({}))

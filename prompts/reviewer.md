@@ -66,7 +66,7 @@ On re-review rounds, check the previous round's `integrated-review.json`. Do not
 ## Completion
 
 1. Write `review.md` to your artifacts path
-2. Submit via `palette:palette-api`: `POST /reviews/{id}/submit` with `{"verdict": "...", "summary": "..."}`
+2. Submit directly: `curl -s -X POST "$PALETTE_URL/reviews/{id}/submit" -H "Content-Type: application/json" -d '{"verdict": "...", "summary": "..."}'`
    - `{id}` is your review job ID (e.g., `R-001`)
    - The verdict must match `review.md`
 

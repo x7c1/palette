@@ -48,6 +48,21 @@ pub async fn handle_submit_review(
         });
     }
 
+    // Reject duplicate submissions to a job that is already Done.
+    // Without this guard, a second submit increments the round number
+    // and causes post_pr_review_comments to look for artifacts in a
+    // non-existent round directory.
+    if job.status.is_done() {
+        return Err(Error::BadRequest {
+            code: ErrorCode::JobAlreadyDone,
+            errors: vec![InputError {
+                location: Location::Path,
+                hint: "review_job_id".into(),
+                reason: "review/job_already_done".into(),
+            }],
+        });
+    }
+
     // Determine if this is an integrator submission (ReviewIntegrate job)
     // or a regular reviewer submission. Must happen before submit_review so we can
     // reject integrator submissions when child reviewers are incomplete (preventing

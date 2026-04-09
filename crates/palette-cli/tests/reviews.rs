@@ -172,6 +172,92 @@ async fn review_approved_completes_review_job() {
     assert_eq!(review.status, JobStatus::Review(ReviewStatus::Done));
 }
 
+/// Duplicate submit to a Done job should be rejected.
+#[tokio::test]
+async fn duplicate_submit_rejected_when_job_done() {
+    let (session, _guard) = test_session_name_with_guard("dup-submit");
+    let tmux = TmuxManager::new(session.clone());
+    tmux.create_session(&session).unwrap();
+
+    let (base_url, state, _shutdown_tx) = spawn_server(tmux, &session).await;
+
+    use palette_domain::job::{
+        CreateJobRequest, JobDetail, JobStatus, JobType, ReviewStatus, ReviewTarget,
+    };
+    use palette_domain::worker::WorkerId;
+
+    let task_id = setup_review_task(&state, "wf-dup:task-R-001");
+    let review_job = state
+        .interactor
+        .data_store
+        .create_job(&CreateJobRequest::new(
+            task_id,
+            palette_domain::job::Title::parse("Review").unwrap(),
+            None,
+            None,
+            None,
+            JobDetail::Review {
+                perspective: None,
+                target: ReviewTarget::CraftOutput,
+            },
+        ))
+        .unwrap();
+    let review_job_id = review_job.id.clone();
+    helper::setup_worker(&*state.interactor.data_store, "member-b");
+    state
+        .interactor
+        .data_store
+        .assign_job(
+            &review_job_id,
+            &WorkerId::parse("member-b").unwrap(),
+            JobType::Review,
+        )
+        .unwrap();
+
+    let client = reqwest::Client::new();
+
+    // First submit — should succeed
+    let resp = client
+        .post(format!("{base_url}/reviews/{review_job_id}/submit"))
+        .json(&SubmitReviewRequest {
+            verdict: Verdict::Approved,
+            summary: Some("LGTM".to_string()),
+            comments: vec![],
+        })
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), 201);
+
+    // Job should be Done
+    let job = state
+        .interactor
+        .data_store
+        .get_job(&review_job_id)
+        .unwrap()
+        .unwrap();
+    assert_eq!(job.status, JobStatus::Review(ReviewStatus::Done));
+
+    // Second submit — should be rejected
+    let resp = client
+        .post(format!("{base_url}/reviews/{review_job_id}/submit"))
+        .json(&SubmitReviewRequest {
+            verdict: Verdict::Approved,
+            summary: Some("duplicate".to_string()),
+            comments: vec![],
+        })
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(
+        resp.status(),
+        400,
+        "duplicate submit to Done job should be rejected"
+    );
+    let err: serde_json::Value = resp.json().await.unwrap();
+    assert_eq!(err["code"], "job_already_done");
+}
+
 /// Blueprint with composite review: craft → review-integrate → [review-a, review-b]
 const COMPOSITE_REVIEW_YAML: &str = r#"
 task:

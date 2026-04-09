@@ -56,7 +56,7 @@ cargo build 2>&1
 # --- Step 2: Start Palette with PR review config ---
 echo ""
 echo "=== Step 2: Start Palette ==="
-RUST_LOG="${RUST_LOG:-info}" cargo run -- "$CONFIG_PATH" >> "$LOG_FILE" 2>&1 &
+RUST_LOG="${RUST_LOG:-info}" cargo run -- start -c "$CONFIG_PATH" >> "$LOG_FILE" 2>&1 &
 echo $! > "$PID_FILE"
 
 for i in $(seq 1 30); do

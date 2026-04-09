@@ -34,7 +34,8 @@ impl TerminalSession for MockTerminalSession {
             .unwrap()
             .get(target.as_ref())
             .cloned()
-            .unwrap_or_default())
+            // Default to a prompt character so delivery readiness checks pass.
+            .unwrap_or_else(|| "❯".to_string()))
     }
 
     fn send_keys(&self, target: &TerminalTarget, text: &str) -> Result<(), BoxErr> {

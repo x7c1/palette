@@ -11,6 +11,7 @@ pub enum ErrorCode {
     NotReviewJob,
     ChildReviewersIncomplete,
     ReviewArtifactMissing,
+    JobAlreadyDone,
     BlueprintInvalid,
 }
 
