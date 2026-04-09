@@ -12,7 +12,11 @@ On macOS, `.credentials.json` does not exist on the host filesystem (Claude Code
 
 ## Step 1: Run claude auth login
 
-Run the login command in a temporary container that writes credentials directly to the auth bundle directory:
+Ensure the auth bundle directory exists, then run the login command in a temporary container:
+
+```bash
+mkdir -p ~/.config/palette/claude-auth-bundle/.claude
+```
 
 ```bash
 docker run --rm \
