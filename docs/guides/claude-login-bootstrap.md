@@ -12,33 +12,14 @@ Run the `/palette:login` skill in Claude Code. It automates the entire flow — 
 
 If `/palette:login` is not available (e.g., plugin not installed), follow these steps:
 
-### 1. Start the Bootstrap Container
-
 ```bash
-cd ~/.config/palette/repo
-HOST_HOME=$HOME docker compose up -d claude-code
+docker run --rm \
+  -v ~/.config/palette/claude-auth-bundle/.claude:/home/agent/.claude \
+  palette-base:latest \
+  claude auth login
 ```
 
-### 2. Run Login
-
-```bash
-docker exec palette-claude-code-1 claude auth login
-```
-
-The command will display an OAuth URL. Open it in your browser and complete authentication.
-
-### 3. Sync Auth Bundle
-
-After login completes:
-
-```bash
-cd ~/.config/palette/repo
-scripts/sync-bootstrap-auth-bundle.sh
-```
-
-Done when this appears:
-
-`PASS: synced auth bundle from <container> -> <output_dir>`
+The command will display an OAuth URL. Open it in your browser and complete authentication. Credentials are written directly to `~/.config/palette/claude-auth-bundle/`.
 
 ## Token Refresh
 
