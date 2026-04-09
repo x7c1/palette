@@ -2,7 +2,7 @@
 
 ## Quick Method (Recommended)
 
-Run the `/palette:login` skill in Claude Code. It automates the entire flow — you only need to open a URL in your browser:
+Run the `/palette:login` skill in Claude Code. It guides you through the process:
 
 ```
 /palette:login
@@ -13,13 +13,15 @@ Run the `/palette:login` skill in Claude Code. It automates the entire flow — 
 If `/palette:login` is not available (e.g., plugin not installed), follow these steps:
 
 ```bash
-docker run --rm \
+mkdir -p ~/.config/palette/claude-auth-bundle/.claude
+
+docker run --rm -it \
   -v ~/.config/palette/claude-auth-bundle/.claude:/home/agent/.claude \
   palette-base:latest \
   claude auth login
 ```
 
-The command will display an OAuth URL. Open it in your browser and complete authentication. Credentials are written directly to `~/.config/palette/claude-auth-bundle/`.
+The command will display an OAuth URL. Open it in your browser, authenticate, then paste the authorization code back into the terminal. Credentials are written directly to `~/.config/palette/claude-auth-bundle/`.
 
 ## Token Refresh
 
