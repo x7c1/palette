@@ -180,6 +180,11 @@ pub trait DataStore: Send + Sync {
         task_id: &TaskId,
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>>;
 
+    fn delete_review_data_by_workflow(
+        &self,
+        workflow_id: &WorkflowId,
+    ) -> Result<(usize, usize), Box<dyn std::error::Error + Send + Sync>>;
+
     // -- Workflow --
 
     fn create_workflow(
@@ -215,6 +220,11 @@ pub trait DataStore: Send + Sync {
         hash: Option<&str>,
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>>;
 
+    fn delete_workflow(
+        &self,
+        id: &WorkflowId,
+    ) -> Result<usize, Box<dyn std::error::Error + Send + Sync>>;
+
     // -- Message Queue --
 
     fn enqueue_message(
@@ -232,4 +242,9 @@ pub trait DataStore: Send + Sync {
         &self,
         target_id: &WorkerId,
     ) -> Result<bool, Box<dyn std::error::Error + Send + Sync>>;
+
+    fn delete_messages_by_targets(
+        &self,
+        target_ids: &[WorkerId],
+    ) -> Result<usize, Box<dyn std::error::Error + Send + Sync>>;
 }

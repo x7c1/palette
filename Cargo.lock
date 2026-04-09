@@ -1020,7 +1020,6 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "axum",
- "chrono",
  "clap",
  "palette-db",
  "palette-docker",
@@ -1152,6 +1151,7 @@ dependencies = [
 name = "palette-usecase"
 version = "0.1.0"
 dependencies = [
+ "chrono",
  "palette-core",
  "palette-domain",
 ]

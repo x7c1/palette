@@ -1,14 +1,19 @@
 use crate::config::Config;
-use chrono::{Duration, Utc};
 use clap::{Args, Subcommand};
 use palette_db::Database;
-use palette_domain::task::TaskId;
-use palette_domain::worker::WorkerId;
-use palette_domain::workflow::{WorkflowId, WorkflowStatus};
-use std::collections::BTreeSet;
+use palette_domain::task::TaskTree;
+use palette_domain::terminal::{TerminalSessionName, TerminalTarget};
+use palette_domain::worker::{ContainerId, WorkerRole, WorkerSessionId};
+use palette_domain::workflow::WorkflowId;
+use palette_usecase::{
+    AdminCleanupPlan, AdminDeletedCounts, AdminGcOptions, BlueprintReader, ContainerMounts,
+    ContainerRuntime, GitHubReviewPort, Interactor, ReadBlueprintError, ReviewEvent,
+    ReviewFileComment, TerminalSession,
+};
 use std::path::{Path, PathBuf};
 
 const USER_CONFIG_RELATIVE: &str = ".config/palette/config.toml";
+type BoxErr = Box<dyn std::error::Error + Send + Sync>;
 
 #[derive(Subcommand)]
 pub enum AdminCommand {
@@ -53,25 +58,6 @@ pub struct GcArgs {
     yes: bool,
 }
 
-#[derive(Default)]
-struct DeletedCounts {
-    workflows: usize,
-    tasks: usize,
-    jobs: usize,
-    workers: usize,
-    review_submissions: usize,
-    review_comments: usize,
-    message_queue: usize,
-}
-
-struct CleanupPlan {
-    workflow_ids: Vec<WorkflowId>,
-    task_ids: Vec<TaskId>,
-    job_ids: Vec<String>,
-    worker_ids: Vec<WorkerId>,
-    file_paths: Vec<PathBuf>,
-}
-
 pub fn run(command: AdminCommand) -> Result<(), Box<dyn std::error::Error>> {
     match command {
         AdminCommand::Reset(args) => run_reset(args),
@@ -87,13 +73,11 @@ fn run_reset(args: ResetArgs) -> Result<(), Box<dyn std::error::Error>> {
     let config_path = resolve_config_path(args.config.as_deref())?;
     let config = Config::load(&config_path)?;
     let data_dir = data_dir_from_db_path(&config.db_path);
-    let db = open_db_for_admin(&config.db_path)?;
-    let workflow_ids = db
-        .list_workflows(None)?
-        .into_iter()
-        .map(|w| w.id)
-        .collect::<Vec<_>>();
-    let plan = gather_cleanup_plan(&db, &workflow_ids, &data_dir)?;
+    let interactor = build_admin_interactor(&config.db_path)?;
+
+    let plan = interactor
+        .admin_plan_reset(&data_dir)
+        .map_err(|e| -> Box<dyn std::error::Error> { e })?;
     print_plan("reset", &plan);
 
     if args.dry_run {
@@ -101,7 +85,9 @@ fn run_reset(args: ResetArgs) -> Result<(), Box<dyn std::error::Error>> {
         return Ok(());
     }
 
-    let deleted = execute_cleanup(&db, &plan.workflow_ids)?;
+    let deleted = interactor
+        .admin_execute_cleanup(&plan.workflow_ids)
+        .map_err(|e| -> Box<dyn std::error::Error> { e })?;
     let removed_files = remove_paths(&plan.file_paths);
     print_deleted(&deleted, removed_files);
     Ok(())
@@ -115,20 +101,28 @@ fn run_gc(args: GcArgs) -> Result<(), Box<dyn std::error::Error>> {
     let config_path = resolve_config_path(args.config.as_deref())?;
     let config = Config::load(&config_path)?;
     let data_dir = data_dir_from_db_path(&config.db_path);
-    let db = open_db_for_admin(&config.db_path)?;
+    let interactor = build_admin_interactor(&config.db_path)?;
 
-    let selected = select_gc_workflows(
-        &db,
-        &args.workflow_ids,
-        args.include_active,
-        args.older_than_hours,
-    )?;
-    if selected.is_empty() {
+    let workflow_ids = args
+        .workflow_ids
+        .iter()
+        .map(|id| {
+            WorkflowId::parse(id.clone())
+                .map_err(|e| format!("invalid workflow-id '{id}': {e:?}").into())
+        })
+        .collect::<Result<Vec<_>, Box<dyn std::error::Error>>>()?;
+    let options = AdminGcOptions {
+        workflow_ids,
+        include_active: args.include_active,
+        older_than_hours: args.older_than_hours,
+    };
+    let plan = interactor
+        .admin_plan_gc(&data_dir, &options)
+        .map_err(|e| -> Box<dyn std::error::Error> { e })?;
+    if plan.workflow_ids.is_empty() {
         println!("gc: no matching workflows");
         return Ok(());
     }
-
-    let plan = gather_cleanup_plan(&db, &selected, &data_dir)?;
     print_plan("gc", &plan);
 
     if args.dry_run {
@@ -136,7 +130,9 @@ fn run_gc(args: GcArgs) -> Result<(), Box<dyn std::error::Error>> {
         return Ok(());
     }
 
-    let deleted = execute_cleanup(&db, &plan.workflow_ids)?;
+    let deleted = interactor
+        .admin_execute_cleanup(&plan.workflow_ids)
+        .map_err(|e| -> Box<dyn std::error::Error> { e })?;
     let removed_files = remove_paths(&plan.file_paths);
     print_deleted(&deleted, removed_files);
     Ok(())
@@ -164,163 +160,21 @@ fn data_dir_from_db_path(db_path: &str) -> PathBuf {
         .unwrap_or_else(|| PathBuf::from("data"))
 }
 
-fn open_db_for_admin(db_path: &str) -> Result<Database, Box<dyn std::error::Error>> {
-    Database::open(Path::new(db_path)).map_err(|e| {
+fn build_admin_interactor(db_path: &str) -> Result<Interactor, Box<dyn std::error::Error>> {
+    let db = Database::open(Path::new(db_path)).map_err(|e| {
         format!(
             "failed to open database '{}': {}. stop `palette start` and retry",
             db_path, e
         )
-        .into()
+    })?;
+
+    Ok(Interactor {
+        container: Box::new(NoopContainer),
+        terminal: Box::new(NoopTerminal),
+        data_store: Box::new(db),
+        blueprint: Box::new(NoopBlueprint),
+        github_review_port: Box::new(NoopGitHubReview),
     })
-}
-
-fn select_gc_workflows(
-    db: &Database,
-    explicit_ids: &[String],
-    include_active: bool,
-    older_than_hours: Option<i64>,
-) -> Result<Vec<WorkflowId>, Box<dyn std::error::Error>> {
-    if !explicit_ids.is_empty() {
-        return explicit_ids
-            .iter()
-            .map(|id| {
-                WorkflowId::parse(id.clone())
-                    .map_err(|e| format!("invalid workflow-id '{id}': {e:?}").into())
-            })
-            .collect();
-    }
-
-    let threshold = older_than_hours.map(|h| Utc::now() - Duration::hours(h));
-    let mut selected = Vec::new();
-    for wf in db.list_workflows(None)? {
-        let eligible_status = matches!(
-            wf.status,
-            WorkflowStatus::Suspended | WorkflowStatus::Completed
-        ) || (include_active
-            && matches!(
-                wf.status,
-                WorkflowStatus::Active | WorkflowStatus::Suspending
-            ));
-        if !eligible_status {
-            continue;
-        }
-        if let Some(t) = threshold
-            && wf.started_at > t
-        {
-            continue;
-        }
-        selected.push(wf.id);
-    }
-    Ok(selected)
-}
-
-fn gather_cleanup_plan(
-    db: &Database,
-    workflow_ids: &[WorkflowId],
-    data_dir: &Path,
-) -> Result<CleanupPlan, Box<dyn std::error::Error>> {
-    let all_workers = db.list_all_workers()?;
-    let all_workflows = db.list_workflows(None)?;
-
-    let mut task_ids = Vec::new();
-    let mut job_ids = Vec::new();
-    let mut worker_ids = Vec::new();
-    let mut file_paths = BTreeSet::new();
-
-    for workflow_id in workflow_ids {
-        let tasks = db.get_task_statuses(workflow_id)?;
-        let mut workflow_job_ids = Vec::new();
-        for task_id in tasks.keys() {
-            task_ids.push(task_id.clone());
-            if let Some(job) = db.get_job_by_task_id(task_id)? {
-                let jid = job.id.to_string();
-                workflow_job_ids.push(jid.clone());
-                job_ids.push(jid);
-            }
-        }
-
-        let mut workflow_worker_ids = Vec::new();
-        for worker in all_workers.iter().filter(|w| w.workflow_id == *workflow_id) {
-            worker_ids.push(worker.id.clone());
-            workflow_worker_ids.push(worker.id.clone());
-        }
-
-        file_paths.insert(data_dir.join("artifacts").join(workflow_id.as_ref()));
-        for job_id in &workflow_job_ids {
-            file_paths.insert(data_dir.join("workspace").join(job_id));
-        }
-        for worker_id in &workflow_worker_ids {
-            file_paths.insert(data_dir.join("transcripts").join(worker_id.as_ref()));
-        }
-        if let Some(wf) = all_workflows.iter().find(|w| w.id == *workflow_id) {
-            file_paths.insert(resolve_path_like(&wf.blueprint_path));
-        }
-    }
-
-    Ok(CleanupPlan {
-        workflow_ids: workflow_ids.to_vec(),
-        task_ids,
-        job_ids,
-        worker_ids,
-        file_paths: file_paths.into_iter().collect(),
-    })
-}
-
-fn execute_cleanup(
-    db: &Database,
-    workflow_ids: &[WorkflowId],
-) -> Result<DeletedCounts, Box<dyn std::error::Error>> {
-    let mut deleted = DeletedCounts::default();
-    for workflow_id in workflow_ids {
-        let task_ids = db
-            .get_task_statuses(workflow_id)?
-            .into_keys()
-            .collect::<Vec<_>>();
-        let worker_ids = db
-            .list_all_workers()?
-            .into_iter()
-            .filter(|w| w.workflow_id == *workflow_id)
-            .map(|w| w.id)
-            .collect::<Vec<_>>();
-
-        deleted.message_queue += db.delete_messages_by_targets(&worker_ids)?;
-        let (deleted_comments, deleted_submissions) =
-            db.delete_review_data_by_workflow(workflow_id)?;
-        deleted.review_comments += deleted_comments;
-        deleted.review_submissions += deleted_submissions;
-
-        for task_id in &task_ids {
-            if db.get_job_by_task_id(task_id)?.is_some() {
-                deleted.jobs += 1;
-            }
-            db.delete_jobs_by_task_id(task_id)?;
-        }
-
-        for worker_id in &worker_ids {
-            if db.remove_worker(worker_id)?.is_some() {
-                deleted.workers += 1;
-            }
-        }
-
-        for task_id in &task_ids {
-            db.delete_task(task_id)?;
-            deleted.tasks += 1;
-        }
-
-        deleted.workflows += db.delete_workflow(workflow_id)?;
-    }
-    Ok(deleted)
-}
-
-fn resolve_path_like(path: &str) -> PathBuf {
-    let p = PathBuf::from(path);
-    if p.is_absolute() {
-        p
-    } else {
-        std::env::current_dir()
-            .unwrap_or_else(|_| PathBuf::from("."))
-            .join(p)
-    }
 }
 
 fn remove_paths(paths: &[PathBuf]) -> usize {
@@ -342,7 +196,7 @@ fn remove_paths(paths: &[PathBuf]) -> usize {
     removed
 }
 
-fn print_plan(mode: &str, plan: &CleanupPlan) {
+fn print_plan(mode: &str, plan: &AdminCleanupPlan) {
     println!("admin {} plan:", mode);
     println!("  workflows: {}", plan.workflow_ids.len());
     println!("  tasks: {}", plan.task_ids.len());
@@ -354,7 +208,7 @@ fn print_plan(mode: &str, plan: &CleanupPlan) {
     }
 }
 
-fn print_deleted(deleted: &DeletedCounts, removed_files: usize) {
+fn print_deleted(deleted: &AdminDeletedCounts, removed_files: usize) {
     println!("deleted:");
     println!("  workflows: {}", deleted.workflows);
     println!("  tasks: {}", deleted.tasks);
@@ -364,4 +218,149 @@ fn print_deleted(deleted: &DeletedCounts, removed_files: usize) {
     println!("  review_comments: {}", deleted.review_comments);
     println!("  message_queue: {}", deleted.message_queue);
     println!("  filesystem entries removed: {}", removed_files);
+}
+
+fn unsupported<T>(name: &str) -> Result<T, BoxErr> {
+    Err(std::io::Error::other(format!("{name} is not available in admin mode")).into())
+}
+
+struct NoopContainer;
+impl ContainerRuntime for NoopContainer {
+    fn create_container(
+        &self,
+        _name: &str,
+        _image: &str,
+        _role: WorkerRole,
+        _session_name: &str,
+        _mounts: ContainerMounts,
+    ) -> Result<ContainerId, BoxErr> {
+        unsupported("create_container")
+    }
+    fn start_container(&self, _container_id: &ContainerId) -> Result<(), BoxErr> {
+        unsupported("start_container")
+    }
+    fn stop_container(&self, _container_id: &ContainerId) -> Result<(), BoxErr> {
+        unsupported("stop_container")
+    }
+    fn remove_container(&self, _container_id: &ContainerId) -> Result<(), BoxErr> {
+        unsupported("remove_container")
+    }
+    fn is_container_running(&self, _container_id: &str) -> bool {
+        false
+    }
+    fn is_claude_running(&self, _container_id: &ContainerId) -> bool {
+        false
+    }
+    fn list_managed_containers(&self) -> Result<Vec<ContainerId>, BoxErr> {
+        Ok(vec![])
+    }
+    fn write_settings(
+        &self,
+        _container_id: &ContainerId,
+        _template_path: &Path,
+        _worker_id: &str,
+    ) -> Result<(), BoxErr> {
+        unsupported("write_settings")
+    }
+    fn copy_file_to_container(
+        &self,
+        _container_id: &ContainerId,
+        _local_path: &Path,
+        _container_path: &str,
+    ) -> Result<(), BoxErr> {
+        unsupported("copy_file_to_container")
+    }
+    fn copy_dir_to_container(
+        &self,
+        _container_id: &ContainerId,
+        _local_dir: &Path,
+        _container_path: &str,
+    ) -> Result<(), BoxErr> {
+        unsupported("copy_dir_to_container")
+    }
+    fn read_container_file(
+        &self,
+        _container_id: &ContainerId,
+        _path: &str,
+        _tail_lines: usize,
+    ) -> Result<String, BoxErr> {
+        unsupported("read_container_file")
+    }
+    fn claude_exec_command(
+        &self,
+        _container_id: &ContainerId,
+        _prompt_file: &str,
+        _role: WorkerRole,
+        _workdir: Option<&str>,
+    ) -> String {
+        String::new()
+    }
+    fn claude_resume_command(
+        &self,
+        _container_id: &ContainerId,
+        _session_id: &WorkerSessionId,
+        _role: WorkerRole,
+        _workdir: Option<&str>,
+    ) -> String {
+        String::new()
+    }
+}
+
+struct NoopTerminal;
+impl TerminalSession for NoopTerminal {
+    fn create_target(&self, _name: &str) -> Result<TerminalTarget, BoxErr> {
+        unsupported("create_target")
+    }
+    fn create_pane(&self, _base_target: &TerminalTarget) -> Result<TerminalTarget, BoxErr> {
+        unsupported("create_pane")
+    }
+    fn send_keys(&self, _target: &TerminalTarget, _text: &str) -> Result<(), BoxErr> {
+        unsupported("send_keys")
+    }
+    fn send_keys_no_enter(&self, _target: &TerminalTarget, _text: &str) -> Result<(), BoxErr> {
+        unsupported("send_keys_no_enter")
+    }
+    fn capture_pane(&self, _target: &TerminalTarget) -> Result<String, BoxErr> {
+        unsupported("capture_pane")
+    }
+    fn kill_session(&self, _name: &TerminalSessionName) -> Result<(), BoxErr> {
+        unsupported("kill_session")
+    }
+}
+
+struct NoopBlueprint;
+impl BlueprintReader for NoopBlueprint {
+    fn read_blueprint(
+        &self,
+        _path: &Path,
+        _workflow_id: &WorkflowId,
+    ) -> Result<TaskTree, ReadBlueprintError> {
+        Err(ReadBlueprintError::Read(
+            std::io::Error::other("read_blueprint is not available in admin mode").into(),
+        ))
+    }
+}
+
+struct NoopGitHubReview;
+impl GitHubReviewPort for NoopGitHubReview {
+    fn post_review(
+        &self,
+        _owner: &str,
+        _repo: &str,
+        _number: u64,
+        _body: &str,
+        _comments: &[ReviewFileComment],
+        _event: ReviewEvent,
+    ) -> Result<(), BoxErr> {
+        unsupported("post_review")
+    }
+
+    fn get_diff_files(
+        &self,
+        _owner: &str,
+        _repo: &str,
+        _number: u64,
+    ) -> Result<Vec<String>, BoxErr> {
+        unsupported("get_diff_files")
+    }
 }

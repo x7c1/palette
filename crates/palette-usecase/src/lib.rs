@@ -25,5 +25,8 @@ pub use interactor::Interactor;
 mod github_review_port;
 pub use github_review_port::{GitHubReviewPort, ReviewEvent, ReviewFileComment};
 
+mod maintenance;
+pub use maintenance::{AdminCleanupPlan, AdminDeletedCounts, AdminGcOptions};
+
 pub mod reconciliation;
 pub mod task_store;

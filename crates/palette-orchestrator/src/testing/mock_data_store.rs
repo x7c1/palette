@@ -178,6 +178,9 @@ impl DataStore for MockDataStore {
     fn delete_jobs_by_task_id(&self, _: &TaskId) -> Result<(), BoxErr> {
         unimplemented!()
     }
+    fn delete_review_data_by_workflow(&self, _: &WorkflowId) -> Result<(usize, usize), BoxErr> {
+        unimplemented!()
+    }
     fn create_workflow(&self, _: &WorkflowId, _: &str) -> Result<(), BoxErr> {
         unimplemented!()
     }
@@ -202,6 +205,9 @@ impl DataStore for MockDataStore {
     fn update_blueprint_hash(&self, _: &WorkflowId, _: Option<&str>) -> Result<(), BoxErr> {
         unimplemented!()
     }
+    fn delete_workflow(&self, _: &WorkflowId) -> Result<usize, BoxErr> {
+        unimplemented!()
+    }
     fn dequeue_message(&self, target_id: &WorkerId) -> Result<Option<String>, BoxErr> {
         let mut messages = self.messages.lock().unwrap();
         if let Some(queue) = messages.get_mut(target_id)
@@ -210,5 +216,8 @@ impl DataStore for MockDataStore {
             return Ok(Some(queue.remove(0)));
         }
         Ok(None)
+    }
+    fn delete_messages_by_targets(&self, _: &[WorkerId]) -> Result<usize, BoxErr> {
+        unimplemented!()
     }
 }
