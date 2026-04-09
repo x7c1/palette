@@ -4,6 +4,7 @@ use palette_domain::task::TaskId;
 use palette_domain::worker::WorkerId;
 use palette_domain::workflow::{WorkflowId, WorkflowStatus};
 use std::collections::BTreeSet;
+use std::panic::Location;
 use std::path::{Path, PathBuf};
 
 #[derive(Default)]
@@ -34,7 +35,7 @@ pub struct AdminGcOptions {
 #[derive(Debug)]
 pub enum AdminMaintenanceError {
     DataStore {
-        op: &'static str,
+        at: &'static Location<'static>,
         source: Box<dyn std::error::Error + Send + Sync>,
     },
 }
@@ -42,8 +43,14 @@ pub enum AdminMaintenanceError {
 impl std::fmt::Display for AdminMaintenanceError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            AdminMaintenanceError::DataStore { op, source } => {
-                write!(f, "maintenance datastore error during {op}: {source}")
+            AdminMaintenanceError::DataStore { at, source } => {
+                write!(
+                    f,
+                    "maintenance datastore error at {}:{}: {}",
+                    at.file(),
+                    at.line(),
+                    source
+                )
             }
         }
     }
@@ -57,11 +64,12 @@ impl std::error::Error for AdminMaintenanceError {
     }
 }
 
-fn ds<T>(
-    op: &'static str,
-    result: Result<T, Box<dyn std::error::Error + Send + Sync>>,
-) -> Result<T, AdminMaintenanceError> {
-    result.map_err(|source| AdminMaintenanceError::DataStore { op, source })
+#[track_caller]
+fn track_error(source: Box<dyn std::error::Error + Send + Sync>) -> AdminMaintenanceError {
+    AdminMaintenanceError::DataStore {
+        at: Location::caller(),
+        source,
+    }
 }
 
 impl Interactor {
@@ -69,7 +77,10 @@ impl Interactor {
         &self,
         data_dir: &Path,
     ) -> Result<AdminCleanupPlan, AdminMaintenanceError> {
-        let workflow_ids = ds("list_workflows", self.data_store.list_workflows(None))?
+        let workflow_ids = self
+            .data_store
+            .list_workflows(None)
+            .map_err(track_error)?
             .into_iter()
             .map(|w| w.id)
             .collect::<Vec<_>>();
@@ -87,7 +98,9 @@ impl Interactor {
             let threshold = options
                 .older_than_hours
                 .map(|h| Utc::now() - Duration::hours(h));
-            ds("list_workflows", self.data_store.list_workflows(None))?
+            self.data_store
+                .list_workflows(None)
+                .map_err(track_error)?
                 .into_iter()
                 .filter(|wf| {
                     matches!(
@@ -113,59 +126,66 @@ impl Interactor {
         let mut deleted = AdminDeletedCounts::default();
 
         for workflow_id in workflow_ids {
-            let task_ids = ds(
-                "get_task_statuses",
-                self.data_store.get_task_statuses(workflow_id),
-            )?
-            .into_keys()
-            .collect::<Vec<_>>();
-            let worker_ids = ds("list_all_workers", self.data_store.list_all_workers())?
+            let task_ids = self
+                .data_store
+                .get_task_statuses(workflow_id)
+                .map_err(track_error)?
+                .into_keys()
+                .collect::<Vec<_>>();
+            let worker_ids = self
+                .data_store
+                .list_all_workers()
+                .map_err(track_error)?
                 .into_iter()
                 .filter(|w| w.workflow_id == *workflow_id)
                 .map(|w| w.id)
                 .collect::<Vec<_>>();
 
-            deleted.message_queue += ds(
-                "delete_messages_by_targets",
-                self.data_store.delete_messages_by_targets(&worker_ids),
-            )?;
-            let (deleted_comments, deleted_submissions) = ds(
-                "delete_review_data_by_workflow",
-                self.data_store.delete_review_data_by_workflow(workflow_id),
-            )?;
+            deleted.message_queue += self
+                .data_store
+                .delete_messages_by_targets(&worker_ids)
+                .map_err(track_error)?;
+            let (deleted_comments, deleted_submissions) = self
+                .data_store
+                .delete_review_data_by_workflow(workflow_id)
+                .map_err(track_error)?;
             deleted.review_comments += deleted_comments;
             deleted.review_submissions += deleted_submissions;
 
             for task_id in &task_ids {
-                if ds(
-                    "get_job_by_task_id",
-                    self.data_store.get_job_by_task_id(task_id),
-                )?
-                .is_some()
+                if self
+                    .data_store
+                    .get_job_by_task_id(task_id)
+                    .map_err(track_error)?
+                    .is_some()
                 {
                     deleted.jobs += 1;
                 }
-                ds(
-                    "delete_jobs_by_task_id",
-                    self.data_store.delete_jobs_by_task_id(task_id),
-                )?;
+                self.data_store
+                    .delete_jobs_by_task_id(task_id)
+                    .map_err(track_error)?;
             }
 
             for worker_id in &worker_ids {
-                if ds("remove_worker", self.data_store.remove_worker(worker_id))?.is_some() {
+                if self
+                    .data_store
+                    .remove_worker(worker_id)
+                    .map_err(track_error)?
+                    .is_some()
+                {
                     deleted.workers += 1;
                 }
             }
 
             for task_id in &task_ids {
-                ds("delete_task", self.data_store.delete_task(task_id))?;
+                self.data_store.delete_task(task_id).map_err(track_error)?;
                 deleted.tasks += 1;
             }
 
-            deleted.workflows += ds(
-                "delete_workflow",
-                self.data_store.delete_workflow(workflow_id),
-            )?;
+            deleted.workflows += self
+                .data_store
+                .delete_workflow(workflow_id)
+                .map_err(track_error)?;
         }
 
         Ok(deleted)
@@ -176,8 +196,8 @@ impl Interactor {
         workflow_ids: &[WorkflowId],
         data_dir: &Path,
     ) -> Result<AdminCleanupPlan, AdminMaintenanceError> {
-        let all_workers = ds("list_all_workers", self.data_store.list_all_workers())?;
-        let all_workflows = ds("list_workflows", self.data_store.list_workflows(None))?;
+        let all_workers = self.data_store.list_all_workers().map_err(track_error)?;
+        let all_workflows = self.data_store.list_workflows(None).map_err(track_error)?;
 
         let mut task_ids = Vec::new();
         let mut job_ids = Vec::new();
@@ -185,17 +205,18 @@ impl Interactor {
         let mut file_paths = BTreeSet::new();
 
         for workflow_id in workflow_ids {
-            let tasks = ds(
-                "get_task_statuses",
-                self.data_store.get_task_statuses(workflow_id),
-            )?;
+            let tasks = self
+                .data_store
+                .get_task_statuses(workflow_id)
+                .map_err(track_error)?;
             let mut workflow_job_ids = Vec::new();
             for task_id in tasks.keys() {
                 task_ids.push(task_id.clone());
-                if let Some(job) = ds(
-                    "get_job_by_task_id",
-                    self.data_store.get_job_by_task_id(task_id),
-                )? {
+                if let Some(job) = self
+                    .data_store
+                    .get_job_by_task_id(task_id)
+                    .map_err(track_error)?
+                {
                     let jid = job.id.to_string();
                     workflow_job_ids.push(jid.clone());
                     job_ids.push(jid);
