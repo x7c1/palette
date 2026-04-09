@@ -14,7 +14,7 @@ Review artifacts are at `/home/agent/artifacts/`. Each reviewer's result is at:
 1. Read all `review.md` files for the current round
 2. Deduplicate and prioritize findings by severity
 3. Write `integrated-review.json`
-4. Submit verdict via `palette:palette-api`: `POST /reviews/{id}/submit` with `{"verdict": "...", "summary": "..."}`
+4. Submit verdict directly: `curl -s -X POST "$PALETTE_URL/reviews/{id}/submit" -H "Content-Type: application/json" -d '{"verdict": "...", "summary": "..."}'`
 
 ## Writing `integrated-review.json`
 
