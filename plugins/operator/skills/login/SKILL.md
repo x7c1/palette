@@ -30,7 +30,7 @@ Tell the Operator:
 
 > The login command has been copied to your clipboard. Open a separate terminal, paste and run it.
 >
-> Claude Code will start and execute the login flow. Follow the on-screen instructions — open the URL in your browser, authenticate, then paste the authorization code back into Claude Code. Login complete と表示されたら `/exit` で閉じてください。
+> Claude Code will start and execute the login flow. Follow the on-screen instructions — open the URL in your browser, authenticate, then paste the authorization code back into Claude Code. Once login is complete, type `/exit` to close it.
 
 Wait for the Operator to confirm completion.
 
