@@ -1,8 +1,9 @@
+mod admin;
 mod config;
 mod doctor;
 mod start;
 
-use clap::{Parser, Subcommand};
+use clap::{Args, Parser, Subcommand};
 
 #[derive(Parser)]
 #[command(name = "palette", about = "Autonomous AI agent orchestration system")]
@@ -21,6 +22,14 @@ enum Command {
     },
     /// Check prerequisites and system health (outputs JSON)
     Doctor,
+    /// Administrative maintenance commands
+    Admin(AdminArgs),
+}
+
+#[derive(Args)]
+struct AdminArgs {
+    #[command(subcommand)]
+    command: admin::AdminCommand,
 }
 
 fn init_tracing() {
@@ -44,6 +53,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
             Ok(())
         }
+        Some(Command::Admin(args)) => admin::run(args.command),
         Some(Command::Start { config }) => start::run(config.as_deref()).await,
         None => start::run(None).await,
     }
