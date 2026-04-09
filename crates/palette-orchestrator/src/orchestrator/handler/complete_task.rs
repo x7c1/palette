@@ -3,6 +3,7 @@ use super::PendingActions;
 use palette_domain::job::{JobDetail, JobId};
 use palette_domain::task::{TaskId, TaskStatus};
 use palette_domain::worker::WorkerRole;
+use palette_domain::workflow::WorkflowId;
 use palette_usecase::task_store::TaskStore;
 
 impl Orchestrator {
@@ -45,19 +46,50 @@ impl Orchestrator {
 
         let result = self
             .cascade_task_completion(task_id, &task_store)?
-            .merge(self.fill_vacant_slots()?);
+            .merge(self.fill_vacant_slots(&task_state.workflow_id));
 
         Ok(result)
     }
 
     /// Find assignable jobs waiting for a member slot and assign them.
-    fn fill_vacant_slots(&self) -> crate::Result<PendingActions> {
-        let assignable = self.interactor.data_store.find_assignable_jobs()?;
+    fn fill_vacant_slots(&self, workflow_id: &WorkflowId) -> PendingActions {
+        let assignable = match self.interactor.data_store.find_assignable_jobs() {
+            Ok(jobs) => jobs,
+            Err(e) => {
+                tracing::error!(error = %e, "failed to list assignable jobs");
+                return PendingActions::new();
+            }
+        };
         let mut result = PendingActions::new();
         for job in &assignable {
-            result = result.merge(self.assign_new_job(&job.id)?);
+            let belongs_to_workflow = match self.interactor.data_store.get_task_state(&job.task_id) {
+                Ok(Some(ts)) => ts.workflow_id == *workflow_id,
+                Ok(None) => false,
+                Err(e) => {
+                    tracing::error!(
+                        error = %e,
+                        job_id = %job.id,
+                        task_id = %job.task_id,
+                        "failed to resolve task state for assignable job"
+                    );
+                    false
+                }
+            };
+            if !belongs_to_workflow {
+                continue;
+            }
+            match self.assign_new_job(&job.id) {
+                Ok(actions) => result = result.merge(actions),
+                Err(e) => {
+                    tracing::error!(
+                        error = %e,
+                        job_id = %job.id,
+                        "failed to assign deferred job"
+                    );
+                }
+            }
         }
-        Ok(result)
+        result
     }
 
     /// Process cascading effects after a task completes.
