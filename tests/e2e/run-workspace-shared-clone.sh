@@ -51,7 +51,7 @@ cargo build 2>&1
 # --- Step 2: Start Palette ---
 echo ""
 echo "=== Step 2: Start Palette ==="
-RUST_LOG=info cargo run >> "$LOG_FILE" 2>&1 &
+RUST_LOG=info cargo run -- start >> "$LOG_FILE" 2>&1 &
 echo $! > "$PID_FILE"
 echo "PID: $(cat "$PID_FILE")"
 
