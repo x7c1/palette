@@ -8,6 +8,24 @@ use helper::{
 use palette_domain::task::TaskId;
 use palette_tmux::TmuxManager;
 use serde_json::json;
+use std::time::Duration;
+
+async fn wait_until(
+    timeout: Duration,
+    interval: Duration,
+    mut check: impl FnMut() -> bool,
+) -> bool {
+    let deadline = tokio::time::Instant::now() + timeout;
+    loop {
+        if check() {
+            return true;
+        }
+        if tokio::time::Instant::now() >= deadline {
+            return false;
+        }
+        tokio::time::sleep(interval).await;
+    }
+}
 
 /// Consecutive permission prompts from a reviewer are delivered to the
 /// ReviewIntegrator one at a time. Each cycle:
@@ -106,8 +124,6 @@ async fn sequential_delivery() {
         .assign_job(&review_job.id, &wid("reviewer-1"), JobType::Review)
         .unwrap();
 
-    let wait = || tokio::time::sleep(std::time::Duration::from_millis(500));
-
     // Run 4 cycles of: notification → delivery → RI stop
     for round in 1..=4 {
         simulate_prompt(&ri_pane);
@@ -126,25 +142,37 @@ async fn sequential_delivery() {
             "round {round}: notification should succeed"
         );
 
-        wait().await;
-
         // Verify message was delivered to RI pane
-        let content = capture_pane(&ri_pane);
+        let mut content = String::new();
+        let appeared = wait_until(Duration::from_secs(3), Duration::from_millis(50), || {
+            content = capture_pane(&ri_pane);
+            content.contains("[event] member=reviewer-1 type=permission_prompt")
+        })
+        .await;
         assert!(
-            content.contains("[event] member=reviewer-1 type=permission_prompt"),
+            appeared,
             "round {round}: notification should appear in RI pane, got: {content}"
         );
 
         // RI should be Working (delivery transitions Idle → Working)
-        let ri = state
+        let mut ri = state
             .interactor
             .data_store
             .find_worker(&wid("ri-1"))
             .unwrap()
             .unwrap();
-        assert_eq!(
-            ri.status,
-            WorkerStatus::Working,
+        let working = wait_until(Duration::from_secs(3), Duration::from_millis(50), || {
+            ri = state
+                .interactor
+                .data_store
+                .find_worker(&wid("ri-1"))
+                .unwrap()
+                .unwrap();
+            ri.status == WorkerStatus::Working
+        })
+        .await;
+        assert!(
+            working,
             "round {round}: RI should be Working after delivery"
         );
 
@@ -167,20 +195,24 @@ async fn sequential_delivery() {
             .unwrap();
         assert_eq!(resp.status(), 200, "round {round}: RI stop should succeed");
 
-        wait().await;
-
         // RI should be Idle, ready for next notification
-        let ri = state
+        let mut ri = state
             .interactor
             .data_store
             .find_worker(&wid("ri-1"))
             .unwrap()
             .unwrap();
-        assert_eq!(
-            ri.status,
-            WorkerStatus::Idle,
-            "round {round}: RI should be Idle after stop"
-        );
+        let idle = wait_until(Duration::from_secs(3), Duration::from_millis(50), || {
+            ri = state
+                .interactor
+                .data_store
+                .find_worker(&wid("ri-1"))
+                .unwrap()
+                .unwrap();
+            ri.status == WorkerStatus::Idle
+        })
+        .await;
+        assert!(idle, "round {round}: RI should be Idle after stop");
     }
 }
 
