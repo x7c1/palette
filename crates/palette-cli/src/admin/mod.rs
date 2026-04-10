@@ -1,6 +1,7 @@
 mod command;
-mod interactor;
+mod context;
 mod io;
+mod noop;
 mod paths;
 mod runner;
 

@@ -1,5 +1,5 @@
 use super::command::{AdminCommand, GcArgs, ResetArgs};
-use super::interactor::build_admin_context;
+use super::context::build_admin_context;
 use super::io::{print_deleted, print_plan};
 use super::paths::{data_dir_from_db_path, remove_paths, resolve_config_path};
 use palette_domain::workflow::WorkflowId;
