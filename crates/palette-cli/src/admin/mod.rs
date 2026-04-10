@@ -1,7 +1,6 @@
 mod command;
 mod context;
 mod io;
-mod noop;
 mod paths;
 mod runner;
 

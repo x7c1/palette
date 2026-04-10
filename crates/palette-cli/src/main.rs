@@ -1,6 +1,7 @@
 mod admin;
 mod config;
 mod doctor;
+mod interactor_factory;
 mod start;
 
 use clap::{Args, Parser, Subcommand};
