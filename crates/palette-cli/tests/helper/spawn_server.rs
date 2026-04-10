@@ -75,7 +75,9 @@ pub async fn spawn_server(
     let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel();
     // Do not await here: this helper must return immediately so each test can
     // proceed and trigger shutdown via `shutdown_tx` when finished.
-    let _orchestrator_task = orchestrator.start(event_rx, shutdown_rx);
+    // Keep a named handle so drop happens at end-of-scope.
+    // (`let _ = ...` would drop immediately at this statement.)
+    let _orchestrator_handle = orchestrator.start(event_rx, shutdown_rx);
 
     let app = create_router(state.clone());
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
