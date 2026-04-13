@@ -6,7 +6,7 @@
 
 ## Development
 
-See [docs/guides/development.md](docs/guides/development.md) for build commands, configuration, and local workflow.
+@docs/guides/development.md
 
 ## Architecture
 
