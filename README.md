@@ -6,6 +6,7 @@ Autonomous AI agent orchestration system.
 
 - [Concepts](docs/concepts/) — domain model and terminology
 - [Guides](docs/guides/) — architecture and development workflows
+  - [Development Guide](docs/guides/development.md) — build, config, and local workflow
 
 ## License
 
