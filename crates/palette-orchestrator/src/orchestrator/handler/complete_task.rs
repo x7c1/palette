@@ -62,7 +62,8 @@ impl Orchestrator {
         };
         let mut result = PendingActions::new();
         for job in &assignable {
-            let belongs_to_workflow = match self.interactor.data_store.get_task_state(&job.task_id) {
+            let belongs_to_workflow = match self.interactor.data_store.get_task_state(&job.task_id)
+            {
                 Ok(Some(ts)) => ts.workflow_id == *workflow_id,
                 Ok(None) => false,
                 Err(e) => {

@@ -1,11 +1,17 @@
+mod admin;
 mod config;
 mod doctor;
+mod interactor_factory;
 mod start;
 
-use clap::{Parser, Subcommand};
+use clap::{Args, Parser, Subcommand};
 
 #[derive(Parser)]
-#[command(name = "palette", about = "Autonomous AI agent orchestration system")]
+#[command(
+    name = "palette",
+    about = "Autonomous AI agent orchestration system",
+    after_help = "Run without a subcommand to start the Orchestrator (equivalent to `palette start`)."
+)]
 struct Cli {
     #[command(subcommand)]
     command: Option<Command>,
@@ -20,7 +26,26 @@ enum Command {
         config: Option<String>,
     },
     /// Check prerequisites and system health (outputs JSON)
+    #[command(long_about = "\
+Check prerequisites and system health (outputs JSON).
+
+Checks:
+  - Rust toolchain (cargo)
+  - Docker daemon
+  - tmux
+  - git
+  - GitHub CLI authentication (gh auth status)
+  - Worker Docker images (palette-base, palette-worker)")]
     Doctor,
+    /// Administrative maintenance commands
+    #[command(after_help = "These commands should be run while the Orchestrator is stopped.")]
+    Admin(AdminArgs),
+}
+
+#[derive(Args)]
+struct AdminArgs {
+    #[command(subcommand)]
+    command: admin::AdminCommand,
 }
 
 fn init_tracing() {
@@ -44,6 +69,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
             Ok(())
         }
+        Some(Command::Admin(args)) => admin::run(args.command),
         Some(Command::Start { config }) => start::run(config.as_deref()).await,
         None => start::run(None).await,
     }

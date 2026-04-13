@@ -231,6 +231,13 @@ impl DataStore for Database {
         Ok(Database::delete_jobs_by_task_id(self, task_id)?)
     }
 
+    fn delete_review_data_by_workflow(
+        &self,
+        workflow_id: &WorkflowId,
+    ) -> Result<(usize, usize), Box<dyn std::error::Error + Send + Sync>> {
+        Ok(Database::delete_review_data_by_workflow(self, workflow_id)?)
+    }
+
     // -- Workflow --
 
     fn create_workflow(
@@ -278,6 +285,13 @@ impl DataStore for Database {
         Ok(Database::update_blueprint_hash(self, id, hash)?)
     }
 
+    fn delete_workflow(
+        &self,
+        id: &WorkflowId,
+    ) -> Result<usize, Box<dyn std::error::Error + Send + Sync>> {
+        Ok(Database::delete_workflow(self, id)?)
+    }
+
     // -- Message Queue --
 
     fn enqueue_message(
@@ -301,5 +315,12 @@ impl DataStore for Database {
         target_id: &WorkerId,
     ) -> Result<bool, Box<dyn std::error::Error + Send + Sync>> {
         Ok(Database::has_pending_messages(self, target_id)?)
+    }
+
+    fn delete_messages_by_targets(
+        &self,
+        target_ids: &[WorkerId],
+    ) -> Result<usize, Box<dyn std::error::Error + Send + Sync>> {
+        Ok(Database::delete_messages_by_targets(self, target_ids)?)
     }
 }

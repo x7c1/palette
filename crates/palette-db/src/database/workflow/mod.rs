@@ -1,6 +1,7 @@
 mod row;
 
 mod create_workflow;
+mod delete_workflow;
 mod get_workflow;
 mod increment_worker_counter;
 mod list_workflows;
