@@ -3,8 +3,23 @@ use clap::{Args, Subcommand};
 #[derive(Subcommand)]
 pub enum AdminCommand {
     /// Remove runtime state for all workflows and clear runtime data directories.
+    #[command(after_help = "\
+Deletes all workflow data: workspace, transcripts, artifacts, blueprints,
+and their database records. The --yes flag is required to execute.
+
+Examples:
+  palette admin reset --dry-run   # Preview what would be deleted
+  palette admin reset --yes       # Delete everything")]
     Reset(ResetArgs),
     /// Garbage-collect stale workflows and their runtime artifacts.
+    #[command(after_help = "\
+By default, targets completed and failed workflows. Use filters to narrow
+the scope. The --yes flag is required to execute.
+
+Examples:
+  palette admin gc --dry-run                    # Preview default targets
+  palette admin gc --older-than-hours 168 --yes # Delete workflows older than 7 days
+  palette admin gc --workflow-id abc123 --yes   # Delete a specific workflow")]
     Gc(GcArgs),
 }
 
