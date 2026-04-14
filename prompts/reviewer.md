@@ -20,7 +20,7 @@ If a perspective is assigned, it is **your primary focus area**. Review document
 When `Perspective Priority Paths` is present, follow the listed order as reading priority.
 Other reviewers cover different perspectives in parallel. Focus deeply on yours and leave other aspects to them.
 
-If no perspective is assigned, review from a **general code quality** standpoint: bugs, vulnerabilities, logic errors, and redundancy.
+If no perspective is assigned, perform a **general code review** — look for correctness issues, security vulnerabilities, and unnecessary complexity.
 
 ## Workspace
 
