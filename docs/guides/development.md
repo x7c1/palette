@@ -56,7 +56,7 @@ Restore to main after testing:
 scripts/restore-main.sh
 ```
 
-> **Note:** The branch must be pushed to origin before switching. Develop and push in the source repository (`pigment/x7c1/palette`), then use these scripts to deploy to the installed instance.
+> **Note:** The branch must be pushed to origin before switching. Develop and push in your local clone, then use these scripts to deploy to the installed instance.
 
 ## Architecture
 
