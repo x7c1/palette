@@ -19,7 +19,7 @@ If the response is NOT `200`, tell the Operator "Orchestrator is not running." a
 ## Step 2: Shut Down
 
 ```bash
-~/.config/palette/repo/target/release/palette shutdown
+cd ~/.config/palette/repo && target/release/palette shutdown
 ```
 
 If the binary does not exist, tell the Operator to run `/palette:setup` first and stop.

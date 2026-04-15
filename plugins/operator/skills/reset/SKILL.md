@@ -25,7 +25,7 @@ Then stop.
 ## Step 2: Dry-Run Preview
 
 ```bash
-~/.config/palette/repo/target/release/palette admin reset --dry-run
+cd ~/.config/palette/repo && target/release/palette admin reset --dry-run
 ```
 
 If the binary does not exist, tell the Operator to run `/palette:setup` first and stop.
@@ -43,7 +43,7 @@ Ask for explicit confirmation before proceeding.
 Once confirmed, run:
 
 ```bash
-~/.config/palette/repo/target/release/palette admin reset --yes
+cd ~/.config/palette/repo && target/release/palette admin reset --yes
 ```
 
 ## Step 4: Report Result

@@ -25,7 +25,7 @@ Then stop.
 Build the command with any filters the Operator specified:
 
 ```bash
-~/.config/palette/repo/target/release/palette admin gc --dry-run [OPTIONS]
+cd ~/.config/palette/repo && target/release/palette admin gc --dry-run [OPTIONS]
 ```
 
 Available filter flags:
@@ -49,7 +49,7 @@ Ask the Operator to confirm before proceeding.
 Once confirmed, run:
 
 ```bash
-~/.config/palette/repo/target/release/palette admin gc --yes [OPTIONS]
+cd ~/.config/palette/repo && target/release/palette admin gc --yes [OPTIONS]
 ```
 
 Use the same filter flags from Step 2.
