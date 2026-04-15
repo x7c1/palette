@@ -38,6 +38,26 @@ cargo run --bin palette -- admin gc --config config/palette.toml --dry-run
 cargo run --bin palette -- admin reset --config config/palette.toml --dry-run
 ```
 
+## Testing with the Installed Instance
+
+The installed instance at `~/.config/palette/repo` can be switched to a development branch for testing operator skills and CLI changes end-to-end.
+
+Switch to a branch:
+
+```bash
+scripts/switch-branch.sh <branch>
+```
+
+This fetches from origin, switches the branch, and runs `cargo build --release` in `~/.config/palette/repo`.
+
+Restore to main after testing:
+
+```bash
+scripts/restore-main.sh
+```
+
+> **Note:** The branch must be pushed to origin before switching. Develop and push in the source repository (`pigment/x7c1/palette`), then use these scripts to deploy to the installed instance.
+
 ## Architecture
 
 See [palette-design.md](palette-design.md) for the crate dependency graph, layer responsibilities, and design principles.
