@@ -13,34 +13,7 @@ impl Orchestrator {
         self.cancel_token.cancel();
         tracing::info!("starting graceful shutdown");
 
-        // Terminate active workflows
-        match self.interactor.data_store.list_workflows(None) {
-            Ok(workflows) => {
-                for wf in workflows {
-                    if matches!(
-                        wf.status,
-                        WorkflowStatus::Active | WorkflowStatus::Suspending
-                    ) {
-                        if let Err(e) = self
-                            .interactor
-                            .data_store
-                            .update_workflow_status(&wf.id, WorkflowStatus::Terminated)
-                        {
-                            tracing::warn!(
-                                workflow_id = %wf.id,
-                                error = %e,
-                                "failed to terminate workflow during shutdown"
-                            );
-                        } else {
-                            tracing::info!(workflow_id = %wf.id, "workflow terminated");
-                        }
-                    }
-                }
-            }
-            Err(e) => {
-                tracing::error!(error = %e, "failed to list workflows for shutdown");
-            }
-        }
+        self.terminate_active_workflows();
 
         let workers = match self.interactor.data_store.list_all_workers() {
             Ok(w) => w,
@@ -50,7 +23,6 @@ impl Orchestrator {
             }
         };
 
-        // Delete message queues
         let worker_ids: Vec<_> = workers.iter().map(|w| w.id.clone()).collect();
         if let Err(e) = self
             .interactor
@@ -60,26 +32,8 @@ impl Orchestrator {
             tracing::warn!(error = %e, "failed to delete message queues during shutdown");
         }
 
-        // Stop and remove worker containers
         for worker in &workers {
-            tracing::info!(worker_id = %worker.id, "stopping worker container");
-            if let Err(e) = self
-                .interactor
-                .container
-                .stop_container(&worker.container_id)
-            {
-                tracing::warn!(worker_id = %worker.id, error = %e, "failed to stop container during shutdown");
-            }
-            if let Err(e) = self
-                .interactor
-                .container
-                .remove_container(&worker.container_id)
-            {
-                tracing::warn!(worker_id = %worker.id, error = %e, "failed to remove container during shutdown");
-            }
-            if let Err(e) = self.interactor.data_store.remove_worker(&worker.id) {
-                tracing::warn!(worker_id = %worker.id, error = %e, "failed to remove worker from DB during shutdown");
-            }
+            self.destroy_worker(worker);
         }
 
         let session_name = TerminalSessionName::new(&self.session_name);
@@ -91,5 +45,56 @@ impl Orchestrator {
             workers_stopped = workers.len(),
             "graceful shutdown complete"
         );
+    }
+
+    fn terminate_active_workflows(&self) {
+        let workflows = match self.interactor.data_store.list_workflows(None) {
+            Ok(w) => w,
+            Err(e) => {
+                tracing::error!(error = %e, "failed to list workflows for shutdown");
+                return;
+            }
+        };
+        for wf in workflows {
+            if !matches!(
+                wf.status,
+                WorkflowStatus::Active | WorkflowStatus::Suspending
+            ) {
+                continue;
+            }
+            if let Err(e) = self
+                .interactor
+                .data_store
+                .update_workflow_status(&wf.id, WorkflowStatus::Terminated)
+            {
+                tracing::warn!(
+                    workflow_id = %wf.id, error = %e,
+                    "failed to terminate workflow during shutdown"
+                );
+            } else {
+                tracing::info!(workflow_id = %wf.id, "workflow terminated");
+            }
+        }
+    }
+
+    fn destroy_worker(&self, worker: &palette_domain::worker::WorkerState) {
+        tracing::info!(worker_id = %worker.id, "stopping worker container");
+        if let Err(e) = self
+            .interactor
+            .container
+            .stop_container(&worker.container_id)
+        {
+            tracing::warn!(worker_id = %worker.id, error = %e, "failed to stop container");
+        }
+        if let Err(e) = self
+            .interactor
+            .container
+            .remove_container(&worker.container_id)
+        {
+            tracing::warn!(worker_id = %worker.id, error = %e, "failed to remove container");
+        }
+        if let Err(e) = self.interactor.data_store.remove_worker(&worker.id) {
+            tracing::warn!(worker_id = %worker.id, error = %e, "failed to remove worker from DB");
+        }
     }
 }
