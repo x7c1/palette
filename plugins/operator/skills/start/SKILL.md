@@ -19,7 +19,7 @@ If the response is `200`, tell the Operator "Orchestrator is already running." a
 ## Step 2: Check Prerequisites
 
 ```bash
-~/.config/palette/repo/target/release/palette doctor
+cd ~/.config/palette/repo && target/release/palette doctor
 ```
 
 If the binary does not exist, tell the Operator to run `/palette:setup` first and stop.
@@ -40,15 +40,7 @@ tmux new-session -d -s <session_name> -n orchestrator \
 Poll the health endpoint until it responds, up to 30 seconds:
 
 ```bash
-for i in $(seq 1 30); do
-  if curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:7100/health 2>/dev/null | grep -q 200; then
-    echo "Orchestrator started successfully."
-    exit 0
-  fi
-  sleep 1
-done
-echo "Timed out waiting for Orchestrator to start."
-exit 1
+bash ~/.config/palette/repo/scripts/wait-for-health.sh
 ```
 
 If the health check succeeds, report success to the Operator with the tmux session name.
