@@ -269,4 +269,40 @@ mod tests {
         initialize(&conn).unwrap();
         initialize(&conn).unwrap();
     }
+
+    #[test]
+    fn all_workflow_statuses_exist_in_seed_data() {
+        use crate::lookup::workflow_status_id;
+        use palette_domain::workflow::WorkflowStatus;
+
+        let conn = Connection::open_in_memory().unwrap();
+        initialize(&conn).unwrap();
+
+        let statuses = [
+            WorkflowStatus::Active,
+            WorkflowStatus::Suspending,
+            WorkflowStatus::Suspended,
+            WorkflowStatus::Completed,
+            WorkflowStatus::Terminated,
+        ];
+
+        conn.execute(
+            "INSERT INTO workflows (id, blueprint_path, status_id, started_at) VALUES (?1, ?2, ?3, ?4)",
+            rusqlite::params!["wf-test", "test.yaml", workflow_status_id(WorkflowStatus::Active), "2026-01-01T00:00:00Z"],
+        ).unwrap();
+
+        for status in statuses {
+            conn.execute(
+                "UPDATE workflows SET status_id = ?1 WHERE id = 'wf-test'",
+                [workflow_status_id(status)],
+            )
+            .unwrap_or_else(|e| {
+                panic!(
+                    "status {:?} (id={}) not in seed data: {e}",
+                    status,
+                    workflow_status_id(status)
+                )
+            });
+        }
+    }
 }
