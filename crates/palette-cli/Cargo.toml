@@ -14,6 +14,7 @@ axum.workspace = true
 palette-db = { path = "../palette-db" }
 palette-docker = { path = "../palette-docker" }
 palette-domain = { path = "../palette-domain" }
+reqwest.workspace = true
 palette-fs = { path = "../palette-fs" }
 palette-orchestrator = { path = "../palette-orchestrator" }
 palette-server = { path = "../palette-server" }
@@ -29,6 +30,5 @@ tracing-subscriber.workspace = true
 
 [dev-dependencies]
 anyhow.workspace = true
-reqwest.workspace = true
 serde_json.workspace = true
 tempfile = "3"

@@ -26,6 +26,7 @@ pub async fn run(config_override: Option<&str>) -> Result<(), Box<dyn std::error
     let interactor = build_interactor(&config, &validated_perspectives)?;
     let (event_tx, event_rx) = tokio::sync::mpsc::unbounded_channel();
 
+    let shutdown_notify = Arc::new(tokio::sync::Notify::new());
     let state = Arc::new(AppState {
         interactor: Arc::clone(&interactor),
         max_review_rounds: config.rules.max_review_rounds,
@@ -33,6 +34,7 @@ pub async fn run(config_override: Option<&str>) -> Result<(), Box<dyn std::error
         event_log: tokio::sync::Mutex::new(Vec::new()),
         pending_permission_events: tokio::sync::Mutex::new(HashMap::new()),
         event_tx: event_tx.clone(),
+        shutdown_notify: Arc::clone(&shutdown_notify),
     });
 
     let orchestrator = build_orchestrator(&config, &interactor, validated_perspectives, event_tx)?;
@@ -44,6 +46,7 @@ pub async fn run(config_override: Option<&str>) -> Result<(), Box<dyn std::error
         orchestrator,
         event_rx,
         state,
+        shutdown_notify,
         &config.server_bind_addr,
         &config.operator_api_url,
     )
@@ -74,6 +77,7 @@ async fn serve(
     orchestrator: Arc<Orchestrator>,
     event_rx: tokio::sync::mpsc::UnboundedReceiver<ServerEvent>,
     state: Arc<AppState>,
+    shutdown_notify: Arc<tokio::sync::Notify>,
     bind_addr: &str,
     operator_api_url: &str,
 ) -> Result<(), Box<dyn std::error::Error>> {
@@ -87,7 +91,7 @@ async fn serve(
 
     let listener = tokio::net::TcpListener::bind(bind_addr).await?;
     axum::serve(listener, app)
-        .with_graceful_shutdown(shutdown_signal())
+        .with_graceful_shutdown(shutdown_signal(shutdown_notify))
         .await?;
 
     let _ = shutdown_tx.send(());
@@ -126,7 +130,7 @@ fn resolve_config_path() -> Result<PathBuf, Box<dyn std::error::Error>> {
     Ok(user_config)
 }
 
-async fn shutdown_signal() {
+async fn shutdown_signal(api_notify: Arc<tokio::sync::Notify>) {
     let ctrl_c = tokio::signal::ctrl_c();
     let mut sigterm =
         tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate()).unwrap();
@@ -137,6 +141,9 @@ async fn shutdown_signal() {
         }
         _ = sigterm.recv() => {
             tracing::info!("received SIGTERM, initiating graceful shutdown");
+        }
+        _ = api_notify.notified() => {
+            tracing::info!("received shutdown request via API, initiating graceful shutdown");
         }
     }
 }

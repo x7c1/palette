@@ -23,6 +23,7 @@ pub struct AppState {
     pub event_log: tokio::sync::Mutex<Vec<EventRecord>>,
     pub pending_permission_events: tokio::sync::Mutex<HashMap<String, PendingPermission>>,
     pub event_tx: tokio::sync::mpsc::UnboundedSender<ServerEvent>,
+    pub shutdown_notify: Arc<tokio::sync::Notify>,
 }
 
 #[derive(Debug, Clone)]
