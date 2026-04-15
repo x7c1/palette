@@ -7,6 +7,7 @@ pub fn review_status_id(status: ReviewStatus) -> i64 {
         ReviewStatus::ChangesRequested => 8,
         ReviewStatus::Done => 9,
         ReviewStatus::Escalated => 10,
+        ReviewStatus::Terminated => 25,
     }
 }
 
@@ -17,6 +18,7 @@ pub fn review_status_from_id(id: i64) -> Result<ReviewStatus, String> {
         8 => Ok(ReviewStatus::ChangesRequested),
         9 => Ok(ReviewStatus::Done),
         10 => Ok(ReviewStatus::Escalated),
+        25 => Ok(ReviewStatus::Terminated),
         _ => Err(format!("invalid review_status id: {id}")),
     }
 }

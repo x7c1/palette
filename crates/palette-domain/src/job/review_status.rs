@@ -7,6 +7,7 @@ pub enum ReviewStatus {
     ChangesRequested,
     Done,
     Escalated,
+    Terminated,
 }
 
 impl ReviewStatus {
@@ -17,6 +18,7 @@ impl ReviewStatus {
             ReviewStatus::ChangesRequested => "changes_requested",
             ReviewStatus::Done => "done",
             ReviewStatus::Escalated => "escalated",
+            ReviewStatus::Terminated => "terminated",
         }
     }
 }

@@ -12,6 +12,7 @@ pub fn validate_craft_transition(
             | (CraftStatus::InReview, CraftStatus::Done)
             | (CraftStatus::InReview, CraftStatus::InProgress) // changes_requested
             | (_, CraftStatus::Escalated)
+            | (_, CraftStatus::Terminated)
     );
 
     if !valid {
@@ -33,6 +34,7 @@ pub fn validate_review_transition(
             | (ReviewStatus::InProgress, ReviewStatus::ChangesRequested)
             | (ReviewStatus::ChangesRequested, ReviewStatus::InProgress) // re-review
             | (_, ReviewStatus::Escalated)
+            | (_, ReviewStatus::Terminated)
     );
 
     if !valid {

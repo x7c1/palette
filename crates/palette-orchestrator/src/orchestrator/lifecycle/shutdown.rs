@@ -1,6 +1,8 @@
 use super::Orchestrator;
+use palette_domain::job::JobStatus;
+use palette_domain::task::TaskStatus;
 use palette_domain::terminal::TerminalSessionName;
-use palette_domain::workflow::WorkflowStatus;
+use palette_domain::workflow::{WorkflowId, WorkflowStatus};
 
 impl Orchestrator {
     /// Gracefully shut down the orchestrator:
@@ -62,6 +64,7 @@ impl Orchestrator {
             ) {
                 continue;
             }
+            self.terminate_jobs_and_tasks(&wf.id);
             if let Err(e) = self
                 .interactor
                 .data_store
@@ -73,6 +76,52 @@ impl Orchestrator {
                 );
             } else {
                 tracing::info!(workflow_id = %wf.id, "workflow terminated");
+            }
+        }
+    }
+
+    fn terminate_jobs_and_tasks(&self, workflow_id: &WorkflowId) {
+        let tasks = match self.interactor.data_store.get_task_statuses(workflow_id) {
+            Ok(t) => t,
+            Err(e) => {
+                tracing::error!(
+                    workflow_id = %workflow_id, error = %e,
+                    "failed to list tasks for shutdown"
+                );
+                return;
+            }
+        };
+
+        for (task_id, status) in &tasks {
+            // Terminate jobs under this task
+            if let Ok(Some(job)) = self.interactor.data_store.get_job_by_task_id(task_id)
+                && !job.status.is_done()
+                && job.status.as_str() != "terminated"
+            {
+                let terminated = JobStatus::terminated(job.detail.job_type());
+                if let Err(e) = self
+                    .interactor
+                    .data_store
+                    .update_job_status(&job.id, terminated)
+                {
+                    tracing::error!(
+                        job_id = %job.id, error = %e,
+                        "failed to terminate job during shutdown"
+                    );
+                }
+            }
+
+            // Terminate the task itself
+            if !matches!(status, TaskStatus::Completed | TaskStatus::Terminated)
+                && let Err(e) = self
+                    .interactor
+                    .data_store
+                    .update_task_status(task_id, TaskStatus::Terminated)
+            {
+                tracing::error!(
+                    task_id = %task_id, error = %e,
+                    "failed to terminate task during shutdown"
+                );
             }
         }
     }

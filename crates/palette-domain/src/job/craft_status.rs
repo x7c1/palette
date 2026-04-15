@@ -7,6 +7,7 @@ pub enum CraftStatus {
     InReview,
     Done,
     Escalated,
+    Terminated,
 }
 
 impl CraftStatus {
@@ -17,6 +18,7 @@ impl CraftStatus {
             CraftStatus::InReview => "in_review",
             CraftStatus::Done => "done",
             CraftStatus::Escalated => "escalated",
+            CraftStatus::Terminated => "terminated",
         }
     }
 }

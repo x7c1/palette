@@ -6,6 +6,7 @@ pub fn mechanized_status_id(status: MechanizedStatus) -> i64 {
         MechanizedStatus::InProgress => 2,
         MechanizedStatus::Done => 3,
         MechanizedStatus::Failed => 4,
+        MechanizedStatus::Terminated => 26,
     }
 }
 
@@ -15,6 +16,7 @@ pub fn mechanized_status_from_id(id: i64) -> Result<MechanizedStatus, String> {
         2 => Ok(MechanizedStatus::InProgress),
         3 => Ok(MechanizedStatus::Done),
         4 => Ok(MechanizedStatus::Failed),
+        26 => Ok(MechanizedStatus::Terminated),
         _ => Err(format!("invalid mechanized_status id: {id}")),
     }
 }

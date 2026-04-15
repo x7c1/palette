@@ -10,6 +10,7 @@ pub enum MechanizedStatus {
     InProgress,
     Done,
     Failed,
+    Terminated,
 }
 
 impl MechanizedStatus {
@@ -19,6 +20,7 @@ impl MechanizedStatus {
             MechanizedStatus::InProgress => "in_progress",
             MechanizedStatus::Done => "done",
             MechanizedStatus::Failed => "failed",
+            MechanizedStatus::Terminated => "terminated",
         }
     }
 }
