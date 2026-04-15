@@ -37,6 +37,7 @@ impl CreateJobRequest {
                         location: palette_core::Location::Body,
                         hint: "repository".into(),
                         reason: "repository/required_for_craft".into(),
+                        help: None,
                     });
                     None
                 }
@@ -45,6 +46,7 @@ impl CreateJobRequest {
                         location: palette_core::Location::Body,
                         hint: "repository".into(),
                         reason: palette_core::ReasonKey::reason_key(&e),
+                        help: None,
                     });
                     None
                 }
@@ -70,6 +72,7 @@ impl CreateJobRequest {
                 location: palette_core::Location::Body,
                 hint: "plan_path".into(),
                 reason: palette_core::ReasonKey::reason_key(e),
+                help: None,
             });
         }
 

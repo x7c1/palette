@@ -18,6 +18,7 @@ impl ReviewCommentInput {
                 location: Location::Body,
                 hint: format!("comments[{index}].file"),
                 reason: e.reason_key(),
+                help: None,
             });
         }
 
@@ -26,6 +27,7 @@ impl ReviewCommentInput {
                 location: Location::Body,
                 hint: format!("comments[{index}].line"),
                 reason: e.reason_key(),
+                help: None,
             });
         }
 
@@ -34,6 +36,7 @@ impl ReviewCommentInput {
                 location: Location::Body,
                 hint: format!("comments[{index}].body"),
                 reason: e.reason_key(),
+                help: None,
             });
         }
     }

@@ -42,6 +42,7 @@ impl BlueprintReader for FsBlueprintReader {
                             location: Location::Body,
                             hint: e.field_path(),
                             reason: e.reason_key(),
+                            help: None,
                         })
                         .collect(),
                 )

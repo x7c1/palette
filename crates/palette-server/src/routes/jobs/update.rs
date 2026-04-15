@@ -36,6 +36,7 @@ pub async fn handle_update_job(
                 location: Location::Body,
                 hint: "status".into(),
                 reason: e.reason_key(),
+                help: None,
             }],
         }
     })?;

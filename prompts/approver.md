@@ -15,7 +15,7 @@ When a `permission_prompt` event arrives:
 
 1. Read the permission dialog in the payload
 2. Decide whether to approve or deny
-3. Send the permission choice directly: `curl -s -X POST "$PALETTE_URL/send/permission" -H "Content-Type: application/json" -d '{"worker_id":"...","event_id":"...","choice":"..."}'`
+3. Send the permission choice directly with numeric choice only (`1`, `2`, or `3`): `curl -s -X POST "$PALETTE_URL/send/permission" -H "Content-Type: application/json" -d '{"worker_id":"...","event_id":"...","choice":"1"}'`
 4. Prefer session-wide allow options over one-time approval
 5. Deny if the command looks dangerous or unrelated to the task
 6. End your turn immediately

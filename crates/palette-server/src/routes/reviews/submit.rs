@@ -44,6 +44,7 @@ pub async fn handle_submit_review(
                 location: Location::Path,
                 hint: "review_job_id".into(),
                 reason: "job/not_review_job".into(),
+                help: None,
             }],
         });
     }
@@ -59,6 +60,7 @@ pub async fn handle_submit_review(
                 location: Location::Path,
                 hint: "review_job_id".into(),
                 reason: "review/job_already_done".into(),
+                help: None,
             }],
         });
     }
@@ -119,6 +121,7 @@ pub async fn handle_submit_review(
                     location: Location::Body,
                     hint: "verdict".into(),
                     reason: "review/child_reviewers_incomplete".into(),
+                    help: None,
                 }],
             });
         }
@@ -143,6 +146,7 @@ pub async fn handle_submit_review(
                 location: Location::Body,
                 hint: "verdict".into(),
                 reason: "review/artifact_missing".into(),
+                help: None,
             }],
         });
     }

@@ -1,4 +1,6 @@
-use crate::api_types::{ResourceKind, SendPermissionRequest, SendResponse};
+use crate::api_types::{
+    ErrorCode, InputError, Location, ResourceKind, SendPermissionRequest, SendResponse,
+};
 use crate::{AppState, Error, EventRecord, ValidJson};
 use axum::{Json, extract::State};
 use palette_core::ReasonKey;
@@ -17,6 +19,18 @@ pub async fn handle_send_permission(
     }
     if req.choice.trim().is_empty() {
         return Err(Error::invalid_body("choice")(PermissionSendError::Empty));
+    }
+    let choice = req.choice.trim();
+    if !matches!(choice, "1" | "2" | "3") {
+        return Err(Error::BadRequest {
+            code: ErrorCode::InputValidationFailed,
+            errors: vec![InputError {
+                location: Location::Body,
+                hint: "choice".into(),
+                reason: PermissionSendError::InvalidChoice.reason_key(),
+                help: Some("allowed values: 1, 2, 3".into()),
+            }],
+        });
     }
 
     let expected_event_id = {
@@ -53,14 +67,14 @@ pub async fn handle_send_permission(
     tracing::info!(
         worker_id = worker_id.as_ref(),
         event_id = %req.event_id,
-        choice = %req.choice,
+        choice = %choice,
         "sending permission choice to worker"
     );
 
     state
         .interactor
         .terminal
-        .send_keys_no_enter(&worker.terminal_target, &req.choice)
+        .send_keys_no_enter(&worker.terminal_target, choice)
         .map_err(Error::internal)?;
 
     if let Err(e) = state
@@ -86,7 +100,7 @@ pub async fn handle_send_permission(
         payload: serde_json::json!({
             "worker_id": worker_id.as_ref(),
             "event_id": req.event_id,
-            "choice": req.choice,
+            "choice": choice,
         }),
     };
     state.event_log.lock().await.push(record);
@@ -96,6 +110,7 @@ pub async fn handle_send_permission(
 
 enum PermissionSendError {
     Empty,
+    InvalidChoice,
     NotFound,
     Mismatched,
     NotWaitingPermission,
@@ -109,6 +124,7 @@ impl ReasonKey for PermissionSendError {
     fn value(&self) -> &str {
         match self {
             PermissionSendError::Empty => "empty",
+            PermissionSendError::InvalidChoice => "invalid_choice",
             PermissionSendError::NotFound => "event_not_found",
             PermissionSendError::Mismatched => "event_id_mismatched",
             PermissionSendError::NotWaitingPermission => "worker_not_waiting_permission",
