@@ -197,6 +197,7 @@ INSERT OR IGNORE INTO workflow_statuses (id, name) VALUES (1, 'active');
 INSERT OR IGNORE INTO workflow_statuses (id, name) VALUES (2, 'suspended');
 INSERT OR IGNORE INTO workflow_statuses (id, name) VALUES (3, 'completed');
 INSERT OR IGNORE INTO workflow_statuses (id, name) VALUES (4, 'suspending');
+INSERT OR IGNORE INTO workflow_statuses (id, name) VALUES (5, 'terminated');
 
 -- Verdict types
 INSERT OR IGNORE INTO verdict_types (id, name) VALUES (1, 'approved');
