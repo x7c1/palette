@@ -23,14 +23,14 @@ mkdir -p ~/.config/palette/claude-auth-bundle/.claude
 Copy the docker command to the clipboard so the Operator can paste it in another terminal:
 
 ```bash
-echo -n 'docker run --rm -it -v ~/.config/palette/claude-auth-bundle/.claude:/home/agent/.claude palette-base:latest claude /login' | pbcopy
+echo -n 'docker run --rm -it -v ~/.config/palette/claude-auth-bundle/.claude:/home/agent/.claude palette-base:latest claude' | pbcopy
 ```
 
 Tell the Operator:
 
 > The login command has been copied to your clipboard. Open a separate terminal, paste and run it.
 >
-> Claude Code will start and execute the login flow. Follow the on-screen instructions — open the URL in your browser, authenticate, then paste the authorization code back into Claude Code. Once login is complete, type `/exit` to close it.
+> Claude Code will start in interactive mode. Type `/login` at the prompt, then follow the on-screen instructions — open the URL in your browser, authenticate, and paste the authorization code back into Claude Code. Once login is complete, type `/exit` to close it.
 
 Wait for the Operator to confirm completion.
 
