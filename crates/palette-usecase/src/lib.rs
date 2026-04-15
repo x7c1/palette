@@ -23,7 +23,9 @@ mod interactor;
 pub use interactor::Interactor;
 
 mod github_review_port;
-pub use github_review_port::{GitHubReviewPort, ReviewEvent, ReviewFileComment};
+pub use github_review_port::{
+    DiffFile, DiffHunk, GitHubReviewPort, ReviewEvent, ReviewFileComment,
+};
 
 mod maintenance;
 pub use maintenance::{
