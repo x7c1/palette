@@ -278,30 +278,27 @@ mod tests {
         let conn = Connection::open_in_memory().unwrap();
         initialize(&conn).unwrap();
 
-        let statuses = [
-            WorkflowStatus::Active,
-            WorkflowStatus::Suspending,
-            WorkflowStatus::Suspended,
-            WorkflowStatus::Completed,
-            WorkflowStatus::Terminated,
-        ];
+        let db_count: i64 = conn
+            .query_row("SELECT COUNT(*) FROM workflow_statuses", [], |row| {
+                row.get(0)
+            })
+            .unwrap();
+        assert_eq!(
+            db_count as usize,
+            WorkflowStatus::all().len(),
+            "seed row count ({db_count}) != WorkflowStatus::all() count ({})",
+            WorkflowStatus::all().len()
+        );
 
-        conn.execute(
-            "INSERT INTO workflows (id, blueprint_path, status_id, started_at) VALUES (?1, ?2, ?3, ?4)",
-            rusqlite::params!["wf-test", "test.yaml", workflow_status_id(WorkflowStatus::Active), "2026-01-01T00:00:00Z"],
-        ).unwrap();
-
-        for status in statuses {
-            conn.execute(
-                "UPDATE workflows SET status_id = ?1 WHERE id = 'wf-test'",
-                [workflow_status_id(status)],
-            )
-            .unwrap_or_else(|e| {
-                panic!(
-                    "status {:?} (id={}) not in seed data: {e}",
-                    status,
-                    workflow_status_id(status)
-                )
+        for status in WorkflowStatus::all() {
+            let id = workflow_status_id(*status);
+            let name: Result<String, _> = conn.query_row(
+                "SELECT name FROM workflow_statuses WHERE id = ?1",
+                [id],
+                |row| row.get(0),
+            );
+            name.unwrap_or_else(|e| {
+                panic!("status {status:?} (id={id}) not in seed data: {e}")
             });
         }
     }

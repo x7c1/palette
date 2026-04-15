@@ -31,6 +31,16 @@ impl WorkflowStatus {
         }
     }
 
+    pub fn all() -> &'static [Self] {
+        &[
+            Self::Active,
+            Self::Suspending,
+            Self::Suspended,
+            Self::Completed,
+            Self::Terminated,
+        ]
+    }
+
     pub fn as_str(&self) -> &'static str {
         match self {
             WorkflowStatus::Active => "active",
