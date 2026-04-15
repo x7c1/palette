@@ -303,9 +303,7 @@ mod tests {
                 [id],
                 |row| row.get(0),
             );
-            name.unwrap_or_else(|e| {
-                panic!("status {status:?} (id={id}) not in seed data: {e}")
-            });
+            name.unwrap_or_else(|e| panic!("status {status:?} (id={id}) not in seed data: {e}"));
         }
     }
 }
