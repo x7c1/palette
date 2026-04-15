@@ -1,6 +1,7 @@
 use crate::config::Config;
 use crate::interactor_factory::build_interactor;
 use palette_domain::server::ServerEvent;
+use palette_domain::terminal::TerminalSessionName;
 use palette_orchestrator::workspace::WorkspaceManager;
 use palette_orchestrator::{Orchestrator, ValidatedPerspectives};
 use palette_server::AppState;
@@ -24,6 +25,13 @@ pub async fn run(config_override: Option<&str>) -> Result<(), Box<dyn std::error
 
     let validated_perspectives = config.perspectives.validate()?;
     let interactor = build_interactor(&config, &validated_perspectives)?;
+
+    let session_name = TerminalSessionName::new(&config.tmux.session_name);
+    interactor
+        .terminal
+        .create_session(&session_name)
+        .map_err(|e| -> Box<dyn std::error::Error> { e })?;
+
     let (event_tx, event_rx) = tokio::sync::mpsc::unbounded_channel();
 
     let shutdown_notify = Arc::new(tokio::sync::Notify::new());

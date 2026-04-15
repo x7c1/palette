@@ -3,6 +3,13 @@ use palette_domain::terminal::{TerminalSessionName, TerminalTarget};
 use palette_usecase::TerminalSession;
 
 impl TerminalSession for TmuxManager {
+    fn create_session(
+        &self,
+        name: &TerminalSessionName,
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        Ok(self.create_session(name)?)
+    }
+
     fn create_target(
         &self,
         name: &str,
