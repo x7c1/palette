@@ -3,6 +3,7 @@ mod jobs;
 mod reviews;
 mod send;
 mod send_permission;
+mod shutdown;
 mod workers;
 mod workflows;
 
@@ -18,6 +19,8 @@ pub fn create_router(state: Arc<AppState>) -> Router {
     Router::new()
         // Health
         .route("/health", get(handle_health))
+        // Shutdown
+        .route("/shutdown", post(shutdown::handle_shutdown))
         // Hooks
         .route("/hooks/stop", post(hooks::handle_stop))
         .route("/hooks/notification", post(hooks::handle_notification))

@@ -57,6 +57,7 @@ pub async fn spawn_server(
         event_log: tokio::sync::Mutex::new(Vec::new()),
         pending_permission_events: tokio::sync::Mutex::new(HashMap::new()),
         event_tx: event_tx.clone(),
+        shutdown_notify: Arc::new(tokio::sync::Notify::new()),
     });
 
     let orchestrator = Arc::new(Orchestrator {

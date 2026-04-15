@@ -2,6 +2,7 @@ mod admin;
 mod config;
 mod doctor;
 mod interactor_factory;
+mod shutdown;
 mod start;
 
 use clap::{Args, Parser, Subcommand};
@@ -37,6 +38,12 @@ Checks:
   - GitHub CLI authentication (gh auth status)
   - Worker Docker images (palette-base, palette-worker)")]
     Doctor,
+    /// Gracefully shut down a running Orchestrator
+    Shutdown {
+        /// Path to the configuration file (overrides the default user config)
+        #[arg(short, long)]
+        config: Option<String>,
+    },
     /// Administrative maintenance commands
     #[command(after_help = "These commands should be run while the Orchestrator is stopped.")]
     Admin(AdminArgs),
@@ -70,6 +77,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             Ok(())
         }
         Some(Command::Admin(args)) => admin::run(args.command),
+        Some(Command::Shutdown { config }) => shutdown::run(config.as_deref()).await,
         Some(Command::Start { config }) => start::run(config.as_deref()).await,
         None => start::run(None).await,
     }
