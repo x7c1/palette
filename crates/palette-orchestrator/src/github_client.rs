@@ -123,9 +123,7 @@ fn parse_hunk_ranges(patch: &str) -> Vec<DiffHunk> {
             continue;
         };
         let after_plus = &line[plus_pos + 1..];
-        let end = after_plus
-            .find([' ', '@'])
-            .unwrap_or(after_plus.len());
+        let end = after_plus.find([' ', '@']).unwrap_or(after_plus.len());
         let range_str = &after_plus[..end];
         let (start, count) = if let Some((s, c)) = range_str.split_once(',') {
             (s.parse::<u64>().ok(), c.parse::<u64>().ok())
