@@ -67,7 +67,7 @@ impl Orchestrator {
                 .data_store
                 .update_workflow_status(&wf.id, WorkflowStatus::Terminated)
             {
-                tracing::warn!(
+                tracing::error!(
                     workflow_id = %wf.id, error = %e,
                     "failed to terminate workflow during shutdown"
                 );
