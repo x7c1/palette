@@ -12,6 +12,9 @@ pub enum WorkflowStatus {
     Suspended,
     /// All Tasks in the Workflow are complete.
     Completed,
+    /// Workflow was terminated by an explicit Orchestrator shutdown.
+    /// Workers have been destroyed and cannot be resumed.
+    Terminated,
 }
 
 impl WorkflowStatus {
@@ -21,6 +24,7 @@ impl WorkflowStatus {
             "suspending" => Ok(Self::Suspending),
             "suspended" => Ok(Self::Suspended),
             "completed" => Ok(Self::Completed),
+            "terminated" => Ok(Self::Terminated),
             _ => Err(InvalidWorkflowStatus::Unknown {
                 value: s.to_string(),
             }),
@@ -33,6 +37,7 @@ impl WorkflowStatus {
             WorkflowStatus::Suspending => "suspending",
             WorkflowStatus::Suspended => "suspended",
             WorkflowStatus::Completed => "completed",
+            WorkflowStatus::Terminated => "terminated",
         }
     }
 }

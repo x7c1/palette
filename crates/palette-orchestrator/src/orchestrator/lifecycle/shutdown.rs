@@ -1,14 +1,46 @@
 use super::Orchestrator;
 use palette_domain::terminal::TerminalSessionName;
+use palette_domain::workflow::WorkflowStatus;
 
 impl Orchestrator {
     /// Gracefully shut down the orchestrator:
-    /// 1. Stop and remove all worker containers
-    /// 2. Remove all worker records from DB
-    /// 3. Kill the tmux session
+    /// 1. Terminate active workflows
+    /// 2. Delete message queues for all workers
+    /// 3. Stop and remove all worker containers
+    /// 4. Remove all worker records from DB
+    /// 5. Kill the tmux session
     pub fn shutdown(&self) {
         self.cancel_token.cancel();
         tracing::info!("starting graceful shutdown");
+
+        // Terminate active workflows
+        match self.interactor.data_store.list_workflows(None) {
+            Ok(workflows) => {
+                for wf in workflows {
+                    if matches!(
+                        wf.status,
+                        WorkflowStatus::Active | WorkflowStatus::Suspending
+                    ) {
+                        if let Err(e) = self
+                            .interactor
+                            .data_store
+                            .update_workflow_status(&wf.id, WorkflowStatus::Terminated)
+                        {
+                            tracing::warn!(
+                                workflow_id = %wf.id,
+                                error = %e,
+                                "failed to terminate workflow during shutdown"
+                            );
+                        } else {
+                            tracing::info!(workflow_id = %wf.id, "workflow terminated");
+                        }
+                    }
+                }
+            }
+            Err(e) => {
+                tracing::error!(error = %e, "failed to list workflows for shutdown");
+            }
+        }
 
         let workers = match self.interactor.data_store.list_all_workers() {
             Ok(w) => w,
@@ -18,6 +50,17 @@ impl Orchestrator {
             }
         };
 
+        // Delete message queues
+        let worker_ids: Vec<_> = workers.iter().map(|w| w.id.clone()).collect();
+        if let Err(e) = self
+            .interactor
+            .data_store
+            .delete_messages_by_targets(&worker_ids)
+        {
+            tracing::warn!(error = %e, "failed to delete message queues during shutdown");
+        }
+
+        // Stop and remove worker containers
         for worker in &workers {
             tracing::info!(worker_id = %worker.id, "stopping worker container");
             if let Err(e) = self
