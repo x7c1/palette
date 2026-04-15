@@ -23,7 +23,7 @@ pub async fn run(config_override: Option<&str>) -> Result<(), Box<dyn std::error
             return Err(format!("unexpected response: {}", resp.status()).into());
         }
         Err(e) if is_connection_refused(&e) => {
-            println!("Orchestrator is not running.");
+            tracing::info!("Orchestrator is not running.");
             return Ok(());
         }
         Err(e) => {
@@ -38,11 +38,13 @@ pub async fn run(config_override: Option<&str>) -> Result<(), Box<dyn std::error
         match client.get(&health_url).send().await {
             Ok(_) => continue,
             Err(e) if is_connection_refused(&e) => break,
-            Err(_) => break,
+            Err(e) => {
+                return Err(format!("failed to poll health endpoint: {e}").into());
+            }
         }
     }
 
-    println!("Orchestrator stopped.");
+    tracing::info!("Orchestrator stopped.");
     Ok(())
 }
 
