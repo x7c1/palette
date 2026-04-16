@@ -68,6 +68,17 @@ impl JobStatus {
         )
     }
 
+    /// Returns true if the job has been terminated.
+    pub fn is_terminated(&self) -> bool {
+        matches!(
+            self,
+            JobStatus::Craft(CraftStatus::Terminated)
+                | JobStatus::Review(ReviewStatus::Terminated)
+                | JobStatus::Orchestrator(MechanizedStatus::Terminated)
+                | JobStatus::Operator(MechanizedStatus::Terminated)
+        )
+    }
+
     /// Returns true if the worker is actively working on this job.
     pub fn is_in_progress(&self) -> bool {
         matches!(

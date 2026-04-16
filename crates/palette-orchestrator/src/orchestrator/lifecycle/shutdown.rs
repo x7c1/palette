@@ -96,7 +96,7 @@ impl Orchestrator {
             // Terminate jobs under this task
             if let Ok(Some(job)) = self.interactor.data_store.get_job_by_task_id(task_id)
                 && !job.status.is_done()
-                && job.status.as_str() != "terminated"
+                && !job.status.is_terminated()
             {
                 let terminated = JobStatus::terminated(job.detail.job_type());
                 if let Err(e) = self

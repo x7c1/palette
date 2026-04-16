@@ -101,43 +101,41 @@ impl GitHubReviewPort for GhCliReviewClient {
         }
 
         let items: Vec<serde_json::Value> = serde_json::from_slice(&output.stdout)?;
-        let mut diff_files = Vec::new();
-        for item in &items {
-            let filename = item["filename"].as_str().unwrap_or_default().to_string();
-            let patch = item["patch"].as_str().unwrap_or_default();
-            let hunks = parse_hunk_ranges(patch);
-            diff_files.push(DiffFile { filename, hunks });
-        }
+        let diff_files = items
+            .iter()
+            .map(|item| {
+                let filename = item["filename"].as_str().unwrap_or_default().to_string();
+                let patch = item["patch"].as_str().unwrap_or_default();
+                let hunks = parse_hunk_ranges(patch);
+                DiffFile { filename, hunks }
+            })
+            .collect();
         Ok(diff_files)
     }
 }
 
 fn parse_hunk_ranges(patch: &str) -> Vec<DiffHunk> {
-    let mut hunks = Vec::new();
-    for line in patch.lines() {
-        if !line.starts_with("@@") {
-            continue;
-        }
-        // Parse "@@ -a,b +c,d @@" — extract c and d from the "+" side
-        let Some(plus_pos) = line.find('+') else {
-            continue;
-        };
-        let after_plus = &line[plus_pos + 1..];
-        let end = after_plus.find([' ', '@']).unwrap_or(after_plus.len());
-        let range_str = &after_plus[..end];
-        let (start, count) = if let Some((s, c)) = range_str.split_once(',') {
-            (s.parse::<u64>().ok(), c.parse::<u64>().ok())
-        } else {
-            (range_str.parse::<u64>().ok(), Some(1))
-        };
-        if let (Some(start), Some(count)) = (start, count) {
-            hunks.push(DiffHunk {
-                start_line: start,
-                line_count: count,
-            });
-        }
-    }
-    hunks
+    patch
+        .lines()
+        .filter(|line| line.starts_with("@@"))
+        .filter_map(parse_hunk_header)
+        .collect()
+}
+
+/// Parse a single hunk header line (`@@ -a,b +c,d @@`) into a `DiffHunk`.
+fn parse_hunk_header(line: &str) -> Option<DiffHunk> {
+    let plus_pos = line.find('+')?;
+    let after_plus = &line[plus_pos + 1..];
+    let end = after_plus.find([' ', '@']).unwrap_or(after_plus.len());
+    let range_str = &after_plus[..end];
+    let (start, count) = match range_str.split_once(',') {
+        Some((s, c)) => (s.parse().ok()?, c.parse().ok()?),
+        None => (range_str.parse().ok()?, 1),
+    };
+    Some(DiffHunk {
+        start_line: start,
+        line_count: count,
+    })
 }
 
 #[cfg(test)]
