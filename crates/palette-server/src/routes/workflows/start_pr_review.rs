@@ -41,7 +41,6 @@ pub async fn handle_start_pr_review(
                 location: crate::api_types::Location::Body,
                 hint: "reviewers".into(),
                 reason: "reviewers/empty".into(),
-                help: None,
             }],
         });
     }

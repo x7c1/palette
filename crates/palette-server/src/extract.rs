@@ -28,7 +28,6 @@ where
                     location: Location::Body,
                     hint: String::new(),
                     reason: rejection_reason(&rejection),
-                    help: None,
                 }],
             }),
         }

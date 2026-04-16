@@ -105,7 +105,6 @@ mod tests {
                 location: Location::Body,
                 hint: "title".into(),
                 reason: "title/required".into(),
-                help: None,
             }],
         };
         let resp = error.into_response();

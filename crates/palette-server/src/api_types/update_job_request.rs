@@ -16,7 +16,6 @@ impl UpdateJobRequest {
                 location: Location::Body,
                 hint: "id".into(),
                 reason: e.reason_key(),
-                help: None,
             }]
         })
     }

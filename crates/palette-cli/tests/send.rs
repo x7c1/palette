@@ -268,7 +268,6 @@ async fn send_permission_rejects_non_numeric_choice() {
     assert_eq!(body["errors"][0]["hint"], "choice");
     assert_eq!(
         body["errors"][0]["reason"],
-        "send_permission/invalid_choice"
+        "send_permission/choice_not_numeric"
     );
-    assert_eq!(body["errors"][0]["help"], "allowed values: 1, 2, 3");
 }

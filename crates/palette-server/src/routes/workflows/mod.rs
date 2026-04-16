@@ -29,7 +29,6 @@ fn blueprint_read_error_to_server_error(e: ReadBlueprintError) -> Error {
                 location: Location::Body,
                 hint: "blueprint_path".into(),
                 reason: format!("{cause}"),
-                help: None,
             }],
         },
         ReadBlueprintError::Validation(errors) => Error::BadRequest {

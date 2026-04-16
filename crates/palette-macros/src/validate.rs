@@ -92,19 +92,18 @@ pub fn expand(input: TokenStream) -> TokenStream {
                 let var = format_ident!("__v{}", i);
                 let field_str = field_name.to_string();
                 bindings.push(quote! {
-                        let #var = match #expr {
-                            Ok(v) => Some(v),
-                            Err(e) => {
-                                __errors.push(::palette_core::InputError {
-                                    location: ::palette_core::Location::Body,
-                                    hint: #field_str.into(),
-                                    reason: ::palette_core::ReasonKey::reason_key(&e),
-                help: None,
-                                });
-                                None
-                            }
-                        };
-                    });
+                    let #var = match #expr {
+                        Ok(v) => Some(v),
+                        Err(e) => {
+                            __errors.push(::palette_core::InputError {
+                                location: ::palette_core::Location::Body,
+                                hint: #field_str.into(),
+                                reason: ::palette_core::ReasonKey::reason_key(&e),
+                            });
+                            None
+                        }
+                    };
+                });
                 ctor_args.push(quote! { #var.unwrap() });
             }
             Field::Plain { expr } => {

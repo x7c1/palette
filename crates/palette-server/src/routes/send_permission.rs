@@ -1,6 +1,4 @@
-use crate::api_types::{
-    ErrorCode, InputError, Location, ResourceKind, SendPermissionRequest, SendResponse,
-};
+use crate::api_types::{ResourceKind, SendPermissionRequest, SendResponse};
 use crate::{AppState, Error, EventRecord, ValidJson};
 use axum::{Json, extract::State};
 use palette_core::ReasonKey;
@@ -22,15 +20,9 @@ pub async fn handle_send_permission(
     }
     let choice = req.choice.trim();
     if !matches!(choice, "1" | "2" | "3") {
-        return Err(Error::BadRequest {
-            code: ErrorCode::InputValidationFailed,
-            errors: vec![InputError {
-                location: Location::Body,
-                hint: "choice".into(),
-                reason: PermissionSendError::InvalidChoice.reason_key(),
-                help: Some("allowed values: 1, 2, 3".into()),
-            }],
-        });
+        return Err(Error::invalid_body("choice")(
+            PermissionSendError::ChoiceNotNumeric,
+        ));
     }
 
     let expected_event_id = {
@@ -110,7 +102,7 @@ pub async fn handle_send_permission(
 
 enum PermissionSendError {
     Empty,
-    InvalidChoice,
+    ChoiceNotNumeric,
     NotFound,
     Mismatched,
     NotWaitingPermission,
@@ -124,7 +116,7 @@ impl ReasonKey for PermissionSendError {
     fn value(&self) -> &str {
         match self {
             PermissionSendError::Empty => "empty",
-            PermissionSendError::InvalidChoice => "invalid_choice",
+            PermissionSendError::ChoiceNotNumeric => "choice_not_numeric",
             PermissionSendError::NotFound => "event_not_found",
             PermissionSendError::Mismatched => "event_id_mismatched",
             PermissionSendError::NotWaitingPermission => "worker_not_waiting_permission",

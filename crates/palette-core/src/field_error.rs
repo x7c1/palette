@@ -18,9 +18,6 @@ pub struct InputError {
     pub hint: String,
     /// Machine-readable reason code in `{namespace}/{value}` format.
     pub reason: String,
-    /// Optional human-readable help text.
-    #[cfg_attr(feature = "serde", serde(skip_serializing_if = "Option::is_none"))]
-    pub help: Option<String>,
 }
 
 impl InputError {
@@ -29,7 +26,6 @@ impl InputError {
             location: Location::Path,
             hint: hint.into(),
             reason: reason.reason_key(),
-            help: None,
         }
     }
 
@@ -38,7 +34,6 @@ impl InputError {
             location: Location::Query,
             hint: hint.into(),
             reason: reason.reason_key(),
-            help: None,
         }
     }
 
@@ -47,7 +42,6 @@ impl InputError {
             location: Location::Body,
             hint: hint.into(),
             reason: reason.reason_key(),
-            help: None,
         }
     }
 }
