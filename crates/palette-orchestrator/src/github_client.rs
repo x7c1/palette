@@ -103,12 +103,14 @@ impl GitHubReviewPort for GhCliReviewClient {
         let items: Vec<serde_json::Value> = serde_json::from_slice(&output.stdout)?;
         let diff_files = items
             .iter()
-            .map(|item| -> Result<DiffFile, Box<dyn std::error::Error + Send + Sync>> {
-                let filename = item["filename"].as_str().unwrap_or_default().to_string();
-                let patch = item["patch"].as_str().unwrap_or_default();
-                let hunks = parse_hunk_ranges(patch)?;
-                Ok(DiffFile { filename, hunks })
-            })
+            .map(
+                |item| -> Result<DiffFile, Box<dyn std::error::Error + Send + Sync>> {
+                    let filename = item["filename"].as_str().unwrap_or_default().to_string();
+                    let patch = item["patch"].as_str().unwrap_or_default();
+                    let hunks = parse_hunk_ranges(patch)?;
+                    Ok(DiffFile { filename, hunks })
+                },
+            )
             .collect::<Result<Vec<_>, _>>()?;
         Ok(diff_files)
     }
