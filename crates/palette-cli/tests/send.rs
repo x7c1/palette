@@ -231,3 +231,43 @@ async fn send_permission_delivers_choice_without_enter() {
         "pane should contain permission choice, got: {content}"
     );
 }
+
+#[tokio::test]
+async fn send_permission_rejects_non_numeric_choice() {
+    let (session, _guard) = test_session_name_with_guard("perm-invalid-choice");
+    let tmux = TmuxManager::new(session.clone());
+    tmux.create_session(&session).unwrap();
+
+    let target = tmux.create_target("worker").unwrap();
+    let (base_url, state, _shutdown_tx) = spawn_server(tmux, &session).await;
+    register_worker(&state, "worker", &target, WorkerStatus::WaitingPermission);
+
+    state.pending_permission_events.lock().await.insert(
+        "worker".to_string(),
+        palette_server::PendingPermission {
+            event_id: "perm-choice".to_string(),
+            created_at: std::time::Instant::now(),
+            supervisor_id: None,
+            notification: String::new(),
+        },
+    );
+
+    let client = reqwest::Client::new();
+    let resp = client
+        .post(format!("{base_url}/send/permission"))
+        .json(&SendPermissionRequest {
+            worker_id: "worker".to_string(),
+            event_id: "perm-choice".to_string(),
+            choice: "yes".to_string(),
+        })
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), 400);
+    let body: serde_json::Value = resp.json().await.unwrap();
+    assert_eq!(body["errors"][0]["hint"], "choice");
+    assert_eq!(
+        body["errors"][0]["reason"],
+        "send_permission/choice_not_numeric"
+    );
+}

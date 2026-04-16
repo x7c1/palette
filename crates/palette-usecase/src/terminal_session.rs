@@ -5,6 +5,11 @@ use palette_domain::terminal::{TerminalSessionName, TerminalTarget};
 /// Abstracts tmux operations so that the orchestrator and server
 /// can be tested with mock implementations.
 pub trait TerminalSession: Send + Sync {
+    fn create_session(
+        &self,
+        name: &TerminalSessionName,
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>>;
+
     fn create_target(
         &self,
         name: &str,

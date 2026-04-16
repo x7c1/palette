@@ -18,6 +18,12 @@ pub async fn handle_send_permission(
     if req.choice.trim().is_empty() {
         return Err(Error::invalid_body("choice")(PermissionSendError::Empty));
     }
+    let choice = req.choice.trim();
+    if !matches!(choice, "1" | "2" | "3") {
+        return Err(Error::invalid_body("choice")(
+            PermissionSendError::ChoiceNotNumeric,
+        ));
+    }
 
     let expected_event_id = {
         let events = state.pending_permission_events.lock().await;
@@ -53,14 +59,14 @@ pub async fn handle_send_permission(
     tracing::info!(
         worker_id = worker_id.as_ref(),
         event_id = %req.event_id,
-        choice = %req.choice,
+        choice = %choice,
         "sending permission choice to worker"
     );
 
     state
         .interactor
         .terminal
-        .send_keys_no_enter(&worker.terminal_target, &req.choice)
+        .send_keys_no_enter(&worker.terminal_target, choice)
         .map_err(Error::internal)?;
 
     if let Err(e) = state
@@ -86,7 +92,7 @@ pub async fn handle_send_permission(
         payload: serde_json::json!({
             "worker_id": worker_id.as_ref(),
             "event_id": req.event_id,
-            "choice": req.choice,
+            "choice": choice,
         }),
     };
     state.event_log.lock().await.push(record);
@@ -96,6 +102,7 @@ pub async fn handle_send_permission(
 
 enum PermissionSendError {
     Empty,
+    ChoiceNotNumeric,
     NotFound,
     Mismatched,
     NotWaitingPermission,
@@ -109,6 +116,7 @@ impl ReasonKey for PermissionSendError {
     fn value(&self) -> &str {
         match self {
             PermissionSendError::Empty => "empty",
+            PermissionSendError::ChoiceNotNumeric => "choice_not_numeric",
             PermissionSendError::NotFound => "event_not_found",
             PermissionSendError::Mismatched => "event_id_mismatched",
             PermissionSendError::NotWaitingPermission => "worker_not_waiting_permission",

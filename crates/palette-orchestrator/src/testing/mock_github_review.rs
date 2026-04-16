@@ -1,4 +1,4 @@
-use palette_usecase::{GitHubReviewPort, ReviewEvent, ReviewFileComment};
+use palette_usecase::{DiffFile, GitHubReviewPort, ReviewEvent, ReviewFileComment};
 
 pub struct MockGitHubReview;
 
@@ -20,7 +20,7 @@ impl GitHubReviewPort for MockGitHubReview {
         _owner: &str,
         _repo: &str,
         _number: u64,
-    ) -> Result<Vec<String>, Box<dyn std::error::Error + Send + Sync>> {
+    ) -> Result<Vec<DiffFile>, Box<dyn std::error::Error + Send + Sync>> {
         Ok(vec![])
     }
 }

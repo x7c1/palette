@@ -86,23 +86,24 @@ impl Orchestrator {
             _ => ReviewEvent::RequestChanges,
         };
 
-        // Get PR diff files to filter inline comments
-        let diff_files: std::collections::HashSet<String> = match github
-            .get_diff_files(&pr.owner, &pr.repo, pr.number)
-        {
-            Ok(files) => files.into_iter().collect(),
+        // Get PR diff files with hunk ranges to filter inline comments
+        let diff_files = match github.get_diff_files(&pr.owner, &pr.repo, pr.number) {
+            Ok(files) => files,
             Err(e) => {
                 tracing::warn!(error = %e, "failed to get PR diff files, all comments go to body");
-                std::collections::HashSet::new()
+                Vec::new()
             }
         };
 
-        // Split comments: diff-eligible go as inline, others fold into body
+        // Split comments: only lines within diff hunks go as inline, others fold into body
         let mut inline_comments = Vec::new();
         let mut body_extra = String::new();
 
         for c in &review.comments {
-            if diff_files.contains(&c.path) {
+            let in_hunk = diff_files
+                .iter()
+                .any(|f| f.filename == c.path && f.contains_line(c.line));
+            if in_hunk {
                 inline_comments.push(ReviewFileComment {
                     path: c.path.clone(),
                     line: c.line,

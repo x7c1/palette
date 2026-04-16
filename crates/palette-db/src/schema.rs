@@ -158,6 +158,7 @@ INSERT OR IGNORE INTO job_statuses (id, job_type_id, name) VALUES (2, 1, 'in_pro
 INSERT OR IGNORE INTO job_statuses (id, job_type_id, name) VALUES (3, 1, 'in_review');
 INSERT OR IGNORE INTO job_statuses (id, job_type_id, name) VALUES (4, 1, 'done');
 INSERT OR IGNORE INTO job_statuses (id, job_type_id, name) VALUES (5, 1, 'escalated');
+INSERT OR IGNORE INTO job_statuses (id, job_type_id, name) VALUES (24, 1, 'terminated');
 
 -- Review statuses (job_type_id = 2)
 INSERT OR IGNORE INTO job_statuses (id, job_type_id, name) VALUES (6, 2, 'todo');
@@ -165,6 +166,7 @@ INSERT OR IGNORE INTO job_statuses (id, job_type_id, name) VALUES (7, 2, 'in_pro
 INSERT OR IGNORE INTO job_statuses (id, job_type_id, name) VALUES (8, 2, 'changes_requested');
 INSERT OR IGNORE INTO job_statuses (id, job_type_id, name) VALUES (9, 2, 'done');
 INSERT OR IGNORE INTO job_statuses (id, job_type_id, name) VALUES (10, 2, 'escalated');
+INSERT OR IGNORE INTO job_statuses (id, job_type_id, name) VALUES (25, 2, 'terminated');
 
 -- ReviewIntegrate statuses (job_type_id = 5, same lifecycle as review)
 INSERT OR IGNORE INTO job_statuses (id, job_type_id, name) VALUES (19, 5, 'todo');
@@ -172,18 +174,21 @@ INSERT OR IGNORE INTO job_statuses (id, job_type_id, name) VALUES (20, 5, 'in_pr
 INSERT OR IGNORE INTO job_statuses (id, job_type_id, name) VALUES (21, 5, 'changes_requested');
 INSERT OR IGNORE INTO job_statuses (id, job_type_id, name) VALUES (22, 5, 'done');
 INSERT OR IGNORE INTO job_statuses (id, job_type_id, name) VALUES (23, 5, 'escalated');
+INSERT OR IGNORE INTO job_statuses (id, job_type_id, name) VALUES (27, 5, 'terminated');
 
 -- Orchestrator statuses (job_type_id = 3)
 INSERT OR IGNORE INTO job_statuses (id, job_type_id, name) VALUES (11, 3, 'todo');
 INSERT OR IGNORE INTO job_statuses (id, job_type_id, name) VALUES (12, 3, 'in_progress');
 INSERT OR IGNORE INTO job_statuses (id, job_type_id, name) VALUES (13, 3, 'done');
 INSERT OR IGNORE INTO job_statuses (id, job_type_id, name) VALUES (14, 3, 'failed');
+INSERT OR IGNORE INTO job_statuses (id, job_type_id, name) VALUES (26, 3, 'terminated');
 
 -- Operator statuses (job_type_id = 4)
 INSERT OR IGNORE INTO job_statuses (id, job_type_id, name) VALUES (15, 4, 'todo');
 INSERT OR IGNORE INTO job_statuses (id, job_type_id, name) VALUES (16, 4, 'in_progress');
 INSERT OR IGNORE INTO job_statuses (id, job_type_id, name) VALUES (17, 4, 'done');
 INSERT OR IGNORE INTO job_statuses (id, job_type_id, name) VALUES (18, 4, 'failed');
+INSERT OR IGNORE INTO job_statuses (id, job_type_id, name) VALUES (28, 4, 'terminated');
 
 -- Task statuses
 INSERT OR IGNORE INTO task_statuses (id, name) VALUES (1, 'pending');
@@ -191,12 +196,14 @@ INSERT OR IGNORE INTO task_statuses (id, name) VALUES (2, 'ready');
 INSERT OR IGNORE INTO task_statuses (id, name) VALUES (3, 'in_progress');
 INSERT OR IGNORE INTO task_statuses (id, name) VALUES (4, 'suspended');
 INSERT OR IGNORE INTO task_statuses (id, name) VALUES (5, 'completed');
+INSERT OR IGNORE INTO task_statuses (id, name) VALUES (6, 'terminated');
 
 -- Workflow statuses
 INSERT OR IGNORE INTO workflow_statuses (id, name) VALUES (1, 'active');
 INSERT OR IGNORE INTO workflow_statuses (id, name) VALUES (2, 'suspended');
 INSERT OR IGNORE INTO workflow_statuses (id, name) VALUES (3, 'completed');
 INSERT OR IGNORE INTO workflow_statuses (id, name) VALUES (4, 'suspending');
+INSERT OR IGNORE INTO workflow_statuses (id, name) VALUES (5, 'terminated');
 
 -- Verdict types
 INSERT OR IGNORE INTO verdict_types (id, name) VALUES (1, 'approved');
@@ -267,5 +274,36 @@ mod tests {
         let conn = Connection::open_in_memory().unwrap();
         initialize(&conn).unwrap();
         initialize(&conn).unwrap();
+    }
+
+    #[test]
+    fn all_workflow_statuses_exist_in_seed_data() {
+        use crate::lookup::workflow_status_id;
+        use palette_domain::workflow::WorkflowStatus;
+
+        let conn = Connection::open_in_memory().unwrap();
+        initialize(&conn).unwrap();
+
+        let db_count: i64 = conn
+            .query_row("SELECT COUNT(*) FROM workflow_statuses", [], |row| {
+                row.get(0)
+            })
+            .unwrap();
+        assert_eq!(
+            db_count as usize,
+            WorkflowStatus::all().len(),
+            "seed row count ({db_count}) != WorkflowStatus::all() count ({})",
+            WorkflowStatus::all().len()
+        );
+
+        for status in WorkflowStatus::all() {
+            let id = workflow_status_id(*status);
+            let name: Result<String, _> = conn.query_row(
+                "SELECT name FROM workflow_statuses WHERE id = ?1",
+                [id],
+                |row| row.get(0),
+            );
+            name.unwrap_or_else(|e| panic!("status {status:?} (id={id}) not in seed data: {e}"));
+        }
     }
 }

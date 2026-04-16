@@ -13,6 +13,8 @@ pub enum TaskStatus {
     Suspended,
     /// Task and all its child Tasks / Job are complete.
     Completed,
+    /// Task was terminated by an explicit Orchestrator shutdown.
+    Terminated,
 }
 
 impl TaskStatus {
@@ -23,6 +25,7 @@ impl TaskStatus {
             TaskStatus::InProgress => "in_progress",
             TaskStatus::Suspended => "suspended",
             TaskStatus::Completed => "completed",
+            TaskStatus::Terminated => "terminated",
         }
     }
 }

@@ -13,6 +13,7 @@ pub enum JobStatus {
     Done,
     Escalated,
     Failed,
+    Terminated,
 }
 
 impl JobStatus {
@@ -25,6 +26,7 @@ impl JobStatus {
             JobStatus::Done => "done",
             JobStatus::Escalated => "escalated",
             JobStatus::Failed => "failed",
+            JobStatus::Terminated => "terminated",
         }
     }
 
@@ -38,6 +40,7 @@ impl JobStatus {
                     JobStatus::InReview => domain::job::CraftStatus::InReview,
                     JobStatus::Done => domain::job::CraftStatus::Done,
                     JobStatus::Escalated => domain::job::CraftStatus::Escalated,
+                    JobStatus::Terminated => domain::job::CraftStatus::Terminated,
                     // ChangesRequested/Failed are not valid for craft, but map to Escalated as fallback
                     JobStatus::ChangesRequested | JobStatus::Failed => {
                         domain::job::CraftStatus::Escalated
@@ -52,6 +55,7 @@ impl JobStatus {
                     JobStatus::ChangesRequested => domain::job::ReviewStatus::ChangesRequested,
                     JobStatus::Done => domain::job::ReviewStatus::Done,
                     JobStatus::Escalated => domain::job::ReviewStatus::Escalated,
+                    JobStatus::Terminated => domain::job::ReviewStatus::Terminated,
                     // InReview/Failed are not valid for review, but map to InProgress as fallback
                     JobStatus::InReview | JobStatus::Failed => {
                         domain::job::ReviewStatus::InProgress
@@ -67,6 +71,7 @@ impl JobStatus {
                     }
                     JobStatus::Done | JobStatus::Escalated => domain::job::MechanizedStatus::Done,
                     JobStatus::Failed => domain::job::MechanizedStatus::Failed,
+                    JobStatus::Terminated => domain::job::MechanizedStatus::Terminated,
                 };
                 if job_type == domain::job::JobType::Orchestrator {
                     domain::job::JobStatus::Orchestrator(ms)
@@ -87,6 +92,7 @@ impl From<domain::job::JobStatus> for JobStatus {
                 domain::job::CraftStatus::InReview => JobStatus::InReview,
                 domain::job::CraftStatus::Done => JobStatus::Done,
                 domain::job::CraftStatus::Escalated => JobStatus::Escalated,
+                domain::job::CraftStatus::Terminated => JobStatus::Terminated,
             },
             domain::job::JobStatus::Review(rs) => match rs {
                 domain::job::ReviewStatus::Todo => JobStatus::Todo,
@@ -94,6 +100,7 @@ impl From<domain::job::JobStatus> for JobStatus {
                 domain::job::ReviewStatus::ChangesRequested => JobStatus::ChangesRequested,
                 domain::job::ReviewStatus::Done => JobStatus::Done,
                 domain::job::ReviewStatus::Escalated => JobStatus::Escalated,
+                domain::job::ReviewStatus::Terminated => JobStatus::Terminated,
             },
             domain::job::JobStatus::Orchestrator(ms) | domain::job::JobStatus::Operator(ms) => {
                 match ms {
@@ -101,6 +108,7 @@ impl From<domain::job::JobStatus> for JobStatus {
                     domain::job::MechanizedStatus::InProgress => JobStatus::InProgress,
                     domain::job::MechanizedStatus::Done => JobStatus::Done,
                     domain::job::MechanizedStatus::Failed => JobStatus::Failed,
+                    domain::job::MechanizedStatus::Terminated => JobStatus::Terminated,
                 }
             }
         }

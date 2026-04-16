@@ -31,7 +31,9 @@ impl Interactor {
                 .filter(|wf| {
                     matches!(
                         wf.status,
-                        WorkflowStatus::Suspended | WorkflowStatus::Completed
+                        WorkflowStatus::Suspended
+                            | WorkflowStatus::Completed
+                            | WorkflowStatus::Terminated
                     ) || (options.include_active
                         && matches!(
                             wf.status,

@@ -45,6 +45,18 @@ impl JobStatus {
         }
     }
 
+    /// Create a Terminated status for the given job type.
+    pub fn terminated(job_type: JobType) -> Self {
+        match job_type {
+            JobType::Craft => JobStatus::Craft(CraftStatus::Terminated),
+            JobType::Review | JobType::ReviewIntegrate => {
+                JobStatus::Review(ReviewStatus::Terminated)
+            }
+            JobType::Orchestrator => JobStatus::Orchestrator(MechanizedStatus::Terminated),
+            JobType::Operator => JobStatus::Operator(MechanizedStatus::Terminated),
+        }
+    }
+
     /// Returns true if the job is done.
     pub fn is_done(&self) -> bool {
         matches!(
@@ -53,6 +65,17 @@ impl JobStatus {
                 | JobStatus::Review(ReviewStatus::Done)
                 | JobStatus::Orchestrator(MechanizedStatus::Done)
                 | JobStatus::Operator(MechanizedStatus::Done)
+        )
+    }
+
+    /// Returns true if the job has been terminated.
+    pub fn is_terminated(&self) -> bool {
+        matches!(
+            self,
+            JobStatus::Craft(CraftStatus::Terminated)
+                | JobStatus::Review(ReviewStatus::Terminated)
+                | JobStatus::Orchestrator(MechanizedStatus::Terminated)
+                | JobStatus::Operator(MechanizedStatus::Terminated)
         )
     }
 

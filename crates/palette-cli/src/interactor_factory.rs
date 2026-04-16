@@ -16,8 +16,7 @@ pub(crate) fn build_interactor(
     perspectives: &ValidatedPerspectives,
 ) -> Result<Arc<Interactor>, Box<dyn std::error::Error>> {
     let session_name = TerminalSessionName::new(&config.tmux.session_name);
-    let tmux = TmuxManager::new(session_name.clone());
-    tmux.create_session(&session_name)?;
+    let tmux = TmuxManager::new(session_name);
 
     let db = Database::open(Path::new(&config.db_path))?;
     tracing::info!(db_path = %config.db_path, "database initialized");

@@ -63,4 +63,7 @@ impl TerminalSession for MockTerminalSession {
     fn kill_session(&self, _: &TerminalSessionName) -> Result<(), BoxErr> {
         unimplemented!()
     }
+    fn create_session(&self, _: &TerminalSessionName) -> Result<(), BoxErr> {
+        Ok(())
+    }
 }
