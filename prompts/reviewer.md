@@ -16,8 +16,8 @@ The Plan describes what the crafter was expected to implement.
 
 ## Perspective
 
-If a perspective is assigned, it is **your primary focus area**. Review documents at `/home/agent/perspective/` define the criteria — read them before starting.
-When `Perspective Priority Paths` is present, follow the listed order as reading priority.
+If a perspective is assigned, it is **your primary focus area**.
+Read the files listed in `Perspective Priority Paths` in order — these define your review criteria.
 Other reviewers cover different perspectives in parallel. Focus deeply on yours and leave other aspects to them.
 
 If no perspective is assigned, perform a **general code review** — look for correctness issues, security vulnerabilities, and unnecessary complexity.
