@@ -15,7 +15,7 @@ Create a Blueprint YAML and its parent plan (`README.md`) from a task descriptio
 
 - Ask the Operator where to put the new plan. Offer two options:
   - **A. Inside the Palette workflow's target repo (workspace)** — for plans that ship together with the code being changed (the common case).
-  - **B. Inside the current CWD's repo** — for plans managed in an external repository (for example, managing palette's own plans from atelier).
+  - **B. Inside the current CWD's repo** — for plans managed in an external repository (for example, managing palette's own plans from a separate workspace repo).
 - After the Operator picks the base, compute the default save directory:
   ```
   <base>/docs/plans/<YYYY>/<MMDD>-<slug>/

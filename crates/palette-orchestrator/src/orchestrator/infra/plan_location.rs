@@ -179,42 +179,42 @@ mod tests {
     #[test]
     fn origin_matches_https_with_dot_git() {
         assert!(origin_matches(
-            "https://github.com/x7c1/atelier.git",
-            "x7c1/atelier"
+            "https://github.com/acme/widget.git",
+            "acme/widget"
         ));
     }
 
     #[test]
     fn origin_matches_https_without_dot_git() {
         assert!(origin_matches(
-            "https://github.com/x7c1/atelier",
-            "x7c1/atelier"
+            "https://github.com/acme/widget",
+            "acme/widget"
         ));
     }
 
     #[test]
     fn origin_matches_ssh() {
         assert!(origin_matches(
-            "git@github.com:x7c1/atelier.git",
-            "x7c1/atelier"
+            "git@github.com:acme/widget.git",
+            "acme/widget"
         ));
     }
 
     #[test]
     fn origin_does_not_match_different_repo() {
         assert!(!origin_matches(
-            "https://github.com/x7c1/palette.git",
-            "x7c1/atelier"
+            "https://github.com/acme/other.git",
+            "acme/widget"
         ));
     }
 
     #[test]
     fn origin_does_not_match_partial_owner() {
-        // "1/atelier" suffix-matches "x1/atelier" without the slash boundary —
+        // "cme/widget" suffix-matches "acme/widget" without the slash boundary —
         // the leading "/" or ":" boundary check prevents this
         assert!(!origin_matches(
-            "https://github.com/x1/atelier.git",
-            "1/atelier"
+            "https://github.com/acme/widget.git",
+            "cme/widget"
         ));
     }
 }
