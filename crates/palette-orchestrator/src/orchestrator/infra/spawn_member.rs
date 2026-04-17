@@ -1,4 +1,5 @@
 use super::Orchestrator;
+use super::plan_location::PlanLocation;
 use palette_domain::job::{JobDetail, JobType};
 use palette_domain::task::TaskId;
 use palette_domain::worker::{WorkerId, WorkerRole, WorkerState, WorkerStatus};
@@ -18,6 +19,7 @@ impl Orchestrator {
         task_id: &TaskId,
         workspace: Option<WorkspaceVolume>,
         artifacts_dir: Option<ArtifactsMount>,
+        plan_loc: &PlanLocation,
     ) -> crate::Result<WorkerState> {
         let session_name = &self.session_name;
         let supervisor_id = supervisor_id.clone();
@@ -40,11 +42,13 @@ impl Orchestrator {
 
         let member_id_str = member_id.as_ref();
         let has_workspace = workspace.is_some();
-        let plan_dir_abs = std::fs::canonicalize(&self.plan_dir)
-            .map_err(|e| crate::Error::External(Box::new(e)))?;
-        let plan_dir_mount = PlanDirMount {
-            host_path: plan_dir_abs.to_string_lossy().to_string(),
-            read_only: matches!(job_type, JobType::Review | JobType::ReviewIntegrate),
+
+        let plan_dir_mount = match plan_loc {
+            PlanLocation::External { blueprint_host_dir } => Some(PlanDirMount {
+                host_path: blueprint_host_dir.to_string_lossy().to_string(),
+                read_only: matches!(job_type, JobType::Review | JobType::ReviewIntegrate),
+            }),
+            PlanLocation::InWorkspace { .. } => None,
         };
 
         // Resolve perspective mounts for review jobs
@@ -57,7 +61,7 @@ impl Orchestrator {
             session_name,
             ContainerMounts {
                 workspace,
-                plan_dir: Some(plan_dir_mount),
+                plan_dir: plan_dir_mount,
                 artifacts_dir,
                 perspective_dirs,
             },

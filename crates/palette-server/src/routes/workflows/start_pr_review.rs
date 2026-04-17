@@ -47,12 +47,27 @@ pub async fn handle_start_pr_review(
 
     let workflow_id = WorkflowId::generate();
 
-    // Generate Blueprint YAML from request
+    // Generate Blueprint YAML and a stub parent README.md (the co-location
+    // convention requires both to live in the same directory). PR-review
+    // blueprints are auto-generated and ephemeral, so we keep them under
+    // data_dir/blueprints/{workflow_id}/.
     let yaml = generate_blueprint_yaml(&req);
-    let blueprint_dir = state.data_dir.join("blueprints");
+    let blueprint_dir = state
+        .data_dir
+        .join("blueprints")
+        .join(workflow_id.to_string());
     std::fs::create_dir_all(&blueprint_dir).map_err(Error::internal)?;
-    let blueprint_path = blueprint_dir.join(format!("{}.yaml", workflow_id));
+    let blueprint_path = blueprint_dir.join("blueprint.yaml");
     std::fs::write(&blueprint_path, &yaml).map_err(Error::internal)?;
+    let readme_path = blueprint_dir.join("README.md");
+    std::fs::write(
+        &readme_path,
+        format!(
+            "# PR review workflow\n\nAuto-generated blueprint for PR review {}#{}.\n",
+            req.repo, req.number
+        ),
+    )
+    .map_err(Error::internal)?;
     let blueprint_path_str = blueprint_path.to_string_lossy().to_string();
 
     tracing::info!(

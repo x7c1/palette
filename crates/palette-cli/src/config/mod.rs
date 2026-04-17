@@ -42,10 +42,6 @@ impl Config {
     pub fn db_path(&self) -> PathBuf {
         self.data_dir.join("palette.db")
     }
-
-    pub fn plan_dir(&self) -> PathBuf {
-        self.data_dir.join("plans")
-    }
 }
 
 #[cfg(test)]
@@ -70,7 +66,6 @@ worker_callback_url = "http://127.0.0.1:7100"
         assert_eq!(config.tmux.session_name, "palette");
         assert_eq!(config.data_dir, PathBuf::from("data"));
         assert_eq!(config.db_path(), PathBuf::from("data/palette.db"));
-        assert_eq!(config.plan_dir(), PathBuf::from("data/plans"));
         assert_eq!(config.rules.max_review_rounds, 5);
         assert_eq!(config.operator_api_url, "http://127.0.0.1:7100");
         assert_eq!(config.server_bind_addr, "0.0.0.0:7100");
@@ -183,7 +178,6 @@ callback_network = "bridge"
             config.db_path(),
             PathBuf::from("/var/lib/palette/palette.db")
         );
-        assert_eq!(config.plan_dir(), PathBuf::from("/var/lib/palette/plans"));
         assert_eq!(config.rules.max_review_rounds, 3);
         assert_eq!(config.operator_api_url, "http://palette.local:7100");
         assert_eq!(config.server_bind_addr, "127.0.0.1:7100");

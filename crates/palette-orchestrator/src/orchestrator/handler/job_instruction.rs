@@ -1,8 +1,6 @@
+use crate::orchestrator::infra::plan_location::PlanLocation;
 use crate::perspectives_config::ValidatedPerspectives;
 use palette_domain::job::{Job, JobDetail};
-
-/// Container-side mount point for the shared plan directory.
-const PLAN_DIR_MOUNT: &str = "/home/agent/plans";
 
 /// Container-side mount point for artifacts.
 pub(crate) const ARTIFACTS_MOUNT: &str = "/home/agent/artifacts";
@@ -15,14 +13,20 @@ const PERSPECTIVE_MOUNT: &str = "/home/agent/perspective";
 /// `round` is included for review jobs so the reviewer knows which round directory to use.
 /// `perspectives` provides the server's perspective configuration for including
 /// priority paths in the instruction.
+/// `plan_loc` is consulted to resolve the absolute container-side path of the
+/// job's plan, when the job has one.
 pub(crate) fn format_job_instruction(
     job: &Job,
     round: Option<u32>,
     perspectives: &ValidatedPerspectives,
+    plan_loc: &PlanLocation,
 ) -> String {
     let mut msg = format!("## Task: {}\n\nID: {}\n", job.title, job.id);
     if let Some(ref plan_path) = job.plan_path {
-        msg.push_str(&format!("Plan: {PLAN_DIR_MOUNT}/{plan_path}\n"));
+        msg.push_str(&format!(
+            "Plan: {}\n",
+            plan_loc.container_plan_path(plan_path.as_ref())
+        ));
     }
     if let JobDetail::Craft { ref repository } = job.detail {
         msg.push_str(&format!(
@@ -80,6 +84,12 @@ mod tests {
     use std::collections::HashMap;
     use std::path::PathBuf;
 
+    fn external_loc() -> PlanLocation {
+        PlanLocation::External {
+            blueprint_host_dir: PathBuf::from("/tmp/bp"),
+        }
+    }
+
     fn make_review_job(perspective: Option<PerspectiveName>) -> Job {
         let now = chrono::Utc::now();
         Job {
@@ -129,12 +139,22 @@ mod tests {
     #[test]
     fn review_without_perspective() {
         let job = make_review_job(None);
-        let msg = format_job_instruction(&job, Some(1), &empty_perspectives());
+        let msg = format_job_instruction(&job, Some(1), &empty_perspectives(), &external_loc());
 
         assert!(msg.contains("Plan: /home/agent/plans/plans/api"));
         assert!(msg.contains("Round: 1"));
         assert!(msg.contains("Artifacts: /home/agent/artifacts/round-1/R-001/"));
         assert!(!msg.contains("Perspective"));
+    }
+
+    #[test]
+    fn in_workspace_plan_uses_workspace_mount_path() {
+        let job = make_review_job(None);
+        let loc = PlanLocation::InWorkspace {
+            blueprint_relative: PathBuf::from("docs/plans/2026/0417-foo"),
+        };
+        let msg = format_job_instruction(&job, Some(1), &empty_perspectives(), &loc);
+        assert!(msg.contains("Plan: /home/agent/workspace/docs/plans/2026/0417-foo/plans/api"));
     }
 
     #[test]
@@ -157,7 +177,7 @@ mod tests {
             }],
         };
 
-        let msg = format_job_instruction(&job, Some(1), &perspectives);
+        let msg = format_job_instruction(&job, Some(1), &perspectives, &external_loc());
 
         assert!(msg.contains("Perspective: rust-review"));
         assert!(msg.contains("Perspective Documents: /home/agent/perspective/"));
@@ -168,7 +188,7 @@ mod tests {
     #[test]
     fn craft_job_includes_repository() {
         let job = make_craft_job();
-        let msg = format_job_instruction(&job, None, &empty_perspectives());
+        let msg = format_job_instruction(&job, None, &empty_perspectives(), &external_loc());
 
         assert!(msg.contains("Repository: x7c1/demo (branch: main)"));
         assert!(!msg.contains("Round"));

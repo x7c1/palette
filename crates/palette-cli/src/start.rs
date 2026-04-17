@@ -67,13 +67,9 @@ fn build_orchestrator(
     perspectives: ValidatedPerspectives,
     event_tx: tokio::sync::mpsc::UnboundedSender<ServerEvent>,
 ) -> Result<Arc<Orchestrator>, Box<dyn std::error::Error>> {
-    let plan_dir = config.plan_dir();
-    std::fs::create_dir_all(&plan_dir)?;
-
     Ok(Arc::new(Orchestrator {
         interactor: Arc::clone(interactor),
         docker_config: config.docker.clone(),
-        plan_dir,
         session_name: config.tmux.session_name.clone(),
         cancel_token: CancellationToken::new(),
         workspace_manager: WorkspaceManager::new(config.data_dir.clone()),

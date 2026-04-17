@@ -8,11 +8,11 @@ The first message you receive includes:
 
 - **Task title**: What you need to review
 - **ID**: Your review job identifier (e.g., `R-001`)
-- **Plan**: Path to the Plan document (under `/home/agent/plans/`)
+- **Plan**: Absolute path to the Plan document inside the container
 - **Round**: Current review round number
 - **Artifacts**: Path where you write your review result
 
-The Plan describes what the crafter was expected to implement.
+The Plan describes what the crafter was expected to implement. The `Plan:` value is always a fully-resolved absolute path; read it verbatim without assuming a fixed mount root.
 
 ## Perspective
 

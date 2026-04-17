@@ -10,6 +10,24 @@ A Blueprint is a static definition — it describes *what* should be done, not t
 
 A Blueprint can be edited while the Workflow is suspended. The [Operator](../operator/) edits the Blueprint, then applies the changes. Applying validates the edits against change rules and reconciles the differences with the Workflow's state in the database.
 
+## Co-location with Parent Plan
+
+A Blueprint is stored as `blueprint.yaml` and must live alongside a parent [Plan](../plan/) (`README.md`) in the same directory. The parent plan describes the work unit's purpose and scope; the Blueprint defines its Task tree. Child [Plans](../plan/) referenced by `plan_path` live under this same directory as relative paths.
+
+```
+<work-unit-dir>/
+  README.md              ← parent Plan (scope, purpose)
+  blueprint.yaml         ← Blueprint (this Task tree)
+  <child-dir>/
+    README.md            ← child Plan referenced by plan_path
+```
+
+Rules:
+
+- A Blueprint's directory must contain a sibling `README.md`. Palette's parser rejects a Blueprint without one.
+- Only one Blueprint per work unit; nested `blueprint.yaml` in a subdirectory is rejected.
+- All `plan_path` values are relative to the Blueprint's directory. Absolute paths and `..` are rejected.
+
 ## Examples
 
 ```yaml

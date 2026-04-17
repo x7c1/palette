@@ -104,11 +104,20 @@ impl Orchestrator {
             tracing::warn!(task_id = %task_id, "no job found for review-integrate task");
             return Ok(());
         };
+        let task_state = self
+            .interactor
+            .data_store
+            .get_task_state(&job.task_id)?
+            .ok_or_else(|| crate::Error::TaskNotFound {
+                task_id: job.task_id.clone(),
+            })?;
+        let plan_loc = self.resolve_plan_location(&task_state.workflow_id, &job.detail)?;
         let round = self.current_review_round(&job)?;
         let instruction = crate::orchestrator::handler::job_instruction::format_job_instruction(
             &job,
             Some(round),
             &self.perspectives,
+            &plan_loc,
         );
 
         // Assign the job to the RI (sets assignee_id and transitions to InProgress).

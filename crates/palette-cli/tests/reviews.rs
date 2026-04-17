@@ -290,11 +290,7 @@ async fn integrator_submit_rejected_when_children_incomplete() {
     let client = reqwest::Client::new();
 
     // Start workflow with composite review blueprint
-    let blueprint_file = {
-        let mut f = tempfile::NamedTempFile::new().unwrap();
-        std::io::Write::write_all(&mut f, COMPOSITE_REVIEW_YAML.as_bytes()).unwrap();
-        f
-    };
+    let blueprint_file = helper::write_blueprint_file(COMPOSITE_REVIEW_YAML);
     let resp = client
         .post(format!("{base_url}/workflows/start"))
         .json(&serde_json::json!({

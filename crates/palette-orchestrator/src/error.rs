@@ -1,4 +1,5 @@
 use palette_domain::task::TaskId;
+use palette_domain::workflow::WorkflowId;
 
 pub type Result<T> = std::result::Result<T, Error>;
 
@@ -8,6 +9,8 @@ pub enum Error {
     External(Box<dyn std::error::Error + Send + Sync>),
     /// Referenced task does not exist.
     TaskNotFound { task_id: TaskId },
+    /// Referenced workflow does not exist.
+    WorkflowNotFound { workflow_id: WorkflowId },
     /// Task is in an unexpected state for the requested operation.
     InvalidTaskState { task_id: TaskId, detail: String },
 }
@@ -38,6 +41,9 @@ impl std::fmt::Display for Error {
         match self {
             Self::External(e) => write!(f, "{e}"),
             Self::TaskNotFound { task_id } => write!(f, "task not found: {task_id}"),
+            Self::WorkflowNotFound { workflow_id } => {
+                write!(f, "workflow not found: {workflow_id}")
+            }
             Self::InvalidTaskState { task_id, detail } => {
                 write!(f, "invalid task state for {task_id}: {detail}")
             }

@@ -25,13 +25,15 @@ Without `--config`, commands target the user config at `~/.config/palette/`, whi
 
 ### Data Directory Layout
 
-All runtime data — DB, plans, workspaces, artifacts — live under `data_dir`:
+`data_dir` holds ephemeral runtime data only:
 
 - `{data_dir}/palette.db` — SQLite database
-- `{data_dir}/plans/` — plan storage
 - `{data_dir}/workspace/` — per-job working copies
 - `{data_dir}/repos/` — bare repo caches
 - `{data_dir}/artifacts/` — craft job artifacts
+- `{data_dir}/blueprints/<workflow-id>/` — auto-generated Blueprints for PR-review workflows (ephemeral, regenerated per workflow)
+
+Plans and user-authored Blueprints are **not** stored under `data_dir`. They live wherever the Operator places them (typically in the target repo under `docs/plans/`) and are referenced by absolute path when a Workflow starts. See [concepts/blueprint](../concepts/blueprint/) for the co-location convention.
 
 ### Operation Models
 

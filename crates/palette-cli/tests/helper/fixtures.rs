@@ -18,11 +18,31 @@ pub fn tid(wf_id: &str, key_path: &str) -> TaskId {
     TaskId::parse(format!("{wf_id}:{key_path}")).unwrap()
 }
 
-pub fn write_blueprint_file(yaml: &str) -> tempfile::NamedTempFile {
+/// A test Blueprint directory holding `blueprint.yaml` and the required
+/// sibling `README.md`. The TempDir is kept alive by this wrapper.
+pub struct BlueprintFixture {
+    _dir: tempfile::TempDir,
+    blueprint_path: std::path::PathBuf,
+}
+
+impl BlueprintFixture {
+    pub fn path(&self) -> &std::path::Path {
+        &self.blueprint_path
+    }
+}
+
+pub fn write_blueprint_file(yaml: &str) -> BlueprintFixture {
     use std::io::Write;
-    let mut f = tempfile::NamedTempFile::new().unwrap();
-    f.write_all(yaml.as_bytes()).unwrap();
-    f
+    let dir = tempfile::tempdir().unwrap();
+    let blueprint_path = dir.path().join("blueprint.yaml");
+    let mut bp = std::fs::File::create(&blueprint_path).unwrap();
+    bp.write_all(yaml.as_bytes()).unwrap();
+    let mut readme = std::fs::File::create(dir.path().join("README.md")).unwrap();
+    readme.write_all(b"# test plan\n").unwrap();
+    BlueprintFixture {
+        _dir: dir,
+        blueprint_path,
+    }
 }
 
 /// Insert a worker record to satisfy FK constraints.

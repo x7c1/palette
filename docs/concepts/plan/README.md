@@ -8,22 +8,21 @@ The directory hierarchy of Plans is independent of the Task tree structure. A Ta
 
 ## Location
 
-Plans are stored under `{data_dir}/plans/`, derived from the `data_dir` setting in `config/palette.toml`. Each Task or Job carries a `plan_path` that specifies where its Plan lives relative to that directory.
-
-For example, with the default `data_dir = "data"`, plans live under `data/plans/`:
+Plans live alongside the [Blueprint](../blueprint/) that defines their work unit. The Blueprint's directory contains a required parent plan (`README.md`) and, under it, any number of child plans referenced by `plan_path`.
 
 ```
-data/plans/
-  2026/
-    feature-x/
-      README.md            ← Task-level Plan (scope, approach)
-      api-impl/
-        README.md          ← Job api-impl's Plan
-      api-spec/
-        README.md          ← Job api-spec's Plan
+<blueprint-dir>/
+  README.md              ← parent Plan (scope, purpose)
+  blueprint.yaml         ← Blueprint that defines the Task tree
+  api-impl/
+    README.md            ← Job api-impl's Plan
+  api-spec/
+    README.md            ← Job api-spec's Plan
 ```
 
-A Job's `plan_path` might be `2026/feature-x/api-impl/README.md`, resolving to `data/plans/2026/feature-x/api-impl/README.md`.
+`plan_path` values are **relative paths** from the Blueprint's directory. A Job's `plan_path` might be `api-impl/README.md`, resolving to `<blueprint-dir>/api-impl/README.md`.
+
+Absolute paths, `..`, and scheme-prefixed strings (e.g. `plans://`, `repo://`) are rejected at parse time so plan resolution cannot escape the Blueprint's directory.
 
 ## Splitting work
 
@@ -36,7 +35,7 @@ For example, if Task `api-impl` is too large:
 3. Each child Task has its own `plan_path`, which can nest under the original Plan's directory:
 
 ```
-data/plans/2026/feature-x/
+<blueprint-dir>/
   api-impl/
     README.md                  ← Original Plan (completed)
     api-impl-auth/
@@ -53,8 +52,9 @@ data/plans/2026/feature-x/
 
 ## Domain Rules
 
-- A Task or Job references its Plan via `plan_path`.
+- A Task or Job references its Plan via `plan_path`, resolved relative to the owning Blueprint's directory.
 - Plans can be nested in the filesystem without affecting the Task tree structure.
+- The parent Plan (`README.md`) is required; a Blueprint without it is rejected by the parser.
 
 ## Related Concepts
 
