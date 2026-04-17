@@ -1,9 +1,11 @@
 ---
-description: Approve a Blueprint and start a Workflow
+name: approve
+description: Approve a Blueprint and start a Workflow on Palette
+user-invocable: true
 argument-hint: <blueprint-path>
 ---
 
-# palette-approve
+# /palette:approve
 
 Approve a Blueprint YAML file and start a Workflow on Palette.
 
@@ -24,4 +26,4 @@ Approve a Blueprint YAML file and start a Workflow on Palette.
 - Parse the JSON response to extract `workflow_id` and `task_count`
 - Report the Workflow ID and the number of tasks created
 - If the request fails, show the error response body for debugging
-- Suggest using `palette-status` to monitor progress
+- Suggest using `/palette:status` to monitor progress

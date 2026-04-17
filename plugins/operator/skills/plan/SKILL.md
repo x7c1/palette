@@ -1,9 +1,11 @@
 ---
+name: plan
 description: Create a Blueprint YAML and its plan document from a task description
+user-invocable: true
 argument-hint: <slug>
 ---
 
-# palette-plan
+# /palette:plan
 
 Create a Blueprint YAML and its plan document from a task description provided by the Operator. The plan is referenced by the Blueprint's root task via `plan_path` and lives alongside `blueprint.yaml` in the same directory.
 
@@ -57,7 +59,7 @@ Create a Blueprint YAML and its plan document from a task description provided b
   - Any constraints or success criteria
 - Display both generated files to the Operator for review.
 - Apply any requested modifications.
-- Once the Operator approves, inform them to run `palette-approve` with the **absolute path** to `blueprint.yaml` to start the Workflow.
+- Once the Operator approves, inform them to run `/palette:approve` with the **absolute path** to `blueprint.yaml` to start the Workflow.
 
 ## Notes
 
