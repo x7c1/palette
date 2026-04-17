@@ -161,16 +161,16 @@ mod tests {
     fn review_with_perspective_includes_at_prefixed_paths() {
         let job = make_review_job(Some(PerspectiveName::parse("rust-review").unwrap()));
         let perspectives = ValidatedPerspectives {
-            dirs: [("atelier".to_string(), PathBuf::from("/host/atelier/docs"))].into(),
+            dirs: [("team-docs".to_string(), PathBuf::from("/host/team-docs"))].into(),
             perspectives: vec![ValidatedPerspective {
                 name: "rust-review".to_string(),
                 paths: vec![
                     PerspectivePath {
-                        dir_name: "atelier".to_string(),
+                        dir_name: "team-docs".to_string(),
                         relative_path: "compass/axioms".to_string(),
                     },
                     PerspectivePath {
-                        dir_name: "atelier".to_string(),
+                        dir_name: "team-docs".to_string(),
                         relative_path: "compass/principles".to_string(),
                     },
                 ],
@@ -181,8 +181,8 @@ mod tests {
 
         assert!(msg.contains("Perspective: rust-review"));
         assert!(msg.contains("Perspective Documents: /home/agent/perspective/"));
-        assert!(msg.contains("1. @/home/agent/perspective/atelier/compass/axioms"));
-        assert!(msg.contains("2. @/home/agent/perspective/atelier/compass/principles"));
+        assert!(msg.contains("1. @/home/agent/perspective/team-docs/compass/axioms"));
+        assert!(msg.contains("2. @/home/agent/perspective/team-docs/compass/principles"));
     }
 
     #[test]

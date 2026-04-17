@@ -311,12 +311,12 @@ mod tests {
         let (tmp, base_path) = setup_dirs();
         let _ = tmp; // keep alive
         let config = PerspectivesConfig {
-            perspectives_dirs: [("atelier".to_string(), base_path)].into(),
+            perspectives_dirs: [("team-docs".to_string(), base_path)].into(),
             perspectives: vec![PerspectiveEntry {
                 name: "rust-review".to_string(),
                 paths: vec![
-                    "atelier:axioms".to_string(),
-                    "atelier:principles".to_string(),
+                    "team-docs:axioms".to_string(),
+                    "team-docs:principles".to_string(),
                 ],
             }],
         };
@@ -328,7 +328,7 @@ mod tests {
     #[test]
     fn rejects_nonexistent_dir() {
         let config = PerspectivesConfig {
-            perspectives_dirs: [("atelier".to_string(), "/nonexistent/path".to_string())].into(),
+            perspectives_dirs: [("team-docs".to_string(), "/nonexistent/path".to_string())].into(),
             perspectives: vec![],
         };
         let err = config.validate().unwrap_err();
