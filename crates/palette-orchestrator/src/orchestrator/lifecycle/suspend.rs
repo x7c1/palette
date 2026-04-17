@@ -69,9 +69,8 @@ impl Orchestrator {
         for member in &members {
             match member.status {
                 WorkerStatus::Idle | WorkerStatus::Booting => {
-                    if self.suspend_single_worker(&member.id, &member.container_id) {
-                        suspended_count += 1;
-                    }
+                    let suspended = self.suspend_single_worker(&member.id, &member.container_id);
+                    suspended_count += usize::from(suspended);
                 }
                 WorkerStatus::Working | WorkerStatus::WaitingPermission => {
                     tracing::info!(
