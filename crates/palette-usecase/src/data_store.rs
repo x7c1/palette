@@ -210,8 +210,7 @@ pub trait DataStore: Send + Sync {
         id: &WorkflowId,
     ) -> Result<Workflow, Box<dyn std::error::Error + Send + Sync>> {
         self.find_workflow(id)?.ok_or_else(|| {
-            format!("workflow {id} missing from DB despite FK reference from worker/task")
-                .into()
+            format!("workflow {id} missing from DB despite FK reference from worker/task").into()
         })
     }
 

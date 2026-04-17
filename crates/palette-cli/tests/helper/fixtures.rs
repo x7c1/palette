@@ -37,12 +37,41 @@ pub fn write_blueprint_file(yaml: &str) -> BlueprintFixture {
     let blueprint_path = dir.path().join("blueprint.yaml");
     let mut bp = std::fs::File::create(&blueprint_path).unwrap();
     bp.write_all(yaml.as_bytes()).unwrap();
-    let mut readme = std::fs::File::create(dir.path().join("README.md")).unwrap();
-    readme.write_all(b"# test plan\n").unwrap();
+
+    // Palette's Blueprint parser now verifies every `plan_path` declared in the
+    // YAML points to an existing file. Scan the YAML for `plan_path:` entries
+    // and create empty stub files under the Blueprint directory so fixtures
+    // can continue to carry plan_path references for readability without
+    // duplicating boilerplate in every test.
+    for plan_rel in extract_plan_paths(yaml) {
+        let target = dir.path().join(&plan_rel);
+        if let Some(parent) = target.parent() {
+            std::fs::create_dir_all(parent).unwrap();
+        }
+        if !target.exists() {
+            std::fs::File::create(&target).unwrap();
+        }
+    }
+
     BlueprintFixture {
         _dir: dir,
         blueprint_path,
     }
+}
+
+fn extract_plan_paths(yaml: &str) -> Vec<String> {
+    yaml.lines()
+        .filter_map(|line| {
+            let trimmed = line.trim_start();
+            let rest = trimmed.strip_prefix("plan_path:")?;
+            let value = rest.trim().trim_matches(|c: char| c == '"' || c == '\'');
+            if value.is_empty() {
+                None
+            } else {
+                Some(value.to_string())
+            }
+        })
+        .collect()
 }
 
 /// Insert a worker record to satisfy FK constraints.

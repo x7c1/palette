@@ -1,11 +1,11 @@
 ---
-description: Create a Blueprint YAML and parent plan from a task description
+description: Create a Blueprint YAML and its plan document from a task description
 argument-hint: <slug>
 ---
 
 # palette-plan
 
-Create a Blueprint YAML and its parent plan (`README.md`) from a task description provided by the Operator. The two files are co-located in a single directory by convention.
+Create a Blueprint YAML and its plan document from a task description provided by the Operator. The plan is referenced by the Blueprint's root task via `plan_path` and lives alongside `blueprint.yaml` in the same directory.
 
 ## Arguments
 
@@ -26,11 +26,12 @@ Create a Blueprint YAML and its parent plan (`README.md`) from a task descriptio
   - Example: `docs/plans/2026/0417-add-user-auth/`
 - Confirm the path with the Operator (allow override).
 - Ask the Operator to describe the task and its subtasks.
-- Generate the Blueprint YAML in the chosen directory as `blueprint.yaml`:
+- Generate the Blueprint YAML in the chosen directory as `blueprint.yaml`. The root task declares `plan_path: README.md` so Palette enforces that the companion plan exists:
   ```yaml
   task:
     id: <task-id>
     title: <descriptive title>
+    plan_path: README.md
 
     children:
       - id: <subtask-id>
@@ -49,8 +50,8 @@ Create a Blueprint YAML and its parent plan (`README.md`) from a task descriptio
   - Use `depends_on:` to express ordering between sibling tasks
   - `priority:` can be `high`, `medium`, or `low`
   - `repository:` takes `name` and `branch` fields
-  - `plan_path:` is **relative to the Blueprint directory**. Absolute paths and `..` are rejected.
-- Generate the parent plan as `README.md` in the same directory. Include:
+  - `plan_path:` on any task (including the root) names a plan document **relative to the Blueprint directory**. Absolute paths and `..` are rejected.
+- Generate the plan as `README.md` in the same directory. Include:
   - The work's purpose and scope
   - A brief overview of the subtasks
   - Any constraints or success criteria
@@ -60,5 +61,6 @@ Create a Blueprint YAML and its parent plan (`README.md`) from a task descriptio
 
 ## Notes
 
-- The co-location convention (parent `README.md` next to `blueprint.yaml`) is enforced by Palette's Blueprint parser. Skipping the README causes workflow start to fail.
+- Palette's Blueprint parser verifies every `plan_path` points to an existing file under the Blueprint directory. Skipping `README.md` (when the root task declares it) causes workflow start to fail.
+- A Blueprint that declares no `plan_path` on any task is also valid — this is the shape Palette uses for purely mechanical workflows (such as auto-generated PR reviews). When you write a Blueprint by hand, include `plan_path: README.md` on the root so your intent is captured.
 - In the future, a Crafter agent will generate Blueprints automatically. This skill serves as a manual bridge until that automation is ready.
