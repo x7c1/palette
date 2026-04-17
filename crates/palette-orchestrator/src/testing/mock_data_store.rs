@@ -184,7 +184,7 @@ impl DataStore for MockDataStore {
     fn create_workflow(&self, _: &WorkflowId, _: &str) -> Result<(), BoxErr> {
         unimplemented!()
     }
-    fn get_workflow(&self, id: &WorkflowId) -> Result<Option<Workflow>, BoxErr> {
+    fn find_workflow(&self, id: &WorkflowId) -> Result<Option<Workflow>, BoxErr> {
         Ok(Some(Workflow {
             id: id.clone(),
             status: WorkflowStatus::Active,

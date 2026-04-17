@@ -37,7 +37,7 @@ pub async fn handle_apply_blueprint(
     let workflow = state
         .interactor
         .data_store
-        .get_workflow(&workflow_id)
+        .find_workflow(&workflow_id)
         .map_err(Error::internal)?
         .ok_or_else(|| Error::NotFound {
             resource: ResourceKind::Workflow,

@@ -160,7 +160,7 @@ fn verify_blueprint_hash(state: &AppState, workflow_id: &WorkflowId) -> crate::R
     let workflow = state
         .interactor
         .data_store
-        .get_workflow(workflow_id)
+        .find_workflow(workflow_id)
         .map_err(Error::internal)?
         .ok_or_else(|| Error::NotFound {
             resource: ResourceKind::Workflow,

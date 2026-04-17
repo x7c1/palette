@@ -248,7 +248,7 @@ impl DataStore for Database {
         Ok(Database::create_workflow(self, id, blueprint_path)?)
     }
 
-    fn get_workflow(
+    fn find_workflow(
         &self,
         id: &WorkflowId,
     ) -> Result<Option<Workflow>, Box<dyn std::error::Error + Send + Sync>> {

@@ -1,5 +1,4 @@
 use crate::blueprint_reader::ReadBlueprintError;
-use palette_domain::workflow::WorkflowId;
 use std::fmt;
 
 #[derive(Debug)]
@@ -8,8 +7,6 @@ pub enum TaskStoreError {
     DataStore(Box<dyn std::error::Error + Send + Sync>),
     /// Blueprint read or validation failed.
     Blueprint(ReadBlueprintError),
-    /// Referenced workflow does not exist.
-    WorkflowNotFound { workflow_id: WorkflowId },
 }
 
 impl fmt::Display for TaskStoreError {
@@ -17,9 +14,6 @@ impl fmt::Display for TaskStoreError {
         match self {
             TaskStoreError::DataStore(e) => write!(f, "data store error: {e}"),
             TaskStoreError::Blueprint(e) => write!(f, "blueprint error: {e}"),
-            TaskStoreError::WorkflowNotFound { workflow_id } => {
-                write!(f, "workflow not found: {workflow_id}")
-            }
         }
     }
 }
@@ -29,7 +23,6 @@ impl std::error::Error for TaskStoreError {
         match self {
             TaskStoreError::DataStore(e) => Some(e.as_ref()),
             TaskStoreError::Blueprint(e) => Some(e),
-            _ => None,
         }
     }
 }

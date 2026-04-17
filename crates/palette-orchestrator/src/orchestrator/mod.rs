@@ -40,16 +40,8 @@ impl Orchestrator {
         let workflow = self
             .interactor
             .data_store
-            .get_workflow(workflow_id)
-            .map_err(crate::Error::External)?
-            .ok_or_else(|| {
-                crate::Error::External(
-                    format!(
-                        "workflow {workflow_id} missing from DB despite FK reference from worker/task"
-                    )
-                    .into(),
-                )
-            })?;
+            .require_workflow(workflow_id)
+            .map_err(crate::Error::External)?;
         plan_location::resolve(std::path::Path::new(&workflow.blueprint_path), job_detail)
             .map_err(|e| crate::Error::External(Box::new(e)))
     }

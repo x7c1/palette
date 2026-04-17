@@ -864,8 +864,7 @@ task:
     let wf = state
         .interactor
         .data_store
-        .get_workflow(&workflow_id)
-        .unwrap()
+        .require_workflow(&workflow_id)
         .unwrap();
     assert_eq!(wf.status, WorkflowStatus::Completed);
 }
