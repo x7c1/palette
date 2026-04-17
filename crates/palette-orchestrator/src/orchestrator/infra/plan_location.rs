@@ -55,26 +55,31 @@ impl PlanLocation {
 /// In-repo detection: if the Blueprint directory is inside a git repo whose
 /// `origin` URL matches the job's target repository name, the Blueprint is
 /// reachable via the workspace mount.
-pub fn resolve(blueprint_path: &Path, job_detail: &JobDetail) -> PlanLocation {
+///
+/// Returns an error if the Blueprint directory cannot be canonicalized (e.g.
+/// the directory does not exist or is unreadable) — callers should surface
+/// this as a workflow configuration error rather than fall back to an
+/// un-normalized path, since downstream path comparisons and Docker mounts
+/// both require a canonical absolute path.
+pub fn resolve(blueprint_path: &Path, job_detail: &JobDetail) -> std::io::Result<PlanLocation> {
     let blueprint_dir = blueprint_path
         .parent()
         .map(|p| p.to_path_buf())
         .unwrap_or_else(|| PathBuf::from("."));
 
-    let abs_blueprint_dir =
-        std::fs::canonicalize(&blueprint_dir).unwrap_or_else(|_| blueprint_dir.clone());
+    let abs_blueprint_dir = std::fs::canonicalize(&blueprint_dir)?;
 
     if let Some(repo_name) = repo_name_for(job_detail)
         && let Some(rel) = try_in_repo(&abs_blueprint_dir, &repo_name)
     {
-        return PlanLocation::InWorkspace {
+        return Ok(PlanLocation::InWorkspace {
             blueprint_relative: rel,
-        };
+        });
     }
 
-    PlanLocation::External {
+    Ok(PlanLocation::External {
         blueprint_host_dir: abs_blueprint_dir,
-    }
+    })
 }
 
 fn repo_name_for(job_detail: &JobDetail) -> Option<String> {
@@ -112,9 +117,7 @@ fn git_toplevel(dir: &Path) -> Option<PathBuf> {
     if path.is_empty() {
         return None;
     }
-    std::fs::canonicalize(&path)
-        .ok()
-        .or(Some(PathBuf::from(path)))
+    std::fs::canonicalize(&path).ok()
 }
 
 fn git_origin(git_root: &Path) -> Option<String> {

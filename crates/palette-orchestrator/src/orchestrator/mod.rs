@@ -45,9 +45,7 @@ impl Orchestrator {
             .ok_or_else(|| crate::Error::WorkflowNotFound {
                 workflow_id: workflow_id.clone(),
             })?;
-        Ok(plan_location::resolve(
-            std::path::Path::new(&workflow.blueprint_path),
-            job_detail,
-        ))
+        plan_location::resolve(std::path::Path::new(&workflow.blueprint_path), job_detail)
+            .map_err(|e| crate::Error::External(Box::new(e)))
     }
 }
