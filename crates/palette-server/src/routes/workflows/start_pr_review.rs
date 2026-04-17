@@ -63,7 +63,7 @@ pub async fn handle_start_pr_review(
     std::fs::write(
         &readme_path,
         format!(
-            "# PR review workflow\n\nAuto-generated blueprint for PR review {}#{}.\n",
+            "# PR review workflow\n\nParent plan for the auto-generated PR review blueprint ({}#{}).\n",
             req.repo, req.number
         ),
     )
