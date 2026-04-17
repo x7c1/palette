@@ -38,7 +38,7 @@ pub async fn run(config_override: Option<&str>) -> Result<(), Box<dyn std::error
     let state = Arc::new(AppState {
         interactor: Arc::clone(&interactor),
         max_review_rounds: config.rules.max_review_rounds,
-        data_dir: PathBuf::from("data"),
+        data_dir: config.data_dir.clone(),
         event_log: tokio::sync::Mutex::new(Vec::new()),
         pending_permission_events: tokio::sync::Mutex::new(HashMap::new()),
         event_tx: event_tx.clone(),
@@ -67,15 +67,16 @@ fn build_orchestrator(
     perspectives: ValidatedPerspectives,
     event_tx: tokio::sync::mpsc::UnboundedSender<ServerEvent>,
 ) -> Result<Arc<Orchestrator>, Box<dyn std::error::Error>> {
-    std::fs::create_dir_all(&config.plan_dir)?;
+    let plan_dir = config.plan_dir();
+    std::fs::create_dir_all(&plan_dir)?;
 
     Ok(Arc::new(Orchestrator {
         interactor: Arc::clone(interactor),
         docker_config: config.docker.clone(),
-        plan_dir: config.plan_dir.clone(),
+        plan_dir,
         session_name: config.tmux.session_name.clone(),
         cancel_token: CancellationToken::new(),
-        workspace_manager: WorkspaceManager::new("data"),
+        workspace_manager: WorkspaceManager::new(config.data_dir.clone()),
         perspectives,
         event_tx,
     }))

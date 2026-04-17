@@ -63,7 +63,7 @@ pub async fn spawn_server(
     let orchestrator = Arc::new(Orchestrator {
         interactor: Arc::clone(&interactor),
         docker_config: test_docker_config(),
-        plan_dir: String::new(),
+        plan_dir: PathBuf::new(),
         session_name: session_name.to_string(),
         cancel_token: CancellationToken::new(),
         workspace_manager: WorkspaceManager::new("data"),

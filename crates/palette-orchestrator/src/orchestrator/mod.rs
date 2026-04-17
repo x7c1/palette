@@ -4,6 +4,7 @@ mod lifecycle;
 
 use palette_domain::server::ServerEvent;
 use palette_usecase::Interactor;
+use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
@@ -15,7 +16,7 @@ use infra::workspace::WorkspaceManager;
 pub struct Orchestrator {
     pub interactor: Arc<Interactor>,
     pub docker_config: DockerConfig,
-    pub plan_dir: String,
+    pub plan_dir: PathBuf,
     pub session_name: String,
     pub cancel_token: CancellationToken,
     pub workspace_manager: WorkspaceManager,

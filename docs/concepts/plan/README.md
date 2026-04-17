@@ -8,12 +8,12 @@ The directory hierarchy of Plans is independent of the Task tree structure. A Ta
 
 ## Location
 
-Plans are stored under a system-wide `plan_dir` setting defined in `config/palette.toml`. Each Task or Job carries a `plan_path` that specifies where its Plan lives relative to `plan_dir`.
+Plans are stored under `{data_dir}/plans/`, derived from the `data_dir` setting in `config/palette.toml`. Each Task or Job carries a `plan_path` that specifies where its Plan lives relative to that directory.
 
-For example, with `plan_dir = "docs/plans"`:
+For example, with the default `data_dir = "data"`, plans live under `data/plans/`:
 
 ```
-docs/plans/
+data/plans/
   2026/
     feature-x/
       README.md            ← Task-level Plan (scope, approach)
@@ -23,7 +23,7 @@ docs/plans/
         README.md          ← Job api-spec's Plan
 ```
 
-A Job's `plan_path` might be `2026/feature-x/api-impl/README.md`, resolving to `docs/plans/2026/feature-x/api-impl/README.md`.
+A Job's `plan_path` might be `2026/feature-x/api-impl/README.md`, resolving to `data/plans/2026/feature-x/api-impl/README.md`.
 
 ## Splitting work
 
@@ -36,7 +36,7 @@ For example, if Task `api-impl` is too large:
 3. Each child Task has its own `plan_path`, which can nest under the original Plan's directory:
 
 ```
-docs/plans/2026/feature-x/
+data/plans/2026/feature-x/
   api-impl/
     README.md                  ← Original Plan (completed)
     api-impl-auth/

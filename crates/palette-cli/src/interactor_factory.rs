@@ -8,7 +8,6 @@ use palette_orchestrator::github_client::GhCliReviewClient;
 use palette_orchestrator::{CallbackNetwork, ValidatedPerspectives};
 use palette_tmux::TmuxManager;
 use palette_usecase::Interactor;
-use std::path::Path;
 use std::sync::Arc;
 
 pub(crate) fn build_interactor(
@@ -18,8 +17,9 @@ pub(crate) fn build_interactor(
     let session_name = TerminalSessionName::new(&config.tmux.session_name);
     let tmux = TmuxManager::new(session_name);
 
-    let db = Database::open(Path::new(&config.db_path))?;
-    tracing::info!(db_path = %config.db_path, "database initialized");
+    let db_path = config.db_path();
+    let db = Database::open(&db_path)?;
+    tracing::info!(db_path = %db_path.display(), "database initialized");
 
     let callback_network_mode = match config.docker.callback_network {
         CallbackNetwork::Auto => CallbackNetworkMode::Auto,

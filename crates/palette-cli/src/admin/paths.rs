@@ -1,4 +1,4 @@
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 const USER_CONFIG_RELATIVE: &str = ".config/palette/config.toml";
 
@@ -15,13 +15,6 @@ pub(super) fn resolve_config_path(
     } else {
         Err(format!("config not found: {}", user_config.display()).into())
     }
-}
-
-pub(super) fn data_dir_from_db_path(db_path: &str) -> PathBuf {
-    Path::new(db_path)
-        .parent()
-        .map(|p| p.to_path_buf())
-        .unwrap_or_else(|| PathBuf::from("data"))
 }
 
 pub(super) fn remove_paths(paths: &[PathBuf]) -> usize {
