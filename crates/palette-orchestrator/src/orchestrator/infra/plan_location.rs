@@ -25,10 +25,7 @@ impl PlanLocation {
 /// Resolve the [`PlanLocation`] for a job, given the workflow's blueprint host
 /// path. The job detail is currently unused but kept in the signature for
 /// callers that may later want to vary the location per job type.
-pub fn resolve(
-    blueprint_path: &Path,
-    _job_detail: &JobDetail,
-) -> std::io::Result<PlanLocation> {
+pub fn resolve(blueprint_path: &Path, _job_detail: &JobDetail) -> std::io::Result<PlanLocation> {
     let blueprint_dir = blueprint_path
         .parent()
         .map(|p| p.to_path_buf())
