@@ -6,62 +6,85 @@ user-invocable: true
 
 # /palette:plan
 
-Interview the Operator about a new task, then generate a Blueprint YAML and its companion plan (`README.md`). The plan is referenced by the Blueprint's root task via `plan_path` and lives alongside `blueprint.yaml` in the same directory.
+Interview the Operator about a new task, then generate a `blueprint.yaml` and its companion `README.md`. The plan is referenced by the Blueprint's root task via `plan_path` and lives alongside `blueprint.yaml` in the same directory.
 
-## Interaction principles
+## Instructions
 
-- **Ask one question at a time.** Wait for the Operator's answer before moving on. Do not batch multiple questions in a single message.
-- **Keep messages short and direct.** A message to the Operator is typically one sentence — at most two. Do not rehearse what comes next, explain filesystem details, or announce internal stages like "slug will come later." Those are instructions to you, not to the Operator.
-- **Defer naming until the work is fully described.** The slug is the directory name, so it is filesystem-facing but not needed until generation. Hold off proposing a slug until scope and subtasks are known — by then the Operator's own subtask names reveal the domain vocabulary the skill should use, and any imprecise wording from the opening goal has had a chance to settle.
-- **Confirm proposed values before committing.** When the skill proposes a slug, a path, or a task structure, show it and ask for approval or edits.
+- Interview the Operator to learn the goal, target repository, and scope
+- Investigate the target repository and share a short summary so the Operator can correct any misreadings
+- Propose a task breakdown grounded in the investigation; confirm with the Operator
+- Propose the slug and the plan directory path; confirm with the Operator
+- Generate `blueprint.yaml` and `README.md`
+- Review the generated files with the Operator, apply edits, then hand off to `/palette:approve`
 
-## Interview flow
+## Interaction Principles
 
-Follow these steps in order. Each step is a single message to the Operator.
+- Ask one question at a time and wait for the answer before moving on
+- Keep each message to one or two sentences — do not rehearse later steps, explain internal stages, or mention `slug`/filesystem details to the Operator
+- Confirm proposed values (slug, path, task tree) before committing them
+- Hold off proposing the slug until scope and breakdown are known; the Operator's own domain vocabulary should shape it, not their opening phrasing
 
-- **Step 1 — Goal.** Ask the Operator what they want to accomplish. Example phrasing: "What would you like to accomplish?" Do not mention slugs, subtasks, or later steps — just the question.
-- **Step 2 — Target repository.** Ask which repository this work targets. Example: "Which repository should this target?" Expect an `owner/repo` answer. Do not ask about branches here; branches belong to craft tasks and are resolved in Step 5. If the Operator volunteers that multiple repositories are involved, record that for Step 5.
-- **Step 3 — Scope detail.** Ask for the scope and success criteria in one focused question. Example: "What's the scope and what would mark this as done?" Accept a free-form answer.
-- **Step 4 — Investigation (skill works alone).** Before proposing a task breakdown, actively inspect the target repository to ground your understanding. Do not ask the Operator any questions during this step.
-  - Read the repository's entry points (top-level README, relevant docs, relevant source directories) and files the stated scope points at.
-  - Use Grep/Glob to locate affected modules, existing patterns, naming conventions, tests, and related specs.
-  - Identify: which files are in scope for modification, what existing patterns the change should match, any design constraints, and whether the work is one concern or several independent concerns.
-  - Finish the step by posting a short summary to the Operator: "Here's what I found: …" listing the affected files/modules and the key observations that will drive the breakdown. Ask the Operator to flag anything you misread before you propose a task tree. This is the Operator's chance to correct your understanding cheaply.
-- **Step 5 — Task breakdown (skill proposes, Operator confirms).** Using the investigation from Step 4, propose the task tree. Do **not** ask the Operator to enumerate subtasks.
-  - If the work is a single small implementation concern, emit **one** craft task (with its implicit review child). Do not invent artificial splits.
-  - If the work has multiple distinct implementation concerns, sequential phases, or sub-steps that can fail/be reviewed independently, emit **multiple** craft tasks, using `depends_on` for any required ordering.
-  - When uncertain whether to split, prefer a single task — splitting later is cheap, merging is not.
+## Interview Questions
 
-  Derive every technical field yourself:
-  - `key`: a kebab-case summary of each task (2–4 words), drawn from the vocabulary that surfaced in Step 3 and Step 4.
-  - `type`: always `craft` for concrete work items; each one implicitly owns a `review` child.
-  - `depends_on`: inferred from the scope's sequencing.
-  - `repository` / `branch`: reuse Step 2's repository; default the branch to the repository's default branch (inspect the repo if possible).
-  - `priority`: leave unset unless the Operator flagged specific priorities in Step 3.
+Ask these in order. One question per message.
 
-  Present the proposed tree as a rendered YAML snippet with a one-line rationale ("single task — scope is self-contained" / "split into N tasks because …") and ask the Operator to confirm the breakdown or request changes (add, remove, reorder). Only ask a follow-up when a field genuinely cannot be derived (e.g. multi-repo ambiguity from Step 2). Apply requested edits in place before moving on.
-- **Step 6 — Slug proposal.** Now that the goal, repository, scope, investigation, and subtasks are all known, derive a short kebab-case slug (2–4 words, lowercase, hyphen-separated, e.g. `refresh-keybinding`). Base it on the vocabulary that surfaced during Steps 3–5 — often a subtask key, a key noun from the scope, or a concatenation thereof — rather than on the Operator's opening phrasing. Propose it with a brief rationale and ask the Operator to accept or override.
-- **Step 7 — Plan location base.** Ask which base directory to use:
-  - **A.** Inside the target repository itself — plans ship with the code (the common case).
-  - **B.** Inside the current CWD's repo — plans managed in an external repository (for example, managing a private project's plans from a separate workspace repo).
-  Present **A** first with the concrete repo name filled in so the choice is unambiguous.
-- **Step 8 — Path confirmation.** Using the chosen base, construct the default directory:
+- What would you like to accomplish?
+- Which repository should this target? (expect an `owner/repo` answer; do not ask about branches)
+- What's the scope, and what would mark this as done?
+
+If the Operator volunteers that multiple repositories are involved, record it and use it later during the breakdown. Otherwise assume a single target repository.
+
+## Repository Investigation
+
+Do this alone — do not ask the Operator questions during investigation.
+
+- Read the repository's entry points (top-level README, relevant docs, the source directories the scope points at)
+- Use Grep / Glob to locate affected modules, existing patterns, tests, and related specs
+- Identify: the files in scope for modification, the conventions the change should match, and whether the work is one concern or several independent concerns
+
+Conclude the step by posting a short summary to the Operator — "Here's what I found: …" — listing the affected files and the key observations that will drive the breakdown. Invite corrections.
+
+## Task Breakdown Policy
+
+Propose the task tree yourself; do not ask the Operator to enumerate subtasks.
+
+- If the work is a single small implementation concern, emit **one** craft task (with its implicit review child). Do not invent artificial splits.
+- If the work has multiple distinct implementation concerns, sequential phases, or sub-steps that can fail or be reviewed independently, emit **multiple** craft tasks with `depends_on` for ordering.
+- When uncertain, prefer a single task — splitting later is cheap, merging is not.
+
+Derive every technical field yourself:
+
+- `key`: a kebab-case summary of each task (2–4 words), drawn from the vocabulary that surfaced during scope and investigation
+- `type`: always `craft` for concrete work items; each one implicitly owns a `review` child
+- `depends_on`: inferred from the scope's sequencing
+- `repository` / `branch`: reuse the target repository; default the branch to the repository's default branch (inspect the repo if possible)
+- `priority`: leave unset unless the Operator explicitly flagged priorities
+
+Present the proposed tree as a rendered YAML snippet with a one-line rationale ("single task — scope is self-contained" / "split into N tasks because …") and ask the Operator to confirm or request changes. Only ask follow-ups when a field genuinely cannot be derived (e.g. multi-repo ambiguity).
+
+## Slug and Path
+
+- Slug: kebab-case, 2–4 words, lowercase, drawn from vocabulary that surfaced during scope and breakdown (often a subtask key or a key noun from the scope)
+- Propose the slug with a brief rationale; the Operator may accept or override
+- Default plan base: the target repository itself (plans ship with the code)
+- Alternative base: the current CWD's repo (for plans managed in an external repository — e.g. a private workspace repo hosting another project's plans)
+- Default directory layout:
   ```
   <base>/docs/plans/<YYYY>/<MMDD>-<slug>/
   ```
-  - `<YYYY>` is the current year (e.g., `2026`).
-  - `<MMDD>` is the current month and day (e.g., `0418`).
-  - `<slug>` is the approved slug.
-  Show the full path and ask the Operator to confirm or override.
-- **Step 9 — Generation.** Generate both files in the chosen directory:
-  - `blueprint.yaml` with the root task's `plan_path: README.md` set, so Palette's parser enforces the companion plan.
-  - `README.md` with the goal, scope, success criteria, and a brief overview of the subtasks.
-- **Step 10 — Review.** Show both generated files. Ask the Operator if any changes are needed. Apply requested edits in place.
-- **Step 11 — Handoff.** Once the Operator approves, tell them to run `/palette:approve <absolute-path-to-blueprint.yaml>` to start the workflow.
+  where `<YYYY>` is the current year and `<MMDD>` is the current month and day
+- Show the full path and ask the Operator to confirm or override
 
-## Blueprint YAML reference
+## Generation
 
-Produce a structure like this:
+Write both files in the chosen directory:
+
+- `blueprint.yaml` — the task tree, with the root task's `plan_path: README.md` set so Palette's parser enforces the companion plan
+- `README.md` — the plan document: goal, scope, success criteria, brief overview of the subtasks
+
+Show both files to the Operator and apply any requested edits in place. Once approved, tell the Operator to run `/palette:approve <absolute-path-to-blueprint.yaml>` to start the workflow.
+
+## Blueprint YAML Reference
 
 ```yaml
 task:
@@ -80,16 +103,16 @@ task:
           type: review
 ```
 
-Rules to observe when generating the YAML:
+Rules:
 
-- `task:` defines the root task with `key` (and optionally `plan_path`).
-- Leaf tasks must have `type: craft` or `type: review`.
-- **Every `craft` task must carry a `review` child** — Palette rejects a Blueprint with a `craft` task that has no review child. The review's ordering relative to the craft is implied by the parent-child relationship, so do not add `depends_on:` for it.
-- Non-leaf (composite) tasks must NOT have a `type` field; they group child tasks via their own `children:` list.
-- Use `depends_on:` to express ordering between **sibling** tasks (e.g. a later craft that depends on an earlier craft finishing).
-- `priority:` can be `high`, `medium`, or `low`.
-- `repository:` takes `name` and `branch` fields.
-- `plan_path:` on any task (including the root) names a plan document **relative to the Blueprint directory**. Absolute paths and `..` are rejected by Palette.
+- `task:` defines the root task with `key` (and optionally `plan_path`)
+- Leaf tasks must have `type: craft` or `type: review`
+- **Every `craft` task must carry a `review` child** — Palette rejects a Blueprint with a `craft` task that has no review child. The review's ordering relative to the craft is implicit, so do not add `depends_on:` for it
+- Non-leaf (composite) tasks must NOT have a `type` field; they group child tasks via their own `children:` list
+- Use `depends_on:` to express ordering between **sibling** tasks (e.g. a later craft that depends on an earlier craft finishing)
+- `priority:` can be `high`, `medium`, or `low`
+- `repository:` takes `name` and `branch` fields
+- `plan_path:` on any task names a plan document **relative to the Blueprint directory**. Absolute paths and `..` are rejected
 
 ## Notes
 
