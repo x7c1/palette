@@ -11,6 +11,7 @@ Interview the Operator about a new task, then generate a Blueprint YAML and its 
 ## Interaction principles
 
 - **Ask one question at a time.** Wait for the Operator's answer before moving on. Do not batch multiple questions in a single message.
+- **Keep messages short and direct.** A message to the Operator is typically one sentence — at most two. Do not rehearse what comes next, explain filesystem details, or announce internal stages like "slug will come later." Those are instructions to you, not to the Operator.
 - **Defer naming until the work is fully described.** The slug is the directory name, so it is filesystem-facing but not needed until generation. Hold off proposing a slug until scope and subtasks are known — by then the Operator's own subtask names reveal the domain vocabulary the skill should use, and any imprecise wording from the opening goal has had a chance to settle.
 - **Confirm proposed values before committing.** When the skill proposes a slug, a path, or a task structure, show it and ask for approval or edits.
 
@@ -18,9 +19,9 @@ Interview the Operator about a new task, then generate a Blueprint YAML and its 
 
 Follow these steps in order. Each step is a single message to the Operator.
 
-- **Step 1 — Goal.** Ask the Operator to describe what they want to accomplish in their own words (one or two sentences). Tell them you will settle on a name at the end — for now, just the goal.
-- **Step 2 — Target repository.** Ask which repository this work targets (just the `owner/repo` name — not the branch). Assume a single repo by default; if the Operator says the work spans multiple repositories, accept that and note it for Step 4. Branches are per-craft-task and are decided during Step 4, so do not ask about branches here.
-- **Step 3 — Scope detail.** Ask the Operator for the scope and success criteria of the overall work (for the root plan's body). Keep it focused — one prompt, free-form answer.
+- **Step 1 — Goal.** Ask the Operator what they want to accomplish. Example phrasing: "What would you like to accomplish?" Do not mention slugs, subtasks, or later steps — just the question.
+- **Step 2 — Target repository.** Ask which repository this work targets. Example: "Which repository should this target?" Expect an `owner/repo` answer. Do not ask about branches here; branches belong to craft tasks and are resolved in Step 4. If the Operator volunteers that multiple repositories are involved, record that for Step 4.
+- **Step 3 — Scope detail.** Ask for the scope and success criteria in one focused question. Example: "What's the scope and what would mark this as done?" Accept a free-form answer.
 - **Step 4 — Task breakdown (skill proposes, Operator confirms).** Do **not** ask the Operator to enumerate subtasks. Judge the breakdown yourself from the goal and scope:
   - If the work is a single small implementation concern, emit **one** craft task (with its implicit review child). Do not invent artificial splits.
   - If the work has multiple distinct implementation concerns, sequential phases, or sub-steps that can fail/be reviewed independently, emit **multiple** craft tasks, using `depends_on` for any required ordering.
