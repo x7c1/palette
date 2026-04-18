@@ -51,23 +51,24 @@ task:
   plan_path: README.md
 
   children:
-    - key: <subtask-key>
+    - key: <craft-key>
       type: craft
       repository:
         name: <owner>/<repo>
         branch: <branch>
       # Optional: depends_on, priority, plan_path
-    - key: <review-key>
-      type: review
-      depends_on: [<subtask-key>]
+      children:
+        - key: <review-key>
+          type: review
 ```
 
 Rules to observe when generating the YAML:
 
 - `task:` defines the root task with `key` (and optionally `plan_path`).
 - Leaf tasks must have `type: craft` or `type: review`.
+- **Every `craft` task must carry a `review` child** — Palette rejects a Blueprint with a `craft` task that has no review child. The review's ordering relative to the craft is implied by the parent-child relationship, so do not add `depends_on:` for it.
 - Non-leaf (composite) tasks must NOT have a `type` field; they group child tasks via their own `children:` list.
-- Use `depends_on:` to express ordering between sibling tasks.
+- Use `depends_on:` to express ordering between **sibling** tasks (e.g. a later craft that depends on an earlier craft finishing).
 - `priority:` can be `high`, `medium`, or `low`.
 - `repository:` takes `name` and `branch` fields.
 - `plan_path:` on any task (including the root) names a plan document **relative to the Blueprint directory**. Absolute paths and `..` are rejected by Palette.

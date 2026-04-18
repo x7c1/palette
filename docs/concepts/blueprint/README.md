@@ -43,9 +43,12 @@ task:
         - key: api-plan
           type: craft
           plan_path: planning/api-plan/README.md
-        - key: api-plan-review
-          type: review
-          depends_on: [api-plan]
+          repository:
+            name: x7c1/palette
+            branch: feature/x-api-plan
+          children:
+            - key: api-plan-review
+              type: review
 
     - key: execution
       depends_on: [planning]
@@ -56,10 +59,12 @@ task:
           repository:
             name: x7c1/palette
             branch: feature/x-api-impl
-        - key: api-impl-review
-          type: review
-          depends_on: [api-impl]
+          children:
+            - key: api-impl-review
+              type: review
 ```
+
+Every `craft` Task must have a `review` child — Palette rejects a Blueprint whose `craft` Task has no review. The review runs after its parent `craft` completes, so the ordering is implicit and no `depends_on` is needed for the review.
 
 ## Collocations
 
