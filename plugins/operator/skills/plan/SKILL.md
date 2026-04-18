@@ -89,7 +89,7 @@ Before showing the files to the Operator, perform a **vocabulary check** against
 - Prefer the canonical name even when it is slightly longer or less conversational — consistency with the codebase outweighs stylistic variation
 - If the plan introduces a genuinely new concept that has no existing name in the repo, keep your chosen wording, but call it out explicitly in the plan so the novelty is visible
 
-Show both files to the Operator and apply any requested edits in place. Once approved, tell the Operator to run `/palette:approve <absolute-path-to-blueprint.yaml>` to start the workflow.
+Show both files to the Operator and apply any requested edits in place. Once approved, tell the Operator to run `/palette:approve` to start the workflow — no path argument needed, since `/palette:approve` picks up the blueprint just generated from the conversation context.
 
 ## Blueprint YAML Reference
 
