@@ -7,6 +7,7 @@ use axum::{
 };
 use palette_domain::server::ServerEvent;
 use palette_domain::workflow::WorkflowId;
+use palette_usecase::validate_blueprint;
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 use std::sync::Arc;
@@ -60,6 +61,17 @@ pub async fn handle_start_pr_review(
     std::fs::create_dir_all(&blueprint_dir).map_err(Error::internal)?;
     let blueprint_path = blueprint_dir.join("blueprint.yaml");
     std::fs::write(&blueprint_path, &yaml).map_err(Error::internal)?;
+    // The parser requires a README.md next to every blueprint.yaml. PR review
+    // workflows carry no human-authored plan, so write a minimal stub.
+    let parent_plan = blueprint_dir.join("README.md");
+    std::fs::write(
+        &parent_plan,
+        format!(
+            "# PR review {}/{}#{}\n\nAuto-generated blueprint — no plan document.\n",
+            req.owner, req.repo, req.number
+        ),
+    )
+    .map_err(Error::internal)?;
     let blueprint_path_str = blueprint_path.to_string_lossy().to_string();
 
     tracing::info!(
@@ -69,11 +81,12 @@ pub async fn handle_start_pr_review(
     );
 
     // Use existing Blueprint read path
-    let tree = state
-        .interactor
-        .blueprint
-        .read_blueprint(Path::new(&blueprint_path_str), &workflow_id)
-        .map_err(super::blueprint_read_error_to_server_error)?;
+    let tree = validate_blueprint(
+        state.interactor.blueprint.as_ref(),
+        Path::new(&blueprint_path_str),
+        &workflow_id,
+    )
+    .map_err(super::blueprint_read_error_to_server_error)?;
 
     let task_count =
         super::start::register_tasks(&state, &workflow_id, &tree, &blueprint_path_str)?;

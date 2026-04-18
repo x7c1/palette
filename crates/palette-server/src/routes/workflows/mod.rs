@@ -20,20 +20,25 @@ use crate::Error;
 use crate::api_types::{ErrorCode, InputError, Location};
 use palette_usecase::ReadBlueprintError;
 
-/// Convert a `ReadBlueprintError` into a server error.
+/// Map a `ReadBlueprintError` to a 4xx/5xx server error for endpoints that
+/// conceptually "use" the blueprint (start, apply-blueprint). File-level
+/// NotFound collapses into a single `blueprint/not_found` InputError so
+/// clients get a machine-readable reason in the existing `BlueprintInvalid`
+/// envelope instead of a free-form message.
 fn blueprint_read_error_to_server_error(e: ReadBlueprintError) -> Error {
     match e {
-        ReadBlueprintError::Read(cause) => Error::BadRequest {
+        ReadBlueprintError::NotFound { .. } => Error::BadRequest {
             code: ErrorCode::BlueprintInvalid,
             errors: vec![InputError {
                 location: Location::Body,
                 hint: "blueprint_path".into(),
-                reason: format!("{cause}"),
+                reason: "blueprint/not_found".into(),
             }],
         },
-        ReadBlueprintError::Validation(errors) => Error::BadRequest {
+        ReadBlueprintError::Invalid(errors) => Error::BadRequest {
             code: ErrorCode::BlueprintInvalid,
             errors,
         },
+        ReadBlueprintError::Internal(cause) => Error::internal(format!("{cause}")),
     }
 }

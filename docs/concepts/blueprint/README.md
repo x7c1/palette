@@ -26,8 +26,8 @@ When the root Task carries `plan_path`, that Plan articulates the workflow's ove
 
 Rules:
 
+- A `README.md` must exist alongside every `blueprint.yaml` as the Blueprint's parent plan. Palette's parser rejects a Blueprint whose directory has no `README.md`.
 - Every `plan_path` declared in the Blueprint must point to an existing file under the Blueprint's directory. Palette's parser rejects the Blueprint otherwise.
-- A Blueprint may declare no `plan_path` at all — this is valid and is the shape used for purely mechanical workflows (such as auto-generated PR reviews) where the Task tree alone fully captures the intent.
 - Only one Blueprint per work unit; nested `blueprint.yaml` in a subdirectory is rejected.
 - All `plan_path` values are relative to the Blueprint's directory. Absolute paths and `..` are rejected.
 
@@ -65,6 +65,12 @@ task:
 ```
 
 Every `craft` Task must have a `review` child — Palette rejects a Blueprint whose `craft` Task has no review. The review runs after its parent `craft` completes, so the ordering is implicit and no `depends_on` is needed for the review.
+
+## Validation
+
+Palette exposes `POST /blueprints/validate` so a Blueprint can be checked before any Workflow is created. The endpoint reads the file, runs the same schema and structural validation as `POST /workflows/start`, and returns either a summary of the parsed tree (when valid) or a list of machine-readable errors (when invalid). The endpoint is side-effect-free — no database rows, no network calls, no activation events — so it is safe to call as a pre-flight from skills (`/palette:plan` uses it after generation; `/palette:approve` runs it before starting a Workflow).
+
+When invalid, each entry in `errors[]` carries a `location`, a `hint` pointing at the offending field, and a `reason` code in `{namespace}/{value}` form (e.g. `blueprint/missing_review_child`, `blueprint/plan_path_missing`, `invalid_task_key/invalid_format`). Clients can branch on `reason` without string-parsing free-form messages.
 
 ## Collocations
 

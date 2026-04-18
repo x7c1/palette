@@ -23,6 +23,7 @@ pub enum ResourceKind {
     Workflow,
     Worker,
     ReviewSubmission,
+    Blueprint,
 }
 
 pub use palette_core::{InputError, Location};
