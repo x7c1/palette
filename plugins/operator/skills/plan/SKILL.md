@@ -21,18 +21,19 @@ Follow these steps in order. Each step is a single message to the Operator.
 - **Step 1 — Goal.** Ask the Operator to describe what they want to accomplish in their own words (one or two sentences). Tell them you will settle on a name at the end — for now, just the goal.
 - **Step 2 — Target repository.** Ask which repository this work targets (just the `owner/repo` name — not the branch). Assume a single repo by default; if the Operator says the work spans multiple repositories, accept that and note it for Step 4. Branches are per-craft-task and are decided during Step 4, so do not ask about branches here.
 - **Step 3 — Scope detail.** Ask the Operator for the scope and success criteria of the overall work (for the root plan's body). Keep it focused — one prompt, free-form answer.
-- **Step 4 — Task breakdown.** Ask the Operator **only** for a natural-language description of the subtasks ("どういう作業のかたまりに分けますか?" / "What pieces of work should this break into?"). Accept the answer as free-form prose or a short list. Derive every technical field yourself from that answer:
-  - `key`: a kebab-case summary of each subtask (2–4 words).
-  - `type`: default `craft` for every concrete work item. Every craft task is given a `review` child automatically — do not ask the Operator about reviews; they are implied by the schema.
-  - `depends_on`: inferred from ordering words in the Operator's answer ("まず…次に…", "first… then…"). Tasks described as sequential become `depends_on: [<previous>]`; tasks presented as a flat list stay independent.
-  - `repository` / `branch`: reuse Step 2's repository and default its branch to the repository's default branch (inspect the repo if possible). Do not prompt for these.
-  - `priority`: leave unset unless the Operator explicitly flags a subtask as high/medium/low priority in their description.
+- **Step 4 — Task breakdown (skill proposes, Operator confirms).** Do **not** ask the Operator to enumerate subtasks. Judge the breakdown yourself from the goal and scope:
+  - If the work is a single small implementation concern, emit **one** craft task (with its implicit review child). Do not invent artificial splits.
+  - If the work has multiple distinct implementation concerns, sequential phases, or sub-steps that can fail/be reviewed independently, emit **multiple** craft tasks, using `depends_on` for any required ordering.
+  - When uncertain whether to split, prefer a single task — splitting later is cheap, merging is not.
 
-  Ask a follow-up **only** when a field genuinely cannot be derived:
-  - The Operator declared a multi-repo workflow in Step 2 and it is ambiguous which repo owns a given subtask.
-  - The Operator mentioned a specific non-default branch but did not attach it to a subtask.
+  Derive every technical field yourself:
+  - `key`: a kebab-case summary of each task (2–4 words), drawn from the scope vocabulary.
+  - `type`: always `craft` for concrete work items; each one implicitly owns a `review` child.
+  - `depends_on`: inferred from the scope's sequencing.
+  - `repository` / `branch`: reuse Step 2's repository; default the branch to the repository's default branch (inspect the repo if possible).
+  - `priority`: leave unset unless the Operator flagged specific priorities in Step 3.
 
-  After deriving the tree, present it back as a rendered YAML snippet and ask the Operator to confirm or amend ("この分解でよいですか? 修正があれば教えてください"). Apply any requested edits in place before moving on.
+  Present the proposed tree as a rendered YAML snippet with one-line rationale ("single task — scope is self-contained" / "split into N tasks because …") and ask the Operator to confirm or amend ("この分解でよいですか? 増やす・減らす・順序変更など修正があれば教えてください"). Only ask a follow-up when a field genuinely cannot be derived (e.g. multi-repo ambiguity from Step 2). Apply requested edits in place before moving on.
 - **Step 5 — Slug proposal.** Now that the goal, repository, scope, and subtasks are all known, derive a short kebab-case slug (2–4 words, lowercase, hyphen-separated, e.g. `refresh-keybinding`). Base it on the vocabulary that surfaced during Step 3 and Step 4 — often a subtask key, a key noun from the scope, or a concatenation thereof — rather than on the Operator's opening phrasing. Propose it with a brief rationale and ask the Operator to accept or override.
 - **Step 6 — Plan location base.** Ask which base directory to use:
   - **A.** Inside the target repository itself — plans ship with the code (the common case).
