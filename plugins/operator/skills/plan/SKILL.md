@@ -21,7 +21,18 @@ Follow these steps in order. Each step is a single message to the Operator.
 - **Step 1 — Goal.** Ask the Operator to describe what they want to accomplish in their own words (one or two sentences). Tell them you will settle on a name at the end — for now, just the goal.
 - **Step 2 — Target repository.** Ask which repository this work targets (just the `owner/repo` name — not the branch). Assume a single repo by default; if the Operator says the work spans multiple repositories, accept that and note it for Step 4. Branches are per-craft-task and are decided during Step 4, so do not ask about branches here.
 - **Step 3 — Scope detail.** Ask the Operator for the scope and success criteria of the overall work (for the root plan's body). Keep it focused — one prompt, free-form answer.
-- **Step 4 — Task breakdown.** Ask the Operator to describe the subtasks. For each Craft subtask, reuse the repository from Step 2 by default; ask for an override only if the Operator indicated a multi-repo workflow or volunteers a different repo. Ask for the **branch** only at this point, since it is per-craft-task; default to the repository's default branch (inspect the repo if possible to avoid asking) and let the Operator override. For each subtask collect key, type (`craft` or `review`), dependencies, and priority if relevant. If the Operator lists several subtasks in one message, accept them; otherwise walk them one at a time until they say the tree is complete.
+- **Step 4 — Task breakdown.** Ask the Operator **only** for a natural-language description of the subtasks ("どういう作業のかたまりに分けますか?" / "What pieces of work should this break into?"). Accept the answer as free-form prose or a short list. Derive every technical field yourself from that answer:
+  - `key`: a kebab-case summary of each subtask (2–4 words).
+  - `type`: default `craft` for every concrete work item. Every craft task is given a `review` child automatically — do not ask the Operator about reviews; they are implied by the schema.
+  - `depends_on`: inferred from ordering words in the Operator's answer ("まず…次に…", "first… then…"). Tasks described as sequential become `depends_on: [<previous>]`; tasks presented as a flat list stay independent.
+  - `repository` / `branch`: reuse Step 2's repository and default its branch to the repository's default branch (inspect the repo if possible). Do not prompt for these.
+  - `priority`: leave unset unless the Operator explicitly flags a subtask as high/medium/low priority in their description.
+
+  Ask a follow-up **only** when a field genuinely cannot be derived:
+  - The Operator declared a multi-repo workflow in Step 2 and it is ambiguous which repo owns a given subtask.
+  - The Operator mentioned a specific non-default branch but did not attach it to a subtask.
+
+  After deriving the tree, present it back as a rendered YAML snippet and ask the Operator to confirm or amend ("この分解でよいですか? 修正があれば教えてください"). Apply any requested edits in place before moving on.
 - **Step 5 — Slug proposal.** Now that the goal, repository, scope, and subtasks are all known, derive a short kebab-case slug (2–4 words, lowercase, hyphen-separated, e.g. `refresh-keybinding`). Base it on the vocabulary that surfaced during Step 3 and Step 4 — often a subtask key, a key noun from the scope, or a concatenation thereof — rather than on the Operator's opening phrasing. Propose it with a brief rationale and ask the Operator to accept or override.
 - **Step 6 — Plan location base.** Ask which base directory to use:
   - **A.** Inside the target repository itself — plans ship with the code (the common case).
