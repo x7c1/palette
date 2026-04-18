@@ -41,6 +41,7 @@ Do this alone — do not ask the Operator questions during investigation.
 - Read the repository's entry points (top-level README, relevant docs, the source directories the scope points at)
 - Use Grep / Glob to locate affected modules, existing patterns, tests, and related specs
 - Identify: the files in scope for modification, the conventions the change should match, and whether the work is one concern or several independent concerns
+- Record a short **vocabulary list** — the canonical names the repo uses for the concepts, types, modules, and subsystems you touched. This list will anchor the wording of the generated plan so it mirrors what the codebase already calls things
 
 Conclude the step by posting a short summary to the Operator — "Here's what I found: …" — listing the affected files and the key observations that will drive the breakdown. Invite corrections.
 
@@ -81,6 +82,12 @@ Write both files in the chosen directory:
 
 - `blueprint.yaml` — the task tree, with the root task's `plan_path: README.md` set so Palette's parser enforces the companion plan
 - `README.md` — the plan document: goal, scope, success criteria, brief overview of the subtasks
+
+Before showing the files to the Operator, perform a **vocabulary check** against the list captured during Repository Investigation:
+
+- For each concept mentioned in `README.md`, verify it uses the repo's existing name when one exists. If a draft sentence paraphrases an established concept (e.g. invents "task definition" when the codebase says `Blueprint`, or writes "executor" for a `Crafter`), replace the paraphrase with the canonical term
+- Prefer the canonical name even when it is slightly longer or less conversational — consistency with the codebase outweighs stylistic variation
+- If the plan introduces a genuinely new concept that has no existing name in the repo, keep your chosen wording, but call it out explicitly in the plan so the novelty is visible
 
 Show both files to the Operator and apply any requested edits in place. Once approved, tell the Operator to run `/palette:approve <absolute-path-to-blueprint.yaml>` to start the workflow.
 
