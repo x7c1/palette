@@ -1,68 +1,77 @@
 ---
 name: plan
-description: Create a Blueprint YAML and its plan document from a task description
+description: Interview the Operator about a new task and generate the Blueprint and plan documents
 user-invocable: true
-argument-hint: <slug>
 ---
 
 # /palette:plan
 
-Create a Blueprint YAML and its plan document from a task description provided by the Operator. The plan is referenced by the Blueprint's root task via `plan_path` and lives alongside `blueprint.yaml` in the same directory.
+Interview the Operator about a new task, then generate a Blueprint YAML and its companion plan (`README.md`). The plan is referenced by the Blueprint's root task via `plan_path` and lives alongside `blueprint.yaml` in the same directory.
 
-## Arguments
+## Interaction principles
 
-- `$0`: Short kebab-case slug describing the work (e.g., `add-user-auth`). Used in the output directory name.
+- **Ask one question at a time.** Wait for the Operator's answer before moving on. Do not batch multiple questions in a single message.
+- **Let the Operator describe the work first.** The slug and directory name are derived from that description by the skill, then confirmed — never asked up-front.
+- **Confirm proposed values before committing.** When the skill proposes a slug, a path, or a task structure, show it and ask for approval or edits.
 
-## Instructions
+## Interview flow
 
-- Ask the Operator where to put the new plan. Offer two options:
-  - **A. Inside the Palette workflow's target repo (workspace)** — for plans that ship together with the code being changed (the common case).
-  - **B. Inside the current CWD's repo** — for plans managed in an external repository (for example, managing palette's own plans from a separate workspace repo).
-- After the Operator picks the base, compute the default save directory:
+Follow these steps in order. Each step is a single message to the Operator.
+
+- **Step 1 — Goal.** Ask the Operator to describe what they want to accomplish in their own words (one or two sentences). Do not ask about subtasks, repositories, or slugs yet.
+- **Step 2 — Slug proposal.** From the goal, derive a short kebab-case slug (2–4 words, lowercase, hyphen-separated, e.g. `add-user-auth`). Propose it to the Operator and ask whether to use it or choose another.
+- **Step 3 — Plan location base.** Ask the Operator which base directory to use:
+  - **A.** Inside the Palette workflow's target repo (workspace) — plans ship with the code.
+  - **B.** Inside the current CWD's repo — plans managed in an external repository (for example, managing Palette's own plans from a separate workspace repo).
+- **Step 4 — Path confirmation.** Using the chosen base, construct the default directory:
   ```
   <base>/docs/plans/<YYYY>/<MMDD>-<slug>/
   ```
   - `<YYYY>` is the current year (e.g., `2026`).
-  - `<MMDD>` is the current month and day (e.g., `0417`).
-  - `<slug>` is `$0`.
-  - Example: `docs/plans/2026/0417-add-user-auth/`
-- Confirm the path with the Operator (allow override).
-- Ask the Operator to describe the task and its subtasks.
-- Generate the Blueprint YAML in the chosen directory as `blueprint.yaml`. The root task declares `plan_path: README.md` so Palette enforces that the companion plan exists:
-  ```yaml
-  task:
-    id: <task-id>
-    title: <descriptive title>
-    plan_path: README.md
+  - `<MMDD>` is the current month and day (e.g., `0418`).
+  - `<slug>` is the approved slug.
+  Show the full path and ask the Operator to confirm or override.
+- **Step 5 — Scope detail.** Ask the Operator for the scope and success criteria of the overall work (for the root plan's body). Keep it focused — one prompt, free-form answer.
+- **Step 6 — Task breakdown.** Ask the Operator to describe the subtasks. For each subtask, the skill needs: key, type (`craft` or `review`), and any dependencies or target repository. If the Operator lists many subtasks at once, accept them; otherwise, ask about one at a time until they say the tree is complete.
+- **Step 7 — Generation.** Generate both files in the chosen directory:
+  - `blueprint.yaml` with the root task's `plan_path: README.md` set, so Palette's parser enforces the companion plan.
+  - `README.md` with the goal, scope, success criteria, and a brief overview of the subtasks.
+- **Step 8 — Review.** Show both generated files. Ask the Operator if any changes are needed. Apply requested edits in place.
+- **Step 9 — Handoff.** Once the Operator approves, tell them to run `/palette:approve <absolute-path-to-blueprint.yaml>` to start the workflow.
 
-    children:
-      - id: <subtask-id>
-        type: craft
-        description: <what to do>
-        # Optional fields: depends_on, priority, repository, plan_path
-      - id: <subtask-id>
-        type: review
-        depends_on: [<previous-subtask>]
-  ```
-- Key rules for the YAML structure:
-  - `task:` defines the root task with `id` and `title`
-  - `children:` is a list of subtasks at the top level
-  - Leaf tasks must have `type: craft` or `type: review`
-  - Non-leaf tasks (composites) must NOT have a `type` field; they group child tasks via their own `children:` list
-  - Use `depends_on:` to express ordering between sibling tasks
-  - `priority:` can be `high`, `medium`, or `low`
-  - `repository:` takes `name` and `branch` fields
-  - `plan_path:` on any task (including the root) names a plan document **relative to the Blueprint directory**. Absolute paths and `..` are rejected.
-- Generate the plan as `README.md` in the same directory. Include:
-  - The work's purpose and scope
-  - A brief overview of the subtasks
-  - Any constraints or success criteria
-- Display both generated files to the Operator for review.
-- Apply any requested modifications.
-- Once the Operator approves, inform them to run `/palette:approve` with the **absolute path** to `blueprint.yaml` to start the Workflow.
+## Blueprint YAML reference
+
+Produce a structure like this:
+
+```yaml
+task:
+  key: <root-slug>
+  plan_path: README.md
+
+  children:
+    - key: <subtask-key>
+      type: craft
+      repository:
+        name: <owner>/<repo>
+        branch: <branch>
+      # Optional: depends_on, priority, plan_path
+    - key: <review-key>
+      type: review
+      depends_on: [<subtask-key>]
+```
+
+Rules to observe when generating the YAML:
+
+- `task:` defines the root task with `key` (and optionally `plan_path`).
+- Leaf tasks must have `type: craft` or `type: review`.
+- Non-leaf (composite) tasks must NOT have a `type` field; they group child tasks via their own `children:` list.
+- Use `depends_on:` to express ordering between sibling tasks.
+- `priority:` can be `high`, `medium`, or `low`.
+- `repository:` takes `name` and `branch` fields.
+- `plan_path:` on any task (including the root) names a plan document **relative to the Blueprint directory**. Absolute paths and `..` are rejected by Palette.
 
 ## Notes
 
-- Palette's Blueprint parser verifies every `plan_path` points to an existing file under the Blueprint directory. Skipping `README.md` (when the root task declares it) causes workflow start to fail.
-- A Blueprint that declares no `plan_path` on any task is also valid — this is the shape Palette uses for purely mechanical workflows (such as auto-generated PR reviews). When you write a Blueprint by hand, include `plan_path: README.md` on the root so your intent is captured.
+- Palette's Blueprint parser verifies every `plan_path` points to an existing file under the Blueprint directory. Skipping `README.md` when the root task declares it will cause workflow start to fail.
+- A Blueprint that declares no `plan_path` on any task is also valid — this shape is used for purely mechanical workflows (such as auto-generated PR reviews). For hand-authored Blueprints, always include `plan_path: README.md` on the root so the intent is captured.
 - In the future, a Crafter agent will generate Blueprints automatically. This skill serves as a manual bridge until that automation is ready.
