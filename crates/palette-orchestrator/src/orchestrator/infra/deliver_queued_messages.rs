@@ -102,7 +102,7 @@ impl Orchestrator {
         &self,
         workflow_id: &palette_domain::workflow::WorkflowId,
     ) -> crate::Result<bool> {
-        let workflow = self.interactor.data_store.get_workflow(workflow_id)?;
-        Ok(workflow.is_some_and(|w| w.status == WorkflowStatus::Suspending))
+        let workflow = self.interactor.data_store.require_workflow(workflow_id)?;
+        Ok(workflow.status == WorkflowStatus::Suspending)
     }
 }

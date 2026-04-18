@@ -19,9 +19,30 @@ Palette resolves its configuration file as follows:
 - `--config <path>` — use the specified file
 - No `--config` — use `~/.config/palette/config.toml`
 
-The repository ships a development config at `config/palette.toml`, which uses relative paths (e.g., `db_path = "data/palette.db"`). This means commands run with `--config config/palette.toml` operate on the local `data/` directory within the repository.
+The repository ships a development config at `config/palette.toml`, which uses a relative `data_dir = "data"`. This means commands run with `--config config/palette.toml` operate on the local `data/` directory within the repository.
 
 Without `--config`, commands target the user config at `~/.config/palette/`, which may contain production data.
+
+### Data Directory Layout
+
+`data_dir` holds ephemeral runtime data only:
+
+- `{data_dir}/palette.db` — SQLite database
+- `{data_dir}/workspace/` — per-job working copies
+- `{data_dir}/repos/` — bare repo caches
+- `{data_dir}/artifacts/` — craft job artifacts
+- `{data_dir}/blueprints/<workflow-id>/` — auto-generated Blueprints for PR-review workflows (ephemeral, regenerated per workflow)
+
+Plans and user-authored Blueprints are **not** stored under `data_dir`. They live wherever the Operator places them (typically in the target repo under `docs/plans/`) and are referenced by absolute path when a Workflow starts. See [concepts/blueprint](../concepts/blueprint/) for the co-location convention.
+
+### Operation Models
+
+Palette's process uniqueness is enforced by SQLite's `PRAGMA locking_mode=EXCLUSIVE` on the DB file, so the choice of `data_dir` determines how instances are shared:
+
+- **Model A — project-local instance**: a relative `data_dir` (e.g., `data_dir = "data"`) resolves from the current working directory. Each CWD has its own DB and workspaces, and multiple instances can run concurrently. This is the default for development.
+- **Model B — user-global instance**: an absolute `data_dir` (e.g., `data_dir = "/Users/alice/.local/share/palette"`) pins the instance to a single location. Starting `palette` from any CWD shares the same DB and workspaces, so only one instance exists per user.
+
+Switch between models by editing `data_dir` in the config file.
 
 ## Running Commands Locally
 

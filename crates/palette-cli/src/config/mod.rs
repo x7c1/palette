@@ -6,7 +6,7 @@ pub use tmux_config::TmuxConfig;
 
 use palette_orchestrator::{DockerConfig, PerspectivesConfig};
 use serde::Deserialize;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 #[cfg(test)]
 use palette_orchestrator::CallbackNetwork;
@@ -17,10 +17,8 @@ pub struct Config {
     pub port: u16,
     pub operator_api_url: String,
     pub server_bind_addr: String,
-    #[serde(default = "default_db_path")]
-    pub db_path: String,
-    #[serde(default = "default_plan_dir")]
-    pub plan_dir: String,
+    #[serde(default = "default_data_dir")]
+    pub data_dir: PathBuf,
     pub tmux: TmuxConfig,
     #[serde(default)]
     pub rules: RulesConfig,
@@ -29,12 +27,8 @@ pub struct Config {
     pub perspectives: PerspectivesConfig,
 }
 
-fn default_db_path() -> String {
-    "data/palette.db".to_string()
-}
-
-fn default_plan_dir() -> String {
-    "data/plans".to_string()
+fn default_data_dir() -> PathBuf {
+    PathBuf::from("data")
 }
 
 impl Config {
@@ -43,6 +37,10 @@ impl Config {
         let config: Config = toml::from_str(&content)
             .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
         Ok(config)
+    }
+
+    pub fn db_path(&self) -> PathBuf {
+        self.data_dir.join("palette.db")
     }
 }
 
@@ -66,7 +64,8 @@ worker_callback_url = "http://127.0.0.1:7100"
         let config: Config = toml::from_str(toml).unwrap();
         assert_eq!(config.port, 7100);
         assert_eq!(config.tmux.session_name, "palette");
-        assert_eq!(config.db_path, "data/palette.db");
+        assert_eq!(config.data_dir, PathBuf::from("data"));
+        assert_eq!(config.db_path(), PathBuf::from("data/palette.db"));
         assert_eq!(config.rules.max_review_rounds, 5);
         assert_eq!(config.operator_api_url, "http://127.0.0.1:7100");
         assert_eq!(config.server_bind_addr, "0.0.0.0:7100");
@@ -161,8 +160,7 @@ approver_image = "custom:latest"
 port = 7100
 operator_api_url = "http://palette.local:7100"
 server_bind_addr = "127.0.0.1:7100"
-db_path = "custom/path.db"
-state_path = "custom/state.json"
+data_dir = "/var/lib/palette"
 
 [tmux]
 session_name = "palette"
@@ -175,7 +173,11 @@ worker_callback_url = "http://localhost:8080"
 callback_network = "bridge"
 "#;
         let config: Config = toml::from_str(toml).unwrap();
-        assert_eq!(config.db_path, "custom/path.db");
+        assert_eq!(config.data_dir, PathBuf::from("/var/lib/palette"));
+        assert_eq!(
+            config.db_path(),
+            PathBuf::from("/var/lib/palette/palette.db")
+        );
         assert_eq!(config.rules.max_review_rounds, 3);
         assert_eq!(config.operator_api_url, "http://palette.local:7100");
         assert_eq!(config.server_bind_addr, "127.0.0.1:7100");

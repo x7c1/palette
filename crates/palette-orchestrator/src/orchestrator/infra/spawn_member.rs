@@ -1,10 +1,16 @@
 use super::Orchestrator;
+use super::plan_location::PlanLocation;
 use palette_domain::job::{JobDetail, JobType};
 use palette_domain::task::TaskId;
 use palette_domain::worker::{WorkerId, WorkerRole, WorkerState, WorkerStatus};
 use palette_usecase::{
     ArtifactsMount, ContainerMounts, PerspectiveMount, PlanDirMount, WorkspaceVolume,
 };
+
+// Plans are authored by the Operator (via /palette:plan or reconciliation) and
+// only read by Members. Mounting them read-only prevents a Member from
+// accidentally writing back to the host plan directory.
+const PLAN_MOUNT_READ_ONLY: bool = true;
 
 impl Orchestrator {
     /// Spawn a member container. Returns the WorkerState for DB registration.
@@ -18,6 +24,7 @@ impl Orchestrator {
         task_id: &TaskId,
         workspace: Option<WorkspaceVolume>,
         artifacts_dir: Option<ArtifactsMount>,
+        plan_loc: &PlanLocation,
     ) -> crate::Result<WorkerState> {
         let session_name = &self.session_name;
         let supervisor_id = supervisor_id.clone();
@@ -40,12 +47,11 @@ impl Orchestrator {
 
         let member_id_str = member_id.as_ref();
         let has_workspace = workspace.is_some();
-        let plan_dir_abs = std::fs::canonicalize(&self.plan_dir)
-            .map_err(|e| crate::Error::External(Box::new(e)))?;
-        let plan_dir_mount = PlanDirMount {
-            host_path: plan_dir_abs.to_string_lossy().to_string(),
-            read_only: matches!(job_type, JobType::Review | JobType::ReviewIntegrate),
-        };
+
+        let plan_dir_mount = Some(PlanDirMount {
+            host_path: plan_loc.blueprint_host_dir.to_string_lossy().to_string(),
+            read_only: PLAN_MOUNT_READ_ONLY,
+        });
 
         // Resolve perspective mounts for review jobs
         let perspective_dirs = self.resolve_perspective_mounts(job_detail);
@@ -57,7 +63,7 @@ impl Orchestrator {
             session_name,
             ContainerMounts {
                 workspace,
-                plan_dir: Some(plan_dir_mount),
+                plan_dir: plan_dir_mount,
                 artifacts_dir,
                 perspective_dirs,
             },

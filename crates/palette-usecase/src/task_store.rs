@@ -39,11 +39,8 @@ impl<'a> TaskStore<'a> {
         workflow_id: &WorkflowId,
     ) -> Result<Self, crate::TaskStoreError> {
         let workflow = data_store
-            .get_workflow(workflow_id)
-            .map_err(crate::TaskStoreError::DataStore)?
-            .ok_or_else(|| crate::TaskStoreError::WorkflowNotFound {
-                workflow_id: workflow_id.clone(),
-            })?;
+            .require_workflow(workflow_id)
+            .map_err(crate::TaskStoreError::DataStore)?;
 
         let tree = blueprint
             .read_blueprint(std::path::Path::new(&workflow.blueprint_path), workflow_id)?;

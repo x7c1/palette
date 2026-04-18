@@ -10,20 +10,45 @@ A Blueprint is a static definition — it describes *what* should be done, not t
 
 A Blueprint can be edited while the Workflow is suspended. The [Operator](../operator/) edits the Blueprint, then applies the changes. Applying validates the edits against change rules and reconciles the differences with the Workflow's state in the database.
 
+## Co-location with Plans
+
+A Blueprint is stored as `blueprint.yaml`. Any Task in the tree — including the root — may carry a `plan_path` pointing to a [Plan](../plan/) document. `plan_path` is resolved as a relative path from the Blueprint's directory, so the Blueprint and every Plan it references form a single co-located directory subtree.
+
+When the root Task carries `plan_path`, that Plan articulates the workflow's overall purpose and scope; when child Tasks carry `plan_path`, each Plan describes its Task's specific work.
+
+```
+<work-unit-dir>/
+  blueprint.yaml         ← Blueprint (this Task tree)
+  README.md              ← Plan for the root Task (purpose, scope)
+  <child-dir>/
+    README.md            ← Plan for a child Task
+```
+
+Rules:
+
+- Every `plan_path` declared in the Blueprint must point to an existing file under the Blueprint's directory. Palette's parser rejects the Blueprint otherwise.
+- A Blueprint may declare no `plan_path` at all — this is valid and is the shape used for purely mechanical workflows (such as auto-generated PR reviews) where the Task tree alone fully captures the intent.
+- Only one Blueprint per work unit; nested `blueprint.yaml` in a subdirectory is rejected.
+- All `plan_path` values are relative to the Blueprint's directory. Absolute paths and `..` are rejected.
+
 ## Examples
 
 ```yaml
 task:
   key: feature-x
+  plan_path: README.md           # plan for the whole workflow
   children:
     - key: planning
       children:
         - key: api-plan
           type: craft
           plan_path: planning/api-plan/README.md
-        - key: api-plan-review
-          type: review
-          depends_on: [api-plan]
+          repository:
+            name: x7c1/palette
+            branch: feature/x-api-plan
+          children:
+            - key: api-plan-review
+              type: review
 
     - key: execution
       depends_on: [planning]
@@ -34,10 +59,12 @@ task:
           repository:
             name: x7c1/palette
             branch: feature/x-api-impl
-        - key: api-impl-review
-          type: review
-          depends_on: [api-impl]
+          children:
+            - key: api-impl-review
+              type: review
 ```
+
+Every `craft` Task must have a `review` child — Palette rejects a Blueprint whose `craft` Task has no review. The review runs after its parent `craft` completes, so the ordering is implicit and no `depends_on` is needed for the review.
 
 ## Collocations
 

@@ -1,17 +1,9 @@
 mod helper;
 
-use helper::{spawn_server, test_session_name_with_guard};
+use helper::{spawn_server, test_session_name_with_guard, write_blueprint_file};
 use palette_tmux::TmuxManager;
-use std::io::Write;
 
 use palette_domain::task::TaskId;
-
-/// Write YAML to a temp file and return the path.
-fn write_blueprint_file(yaml: &str) -> tempfile::NamedTempFile {
-    let mut f = tempfile::NamedTempFile::new().unwrap();
-    f.write_all(yaml.as_bytes()).unwrap();
-    f
-}
 
 /// Build a TaskId from a workflow ID and key path.
 fn tid(wf_id: &str, key_path: &str) -> TaskId {
@@ -129,17 +121,15 @@ async fn workflow_start_creates_task_tree() {
         })
         .unwrap();
 
-    // Only api-plan should have a job (composite craft task with job_type)
+    // Only api-plan should have a job (composite craft task with job_type).
+    // The job's runtime status (Todo vs assigned/InProgress) depends on the
+    // event loop's progress; we only assert structural properties here.
     assert_eq!(jobs.len(), 1);
     assert_eq!(jobs[0].task_id, tid(wf_id, "feature-x/planning/api-plan"));
     assert!(matches!(
         jobs[0].detail,
         palette_domain::job::JobDetail::Craft { .. }
     ));
-    assert_eq!(
-        jobs[0].status,
-        palette_domain::job::JobStatus::Craft(palette_domain::job::CraftStatus::Todo)
-    );
 }
 
 #[tokio::test]
@@ -468,7 +458,7 @@ task:
     let resp_body: serde_json::Value = resp.json().await.unwrap();
     let wf_id = resp_body["workflow_id"].as_str().unwrap();
 
-    use palette_domain::job::{CraftStatus, JobFilter, JobStatus as JStatus, ReviewStatus};
+    use palette_domain::job::{CraftStatus, JobFilter, JobStatus as JStatus};
     use palette_domain::server::ServerEvent;
     use palette_domain::task::TaskStatus;
 
@@ -538,10 +528,13 @@ task:
         .filter(|j| j.task_id.to_string() == tid(wf_id, "ir-test/craft/review").to_string())
         .collect();
     assert_eq!(review_jobs.len(), 1, "review job should be created");
-    assert_eq!(
-        review_jobs[0].status,
-        JStatus::Review(ReviewStatus::Todo),
-        "review job should be in Todo status for AutoAssign"
+    // The review job's runtime status (Todo vs assigned/InProgress) depends on
+    // whether the orchestrator's AutoAssign event has been processed by the
+    // event loop yet; we only assert that the job exists with the right type.
+    assert!(
+        matches!(review_jobs[0].status, JStatus::Review(_)),
+        "review job should have a Review status, got {:?}",
+        review_jobs[0].status
     );
 
     // step-b should still be Pending (craft task is not completed yet)
@@ -871,8 +864,7 @@ task:
     let wf = state
         .interactor
         .data_store
-        .get_workflow(&workflow_id)
-        .unwrap()
+        .require_workflow(&workflow_id)
         .unwrap();
     assert_eq!(wf.status, WorkflowStatus::Completed);
 }

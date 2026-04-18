@@ -1,8 +1,6 @@
+use crate::orchestrator::infra::plan_location::PlanLocation;
 use crate::perspectives_config::ValidatedPerspectives;
 use palette_domain::job::{Job, JobDetail};
-
-/// Container-side mount point for the shared plan directory.
-const PLAN_DIR_MOUNT: &str = "/home/agent/plans";
 
 /// Container-side mount point for artifacts.
 pub(crate) const ARTIFACTS_MOUNT: &str = "/home/agent/artifacts";
@@ -15,14 +13,20 @@ const PERSPECTIVE_MOUNT: &str = "/home/agent/perspective";
 /// `round` is included for review jobs so the reviewer knows which round directory to use.
 /// `perspectives` provides the server's perspective configuration for including
 /// priority paths in the instruction.
+/// `plan_loc` is consulted to resolve the absolute container-side path of the
+/// job's plan, when the job has one.
 pub(crate) fn format_job_instruction(
     job: &Job,
     round: Option<u32>,
     perspectives: &ValidatedPerspectives,
+    plan_loc: &PlanLocation,
 ) -> String {
     let mut msg = format!("## Task: {}\n\nID: {}\n", job.title, job.id);
     if let Some(ref plan_path) = job.plan_path {
-        msg.push_str(&format!("Plan: {PLAN_DIR_MOUNT}/{plan_path}\n"));
+        msg.push_str(&format!(
+            "Plan: {}\n",
+            plan_loc.container_plan_path(plan_path.as_ref())
+        ));
     }
     if let JobDetail::Craft { ref repository } = job.detail {
         msg.push_str(&format!(
@@ -80,6 +84,12 @@ mod tests {
     use std::collections::HashMap;
     use std::path::PathBuf;
 
+    fn plan_loc() -> PlanLocation {
+        PlanLocation {
+            blueprint_host_dir: PathBuf::from("/tmp/bp"),
+        }
+    }
+
     fn make_review_job(perspective: Option<PerspectiveName>) -> Job {
         let now = chrono::Utc::now();
         Job {
@@ -129,7 +139,7 @@ mod tests {
     #[test]
     fn review_without_perspective() {
         let job = make_review_job(None);
-        let msg = format_job_instruction(&job, Some(1), &empty_perspectives());
+        let msg = format_job_instruction(&job, Some(1), &empty_perspectives(), &plan_loc());
 
         assert!(msg.contains("Plan: /home/agent/plans/plans/api"));
         assert!(msg.contains("Round: 1"));
@@ -141,34 +151,34 @@ mod tests {
     fn review_with_perspective_includes_at_prefixed_paths() {
         let job = make_review_job(Some(PerspectiveName::parse("rust-review").unwrap()));
         let perspectives = ValidatedPerspectives {
-            dirs: [("atelier".to_string(), PathBuf::from("/host/atelier/docs"))].into(),
+            dirs: [("team-docs".to_string(), PathBuf::from("/host/team-docs"))].into(),
             perspectives: vec![ValidatedPerspective {
                 name: "rust-review".to_string(),
                 paths: vec![
                     PerspectivePath {
-                        dir_name: "atelier".to_string(),
+                        dir_name: "team-docs".to_string(),
                         relative_path: "compass/axioms".to_string(),
                     },
                     PerspectivePath {
-                        dir_name: "atelier".to_string(),
+                        dir_name: "team-docs".to_string(),
                         relative_path: "compass/principles".to_string(),
                     },
                 ],
             }],
         };
 
-        let msg = format_job_instruction(&job, Some(1), &perspectives);
+        let msg = format_job_instruction(&job, Some(1), &perspectives, &plan_loc());
 
         assert!(msg.contains("Perspective: rust-review"));
         assert!(msg.contains("Perspective Documents: /home/agent/perspective/"));
-        assert!(msg.contains("1. @/home/agent/perspective/atelier/compass/axioms"));
-        assert!(msg.contains("2. @/home/agent/perspective/atelier/compass/principles"));
+        assert!(msg.contains("1. @/home/agent/perspective/team-docs/compass/axioms"));
+        assert!(msg.contains("2. @/home/agent/perspective/team-docs/compass/principles"));
     }
 
     #[test]
     fn craft_job_includes_repository() {
         let job = make_craft_job();
-        let msg = format_job_instruction(&job, None, &empty_perspectives());
+        let msg = format_job_instruction(&job, None, &empty_perspectives(), &plan_loc());
 
         assert!(msg.contains("Repository: x7c1/demo (branch: main)"));
         assert!(!msg.contains("Round"));

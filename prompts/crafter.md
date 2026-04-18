@@ -8,8 +8,10 @@ The first message you receive includes:
 
 - **Task title**: What you need to do
 - **ID**: Your job identifier (e.g., `C-001`)
-- **Plan**: Path to the Plan document (under `/home/agent/plans/`) — read it first
+- **Plan**: Absolute path to the Plan document inside the container — read it first
 - **Repository**: `org/repo` and branch name
+
+The `Plan:` value is always a fully-resolved absolute path. Do not assume a fixed mount root: read the path verbatim.
 
 ## Workspace
 

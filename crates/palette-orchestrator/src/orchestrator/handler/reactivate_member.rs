@@ -20,12 +20,21 @@ impl Orchestrator {
             return Ok(result);
         };
 
+        let task_state = self
+            .interactor
+            .data_store
+            .get_task_state(&job.task_id)?
+            .ok_or_else(|| crate::Error::TaskNotFound {
+                task_id: job.task_id.clone(),
+            })?;
+        let plan_loc = self.resolve_plan_location(&task_state.workflow_id, &job.detail)?;
+
         let round = if matches!(job.detail, JobDetail::Review { .. }) {
             Some(self.current_review_round(&job)?)
         } else {
             None
         };
-        let instruction = format_job_instruction(&job, round, &self.perspectives);
+        let instruction = format_job_instruction(&job, round, &self.perspectives, &plan_loc);
         self.interactor
             .data_store
             .enqueue_message(member_id, &instruction)?;

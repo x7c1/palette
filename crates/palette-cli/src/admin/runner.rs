@@ -1,7 +1,7 @@
 use super::command::{AdminCommand, GcArgs, ResetArgs};
 use super::context::build_admin_context;
 use super::io::{print_deleted, print_plan};
-use super::paths::{data_dir_from_db_path, remove_paths, resolve_config_path};
+use super::paths::{remove_paths, resolve_config_path};
 use palette_domain::workflow::WorkflowId;
 use palette_usecase::{AdminGcOptions, AdminMaintenanceError};
 
@@ -19,11 +19,10 @@ fn run_reset(args: ResetArgs) -> Result<(), Box<dyn std::error::Error>> {
 
     let config_path = resolve_config_path(args.config.as_deref())?;
     let context = build_admin_context(&config_path)?;
-    let data_dir = data_dir_from_db_path(&context.config.db_path);
 
     let plan = context
         .interactor
-        .admin_plan_reset(&data_dir)
+        .admin_plan_reset(&context.config.data_dir)
         .map_err(to_box_error)?;
     print_plan("reset", &plan);
 
@@ -48,7 +47,6 @@ fn run_gc(args: GcArgs) -> Result<(), Box<dyn std::error::Error>> {
 
     let config_path = resolve_config_path(args.config.as_deref())?;
     let context = build_admin_context(&config_path)?;
-    let data_dir = data_dir_from_db_path(&context.config.db_path);
 
     let workflow_ids = parse_workflow_ids(&args.workflow_ids)?;
     let options = AdminGcOptions {
@@ -58,7 +56,7 @@ fn run_gc(args: GcArgs) -> Result<(), Box<dyn std::error::Error>> {
     };
     let plan = context
         .interactor
-        .admin_plan_gc(&data_dir, &options)
+        .admin_plan_gc(&context.config.data_dir, &options)
         .map_err(to_box_error)?;
     if plan.workflow_ids.is_empty() {
         println!("gc: no matching workflows");

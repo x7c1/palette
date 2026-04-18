@@ -193,10 +193,26 @@ pub trait DataStore: Send + Sync {
         blueprint_path: &str,
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>>;
 
-    fn get_workflow(
+    /// Look up a workflow by id. Returns `None` when absent — for use when the
+    /// caller received the id from outside (e.g. a URL path) and must handle
+    /// the "not found" case as a normal outcome.
+    fn find_workflow(
         &self,
         id: &WorkflowId,
     ) -> Result<Option<Workflow>, Box<dyn std::error::Error + Send + Sync>>;
+
+    /// Load a workflow whose existence is guaranteed by the caller's context
+    /// (typically a foreign-key reference from `workers` or `tasks`). Returns
+    /// an error if the workflow is missing, since that indicates DB invariant
+    /// violation rather than a normal outcome.
+    fn require_workflow(
+        &self,
+        id: &WorkflowId,
+    ) -> Result<Workflow, Box<dyn std::error::Error + Send + Sync>> {
+        self.find_workflow(id)?.ok_or_else(|| {
+            format!("workflow {id} missing from DB despite FK reference from worker/task").into()
+        })
+    }
 
     fn list_workflows(
         &self,

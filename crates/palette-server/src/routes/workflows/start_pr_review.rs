@@ -47,11 +47,18 @@ pub async fn handle_start_pr_review(
 
     let workflow_id = WorkflowId::generate();
 
-    // Generate Blueprint YAML from request
+    // Generate a Blueprint YAML for the PR-review workflow. The blueprint
+    // references no `plan_path` on any task, so no plan document is written —
+    // the task tree fully describes this purely mechanical workflow. The file
+    // lives under `data_dir/blueprints/{workflow_id}/` as ephemeral runtime
+    // data, regenerated per workflow.
     let yaml = generate_blueprint_yaml(&req);
-    let blueprint_dir = state.data_dir.join("blueprints");
+    let blueprint_dir = state
+        .data_dir
+        .join("blueprints")
+        .join(workflow_id.to_string());
     std::fs::create_dir_all(&blueprint_dir).map_err(Error::internal)?;
-    let blueprint_path = blueprint_dir.join(format!("{}.yaml", workflow_id));
+    let blueprint_path = blueprint_dir.join("blueprint.yaml");
     std::fs::write(&blueprint_path, &yaml).map_err(Error::internal)?;
     let blueprint_path_str = blueprint_path.to_string_lossy().to_string();
 

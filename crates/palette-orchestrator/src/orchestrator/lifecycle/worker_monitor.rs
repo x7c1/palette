@@ -524,7 +524,6 @@ mod tests {
                 reviewer_prompt: String::new(),
                 max_workers: 3,
             },
-            plan_dir: String::new(),
             session_name: String::new(),
             cancel_token: CancellationToken::new(),
             workspace_manager: crate::orchestrator::infra::workspace::WorkspaceManager::new("data"),

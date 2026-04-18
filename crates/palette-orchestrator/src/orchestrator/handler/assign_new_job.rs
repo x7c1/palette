@@ -55,6 +55,9 @@ impl Orchestrator {
         // Determine artifacts mount for review jobs
         let artifacts_dir = self.resolve_artifacts_mount(&job)?;
 
+        // Resolve plan location (used both for mount and for the Plan: line)
+        let plan_loc = self.resolve_plan_location(&task_state.workflow_id, &job.detail)?;
+
         // Spawn a new member with supervisor from the task tree
         let supervisor_id = self.find_supervisor_for_job(&job.task_id)?;
         let seq = self
@@ -70,6 +73,7 @@ impl Orchestrator {
             &job.task_id,
             workspace,
             artifacts_dir,
+            &plan_loc,
         )?;
         // Register in DB
         self.interactor
@@ -102,7 +106,7 @@ impl Orchestrator {
         } else {
             None
         };
-        let instruction = format_job_instruction(&job, round, &self.perspectives);
+        let instruction = format_job_instruction(&job, round, &self.perspectives, &plan_loc);
         self.interactor
             .data_store
             .enqueue_message(&member_id, &instruction)?;
