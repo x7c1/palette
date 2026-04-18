@@ -19,7 +19,7 @@ Interview the Operator about a new task, then generate a Blueprint YAML and its 
 Follow these steps in order. Each step is a single message to the Operator.
 
 - **Step 1 — Goal.** Ask the Operator to describe what they want to accomplish in their own words (one or two sentences). Tell them subtasks, repositories, and slugs will come next — for this message, just the goal.
-- **Step 2 — Target repository.** Ask which repository this work targets. Assume a single repo by default; if the Operator says the work spans multiple repositories, accept that and note it for Step 7. Record the repository name and default branch.
+- **Step 2 — Target repository.** Ask which repository this work targets (just the `owner/repo` name — not the branch). Assume a single repo by default; if the Operator says the work spans multiple repositories, accept that and note it for Step 7. Branches are per-craft-task and are decided during Step 7, so do not ask about branches here.
 - **Step 3 — Slug proposal.** Using the goal and the repository's domain vocabulary (derived from the repo name, recent branch names, or README), derive a short kebab-case slug (2–4 words, lowercase, hyphen-separated, e.g. `refresh-keybinding`). Propose it and ask the Operator to accept or override.
 - **Step 4 — Plan location base.** Ask which base directory to use:
   - **A.** Inside the target repository itself — plans ship with the code (the common case).
@@ -34,7 +34,7 @@ Follow these steps in order. Each step is a single message to the Operator.
   - `<slug>` is the approved slug.
   Show the full path and ask the Operator to confirm or override.
 - **Step 6 — Scope detail.** Ask the Operator for the scope and success criteria of the overall work (for the root plan's body). Keep it focused — one prompt, free-form answer.
-- **Step 7 — Task breakdown.** Ask the Operator to describe the subtasks. For each Craft subtask, reuse the repository from Step 2 by default; ask for an override only if the Operator indicated a multi-repo workflow in Step 2 or volunteers a different repo. For each subtask collect key, type (`craft` or `review`), dependencies, and priority if relevant. If the Operator lists several subtasks in one message, accept them; otherwise walk them one at a time until they say the tree is complete.
+- **Step 7 — Task breakdown.** Ask the Operator to describe the subtasks. For each Craft subtask, reuse the repository from Step 2 by default; ask for an override only if the Operator indicated a multi-repo workflow in Step 2 or volunteers a different repo. Ask for the **branch** only at this point, since it is per-craft-task; default to the repository's default branch (inspect the repo if possible to avoid asking) and let the Operator override. For each subtask collect key, type (`craft` or `review`), dependencies, and priority if relevant. If the Operator lists several subtasks in one message, accept them; otherwise walk them one at a time until they say the tree is complete.
 - **Step 8 — Generation.** Generate both files in the chosen directory:
   - `blueprint.yaml` with the root task's `plan_path: README.md` set, so Palette's parser enforces the companion plan.
   - `README.md` with the goal, scope, success criteria, and a brief overview of the subtasks.
