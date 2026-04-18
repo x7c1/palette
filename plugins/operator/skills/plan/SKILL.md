@@ -33,7 +33,7 @@ Follow these steps in order. Each step is a single message to the Operator.
   - `repository` / `branch`: reuse Step 2's repository; default the branch to the repository's default branch (inspect the repo if possible).
   - `priority`: leave unset unless the Operator flagged specific priorities in Step 3.
 
-  Present the proposed tree as a rendered YAML snippet with one-line rationale ("single task — scope is self-contained" / "split into N tasks because …") and ask the Operator to confirm or amend ("この分解でよいですか? 増やす・減らす・順序変更など修正があれば教えてください"). Only ask a follow-up when a field genuinely cannot be derived (e.g. multi-repo ambiguity from Step 2). Apply requested edits in place before moving on.
+  Present the proposed tree as a rendered YAML snippet with a one-line rationale ("single task — scope is self-contained" / "split into N tasks because …") and ask the Operator to confirm the breakdown or request changes (add, remove, reorder). Only ask a follow-up when a field genuinely cannot be derived (e.g. multi-repo ambiguity from Step 2). Apply requested edits in place before moving on.
 - **Step 5 — Slug proposal.** Now that the goal, repository, scope, and subtasks are all known, derive a short kebab-case slug (2–4 words, lowercase, hyphen-separated, e.g. `refresh-keybinding`). Base it on the vocabulary that surfaced during Step 3 and Step 4 — often a subtask key, a key noun from the scope, or a concatenation thereof — rather than on the Operator's opening phrasing. Propose it with a brief rationale and ask the Operator to accept or override.
 - **Step 6 — Plan location base.** Ask which base directory to use:
   - **A.** Inside the target repository itself — plans ship with the code (the common case).
