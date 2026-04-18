@@ -7,6 +7,11 @@ use palette_usecase::{
     ArtifactsMount, ContainerMounts, PerspectiveMount, PlanDirMount, WorkspaceVolume,
 };
 
+// Plans are authored by the Operator (via /palette:plan or reconciliation) and
+// only read by Members. Mounting them read-only prevents a Member from
+// accidentally writing back to the host plan directory.
+const PLAN_MOUNT_READ_ONLY: bool = true;
+
 impl Orchestrator {
     /// Spawn a member container. Returns the WorkerState for DB registration.
     #[allow(clippy::too_many_arguments)]
@@ -43,13 +48,10 @@ impl Orchestrator {
         let member_id_str = member_id.as_ref();
         let has_workspace = workspace.is_some();
 
-        let plan_dir_mount = match plan_loc {
-            PlanLocation::External { blueprint_host_dir } => Some(PlanDirMount {
-                host_path: blueprint_host_dir.to_string_lossy().to_string(),
-                read_only: matches!(job_type, JobType::Review | JobType::ReviewIntegrate),
-            }),
-            PlanLocation::InWorkspace { .. } => None,
-        };
+        let plan_dir_mount = Some(PlanDirMount {
+            host_path: plan_loc.blueprint_host_dir.to_string_lossy().to_string(),
+            read_only: PLAN_MOUNT_READ_ONLY,
+        });
 
         // Resolve perspective mounts for review jobs
         let perspective_dirs = self.resolve_perspective_mounts(job_detail);

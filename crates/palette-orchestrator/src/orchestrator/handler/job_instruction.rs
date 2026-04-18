@@ -84,8 +84,8 @@ mod tests {
     use std::collections::HashMap;
     use std::path::PathBuf;
 
-    fn external_loc() -> PlanLocation {
-        PlanLocation::External {
+    fn plan_loc() -> PlanLocation {
+        PlanLocation {
             blueprint_host_dir: PathBuf::from("/tmp/bp"),
         }
     }
@@ -139,22 +139,12 @@ mod tests {
     #[test]
     fn review_without_perspective() {
         let job = make_review_job(None);
-        let msg = format_job_instruction(&job, Some(1), &empty_perspectives(), &external_loc());
+        let msg = format_job_instruction(&job, Some(1), &empty_perspectives(), &plan_loc());
 
         assert!(msg.contains("Plan: /home/agent/plans/plans/api"));
         assert!(msg.contains("Round: 1"));
         assert!(msg.contains("Artifacts: /home/agent/artifacts/round-1/R-001/"));
         assert!(!msg.contains("Perspective"));
-    }
-
-    #[test]
-    fn in_workspace_plan_uses_workspace_mount_path() {
-        let job = make_review_job(None);
-        let loc = PlanLocation::InWorkspace {
-            blueprint_relative: PathBuf::from("docs/plans/2026/0417-foo"),
-        };
-        let msg = format_job_instruction(&job, Some(1), &empty_perspectives(), &loc);
-        assert!(msg.contains("Plan: /home/agent/workspace/docs/plans/2026/0417-foo/plans/api"));
     }
 
     #[test]
@@ -177,7 +167,7 @@ mod tests {
             }],
         };
 
-        let msg = format_job_instruction(&job, Some(1), &perspectives, &external_loc());
+        let msg = format_job_instruction(&job, Some(1), &perspectives, &plan_loc());
 
         assert!(msg.contains("Perspective: rust-review"));
         assert!(msg.contains("Perspective Documents: /home/agent/perspective/"));
@@ -188,7 +178,7 @@ mod tests {
     #[test]
     fn craft_job_includes_repository() {
         let job = make_craft_job();
-        let msg = format_job_instruction(&job, None, &empty_perspectives(), &external_loc());
+        let msg = format_job_instruction(&job, None, &empty_perspectives(), &plan_loc());
 
         assert!(msg.contains("Repository: x7c1/demo (branch: main)"));
         assert!(!msg.contains("Round"));
