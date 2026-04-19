@@ -11,6 +11,7 @@ pub(super) fn read_workflow_row(row: &rusqlite::Row) -> rusqlite::Result<Workflo
         status_id: row.get("status_id")?,
         started_at: row.get("started_at")?,
         blueprint_hash: row.get("blueprint_hash")?,
+        failure_reason: row.get("failure_reason")?,
     })
 }
 
@@ -25,5 +26,6 @@ pub(super) fn into_workflow(row: WorkflowRow) -> crate::Result<Workflow> {
         status,
         started_at: parse_datetime(&row.started_at),
         blueprint_hash: row.blueprint_hash,
+        failure_reason: row.failure_reason,
     })
 }

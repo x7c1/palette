@@ -34,6 +34,7 @@ impl Interactor {
                         WorkflowStatus::Suspended
                             | WorkflowStatus::Completed
                             | WorkflowStatus::Terminated
+                            | WorkflowStatus::Failed
                     ) || (options.include_active
                         && matches!(
                             wf.status,

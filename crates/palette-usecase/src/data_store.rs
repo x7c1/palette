@@ -225,6 +225,19 @@ pub trait DataStore: Send + Sync {
         status: WorkflowStatus,
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>>;
 
+    /// Transition a workflow to [`WorkflowStatus::Failed`] with a reason key
+    /// (`{namespace}/{value}` format — callers should pass the result of
+    /// `ReasonKey::reason_key()` rather than a literal string).
+    ///
+    /// No-op when the workflow is already in a terminal state (`Completed`,
+    /// `Terminated`, or `Failed`); returns `Ok(false)` in that case. Returns
+    /// `Ok(true)` on successful transition.
+    fn mark_workflow_failed(
+        &self,
+        id: &WorkflowId,
+        reason: &str,
+    ) -> Result<bool, Box<dyn std::error::Error + Send + Sync>>;
+
     fn increment_worker_counter(
         &self,
         workflow_id: &WorkflowId,

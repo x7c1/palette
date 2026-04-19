@@ -191,12 +191,16 @@ impl DataStore for MockDataStore {
             blueprint_path: String::new(),
             started_at: chrono::Utc::now(),
             blueprint_hash: None,
+            failure_reason: None,
         }))
     }
     fn list_workflows(&self, _: Option<WorkflowStatus>) -> Result<Vec<Workflow>, BoxErr> {
         unimplemented!()
     }
     fn update_workflow_status(&self, _: &WorkflowId, _: WorkflowStatus) -> Result<(), BoxErr> {
+        unimplemented!()
+    }
+    fn mark_workflow_failed(&self, _: &WorkflowId, _: &str) -> Result<bool, BoxErr> {
         unimplemented!()
     }
     fn increment_worker_counter(&self, _: &WorkflowId) -> Result<usize, BoxErr> {
