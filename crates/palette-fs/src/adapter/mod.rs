@@ -4,6 +4,7 @@ use to_task_tree::to_task_tree;
 
 mod blueprint_validator;
 
+use crate::blueprint::BlueprintReadError;
 use palette_core::{InputError, Location};
 use palette_domain::task::TaskTree;
 use palette_domain::workflow::WorkflowId;
@@ -31,11 +32,10 @@ impl BlueprintReader for FsBlueprintReader {
         path: &Path,
         workflow_id: &WorkflowId,
     ) -> Result<TaskTree, ReadBlueprintError> {
-        let blueprint =
-            crate::read_blueprint(path).map_err(|e| ReadBlueprintError::Read(Box::new(e)))?;
+        let blueprint = crate::read_blueprint(path).map_err(read_err_to_usecase_err)?;
         let tree =
             to_task_tree(&blueprint, workflow_id, &self.known_perspectives).map_err(|errors| {
-                ReadBlueprintError::Validation(
+                ReadBlueprintError::Invalid(
                     errors
                         .iter()
                         .map(|e| InputError {
@@ -47,5 +47,23 @@ impl BlueprintReader for FsBlueprintReader {
                 )
             })?;
         Ok(tree)
+    }
+}
+
+fn read_err_to_usecase_err(err: BlueprintReadError) -> ReadBlueprintError {
+    if err.is_not_found()
+        && let BlueprintReadError::Io { path, .. } = &err
+    {
+        return ReadBlueprintError::NotFound {
+            path: path.to_path_buf(),
+        };
+    }
+    match err.reason_key() {
+        Some(reason) => ReadBlueprintError::Invalid(vec![InputError {
+            location: Location::Body,
+            hint: err.field_path(),
+            reason: reason.to_string(),
+        }]),
+        None => ReadBlueprintError::Internal(Box::new(err)),
     }
 }

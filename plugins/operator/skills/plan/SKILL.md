@@ -89,6 +89,19 @@ Before showing the files to the Operator, perform a **vocabulary check** against
 - Prefer the canonical name even when it is slightly longer or less conversational — consistency with the codebase outweighs stylistic variation
 - If the plan introduces a genuinely new concept that has no existing name in the repo, keep your chosen wording, but call it out explicitly in the plan so the novelty is visible
 
+After writing both files, run a pre-flight check against Palette to catch structural mistakes before handoff:
+
+```
+POST /blueprints/validate
+Content-Type: application/json
+
+{ "blueprint_path": "<absolute path to the generated blueprint.yaml>" }
+```
+
+- **200 with `valid: true`** — summary shows the task/craft/review counts. Proceed to review with the Operator.
+- **200 with `valid: false`** — fix each item in `errors[]` (each carries a `hint` pointing at the offending field and a machine-readable `reason` like `blueprint/missing_review_child` or `blueprint/plan_path_missing`), then re-validate. Do not hand off while any errors remain.
+- **404** — the path is wrong; regenerate the file or correct the path before re-validating.
+
 Show both files to the Operator and apply any requested edits in place. Once approved, tell the Operator to run `/palette:approve` to start the workflow — no path argument needed, since `/palette:approve` picks up the blueprint just generated from the conversation context.
 
 ## Blueprint YAML Reference

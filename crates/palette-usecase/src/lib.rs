@@ -13,6 +13,9 @@ pub use terminal_session::TerminalSession;
 mod blueprint_reader;
 pub use blueprint_reader::{BlueprintReader, ReadBlueprintError};
 
+mod validate_blueprint;
+pub use validate_blueprint::{BlueprintSummary, validate_blueprint};
+
 mod task_store_error;
 pub use task_store_error::TaskStoreError;
 

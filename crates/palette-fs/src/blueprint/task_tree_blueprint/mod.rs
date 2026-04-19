@@ -11,18 +11,18 @@ pub struct TaskTreeBlueprint {
     pub task: TaskNode,
 }
 
+/// Filename for the parent Plan co-located with a Blueprint.
+pub const PARENT_PLAN_FILENAME: &str = "README.md";
+
 /// Read and parse a Blueprint YAML file into a TaskTreeBlueprint.
 ///
 /// Validates the co-location convention:
+/// - A `README.md` must exist in the Blueprint's directory as the parent plan.
 /// - For every task node that declares a `plan_path`, the referenced file must
 ///   exist under the Blueprint's directory. This applies uniformly to the root
 ///   task (whose `plan_path` acts as the workflow-wide plan) and to any child
 ///   task with its own plan document.
 /// - No nested `blueprint.yaml` may exist in any subdirectory.
-///
-/// A Blueprint that declares no `plan_path` on any task is valid and carries
-/// no required plan document — this is the normal shape for purely mechanical
-/// workflows such as auto-generated PR reviews.
 pub fn read_blueprint(path: &Path) -> Result<TaskTreeBlueprint, BlueprintReadError> {
     let yaml = std::fs::read_to_string(path).map_err(|e| BlueprintReadError::Io {
         path: path.to_path_buf(),
@@ -39,6 +39,14 @@ pub fn read_blueprint(path: &Path) -> Result<TaskTreeBlueprint, BlueprintReadErr
         .ok_or_else(|| BlueprintReadError::InvalidLocation {
             path: path.to_path_buf(),
         })?;
+
+    let parent_plan = blueprint_dir.join(PARENT_PLAN_FILENAME);
+    if !parent_plan.exists() {
+        return Err(BlueprintReadError::ParentPlanMissing {
+            blueprint_dir: blueprint_dir.to_path_buf(),
+            expected: parent_plan,
+        });
+    }
 
     verify_plan_paths_exist(&blueprint.task, blueprint_dir)?;
 
@@ -118,6 +126,54 @@ pub enum BlueprintReadError {
         outer: PathBuf,
         nested: PathBuf,
     },
+    ParentPlanMissing {
+        blueprint_dir: PathBuf,
+        expected: PathBuf,
+    },
+}
+
+impl BlueprintReadError {
+    /// Machine-readable reason code for variants that represent user-facing
+    /// blueprint content or co-location issues. Returns `None` for I/O-level
+    /// errors whose handling depends on the caller (e.g. `NotFound` is mapped
+    /// to 404 by the validate endpoint).
+    pub fn reason_key(&self) -> Option<&'static str> {
+        match self {
+            BlueprintReadError::Io { .. } | BlueprintReadError::InvalidLocation { .. } => None,
+            BlueprintReadError::Parse { .. } => Some("blueprint/yaml_parse_error"),
+            BlueprintReadError::PlanPathMissing { .. } => Some("blueprint/plan_path_missing"),
+            BlueprintReadError::NestedBlueprint { .. } => Some("blueprint/nested_blueprint"),
+            BlueprintReadError::ParentPlanMissing { .. } => Some("blueprint/parent_plan_missing"),
+        }
+    }
+
+    /// Input-field hint for the InputError envelope. Only meaningful for
+    /// variants whose `reason_key()` is `Some`.
+    pub fn field_path(&self) -> String {
+        match self {
+            BlueprintReadError::Parse { source, .. } => match source.location() {
+                Some(loc) => format!("blueprint_path:{}:{}", loc.line(), loc.column()),
+                None => "blueprint_path".into(),
+            },
+            BlueprintReadError::PlanPathMissing { task_key, .. } => {
+                format!("tasks[key={task_key}].plan_path")
+            }
+            BlueprintReadError::NestedBlueprint { .. } => "blueprint_path".into(),
+            BlueprintReadError::ParentPlanMissing { .. } => "blueprint_path".into(),
+            BlueprintReadError::Io { .. } | BlueprintReadError::InvalidLocation { .. } => {
+                "blueprint_path".into()
+            }
+        }
+    }
+
+    /// True if this error represents a missing blueprint file at the given path.
+    pub fn is_not_found(&self) -> bool {
+        matches!(
+            self,
+            BlueprintReadError::Io { source, .. }
+                if source.kind() == std::io::ErrorKind::NotFound
+        )
+    }
 }
 
 impl std::fmt::Display for BlueprintReadError {
@@ -157,6 +213,17 @@ impl std::fmt::Display for BlueprintReadError {
                     "nested blueprint not allowed: '{}' exists under outer blueprint '{}'",
                     nested.display(),
                     outer.display()
+                )
+            }
+            BlueprintReadError::ParentPlanMissing {
+                blueprint_dir,
+                expected,
+            } => {
+                write!(
+                    f,
+                    "parent plan not found: '{}' is missing in blueprint directory '{}'",
+                    expected.display(),
+                    blueprint_dir.display()
                 )
             }
         }
@@ -230,44 +297,44 @@ task:
     }
 
     #[test]
-    fn read_blueprint_without_any_plan() {
+    fn read_blueprint_without_plan_paths_requires_parent_readme() {
         let dir = tempfile::tempdir().unwrap();
         write_file(dir.path(), BLUEPRINT_FILENAME, MINIMAL_BLUEPRINT_NO_PLAN);
+        write_file(dir.path(), PARENT_PLAN_FILENAME, "# parent\n");
 
         let bp = read_blueprint(&dir.path().join(BLUEPRINT_FILENAME)).unwrap();
         assert_eq!(bp.task.key, "test");
     }
 
     #[test]
+    fn read_blueprint_rejects_missing_parent_readme() {
+        let dir = tempfile::tempdir().unwrap();
+        write_file(dir.path(), BLUEPRINT_FILENAME, MINIMAL_BLUEPRINT_NO_PLAN);
+
+        let err = read_blueprint(&dir.path().join(BLUEPRINT_FILENAME)).expect_err("should fail");
+        assert!(
+            matches!(err, BlueprintReadError::ParentPlanMissing { .. }),
+            "unexpected error: {err}"
+        );
+    }
+
+    #[test]
     fn read_blueprint_with_root_plan_when_present() {
         let dir = tempfile::tempdir().unwrap();
         write_file(dir.path(), BLUEPRINT_FILENAME, BLUEPRINT_WITH_ROOT_PLAN);
-        write_file(dir.path(), "README.md", "# plan\n");
+        write_file(dir.path(), PARENT_PLAN_FILENAME, "# plan\n");
 
         let bp = read_blueprint(&dir.path().join(BLUEPRINT_FILENAME)).unwrap();
         assert_eq!(bp.task.plan_path.as_deref(), Some("README.md"));
     }
 
     #[test]
-    fn read_blueprint_rejects_missing_root_plan() {
-        let dir = tempfile::tempdir().unwrap();
-        write_file(dir.path(), BLUEPRINT_FILENAME, BLUEPRINT_WITH_ROOT_PLAN);
-
-        let result = read_blueprint(&dir.path().join(BLUEPRINT_FILENAME));
-        let err = result.err().expect("should fail");
-        assert!(
-            matches!(err, BlueprintReadError::PlanPathMissing { ref task_key, .. } if task_key == "test"),
-            "unexpected error: {err}"
-        );
-    }
-
-    #[test]
     fn read_blueprint_rejects_missing_child_plan() {
         let dir = tempfile::tempdir().unwrap();
         write_file(dir.path(), BLUEPRINT_FILENAME, BLUEPRINT_WITH_CHILD_PLAN);
+        write_file(dir.path(), PARENT_PLAN_FILENAME, "# parent\n");
 
-        let result = read_blueprint(&dir.path().join(BLUEPRINT_FILENAME));
-        let err = result.err().expect("should fail");
+        let err = read_blueprint(&dir.path().join(BLUEPRINT_FILENAME)).expect_err("should fail");
         assert!(
             matches!(err, BlueprintReadError::PlanPathMissing { ref task_key, .. } if task_key == "task-a"),
             "unexpected error: {err}"
@@ -278,6 +345,7 @@ task:
     fn read_blueprint_rejects_nested_blueprint() {
         let dir = tempfile::tempdir().unwrap();
         write_file(dir.path(), BLUEPRINT_FILENAME, MINIMAL_BLUEPRINT_NO_PLAN);
+        write_file(dir.path(), PARENT_PLAN_FILENAME, "# parent\n");
         // A child directory containing its own blueprint.yaml — should fail
         write_file(
             &dir.path().join("subtask"),

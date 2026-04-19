@@ -1,3 +1,4 @@
+mod blueprints;
 mod hooks;
 mod jobs;
 mod reviews;
@@ -52,6 +53,11 @@ pub fn create_router(state: Arc<AppState>) -> Router {
             post(workflows::handle_apply_blueprint),
         )
         .route("/workflows", get(workflows::handle_list_workflows))
+        // Blueprint API
+        .route(
+            "/blueprints/validate",
+            post(blueprints::handle_validate_blueprint),
+        )
         // Job API
         .route("/jobs/create", post(jobs::handle_create_job))
         .route("/jobs/update", post(jobs::handle_update_job))

@@ -8,7 +8,7 @@ use axum::{
 use palette_domain::server::ServerEvent;
 use palette_domain::task::TaskTree;
 use palette_domain::workflow::WorkflowId;
-use palette_usecase::CreateTaskRequest;
+use palette_usecase::{CreateTaskRequest, validate_blueprint};
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 use std::sync::Arc;
@@ -29,11 +29,12 @@ pub async fn handle_start_workflow(
     ValidJson(req): ValidJson<StartWorkflowRequest>,
 ) -> crate::Result<Response> {
     let workflow_id = WorkflowId::generate();
-    let tree = state
-        .interactor
-        .blueprint
-        .read_blueprint(Path::new(&req.blueprint_path), &workflow_id)
-        .map_err(super::blueprint_read_error_to_server_error)?;
+    let tree = validate_blueprint(
+        state.interactor.blueprint.as_ref(),
+        Path::new(&req.blueprint_path),
+        &workflow_id,
+    )
+    .map_err(super::blueprint_read_error_to_server_error)?;
 
     let task_count = register_tasks(&state, &workflow_id, &tree, &req.blueprint_path)?;
 

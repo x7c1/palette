@@ -21,6 +21,15 @@ Approve a Blueprint YAML file and start a Workflow on Palette.
   - Otherwise, reuse the most recently generated `blueprint.yaml` path from the current conversation (typically produced by a preceding `/palette:plan` run)
 - Verify the Blueprint file exists
 - Resolve the path to an absolute path
+- Run the validate endpoint first so an invalid Blueprint is caught before a Workflow is even attempted:
+  ```
+  curl -sf -X POST http://127.0.0.1:7100/blueprints/validate \
+    -H "Content-Type: application/json" \
+    -d '{"blueprint_path": "<absolute-path>"}'
+  ```
+  - 200 with `valid: false` — surface the `errors[]` to the Operator and stop. Do not call `/workflows/start` until the Blueprint is fixed (typically by returning to `/palette:plan`)
+  - 404 — report the path problem to the Operator and stop
+  - 200 with `valid: true` — proceed to the next step
 - Send a POST request to start the Workflow:
   ```
   curl -sf -X POST http://127.0.0.1:7100/workflows/start \

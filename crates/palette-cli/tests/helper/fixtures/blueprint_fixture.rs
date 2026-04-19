@@ -21,6 +21,10 @@ pub fn write_blueprint_file(yaml: &str) -> BlueprintFixture {
     let mut bp = std::fs::File::create(&blueprint_path).unwrap();
     bp.write_all(yaml.as_bytes()).unwrap();
 
+    // The parser requires a co-located parent plan (README.md) next to every
+    // blueprint.yaml.
+    std::fs::write(dir.path().join("README.md"), "# test blueprint\n").unwrap();
+
     // Palette's Blueprint parser verifies every `plan_path` declared in the
     // YAML points to an existing file. Create empty stubs so fixtures can
     // carry plan_path references for readability without each test having to

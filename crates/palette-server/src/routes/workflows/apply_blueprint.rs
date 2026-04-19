@@ -8,7 +8,7 @@ use axum::{
 };
 use palette_domain::server::ServerEvent;
 use palette_domain::workflow::WorkflowId;
-use palette_usecase::reconciliation;
+use palette_usecase::{reconciliation, validate_blueprint};
 use serde::Serialize;
 use sha2::{Digest, Sha256};
 use std::sync::Arc;
@@ -49,11 +49,12 @@ pub async fn handle_apply_blueprint(
     let blueprint_content = std::fs::read(blueprint_path).map_err(Error::internal)?;
 
     // Re-read Blueprint from disk (parsed into TaskTree)
-    let tree = state
-        .interactor
-        .blueprint
-        .read_blueprint(blueprint_path, &workflow_id)
-        .map_err(super::blueprint_read_error_to_server_error)?;
+    let tree = validate_blueprint(
+        state.interactor.blueprint.as_ref(),
+        blueprint_path,
+        &workflow_id,
+    )
+    .map_err(super::blueprint_read_error_to_server_error)?;
 
     // Get current task statuses from DB
     let db_statuses = state
