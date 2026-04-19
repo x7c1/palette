@@ -48,8 +48,11 @@ impl Orchestrator {
         let member_id_str = member_id.as_ref();
         let has_workspace = workspace.is_some();
 
-        let plan_dir_mount = Some(PlanDirMount {
-            host_path: plan_loc.blueprint_host_dir.to_string_lossy().to_string(),
+        // Only attach the plan mount when the Blueprint is outside the
+        // workspace. For Repo-inside-Plan mode the workspace mount already
+        // carries the Blueprint (committed on the work branch).
+        let plan_dir_mount = plan_loc.plan_dir_host_path().map(|host| PlanDirMount {
+            host_path: host.to_string_lossy().to_string(),
             read_only: PLAN_MOUNT_READ_ONLY,
         });
 

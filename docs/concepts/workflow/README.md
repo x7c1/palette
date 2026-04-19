@@ -34,7 +34,22 @@ A Workflow carries one of the following statuses:
 
 `terminated` and `failed` are both terminal but are kept distinct: `terminated` is an operator-driven outcome and is not a fault signal, whereas `failed` indicates the Workflow itself could not proceed.
 
-A failed Workflow carries a **failure reason** that names the cause in a machine-readable form (e.g. "workspace setup failed," "branch in use"). The reason is the only failure metadata the Workflow itself retains; detailed diagnostics belong in operational logs rather than on the Workflow.
+A failed Workflow carries a **failure reason** that names the cause in a machine-readable form as a `{namespace}/{value}` key. Known reasons today:
+
+| Reason | Trigger |
+|---|---|
+| `workflow/workspace_setup_failed` | A git step during workspace creation (clone, branch checkout, plan sync) fails for a Craft job. |
+| `workflow/branch_in_use` | Registered as a post-insert fallback when another Workflow claims the same `(repository, branch)` pair. The primary detection path is `POST /workflows/start`, which rejects the start with an `InputError` of the same reason key before any Workflow row is created. |
+
+The reason is the only failure metadata the Workflow itself retains; detailed diagnostics belong in operational logs rather than on the Workflow.
+
+## Branch Collision
+
+Because two Workflows that commit to the same work branch would corrupt each other's workspaces, `POST /workflows/start` checks every Craft Task in the new Blueprint against all non-terminal Workflows (`active`, `suspending`, `suspended`). If any `(repository, branch)` pair is already claimed, the start is rejected with `workflow/branch_in_use` and no Workflow row is created. The check uses the existing server DB (single-writer, `locking_mode=EXCLUSIVE`) so the rejection is race-free.
+
+## Push Policy
+
+Craft workspaces are configured so `git push` to origin is possible but not executed by any Worker today. Reviewers and PR-review workspaces keep origin read-only (pushurl is disabled). Actual push and PR creation are deferred to a follow-up component (Publisher / PR writer) that runs after a Review approval.
 
 ## Domain Rules
 

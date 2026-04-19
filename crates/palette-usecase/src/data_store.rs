@@ -238,6 +238,19 @@ pub trait DataStore: Send + Sync {
         reason: &str,
     ) -> Result<bool, Box<dyn std::error::Error + Send + Sync>>;
 
+    /// Return the IDs of non-terminal workflows (`Active`, `Suspending`, or
+    /// `Suspended`) whose task tree contains a Craft job targeting the given
+    /// `(repo_name, branch)` pair.
+    ///
+    /// Used by workflow start to detect branch collisions before creating a
+    /// new workflow row, since two concurrent workflows that fight over the
+    /// same work branch would corrupt their workspaces.
+    fn find_active_workflows_using_branch(
+        &self,
+        repo_name: &str,
+        branch: &str,
+    ) -> Result<Vec<WorkflowId>, Box<dyn std::error::Error + Send + Sync>>;
+
     fn increment_worker_counter(
         &self,
         workflow_id: &WorkflowId,

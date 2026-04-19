@@ -60,7 +60,7 @@ pub fn create_craft(db: &Database, id: &str, priority: Option<Priority>) -> Job 
         None,
         priority,
         JobDetail::Craft {
-            repository: Repository::parse("x7c1/palette-demo", "main").unwrap(),
+            repository: Repository::parse("x7c1/palette-demo", "main", None).unwrap(),
         },
     ))
     .unwrap()

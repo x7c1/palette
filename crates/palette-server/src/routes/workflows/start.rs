@@ -1,3 +1,4 @@
+use crate::api_types::{ErrorCode, InputError, Location};
 use crate::{AppState, Error, ValidJson};
 use axum::{
     Json,
@@ -5,6 +6,7 @@ use axum::{
     http::StatusCode,
     response::{IntoResponse, Response},
 };
+use palette_domain::job::JobDetail;
 use palette_domain::server::ServerEvent;
 use palette_domain::task::TaskTree;
 use palette_domain::workflow::WorkflowId;
@@ -36,6 +38,18 @@ pub async fn handle_start_workflow(
     )
     .map_err(super::blueprint_read_error_to_server_error)?;
 
+    // Branch collision: reject the start if any active workflow already owns
+    // one of the (repo, branch) pairs used by this blueprint's craft tasks.
+    // Performed before `create_workflow` so the rejection leaves no workflow
+    // row behind.
+    let conflicts = collect_branch_conflicts(&state, &tree)?;
+    if !conflicts.is_empty() {
+        return Err(Error::BadRequest {
+            code: ErrorCode::InputValidationFailed,
+            errors: conflicts,
+        });
+    }
+
     let task_count = register_tasks(&state, &workflow_id, &tree, &req.blueprint_path)?;
 
     // Send domain event — orchestrator handles task activation
@@ -58,6 +72,41 @@ pub async fn handle_start_workflow(
         }),
     )
         .into_response())
+}
+
+/// Gather one [`InputError`] per craft task whose `(repo, branch)` pair is
+/// already claimed by a non-terminal workflow.
+///
+/// The `hint` field carries `task_key:repo_name:branch` so clients can pinpoint
+/// which craft task needs attention when a blueprint references multiple repos.
+fn collect_branch_conflicts(state: &AppState, tree: &TaskTree) -> crate::Result<Vec<InputError>> {
+    let mut errors = Vec::new();
+    for task_id in tree.task_ids() {
+        let Some(node) = tree.get(task_id) else {
+            continue;
+        };
+        let Some(JobDetail::Craft { repository }) = node.job_detail.as_ref() else {
+            continue;
+        };
+        let in_use = state
+            .interactor
+            .data_store
+            .find_active_workflows_using_branch(&repository.name, &repository.branch)
+            .map_err(Error::internal)?;
+        if !in_use.is_empty() {
+            errors.push(InputError {
+                location: Location::Body,
+                hint: format!(
+                    "{}:{}:{}",
+                    node.key.as_ref(),
+                    repository.name,
+                    repository.branch
+                ),
+                reason: "workflow/branch_in_use".into(),
+            });
+        }
+    }
+    Ok(errors)
 }
 
 /// Create the workflow and register all task IDs (with Pending status) in the DB.

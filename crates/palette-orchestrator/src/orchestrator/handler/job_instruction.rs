@@ -85,8 +85,15 @@ mod tests {
     use std::path::PathBuf;
 
     fn plan_loc() -> PlanLocation {
-        PlanLocation {
+        PlanLocation::OutsideWorkspace {
             blueprint_host_dir: PathBuf::from("/tmp/bp"),
+        }
+    }
+
+    fn plan_loc_inside() -> PlanLocation {
+        PlanLocation::InsideWorkspace {
+            blueprint_host_dir: PathBuf::from("/host/ws/docs/plans/001"),
+            blueprint_rel_to_workspace: PathBuf::from("docs/plans/001"),
         }
     }
 
@@ -121,7 +128,7 @@ mod tests {
             status: JobStatus::todo(JobType::Craft),
             priority: None,
             detail: JobDetail::Craft {
-                repository: Repository::parse("x7c1/demo", "main").unwrap(),
+                repository: Repository::parse("x7c1/demo", "main", None).unwrap(),
             },
             created_at: now,
             updated_at: now,
@@ -183,5 +190,17 @@ mod tests {
         assert!(msg.contains("Repository: x7c1/demo (branch: main)"));
         assert!(!msg.contains("Round"));
         assert!(!msg.contains("Perspective"));
+    }
+
+    #[test]
+    fn inside_workspace_plan_path_uses_workspace_mount() {
+        let job = make_craft_job();
+        let msg = format_job_instruction(&job, None, &empty_perspectives(), &plan_loc_inside());
+
+        assert!(
+            msg.contains("Plan: /home/agent/workspace/docs/plans/001/plans/api"),
+            "expected workspace-rooted plan path, got: {msg}"
+        );
+        assert!(!msg.contains("/home/agent/plans/"));
     }
 }

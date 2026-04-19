@@ -278,6 +278,16 @@ impl DataStore for Database {
         Ok(Database::mark_workflow_failed(self, id, reason)?)
     }
 
+    fn find_active_workflows_using_branch(
+        &self,
+        repo_name: &str,
+        branch: &str,
+    ) -> Result<Vec<WorkflowId>, Box<dyn std::error::Error + Send + Sync>> {
+        Ok(Database::find_active_workflows_using_branch(
+            self, repo_name, branch,
+        )?)
+    }
+
     fn increment_worker_counter(
         &self,
         workflow_id: &WorkflowId,

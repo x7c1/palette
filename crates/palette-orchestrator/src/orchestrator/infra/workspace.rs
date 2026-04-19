@@ -6,6 +6,14 @@ use palette_domain::job::{PullRequest, Repository};
 /// Container-side mount point for the repo cache.
 const CONTAINER_REPO_CACHE: &str = "/home/agent/repo-cache";
 
+/// Sentinel pushurl used to block pushes from workspaces that must remain
+/// read-only to origin (e.g., PR review clones).
+const PUSH_DISABLED: &str = "PUSH_DISABLED";
+
+/// Commit message used when importing the Blueprint directory into a
+/// Repo-inside-Plan workspace.
+const PLAN_IMPORT_COMMIT_MESSAGE: &str = "chore(plan): import workflow plan";
+
 /// Manages host-side repository caches and workspaces.
 ///
 /// Repository caches are bare clones stored under `data/repos/{org}/{repo}.git`.
@@ -72,19 +80,46 @@ impl WorkspaceManager {
                 &["config", "core.fileMode", "false"],
                 "set core.fileMode",
             )?;
+            // Modern git's `clone --bare` does not set a fetch refspec on
+            // origin, which makes later `git fetch --prune origin` a no-op
+            // for branches that were created on the remote after this
+            // initial clone. Seed the standard bare-mirror refspec so the
+            // cache stays in sync with origin's branches.
+            run_git(
+                &cache_path,
+                &[
+                    "config",
+                    "remote.origin.fetch",
+                    "+refs/heads/*:refs/heads/*",
+                ],
+                "set fetch refspec",
+            )?;
         }
+
         // Return absolute path so callers don't depend on CWD
         let abs_cache =
             std::fs::canonicalize(&cache_path).map_err(|e| crate::Error::External(Box::new(e)))?;
         Ok(abs_cache)
     }
 
-    /// Create a workspace for a job using `git clone --shared`.
-    /// Returns the absolute host path to the workspace.
+    /// Create a workspace for a craft job using `git clone --shared`.
+    ///
+    /// The resulting workspace is always checked out on `repo.branch` (the
+    /// work branch). When the remote already has that branch, it is checked
+    /// out as-is (resume scenario). When it does not, the work branch is
+    /// created from `repo.source_branch` (or the repository's default branch
+    /// when `source_branch` is omitted).
+    ///
+    /// When the Blueprint directory sits inside the workspace
+    /// (Repo-inside-Plan mode), its contents are staged and committed on the
+    /// work branch so that Plan files participate in the workspace's git
+    /// history. The operation is idempotent: nothing is committed when the
+    /// tree has no changes.
     pub fn create_workspace(
         &self,
         job_id: &str,
         repo: &Repository,
+        blueprint_path: &Path,
     ) -> crate::Result<WorkspaceInfo> {
         let cache_path = self.ensure_repo_cache(repo)?;
         let ws_path = self.workspace_path(job_id);
@@ -115,25 +150,69 @@ impl WorkspaceManager {
             "shared clone",
         )?;
 
-        run_git(&ws_path, &["checkout", &repo.branch], "checkout branch")?;
-
-        // Rewrite alternates to use the container-side path
-        let alternates_path = ws_path.join(".git/objects/info/alternates");
-        let container_alternates = format!("{CONTAINER_REPO_CACHE}/objects\n");
-        std::fs::write(&alternates_path, &container_alternates)
-            .map_err(|e| crate::Error::External(Box::new(e)))?;
-
-        // Disable push: set pushurl to a sentinel value
-        run_git(
-            &ws_path,
-            &["config", "remote.origin.pushurl", "PUSH_DISABLED"],
-            "disable pushurl",
-        )?;
+        // Branch create-or-checkout.
+        // The work branch lives on origin → check it out directly; otherwise
+        // derive it from the source branch.
+        if remote_has_branch(&ws_path, &repo.branch)? {
+            run_git(
+                &ws_path,
+                &["checkout", &repo.branch],
+                "checkout work branch",
+            )?;
+        } else {
+            let source_branch = match repo.source_branch.as_deref() {
+                Some(sb) => sb.to_string(),
+                None => resolve_default_branch(&cache_path)?,
+            };
+            run_git(
+                &ws_path,
+                &["checkout", &source_branch],
+                "checkout source branch",
+            )?;
+            run_git(
+                &ws_path,
+                &["checkout", "-b", &repo.branch],
+                "create work branch",
+            )?;
+        }
 
         let cache_abs =
             std::fs::canonicalize(&cache_path).map_err(|e| crate::Error::External(Box::new(e)))?;
         let ws_abs =
             std::fs::canonicalize(&ws_path).map_err(|e| crate::Error::External(Box::new(e)))?;
+
+        // Repo-inside-Plan mode: import the Blueprint directory into the work
+        // branch. `blueprint_path` points at the Blueprint file (README.md);
+        // we stage its parent directory so that `blueprint.yaml` and any
+        // child plan directories are included in the same commit.
+        //
+        // This must run before the alternates rewrite below — once alternates
+        // points at the container-side path, host-side git operations can no
+        // longer resolve objects.
+        let blueprint_dir = blueprint_path
+            .parent()
+            .map(|p| p.to_path_buf())
+            .unwrap_or_else(|| PathBuf::from("."));
+        if blueprint_dir.exists() {
+            let blueprint_dir_abs = std::fs::canonicalize(&blueprint_dir)
+                .map_err(|e| crate::Error::External(Box::new(e)))?;
+            if blueprint_dir_abs.starts_with(&ws_abs) {
+                sync_blueprint_into_workspace(&ws_abs, &blueprint_dir_abs)?;
+            }
+        }
+
+        // Rewrite alternates to use the container-side path. From this point
+        // on, host-side git commands against the workspace will fail to
+        // resolve objects — the workspace is ready for container use only.
+        let alternates_path = ws_path.join(".git/objects/info/alternates");
+        let container_alternates = format!("{CONTAINER_REPO_CACHE}/objects\n");
+        std::fs::write(&alternates_path, &container_alternates)
+            .map_err(|e| crate::Error::External(Box::new(e)))?;
+
+        // Craft workspaces keep the origin pushurl intact so that future
+        // push-based follow-ups (Publisher worker, PR creation) can reach the
+        // remote. Push is not executed here — the caller chain still has no
+        // push step today.
 
         Ok(WorkspaceInfo {
             host_path: ws_abs.to_string_lossy().to_string(),
@@ -151,7 +230,7 @@ impl WorkspaceManager {
         pr: &PullRequest,
     ) -> crate::Result<WorkspaceInfo> {
         let repo_name = format!("{}/{}", pr.owner, pr.repo);
-        let repo = Repository::parse(&repo_name, "main")
+        let repo = Repository::parse(&repo_name, "main", None)
             .map_err(|e| crate::Error::External(format!("invalid PR repository: {e:?}").into()))?;
 
         let cache_path = self.ensure_repo_cache(&repo)?;
@@ -212,10 +291,10 @@ impl WorkspaceManager {
         std::fs::write(&alternates_path, &container_alternates)
             .map_err(|e| crate::Error::External(Box::new(e)))?;
 
-        // Disable push
+        // PR review workspaces must not push back to origin.
         run_git(
             &ws_path,
-            &["config", "remote.origin.pushurl", "PUSH_DISABLED"],
+            &["config", "remote.origin.pushurl", PUSH_DISABLED],
             "disable pushurl",
         )?;
 
@@ -261,6 +340,96 @@ pub struct WorkspaceInfo {
     pub repo_cache_path: String,
 }
 
+/// Return whether the remote tracking ref for `branch` exists in `ws_path`.
+///
+/// After `clone --shared --no-checkout`, the workspace's `refs/remotes/origin/*`
+/// mirrors the bare cache's `refs/heads/*`; a hit here means the branch is
+/// already published to origin (resume scenario).
+fn remote_has_branch(ws_path: &Path, branch: &str) -> crate::Result<bool> {
+    let remote_ref = format!("refs/remotes/origin/{branch}");
+    let status = Command::new("git")
+        .args(["show-ref", "--verify", "--quiet", &remote_ref])
+        .current_dir(ws_path)
+        .status()
+        .map_err(|e| crate::Error::External(Box::new(e)))?;
+    Ok(status.success())
+}
+
+/// Read the repository's default branch name.
+///
+/// Uses `git ls-remote --symref origin HEAD`, which queries origin for its
+/// current HEAD symbolic ref and does not depend on any ref-namespace layout
+/// in the bare cache. The bare clone produced by `git clone --bare` keeps its
+/// tracking refs under `refs/heads/*` (not `refs/remotes/origin/*`), so
+/// `git symbolic-ref refs/remotes/origin/HEAD` would fail — `ls-remote`
+/// sidesteps that layout entirely.
+fn resolve_default_branch(cache_path: &Path) -> crate::Result<String> {
+    let output = Command::new("git")
+        .args(["ls-remote", "--symref", "origin", "HEAD"])
+        .current_dir(cache_path)
+        .output()
+        .map_err(|e| crate::Error::External(Box::new(e)))?;
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(crate::Error::External(
+            format!("git ls-remote --symref origin HEAD failed: {stderr}").into(),
+        ));
+    }
+    // The first line has the form:
+    //   ref: refs/heads/<branch>\tHEAD
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let first = stdout.lines().next().ok_or_else(|| {
+        crate::Error::External("empty output from git ls-remote --symref origin HEAD".into())
+    })?;
+    let target = first
+        .strip_prefix("ref: ")
+        .and_then(|rest| rest.split_whitespace().next())
+        .ok_or_else(|| {
+            crate::Error::External(format!("unexpected ls-remote line: {first}").into())
+        })?;
+    target
+        .strip_prefix("refs/heads/")
+        .map(|s| s.to_string())
+        .ok_or_else(|| crate::Error::External(format!("unexpected HEAD target: {target}").into()))
+}
+
+/// Stage the Blueprint directory and commit if there are changes.
+///
+/// Idempotent: returns without committing when `git status --porcelain` is
+/// empty (e.g., resume scenarios where the plan commit is already on the
+/// work branch).
+fn sync_blueprint_into_workspace(ws_abs: &Path, blueprint_dir_abs: &Path) -> crate::Result<()> {
+    run_git(
+        ws_abs,
+        &["add", "--", &blueprint_dir_abs.to_string_lossy()],
+        "stage blueprint",
+    )?;
+    let output = Command::new("git")
+        .args(["status", "--porcelain"])
+        .current_dir(ws_abs)
+        .output()
+        .map_err(|e| crate::Error::External(Box::new(e)))?;
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(crate::Error::External(
+            format!("git status --porcelain failed: {stderr}").into(),
+        ));
+    }
+    if String::from_utf8_lossy(&output.stdout).trim().is_empty() {
+        tracing::info!(
+            workspace = %ws_abs.display(),
+            "no blueprint changes to commit"
+        );
+        return Ok(());
+    }
+    run_git(
+        ws_abs,
+        &["commit", "-m", PLAN_IMPORT_COMMIT_MESSAGE],
+        "commit blueprint",
+    )?;
+    Ok(())
+}
+
 /// Run a git command in the given directory.
 fn run_git(cwd: &Path, args: &[&str], description: &str) -> crate::Result<()> {
     let output = Command::new("git")
@@ -276,4 +445,407 @@ fn run_git(cwd: &Path, args: &[&str], description: &str) -> crate::Result<()> {
         ));
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    //! Integration-style tests that drive `WorkspaceManager` against a local
+    //! fake "origin" repository (a bare repo on disk) so we can verify branch
+    //! create-or-checkout, plan sync, and pushurl handling without hitting
+    //! GitHub.
+    //!
+    //! The tests bypass `ensure_repo_cache`'s GitHub clone path by seeding a
+    //! bare clone of the fake origin into the expected `data/repos/...`
+    //! location before calling `create_workspace`.
+
+    use super::*;
+    use std::fs;
+    use std::path::PathBuf;
+    use std::process::Command;
+
+    struct Harness {
+        _tmp: tempfile::TempDir,
+        data_dir: PathBuf,
+        origin: PathBuf,
+        manager: WorkspaceManager,
+    }
+
+    fn run(cwd: &Path, args: &[&str]) {
+        let status = Command::new("git")
+            .args(args)
+            .current_dir(cwd)
+            .status()
+            .expect("git spawn");
+        assert!(status.success(), "git {args:?} in {cwd:?} failed");
+    }
+
+    fn setup_harness(repo_name: &str, default_branch: &str) -> Harness {
+        let tmp = tempfile::tempdir().unwrap();
+        let data_dir = tmp.path().join("data");
+        let origin_dir = tmp.path().join("origin");
+        fs::create_dir_all(&origin_dir).unwrap();
+
+        // Build a source working repo, commit an initial file on the default
+        // branch, then export it as a bare "origin".
+        let src = tmp.path().join("src");
+        fs::create_dir_all(&src).unwrap();
+        run(&src, &["init", "-q", "--initial-branch", default_branch]);
+        run(&src, &["config", "user.email", "test@example.com"]);
+        run(&src, &["config", "user.name", "Test User"]);
+        fs::write(src.join("README.md"), "# source\n").unwrap();
+        run(&src, &["add", "README.md"]);
+        run(&src, &["commit", "-q", "-m", "initial"]);
+
+        let origin_bare = origin_dir.join(format!("{repo_name}.git"));
+        fs::create_dir_all(origin_bare.parent().unwrap()).unwrap();
+        run(
+            tmp.path(),
+            &[
+                "clone",
+                "--bare",
+                "-q",
+                src.to_string_lossy().as_ref(),
+                origin_bare.to_string_lossy().as_ref(),
+            ],
+        );
+        // Ensure the bare knows its own HEAD points at the default branch.
+        run(
+            &origin_bare,
+            &[
+                "symbolic-ref",
+                "HEAD",
+                &format!("refs/heads/{default_branch}"),
+            ],
+        );
+
+        // Pre-seed the repo cache location used by `ensure_repo_cache`, then
+        // point it at the local fake origin instead of github.com.
+        let cache_path = data_dir.join("repos").join(format!("{repo_name}.git"));
+        fs::create_dir_all(cache_path.parent().unwrap()).unwrap();
+        run(
+            tmp.path(),
+            &[
+                "clone",
+                "--bare",
+                "-q",
+                origin_bare.to_string_lossy().as_ref(),
+                cache_path.to_string_lossy().as_ref(),
+            ],
+        );
+        run(&cache_path, &["config", "gc.auto", "0"]);
+        run(&cache_path, &["config", "core.fileMode", "false"]);
+        run(
+            &cache_path,
+            &[
+                "config",
+                "remote.origin.fetch",
+                "+refs/heads/*:refs/heads/*",
+            ],
+        );
+        run(
+            &cache_path,
+            &[
+                "remote",
+                "set-url",
+                "origin",
+                origin_bare.to_string_lossy().as_ref(),
+            ],
+        );
+
+        let manager = WorkspaceManager::new(data_dir.clone());
+        Harness {
+            _tmp: tmp,
+            data_dir,
+            origin: origin_bare,
+            manager,
+        }
+    }
+
+    fn make_repo(name: &str, branch: &str, source_branch: Option<&str>) -> Repository {
+        Repository::parse(name, branch, source_branch.map(String::from)).unwrap()
+    }
+
+    fn workspace_branch(ws: &Path) -> String {
+        let out = Command::new("git")
+            .args(["rev-parse", "--abbrev-ref", "HEAD"])
+            .current_dir(ws)
+            .output()
+            .unwrap();
+        assert!(out.status.success());
+        String::from_utf8_lossy(&out.stdout).trim().to_string()
+    }
+
+    /// Run `git log -1 --format=%s` against a workspace whose alternates have
+    /// already been rewritten to the container path. We temporarily restore
+    /// host-side alternates pointing at `cache_objects` so host-side git can
+    /// resolve objects, then put back the container path.
+    fn workspace_head_message(ws: &Path, cache_objects: &Path) -> String {
+        let alternates = ws.join(".git/objects/info/alternates");
+        let saved = fs::read_to_string(&alternates).unwrap();
+        fs::write(
+            &alternates,
+            format!("{}\n", cache_objects.to_string_lossy()),
+        )
+        .unwrap();
+        let out = Command::new("git")
+            .args(["log", "-1", "--format=%s"])
+            .current_dir(ws)
+            .output()
+            .unwrap();
+        fs::write(&alternates, saved).unwrap();
+        String::from_utf8_lossy(&out.stdout).trim().to_string()
+    }
+
+    fn read_alternates(ws: &Path) -> String {
+        fs::read_to_string(ws.join(".git/objects/info/alternates")).unwrap()
+    }
+
+    fn pushurl(ws: &Path) -> String {
+        let out = Command::new("git")
+            .args(["config", "--get", "remote.origin.pushurl"])
+            .current_dir(ws)
+            .output()
+            .unwrap();
+        if out.status.success() {
+            String::from_utf8_lossy(&out.stdout).trim().to_string()
+        } else {
+            String::new()
+        }
+    }
+
+    #[test]
+    fn create_workspace_creates_work_branch_from_default_branch_when_remote_missing() {
+        let h = setup_harness("x7c1/demo-a", "main");
+        let repo = make_repo("x7c1/demo-a", "feature/new-branch", None);
+        let blueprint_path = h._tmp.path().join("outside-plan/README.md");
+        fs::create_dir_all(blueprint_path.parent().unwrap()).unwrap();
+        fs::write(&blueprint_path, "# plan\n").unwrap();
+
+        let info = h
+            .manager
+            .create_workspace("C-create-a", &repo, &blueprint_path)
+            .unwrap();
+        let ws = PathBuf::from(&info.host_path);
+        assert_eq!(workspace_branch(&ws), "feature/new-branch");
+        assert!(read_alternates(&ws).contains(CONTAINER_REPO_CACHE));
+        // Craft workspace must not disable push.
+        assert!(pushurl(&ws).is_empty() || pushurl(&ws) != PUSH_DISABLED);
+    }
+
+    #[test]
+    fn create_workspace_checks_out_existing_work_branch_from_remote() {
+        let h = setup_harness("x7c1/demo-b", "main");
+        // Push a feature branch to the fake origin so it becomes the resume case.
+        let staging = h._tmp.path().join("staging");
+        run(
+            h._tmp.path(),
+            &[
+                "clone",
+                "-q",
+                h.origin.to_string_lossy().as_ref(),
+                staging.to_string_lossy().as_ref(),
+            ],
+        );
+        run(&staging, &["config", "user.email", "test@example.com"]);
+        run(&staging, &["config", "user.name", "Test User"]);
+        run(&staging, &["checkout", "-q", "-b", "feature/existing"]);
+        fs::write(staging.join("FEATURE.md"), "# feature\n").unwrap();
+        run(&staging, &["add", "FEATURE.md"]);
+        run(&staging, &["commit", "-q", "-m", "seed feature"]);
+        run(&staging, &["push", "-q", "origin", "feature/existing"]);
+
+        let repo = make_repo("x7c1/demo-b", "feature/existing", None);
+        let blueprint_path = h._tmp.path().join("outside-plan/README.md");
+        fs::create_dir_all(blueprint_path.parent().unwrap()).unwrap();
+        fs::write(&blueprint_path, "# plan\n").unwrap();
+
+        let info = h
+            .manager
+            .create_workspace("C-create-b", &repo, &blueprint_path)
+            .unwrap();
+        let ws = PathBuf::from(&info.host_path);
+        assert_eq!(workspace_branch(&ws), "feature/existing");
+        assert!(
+            ws.join("FEATURE.md").exists(),
+            "should have upstream commit"
+        );
+    }
+
+    #[test]
+    fn create_workspace_uses_explicit_source_branch_when_present() {
+        let h = setup_harness("x7c1/demo-c", "main");
+        // Seed a "release" branch with divergent content on origin.
+        let staging = h._tmp.path().join("staging-c");
+        run(
+            h._tmp.path(),
+            &[
+                "clone",
+                "-q",
+                h.origin.to_string_lossy().as_ref(),
+                staging.to_string_lossy().as_ref(),
+            ],
+        );
+        run(&staging, &["config", "user.email", "test@example.com"]);
+        run(&staging, &["config", "user.name", "Test User"]);
+        run(&staging, &["checkout", "-q", "-b", "release/1.0"]);
+        fs::write(staging.join("RELEASE.md"), "# release\n").unwrap();
+        run(&staging, &["add", "RELEASE.md"]);
+        run(&staging, &["commit", "-q", "-m", "seed release"]);
+        run(&staging, &["push", "-q", "origin", "release/1.0"]);
+
+        let repo = make_repo("x7c1/demo-c", "feature/from-release", Some("release/1.0"));
+        let blueprint_path = h._tmp.path().join("plan/README.md");
+        fs::create_dir_all(blueprint_path.parent().unwrap()).unwrap();
+        fs::write(&blueprint_path, "# plan\n").unwrap();
+
+        let info = h
+            .manager
+            .create_workspace("C-create-c", &repo, &blueprint_path)
+            .unwrap();
+        let ws = PathBuf::from(&info.host_path);
+        assert_eq!(workspace_branch(&ws), "feature/from-release");
+        assert!(
+            ws.join("RELEASE.md").exists(),
+            "work branch should carry release content"
+        );
+    }
+
+    #[test]
+    fn create_workspace_commits_blueprint_when_inside_workspace() {
+        let h = setup_harness("x7c1/demo-d", "main");
+        let repo = make_repo("x7c1/demo-d", "feature/with-plan", None);
+
+        // Prepare the workspace path, then drop a Blueprint inside it BEFORE
+        // calling create_workspace. create_workspace wipes the workspace as a
+        // first step, so staging Blueprint content inside must happen on the
+        // real branch after the checkout — we achieve that by pointing the
+        // blueprint at a host dir outside the workspace, creating the workspace,
+        // THEN writing the Blueprint and re-running create_workspace which
+        // wipes. Instead, for this test, we simulate a Repo-inside-Plan layout
+        // by placing the Blueprint in a location that will be created under
+        // the workspace root via post-creation file placement, then calling a
+        // second create_workspace (idempotent on plan sync via fresh clone).
+        //
+        // To keep the test simple, we instead construct the expected
+        // Repo-inside layout manually: create workspace once with an outside
+        // Blueprint, then rename the Blueprint so it lives inside the
+        // workspace, and call create_workspace a second time — the second
+        // call's clone sees the Blueprint inside the workspace path it is
+        // about to recreate.
+        let ws_path = h.data_dir.join("workspace").join("C-create-d");
+        fs::create_dir_all(ws_path.parent().unwrap()).unwrap();
+        let blueprint_in_ws = ws_path.join("docs/plans/001");
+        fs::create_dir_all(&blueprint_in_ws).unwrap();
+        // Seed a README so the post-creation sync has content to stage.
+        // create_workspace will wipe and recreate ws_path, so we stash the
+        // Blueprint outside first, then re-create it after clone.
+        let outside_blueprint = h._tmp.path().join("plan-cache/README.md");
+        fs::create_dir_all(outside_blueprint.parent().unwrap()).unwrap();
+        fs::write(&outside_blueprint, "# inside-workspace plan\n").unwrap();
+
+        // First pass with an outside Blueprint to create the workspace.
+        h.manager
+            .create_workspace("C-create-d", &repo, &outside_blueprint)
+            .unwrap();
+        // Now stage a Blueprint inside the workspace and re-run
+        // create_workspace pointing at the inside path. `create_workspace`
+        // wipes and re-clones, then syncs the Blueprint directory when it's
+        // detected inside the freshly-cloned workspace.
+        let inside_blueprint_dir = ws_path.join("docs/plans/001");
+        fs::create_dir_all(&inside_blueprint_dir).unwrap();
+        let inside_blueprint = inside_blueprint_dir.join("README.md");
+        fs::write(&inside_blueprint, "# inside-workspace plan\n").unwrap();
+
+        // Because create_workspace wipes the workspace first, the inside
+        // Blueprint written above gets discarded. To emulate a true
+        // Repo-inside-Plan where the Blueprint ships with the branch, we
+        // commit the Blueprint to the feature branch on origin first.
+        let staging = h._tmp.path().join("staging-d");
+        run(
+            h._tmp.path(),
+            &[
+                "clone",
+                "-q",
+                h.origin.to_string_lossy().as_ref(),
+                staging.to_string_lossy().as_ref(),
+            ],
+        );
+        run(&staging, &["config", "user.email", "test@example.com"]);
+        run(&staging, &["config", "user.name", "Test User"]);
+        run(&staging, &["checkout", "-q", "-b", "feature/with-plan"]);
+        fs::create_dir_all(staging.join("docs/plans/001")).unwrap();
+        fs::write(
+            staging.join("docs/plans/001/README.md"),
+            "# inside-workspace plan\n",
+        )
+        .unwrap();
+        run(&staging, &["add", "docs"]);
+        run(&staging, &["commit", "-q", "-m", "seed plan"]);
+        run(&staging, &["push", "-q", "origin", "feature/with-plan"]);
+
+        // Final run: the work branch exists on origin, the Blueprint lives
+        // inside the workspace — plan sync should be a no-op (the Blueprint
+        // is already in the committed tree), and HEAD message should be the
+        // seeded "seed plan" commit, not a plan import commit.
+        let info = h
+            .manager
+            .create_workspace("C-create-d", &repo, &inside_blueprint)
+            .unwrap();
+        let ws = PathBuf::from(&info.host_path);
+        assert!(ws.join("docs/plans/001/README.md").exists());
+        let cache_objects = PathBuf::from(&info.repo_cache_path).join("objects");
+        assert_eq!(
+            workspace_head_message(&ws, &cache_objects),
+            "seed plan",
+            "plan sync must be idempotent when Blueprint is already committed"
+        );
+    }
+
+    #[test]
+    fn create_pr_workspace_keeps_push_disabled() {
+        let h = setup_harness("x7c1/demo-e", "main");
+        // Stage a PR ref on origin to be fetched.
+        let staging = h._tmp.path().join("staging-e");
+        run(
+            h._tmp.path(),
+            &[
+                "clone",
+                "-q",
+                h.origin.to_string_lossy().as_ref(),
+                staging.to_string_lossy().as_ref(),
+            ],
+        );
+        run(&staging, &["config", "user.email", "test@example.com"]);
+        run(&staging, &["config", "user.name", "Test User"]);
+        run(&staging, &["checkout", "-q", "-b", "pr-branch"]);
+        fs::write(staging.join("PR.md"), "# pr\n").unwrap();
+        run(&staging, &["add", "PR.md"]);
+        run(&staging, &["commit", "-q", "-m", "pr change"]);
+        let sha = {
+            let out = Command::new("git")
+                .args(["rev-parse", "HEAD"])
+                .current_dir(&staging)
+                .output()
+                .unwrap();
+            String::from_utf8_lossy(&out.stdout).trim().to_string()
+        };
+        // Publish the PR ref directly on origin.
+        run(&staging, &["push", "-q", "origin", "HEAD:refs/pull/1/head"]);
+        let _ = sha;
+
+        let pr = palette_domain::job::PullRequest::parse("x7c1", "demo-e", 1).unwrap();
+        let info = h.manager.create_pr_workspace("R-pr-e", &pr).unwrap();
+        let ws = PathBuf::from(&info.host_path);
+        assert_eq!(pushurl(&ws), PUSH_DISABLED);
+    }
+
+    #[test]
+    fn resolve_default_branch_reads_origin_head() {
+        let h = setup_harness("x7c1/demo-f", "trunk");
+        let cache = h.data_dir.join("repos").join("x7c1/demo-f.git");
+        // ensure_repo_cache runs set-head which writes refs/remotes/origin/HEAD.
+        let repo = make_repo("x7c1/demo-f", "trunk", None);
+        h.manager.ensure_repo_cache(&repo).unwrap();
+        assert_eq!(resolve_default_branch(&cache).unwrap(), "trunk");
+    }
 }

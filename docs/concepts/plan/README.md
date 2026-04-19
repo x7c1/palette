@@ -24,6 +24,15 @@ Plans live under the directory of the [Blueprint](../blueprint/) that references
 
 A Blueprint may declare no `plan_path` on any Task. This is valid and describes a purely mechanical workflow (such as an auto-generated PR review) whose intent is fully captured by the Task tree itself.
 
+## Plan Delivery to Workers
+
+The orchestrator makes Plans reachable to Workers in one of two modes, picked automatically from the host-side layout:
+
+- **Repo-inside-Plan** (the Blueprint directory is under the target repo): the Blueprint is staged and committed on the work branch during workspace setup, so Plan files sit inside the Crafter's workspace. Plan paths in the instruction message resolve under `/home/agent/workspace/<blueprint-rel>/...`, and relative links inside the Plan can reach anything in the workspace.
+- **Repo-outside-Plan** (the Blueprint lives outside the target repo, e.g. a separate workspace repo): the Blueprint directory is bind-mounted read-only at `/home/agent/plans`. Plan paths resolve under `/home/agent/plans/...`, and relative links resolve only within the Blueprint directory (the mount boundary).
+
+The `Plan:` line in a Worker's first instruction is already a fully-resolved absolute container path — Workers read it verbatim regardless of mode. Mode detection happens at workspace-creation time by comparing the Blueprint's absolute host path with the workspace's absolute host path.
+
 ## Splitting work
 
 When a Task turns out to be larger than expected, the [Operator](../operator/) suspends the [Workflow](../workflow/), edits the [Blueprint](../blueprint/) to break the Task into child Tasks, and resumes. Each child Task has its own Plan.

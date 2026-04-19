@@ -73,7 +73,8 @@ mod tests {
                 Some(wid("member-a")),
                 Some(Priority::High),
                 JobDetail::Craft {
-                    repository: Repository::parse("x7c1/palette-demo", "feature/test").unwrap(),
+                    repository: Repository::parse("x7c1/palette-demo", "feature/test", None)
+                        .unwrap(),
                 },
             ))
             .unwrap();

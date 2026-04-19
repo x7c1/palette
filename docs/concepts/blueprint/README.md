@@ -66,6 +66,27 @@ task:
 
 Every `craft` Task must have a `review` child — Palette rejects a Blueprint whose `craft` Task has no review. The review runs after its parent `craft` completes, so the ordering is implicit and no `depends_on` is needed for the review.
 
+## Repository Fields
+
+`repository:` on a `craft` Task specifies where the work lands:
+
+| Field | Meaning | Default |
+|---|---|---|
+| `name` | `owner/repo` slug | required |
+| `branch` | Work branch Palette creates and commits to. Does not need to exist on origin yet. | required (typically `feature/<craft-key>`) |
+| `source_branch` | Branch to derive `branch` from when it does not exist on origin. Ignored for the resume path (`branch` already on origin). | repository default branch (`refs/remotes/origin/HEAD`) |
+
+The orchestrator creates the work branch; the Crafter does not. When the same `(name, branch)` pair is already in use by another non-terminal [Workflow](../workflow/), `POST /workflows/start` rejects the request with `workflow/branch_in_use` so that two workflows never contend for the same branch.
+
+## Blueprint Location Modes
+
+The orchestrator auto-detects where the Blueprint sits relative to the Craft workspace and picks one of two modes at workspace-creation time:
+
+- **Repo-inside-Plan**: the Blueprint directory is a subdirectory of the target repo. The Blueprint and Plan files are committed on the work branch alongside the Craft output, so PR reviewers see plan and code together. Relative links inside the Plan can reach the whole workspace.
+- **Repo-outside-Plan**: the Blueprint lives in a different repo (e.g. a shared workspace repo that coordinates plans for other projects). The Blueprint directory is bind-mounted read-only under `/home/agent/plans`; the workspace's git history stays free of Plan files. Relative links inside the Plan resolve only within the Blueprint directory.
+
+Mode detection compares the Blueprint's absolute host path against the workspace's absolute host path — no configuration needed.
+
 ## Validation
 
 Palette exposes `POST /blueprints/validate` so a Blueprint can be checked before any Workflow is created. The endpoint reads the file, runs the same schema and structural validation as `POST /workflows/start`, and returns either a summary of the parsed tree (when valid) or a list of machine-readable errors (when invalid). The endpoint is side-effect-free — no database rows, no network calls, no activation events — so it is safe to call as a pre-flight from skills (`/palette:plan` uses it after generation; `/palette:approve` runs it before starting a Workflow).
