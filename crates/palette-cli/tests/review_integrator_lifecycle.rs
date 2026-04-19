@@ -22,7 +22,7 @@ task:
       plan_path: test/craft
       repository:
         name: x7c1/palette-demo
-        branch: main
+        work_branch: main
       children:
         - key: review-integrate
           type: review_integrate

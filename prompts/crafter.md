@@ -9,7 +9,7 @@ The first message you receive includes:
 - **Task title**: What you need to do
 - **ID**: Your job identifier (e.g., `C-001`)
 - **Plan**: Absolute path to the Plan document inside the container — read it first
-- **Repository**: `org/repo` and branch name
+- **Repository**: `org/repo` and work branch name
 
 The `Plan:` value is always a fully-resolved absolute path. Do not assume a fixed mount root: read the path verbatim.
 

@@ -38,11 +38,11 @@ pub async fn handle_start_workflow(
     )
     .map_err(super::blueprint_read_error_to_server_error)?;
 
-    // Branch collision: reject the start if any active workflow already owns
-    // one of the (repo, branch) pairs used by this blueprint's craft tasks.
-    // Performed before `create_workflow` so the rejection leaves no workflow
-    // row behind.
-    let conflicts = collect_branch_conflicts(&state, &tree)?;
+    // Work-branch collision: reject the start if any active workflow already
+    // owns one of the (repo, work_branch) pairs used by this blueprint's
+    // craft tasks. Performed before `create_workflow` so the rejection
+    // leaves no workflow row behind.
+    let conflicts = collect_work_branch_conflicts(&state, &tree)?;
     if !conflicts.is_empty() {
         return Err(Error::BadRequest {
             code: ErrorCode::InputValidationFailed,
@@ -74,12 +74,16 @@ pub async fn handle_start_workflow(
         .into_response())
 }
 
-/// Gather one [`InputError`] per craft task whose `(repo, branch)` pair is
-/// already claimed by a non-terminal workflow.
+/// Gather one [`InputError`] per craft task whose `(repo, work_branch)` pair
+/// is already claimed by a non-terminal workflow.
 ///
-/// The `hint` field carries `task_key:repo_name:branch` so clients can pinpoint
-/// which craft task needs attention when a blueprint references multiple repos.
-fn collect_branch_conflicts(state: &AppState, tree: &TaskTree) -> crate::Result<Vec<InputError>> {
+/// The `hint` field carries `task_key:repo_name:work_branch` so clients can
+/// pinpoint which craft task needs attention when a blueprint references
+/// multiple repos.
+fn collect_work_branch_conflicts(
+    state: &AppState,
+    tree: &TaskTree,
+) -> crate::Result<Vec<InputError>> {
     let mut errors = Vec::new();
     for task_id in tree.task_ids() {
         let Some(node) = tree.get(task_id) else {
@@ -91,7 +95,7 @@ fn collect_branch_conflicts(state: &AppState, tree: &TaskTree) -> crate::Result<
         let in_use = state
             .interactor
             .data_store
-            .find_active_workflows_using_branch(&repository.name, &repository.branch)
+            .find_active_workflows_using_work_branch(&repository.name, &repository.work_branch)
             .map_err(Error::internal)?;
         if !in_use.is_empty() {
             errors.push(InputError {
@@ -100,9 +104,9 @@ fn collect_branch_conflicts(state: &AppState, tree: &TaskTree) -> crate::Result<
                     "{}:{}:{}",
                     node.key.as_ref(),
                     repository.name,
-                    repository.branch
+                    repository.work_branch
                 ),
-                reason: "workflow/branch_in_use".into(),
+                reason: "workflow/work_branch_in_use".into(),
             });
         }
     }

@@ -4,15 +4,15 @@ use rusqlite::params;
 
 impl Database {
     /// Return non-terminal workflows (`Active`, `Suspending`, or `Suspended`)
-    /// whose task tree contains a Craft job targeting `(repo_name, branch)`.
+    /// whose task tree contains a Craft job targeting `(repo_name, work_branch)`.
     ///
     /// The branch identity check uses `json_extract` against the
     /// `jobs.repository` JSON column; only Craft jobs populate that field
     /// (see [`RepositoryRow`]).
-    pub fn find_active_workflows_using_branch(
+    pub fn find_active_workflows_using_work_branch(
         &self,
         repo_name: &str,
-        branch: &str,
+        work_branch: &str,
     ) -> crate::Result<Vec<WorkflowId>> {
         let conn = lock(&self.conn)?;
         let mut stmt = conn.prepare(
@@ -22,13 +22,13 @@ impl Database {
                JOIN jobs j ON j.task_id = t.id
               WHERE j.repository IS NOT NULL
                 AND json_extract(j.repository, '$.name') = ?1
-                AND json_extract(j.repository, '$.branch') = ?2
+                AND json_extract(j.repository, '$.work_branch') = ?2
                 AND w.status_id IN (?3, ?4, ?5)",
         )?;
         let rows = stmt.query_map(
             params![
                 repo_name,
-                branch,
+                work_branch,
                 crate::lookup::workflow_status_id(WorkflowStatus::Active),
                 crate::lookup::workflow_status_id(WorkflowStatus::Suspending),
                 crate::lookup::workflow_status_id(WorkflowStatus::Suspended),
@@ -53,9 +53,10 @@ mod tests {
     use palette_domain::task::TaskId;
     use palette_domain::workflow::{WorkflowId, WorkflowStatus};
 
-    fn craft(name: &str, branch: &str, source_branch: Option<&str>) -> JobDetail {
+    fn craft(name: &str, work_branch: &str, source_branch: Option<&str>) -> JobDetail {
         JobDetail::Craft {
-            repository: Repository::parse(name, branch, source_branch.map(String::from)).unwrap(),
+            repository: Repository::parse(name, work_branch, source_branch.map(String::from))
+                .unwrap(),
         }
     }
 
@@ -85,7 +86,7 @@ mod tests {
     }
 
     #[test]
-    fn returns_active_workflow_that_uses_branch() {
+    fn returns_active_workflow_that_uses_work_branch() {
         let db = test_db();
         seed_workflow_with_craft(
             &db,
@@ -94,14 +95,14 @@ mod tests {
             craft("x7c1/palette", "feature/foo", None),
         );
         let found = db
-            .find_active_workflows_using_branch("x7c1/palette", "feature/foo")
+            .find_active_workflows_using_work_branch("x7c1/palette", "feature/foo")
             .unwrap();
         assert_eq!(found.len(), 1);
         assert_eq!(found[0].as_ref(), "wf-branch-1");
     }
 
     #[test]
-    fn ignores_different_repo_or_branch() {
+    fn ignores_different_repo_or_work_branch() {
         let db = test_db();
         seed_workflow_with_craft(
             &db,
@@ -110,12 +111,12 @@ mod tests {
             craft("x7c1/palette", "feature/bar", None),
         );
         assert!(
-            db.find_active_workflows_using_branch("x7c1/palette", "feature/foo")
+            db.find_active_workflows_using_work_branch("x7c1/palette", "feature/foo")
                 .unwrap()
                 .is_empty()
         );
         assert!(
-            db.find_active_workflows_using_branch("x7c1/other", "feature/bar")
+            db.find_active_workflows_using_work_branch("x7c1/other", "feature/bar")
                 .unwrap()
                 .is_empty()
         );
@@ -134,7 +135,7 @@ mod tests {
         db.update_workflow_status(&wf_id, WorkflowStatus::Completed)
             .unwrap();
         assert!(
-            db.find_active_workflows_using_branch("x7c1/palette", "feature/foo")
+            db.find_active_workflows_using_work_branch("x7c1/palette", "feature/foo")
                 .unwrap()
                 .is_empty()
         );
@@ -149,7 +150,7 @@ mod tests {
         db.mark_workflow_failed(&wf_id, "workflow/workspace_setup_failed")
             .unwrap();
         assert!(
-            db.find_active_workflows_using_branch("x7c1/palette", "feature/foo")
+            db.find_active_workflows_using_work_branch("x7c1/palette", "feature/foo")
                 .unwrap()
                 .is_empty()
         );
@@ -168,7 +169,7 @@ mod tests {
         db.update_workflow_status(&wf_id, WorkflowStatus::Suspended)
             .unwrap();
         let found = db
-            .find_active_workflows_using_branch("x7c1/palette", "feature/foo")
+            .find_active_workflows_using_work_branch("x7c1/palette", "feature/foo")
             .unwrap();
         assert_eq!(found.len(), 1);
     }

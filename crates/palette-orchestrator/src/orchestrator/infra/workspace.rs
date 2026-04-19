@@ -104,11 +104,11 @@ impl WorkspaceManager {
 
     /// Create a workspace for a craft job using `git clone --shared`.
     ///
-    /// The resulting workspace is always checked out on `repo.branch` (the
-    /// work branch). When the remote already has that branch, it is checked
-    /// out as-is (resume scenario). When it does not, the work branch is
-    /// created from `repo.source_branch` (or the repository's default branch
-    /// when `source_branch` is omitted).
+    /// The resulting workspace is always checked out on `repo.work_branch`.
+    /// When the remote already has that branch, it is checked out as-is
+    /// (resume scenario). When it does not, the work branch is created from
+    /// `repo.source_branch` (or the repository's default branch when
+    /// `source_branch` is omitted).
     ///
     /// When the Blueprint directory sits inside the workspace
     /// (Repo-inside-Plan mode), its contents are staged and committed on the
@@ -153,10 +153,10 @@ impl WorkspaceManager {
         // Branch create-or-checkout.
         // The work branch lives on origin → check it out directly; otherwise
         // derive it from the source branch.
-        if remote_has_branch(&ws_path, &repo.branch)? {
+        if remote_has_branch(&ws_path, &repo.work_branch)? {
             run_git(
                 &ws_path,
-                &["checkout", &repo.branch],
+                &["checkout", &repo.work_branch],
                 "checkout work branch",
             )?;
         } else {
@@ -171,7 +171,7 @@ impl WorkspaceManager {
             )?;
             run_git(
                 &ws_path,
-                &["checkout", "-b", &repo.branch],
+                &["checkout", "-b", &repo.work_branch],
                 "create work branch",
             )?;
         }

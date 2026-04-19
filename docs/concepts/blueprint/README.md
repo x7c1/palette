@@ -45,7 +45,7 @@ task:
           plan_path: planning/api-plan/README.md
           repository:
             name: x7c1/palette
-            branch: feature/x-api-plan
+            work_branch: feature/x-api-plan
           children:
             - key: api-plan-review
               type: review
@@ -58,7 +58,7 @@ task:
           plan_path: execution/api-impl/README.md
           repository:
             name: x7c1/palette
-            branch: feature/x-api-impl
+            work_branch: feature/x-api-impl
           children:
             - key: api-impl-review
               type: review
@@ -70,8 +70,8 @@ Every `craft` Task must have a `review` child — Palette rejects a Blueprint wh
 
 `repository:` on a `craft` Task names two branches with distinct roles:
 
-- `branch` — the **work branch** the Craft commits to. This is what downstream review lands on.
-- `source_branch` — the **derivation source** when `branch` does not yet exist. When omitted, Palette derives from the repository's default branch.
+- `work_branch` — the branch the Craft commits to. This is what downstream review lands on.
+- `source_branch` — the **derivation source** when `work_branch` does not yet exist. When omitted, Palette derives from the repository's default branch.
 
 The work branch is owned by Palette, not by the Crafter; the Operator does not need to pre-create it.
 
@@ -95,7 +95,7 @@ When invalid, each entry in `errors[]` carries a `location`, a `hint` pointing a
 - A Blueprint is the source of truth for the Task tree structure.
 - A Blueprint can only be edited while the Workflow is suspended.
 - Edits are restricted to Tasks that are Pending or Ready. Tasks that are Completed, InProgress, or Suspended — and their subtrees — cannot be modified.
-- No two non-terminal [Workflows](../workflow/) may share the same `(repository, branch)` pair, so that concurrent work branches never contend over the same landing point.
+- No two non-terminal [Workflows](../workflow/) may share the same `(repository, work_branch)` pair, so that concurrent work branches never contend over the same landing point.
 
 ## Related Concepts
 

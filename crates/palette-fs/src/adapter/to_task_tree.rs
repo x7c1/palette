@@ -155,7 +155,7 @@ task:
           plan_path: planning/api-plan/README.md
           repository:
             name: x7c1/palette-demo
-            branch: main
+            work_branch: main
           children:
             - key: api-plan-review
               type: review
@@ -168,7 +168,7 @@ task:
           plan_path: execution/api-impl/README.md
           repository:
             name: x7c1/palette-demo
-            branch: main
+            work_branch: main
           children:
             - key: api-impl-review
               type: review
@@ -252,7 +252,7 @@ task:
       type: craft
       repository:
         name: x7c1/palette-demo
-        branch: main
+        work_branch: main
 "#;
         let blueprint: TaskTreeBlueprint = serde_yaml::from_str(yaml).unwrap();
         let errors = to_task_tree(&blueprint, &wf_id, &no_perspectives()).unwrap_err();
@@ -294,7 +294,7 @@ task:
       type: craft
       repository:
         name: x7c1/palette-demo
-        branch: main
+        work_branch: main
 "#;
         let blueprint: TaskTreeBlueprint = serde_yaml::from_str(yaml).unwrap();
         let errors = to_task_tree(&blueprint, &wf_id, &no_perspectives()).unwrap_err();
@@ -313,7 +313,7 @@ task:
       plan_path: plans/impl
       repository:
         name: x7c1/palette-demo
-        branch: main
+        work_branch: main
       children:
         - key: my-review
           type: review
@@ -341,7 +341,7 @@ task:
       perspective: rust-review
       repository:
         name: x7c1/palette-demo
-        branch: main
+        work_branch: main
       children:
         - key: my-review
           type: review
@@ -366,7 +366,7 @@ task:
       plan_path: plans/impl
       repository:
         name: x7c1/palette-demo
-        branch: main
+        work_branch: main
       children:
         - key: my-review
           type: review

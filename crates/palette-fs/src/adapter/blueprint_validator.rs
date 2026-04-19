@@ -102,7 +102,7 @@ impl<'a> BlueprintValidator<'a> {
                     }
                     Some(repo) => match Repository::parse(
                         &repo.name,
-                        &repo.branch,
+                        &repo.work_branch,
                         repo.source_branch.clone(),
                     ) {
                         Ok(repository) => (errors, Some(JobDetail::Craft { repository })),
@@ -250,7 +250,7 @@ fn validate_repository_format(node: &TaskNode) -> Vec<BlueprintError> {
     let Some(repo) = node.repository.as_ref() else {
         return vec![];
     };
-    match Repository::parse(&repo.name, &repo.branch, repo.source_branch.clone()) {
+    match Repository::parse(&repo.name, &repo.work_branch, repo.source_branch.clone()) {
         Ok(_) => vec![],
         Err(cause) => vec![BlueprintError::InvalidRepository {
             task_key: node.key.clone(),

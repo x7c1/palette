@@ -59,7 +59,7 @@ Derive every technical field yourself:
 - `type`: always `craft` for concrete work items; each one implicitly owns a `review` child
 - `depends_on`: inferred from the scope's sequencing
 - `repository`: reuse the target repository
-- `branch`: the **work branch** Palette will commit to. Propose `feature/<craft-key>` and offer it to the Operator for override. The orchestrator creates this branch (it does not need to exist on the remote yet); see `source_branch` below
+- `work_branch`: the branch Palette will commit to. Propose `feature/<craft-key>` and offer it to the Operator for override. The orchestrator creates this branch (it does not need to exist on the remote yet); see `source_branch` below
 - `source_branch`: omit by default so Palette derives the work branch from the repository's default branch. Set it only when the Operator explicitly asks to derive from a non-default branch
 - `priority`: leave unset unless the Operator explicitly flagged priorities
 
@@ -118,7 +118,7 @@ task:
       type: craft
       repository:
         name: <owner>/<repo>
-        branch: feature/<craft-key>
+        work_branch: feature/<craft-key>
         # Optional: source_branch: <branch>   # omit → repository default branch
       # Optional: depends_on, priority, plan_path
       children:
@@ -134,7 +134,7 @@ Rules:
 - Non-leaf (composite) tasks must NOT have a `type` field; they group child tasks via their own `children:` list
 - Use `depends_on:` to express ordering between **sibling** tasks (e.g. a later craft that depends on an earlier craft finishing)
 - `priority:` can be `high`, `medium`, or `low`
-- `repository:` takes `name`, `branch`, and an optional `source_branch` field. `branch` is the work branch Palette creates and commits to; `source_branch` names the branch to derive it from (omit to fall back to the repository's default branch)
+- `repository:` takes `name`, `work_branch`, and an optional `source_branch` field. `work_branch` is the branch Palette creates and commits to; `source_branch` names the branch to derive it from (omit to fall back to the repository's default branch)
 - `plan_path:` on any task names a plan document **relative to the Blueprint directory**. Absolute paths and `..` are rejected
 
 ## Notes

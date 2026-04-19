@@ -38,7 +38,7 @@ A failed Workflow carries a **failure reason** — a machine-readable key naming
 
 ## Branch Ownership
 
-Each non-terminal Workflow exclusively owns the `(repository, branch)` pair of every Craft Task in its Blueprint. Starting a Workflow whose Blueprint would collide with a pair already owned by another non-terminal Workflow is refused — the start never partially succeeds, so two Workflows can never share a work branch.
+Each non-terminal Workflow exclusively owns the `(repository, work_branch)` pair of every Craft Task in its Blueprint. Starting a Workflow whose Blueprint would collide with a pair already owned by another non-terminal Workflow is refused — the start never partially succeeds, so two Workflows can never share a work branch.
 
 ## Publishing
 

@@ -30,8 +30,8 @@ pub(crate) fn format_job_instruction(
     }
     if let JobDetail::Craft { ref repository } = job.detail {
         msg.push_str(&format!(
-            "\nRepository: {} (branch: {})\n",
-            repository.name, repository.branch
+            "\nRepository: {} (work branch: {})\n",
+            repository.name, repository.work_branch
         ));
     }
     if let Some(pr) = job.detail.pull_request() {
@@ -187,7 +187,7 @@ mod tests {
         let job = make_craft_job();
         let msg = format_job_instruction(&job, None, &empty_perspectives(), &plan_loc());
 
-        assert!(msg.contains("Repository: x7c1/demo (branch: main)"));
+        assert!(msg.contains("Repository: x7c1/demo (work branch: main)"));
         assert!(!msg.contains("Round"));
         assert!(!msg.contains("Perspective"));
     }

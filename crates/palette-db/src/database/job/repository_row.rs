@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub(crate) struct RepositoryRow {
     pub name: String,
-    pub branch: String,
+    pub work_branch: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub source_branch: Option<String>,
 }
@@ -15,7 +15,7 @@ impl From<&Repository> for RepositoryRow {
     fn from(r: &Repository) -> Self {
         Self {
             name: r.name.clone(),
-            branch: r.branch.clone(),
+            work_branch: r.work_branch.clone(),
             source_branch: r.source_branch.clone(),
         }
     }
@@ -23,7 +23,7 @@ impl From<&Repository> for RepositoryRow {
 
 impl RepositoryRow {
     pub(crate) fn into_domain(self) -> Result<Repository, palette_domain::job::InvalidRepository> {
-        Repository::parse(self.name, self.branch, self.source_branch)
+        Repository::parse(self.name, self.work_branch, self.source_branch)
     }
 }
 
