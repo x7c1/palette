@@ -25,22 +25,16 @@ A Blueprint is a static definition of *what* should be done. A Workflow is the r
 
 A Workflow carries one of the following statuses:
 
-- `active` — running, assignments and messages flow normally.
-- `suspending` — suspend requested; in-progress workers finish while new work is blocked.
-- `suspended` — all workers stopped; the Workflow can be resumed.
+- `active` — running.
+- `suspending` — suspend requested; in-progress work is winding down and new work is blocked.
+- `suspended` — paused; the Workflow can be resumed.
 - `completed` — terminal. All Tasks in the Blueprint's Task tree are done.
-- `terminated` — terminal. The Orchestrator's explicit shutdown stopped the Workflow; workers are destroyed and the Workflow cannot be resumed.
-- `failed` — terminal. A runtime failure (e.g. workspace setup failed, branch conflict) stopped the Workflow. Carries a `failure_reason` key that identifies the cause.
+- `terminated` — terminal. The Orchestrator's shutdown stopped the Workflow; it cannot be resumed.
+- `failed` — terminal. A runtime failure stopped the Workflow before it could complete.
 
-`terminated` and `failed` are both terminal but are kept distinct: `terminated` is caused by operator-driven shutdown and is not a fault signal, whereas `failed` indicates the Workflow itself could not proceed. Failed Workflows are reclaimed through `palette admin gc` or `palette admin reset`; individual resume/retry APIs are intentionally out of scope at this point.
+`terminated` and `failed` are both terminal but are kept distinct: `terminated` is an operator-driven outcome and is not a fault signal, whereas `failed` indicates the Workflow itself could not proceed.
 
-### failure_reason
-
-When a Workflow transitions to `failed`, the row also stores a `failure_reason` string. Reasons are machine-readable keys in `{namespace}/{value}` form and use the `workflow/` namespace — for example `workflow/workspace_setup_failed`, `workflow/branch_in_use`, `workflow/git_push_failed`.
-
-Callers must pass a key produced by a `#[derive(palette_macros::ReasonKey)]` enum's `.reason_key()` method rather than a literal string. This keeps reason names typo-resistant and makes it easy to grep for every place a given reason can originate. Detailed error context (stderr, stack traces) stays in `tracing::error!` logs and is deliberately not persisted to the DB; the reason key is the only failure metadata stored on the Workflow row.
-
-`mark_workflow_failed` is a no-op on Workflows already in a terminal state (`completed`, `terminated`, or `failed`), so a late failure notification cannot overwrite a previously recorded terminal outcome.
+A failed Workflow carries a **failure reason** that names the cause in a machine-readable form (e.g. "workspace setup failed," "branch in use"). The reason is the only failure metadata the Workflow itself retains; detailed diagnostics belong in operational logs rather than on the Workflow.
 
 ## Domain Rules
 
