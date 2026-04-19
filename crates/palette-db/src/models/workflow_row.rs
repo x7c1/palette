@@ -5,4 +5,5 @@ pub(crate) struct WorkflowRow {
     pub status_id: i64,
     pub started_at: String,
     pub blueprint_hash: Option<String>,
+    pub failure_reason: Option<String>,
 }

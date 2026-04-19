@@ -15,6 +15,8 @@ pub struct WorkflowResponse {
     pub blueprint_path: String,
     pub status: String,
     pub started_at: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub failure_reason: Option<String>,
 }
 
 pub async fn handle_list_workflows(
@@ -41,6 +43,7 @@ pub async fn handle_list_workflows(
             blueprint_path: w.blueprint_path,
             status: w.status.as_str().to_string(),
             started_at: w.started_at.to_rfc3339(),
+            failure_reason: w.failure_reason,
         })
         .collect();
 

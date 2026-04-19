@@ -45,6 +45,7 @@ CREATE TABLE IF NOT EXISTS workflows (
     worker_counter INTEGER NOT NULL DEFAULT 0,
     started_at TEXT NOT NULL,
     blueprint_hash TEXT,
+    failure_reason TEXT,
     FOREIGN KEY (status_id) REFERENCES workflow_statuses(id)
 );
 
@@ -204,6 +205,7 @@ INSERT OR IGNORE INTO workflow_statuses (id, name) VALUES (2, 'suspended');
 INSERT OR IGNORE INTO workflow_statuses (id, name) VALUES (3, 'completed');
 INSERT OR IGNORE INTO workflow_statuses (id, name) VALUES (4, 'suspending');
 INSERT OR IGNORE INTO workflow_statuses (id, name) VALUES (5, 'terminated');
+INSERT OR IGNORE INTO workflow_statuses (id, name) VALUES (6, 'failed');
 
 -- Verdict types
 INSERT OR IGNORE INTO verdict_types (id, name) VALUES (1, 'approved');
@@ -274,6 +276,38 @@ mod tests {
         let conn = Connection::open_in_memory().unwrap();
         initialize(&conn).unwrap();
         initialize(&conn).unwrap();
+    }
+
+    #[test]
+    fn workflows_has_failure_reason_column() {
+        let conn = Connection::open_in_memory().unwrap();
+        initialize(&conn).unwrap();
+
+        let has_column: bool = conn
+            .prepare(
+                "SELECT name FROM pragma_table_info('workflows') WHERE name = 'failure_reason'",
+            )
+            .unwrap()
+            .query_map([], |_| Ok(()))
+            .unwrap()
+            .next()
+            .is_some();
+        assert!(has_column, "workflows.failure_reason column missing");
+    }
+
+    #[test]
+    fn workflow_statuses_seed_contains_failed() {
+        let conn = Connection::open_in_memory().unwrap();
+        initialize(&conn).unwrap();
+
+        let name: String = conn
+            .query_row(
+                "SELECT name FROM workflow_statuses WHERE id = 6",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(name, "failed");
     }
 
     #[test]

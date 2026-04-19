@@ -13,4 +13,7 @@ pub struct Workflow {
     /// SHA-256 hash of the Blueprint file at the time of the last apply.
     /// None if no apply has been performed (Blueprint unchanged since start).
     pub blueprint_hash: Option<String>,
+    /// Machine-readable reason key (`{namespace}/{value}`) set when `status`
+    /// transitions to [`WorkflowStatus::Failed`]. `None` for all other states.
+    pub failure_reason: Option<String>,
 }

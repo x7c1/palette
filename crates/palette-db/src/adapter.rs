@@ -270,6 +270,14 @@ impl DataStore for Database {
         Ok(Database::update_workflow_status(self, id, status)?)
     }
 
+    fn mark_workflow_failed(
+        &self,
+        id: &WorkflowId,
+        reason: &str,
+    ) -> Result<bool, Box<dyn std::error::Error + Send + Sync>> {
+        Ok(Database::mark_workflow_failed(self, id, reason)?)
+    }
+
     fn increment_worker_counter(
         &self,
         workflow_id: &WorkflowId,

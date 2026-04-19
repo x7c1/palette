@@ -15,6 +15,10 @@ pub enum WorkflowStatus {
     /// Workflow was terminated by an explicit Orchestrator shutdown.
     /// Workers have been destroyed and cannot be resumed.
     Terminated,
+    /// Workflow stopped due to a runtime failure (e.g. workspace setup failed,
+    /// branch conflict). The accompanying `failure_reason` carries the
+    /// machine-readable reason key.
+    Failed,
 }
 
 impl WorkflowStatus {
@@ -25,6 +29,7 @@ impl WorkflowStatus {
             "suspended" => Ok(Self::Suspended),
             "completed" => Ok(Self::Completed),
             "terminated" => Ok(Self::Terminated),
+            "failed" => Ok(Self::Failed),
             _ => Err(InvalidWorkflowStatus::Unknown {
                 value: s.to_string(),
             }),
@@ -38,6 +43,7 @@ impl WorkflowStatus {
             Self::Suspended,
             Self::Completed,
             Self::Terminated,
+            Self::Failed,
         ]
     }
 
@@ -48,6 +54,7 @@ impl WorkflowStatus {
             WorkflowStatus::Suspended => "suspended",
             WorkflowStatus::Completed => "completed",
             WorkflowStatus::Terminated => "terminated",
+            WorkflowStatus::Failed => "failed",
         }
     }
 }
@@ -61,4 +68,27 @@ impl fmt::Display for WorkflowStatus {
 #[derive(Debug, palette_macros::ReasonKey)]
 pub enum InvalidWorkflowStatus {
     Unknown { value: String },
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parse_accepts_failed() {
+        assert_eq!(
+            WorkflowStatus::parse("failed").unwrap(),
+            WorkflowStatus::Failed
+        );
+    }
+
+    #[test]
+    fn as_str_returns_failed_for_failed_variant() {
+        assert_eq!(WorkflowStatus::Failed.as_str(), "failed");
+    }
+
+    #[test]
+    fn all_contains_failed() {
+        assert!(WorkflowStatus::all().contains(&WorkflowStatus::Failed));
+    }
 }
