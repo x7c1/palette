@@ -5,6 +5,10 @@ use palette_domain::job::{Job, JobDetail, JobId, JobType};
 use palette_domain::worker::WorkerId;
 use palette_usecase::{ArtifactsMount, InsertWorkerRequest, WorkspaceVolume};
 
+/// Machine-readable failure reason recorded on the workflow when workspace
+/// creation (clone, branch setup, plan sync) fails.
+const REASON_WORKSPACE_SETUP_FAILED: &str = "workflow/workspace_setup_failed";
+
 impl Orchestrator {
     /// Assign a new job to a freshly spawned member.
     /// Skipped when the workflow is suspending (no new members during suspend).
@@ -49,14 +53,38 @@ impl Orchestrator {
             return Ok(result);
         }
 
-        // Determine workspace volume based on job type
-        let workspace = self.resolve_workspace(&job)?;
+        // Determine workspace volume based on job type. When setup fails for
+        // a job that needs a workspace, transition the workflow to Failed so
+        // operators can see the cause without digging through logs.
+        let workspace = match self.resolve_workspace(&job, &task_state.workflow_id) {
+            Ok(ws) => ws,
+            Err(e) => {
+                if let Err(mark_err) = self
+                    .interactor
+                    .data_store
+                    .mark_workflow_failed(&task_state.workflow_id, REASON_WORKSPACE_SETUP_FAILED)
+                {
+                    tracing::warn!(
+                        workflow_id = %task_state.workflow_id,
+                        error = %mark_err,
+                        "failed to mark workflow Failed after workspace setup error"
+                    );
+                }
+                return Err(e);
+            }
+        };
 
         // Determine artifacts mount for review jobs
         let artifacts_dir = self.resolve_artifacts_mount(&job)?;
 
-        // Resolve plan location (used both for mount and for the Plan: line)
-        let plan_loc = self.resolve_plan_location(&task_state.workflow_id, &job.detail)?;
+        // Resolve plan location (used both for mount and for the Plan: line).
+        // The workspace-aware resolution decides between Repo-inside-Plan and
+        // Repo-outside-Plan mode.
+        let workspace_path = workspace
+            .as_ref()
+            .map(|w| std::path::PathBuf::from(&w.host_path));
+        let plan_loc =
+            self.resolve_plan_location(&task_state.workflow_id, workspace_path.as_deref())?;
 
         // Spawn a new member with supervisor from the task tree
         let supervisor_id = self.find_supervisor_for_job(&job.task_id)?;
@@ -245,15 +273,22 @@ impl Orchestrator {
     ///
     /// Craft jobs get a new workspace via `git clone --shared` from the bare cache.
     /// Review jobs share the parent craft job's workspace as read-only.
-    fn resolve_workspace(&self, job: &Job) -> crate::Result<Option<WorkspaceVolume>> {
+    fn resolve_workspace(
+        &self,
+        job: &Job,
+        workflow_id: &palette_domain::workflow::WorkflowId,
+    ) -> crate::Result<Option<WorkspaceVolume>> {
         match &job.detail {
             JobDetail::ReviewIntegrate { .. }
             | JobDetail::Orchestrator { .. }
             | JobDetail::Operator => Ok(None),
             JobDetail::Craft { repository } => {
-                let info = self
-                    .workspace_manager
-                    .create_workspace(job.id.as_ref(), repository)?;
+                let blueprint_path = self.workflow_blueprint_path(workflow_id)?;
+                let info = self.workspace_manager.create_workspace(
+                    job.id.as_ref(),
+                    repository,
+                    &blueprint_path,
+                )?;
                 Ok(Some(WorkspaceVolume {
                     host_path: info.host_path,
                     repo_cache_path: info.repo_cache_path,

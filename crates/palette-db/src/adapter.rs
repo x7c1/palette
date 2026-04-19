@@ -278,6 +278,27 @@ impl DataStore for Database {
         Ok(Database::mark_workflow_failed(self, id, reason)?)
     }
 
+    fn create_workflow_with_branch_claims(
+        &self,
+        id: &WorkflowId,
+        blueprint_path: &str,
+        claims: &[(String, String)],
+    ) -> Result<Vec<(String, String)>, Box<dyn std::error::Error + Send + Sync>> {
+        let conflicts =
+            Database::create_workflow_with_branch_claims(self, id, blueprint_path, claims)?;
+        Ok(conflicts
+            .into_iter()
+            .map(|c| (c.repo_name, c.work_branch))
+            .collect())
+    }
+
+    fn release_workflow_branch_claims(
+        &self,
+        id: &WorkflowId,
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        Ok(Database::release_workflow_branch_claims(self, id)?)
+    }
+
     fn increment_worker_counter(
         &self,
         workflow_id: &WorkflowId,

@@ -203,6 +203,17 @@ impl DataStore for MockDataStore {
     fn mark_workflow_failed(&self, _: &WorkflowId, _: &str) -> Result<bool, BoxErr> {
         unimplemented!()
     }
+    fn create_workflow_with_branch_claims(
+        &self,
+        _: &WorkflowId,
+        _: &str,
+        _: &[(String, String)],
+    ) -> Result<Vec<(String, String)>, BoxErr> {
+        Ok(vec![])
+    }
+    fn release_workflow_branch_claims(&self, _: &WorkflowId) -> Result<(), BoxErr> {
+        Ok(())
+    }
     fn increment_worker_counter(&self, _: &WorkflowId) -> Result<usize, BoxErr> {
         unimplemented!()
     }

@@ -10,7 +10,8 @@ pub fn create_craft(id: &str, title: &str, task_id: &str) -> CreateJobRequest {
         priority: None,
         repository: Some(palette_server::api_types::Repository {
             name: "x7c1/palette-demo".to_string(),
-            branch: "main".to_string(),
+            work_branch: "main".to_string(),
+            source_branch: None,
         }),
         command: None,
     }

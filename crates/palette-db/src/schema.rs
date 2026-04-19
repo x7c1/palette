@@ -134,6 +134,19 @@ CREATE TABLE IF NOT EXISTS workers (
     FOREIGN KEY (status_id) REFERENCES worker_statuses(id)
 );
 
+-- Active branch ownership. One row per (workflow, repo, work_branch); a
+-- workflow may claim multiple repos. A separate UNIQUE index across just
+-- (repo_name, work_branch) enforces at-most-one-active-claim. Rows are
+-- deleted when the owning workflow transitions to a terminal state
+-- (Completed / Failed / Terminated), freeing the branch for reuse.
+CREATE TABLE IF NOT EXISTS workflow_branch_claims (
+    workflow_id TEXT NOT NULL,
+    repo_name TEXT NOT NULL,
+    work_branch TEXT NOT NULL,
+    PRIMARY KEY (workflow_id, repo_name, work_branch),
+    FOREIGN KEY (workflow_id) REFERENCES workflows(id) ON DELETE CASCADE
+);
+
 -- Indexes
 
 CREATE INDEX IF NOT EXISTS idx_jobs_type_status ON jobs(type_id, status_id);
@@ -143,6 +156,11 @@ CREATE INDEX IF NOT EXISTS idx_message_queue_target ON message_queue(target_id, 
 CREATE INDEX IF NOT EXISTS idx_tasks_workflow ON tasks(workflow_id);
 CREATE INDEX IF NOT EXISTS idx_workers_workflow ON workers(workflow_id);
 CREATE INDEX IF NOT EXISTS idx_workers_task ON workers(task_id);
+-- Enforces at-most-one active workflow per (repo_name, work_branch).
+-- Rows are removed when a workflow reaches a terminal state, so past branch
+-- names remain reusable.
+CREATE UNIQUE INDEX IF NOT EXISTS uq_workflow_branch_claims_repo_branch
+    ON workflow_branch_claims(repo_name, work_branch);
 "#;
 
 pub(crate) const SEED: &str = r#"

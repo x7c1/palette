@@ -3,14 +3,17 @@ use palette_domain::workflow::{WorkflowId, WorkflowStatus};
 use rusqlite::params;
 
 impl Database {
-    /// Transition a workflow into [`WorkflowStatus::Failed`] with a reason key.
+    /// Transition a workflow into [`WorkflowStatus::Failed`] with a reason key,
+    /// releasing its branch claims atomically so the freed
+    /// `(repo_name, work_branch)` pairs become available to new workflows.
     ///
     /// Returns `Ok(true)` if the row transitioned, `Ok(false)` if the workflow
     /// was already in a terminal state (`Completed`, `Terminated`, or `Failed`)
     /// and was left untouched.
     pub fn mark_workflow_failed(&self, id: &WorkflowId, reason: &str) -> crate::Result<bool> {
-        let conn = lock(&self.conn)?;
-        let rows = conn.execute(
+        let mut conn = lock(&self.conn)?;
+        let tx = conn.transaction()?;
+        let rows = tx.execute(
             "UPDATE workflows
                 SET status_id = ?1, failure_reason = ?2
               WHERE id = ?3
@@ -24,6 +27,13 @@ impl Database {
                 crate::lookup::workflow_status_id(WorkflowStatus::Failed),
             ],
         )?;
+        if rows > 0 {
+            tx.execute(
+                "DELETE FROM workflow_branch_claims WHERE workflow_id = ?1",
+                params![id.as_ref()],
+            )?;
+        }
+        tx.commit()?;
         Ok(rows > 0)
     }
 }

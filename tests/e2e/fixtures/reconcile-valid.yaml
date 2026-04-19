@@ -9,7 +9,7 @@ task:
           priority: high
           repository:
             name: x7c1/palette-demo
-            branch: plan/2026-999-e2e-dynamic-sup
+            work_branch: plan/2026-999-e2e-dynamic-sup
           children:
             - key: review
               type: review
@@ -22,7 +22,7 @@ task:
           priority: medium
           repository:
             name: x7c1/palette-demo
-            branch: plan/2026-999-e2e-dynamic-sup
+            work_branch: plan/2026-999-e2e-dynamic-sup
           children:
             - key: review
               type: review
@@ -32,7 +32,7 @@ task:
           priority: low
           repository:
             name: x7c1/palette-demo
-            branch: plan/2026-999-e2e-dynamic-sup
+            work_branch: plan/2026-999-e2e-dynamic-sup
           children:
             - key: review
               type: review

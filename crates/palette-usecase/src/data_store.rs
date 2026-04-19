@@ -238,6 +238,31 @@ pub trait DataStore: Send + Sync {
         reason: &str,
     ) -> Result<bool, Box<dyn std::error::Error + Send + Sync>>;
 
+    /// Atomically create a `workflows` row together with its branch claims —
+    /// one `(repo_name, work_branch)` pair per Craft task.
+    ///
+    /// Returns the list of conflicting claims when any incoming pair is
+    /// already held by an active workflow; on conflict the workflow row is
+    /// **not** created. An empty Vec signals the workflow was inserted
+    /// successfully. Two concurrent workflows that fight over the same work
+    /// branch would corrupt each other's workspaces, so this check must be
+    /// atomic with the workflow insert.
+    fn create_workflow_with_branch_claims(
+        &self,
+        id: &WorkflowId,
+        blueprint_path: &str,
+        claims: &[(String, String)],
+    ) -> Result<Vec<(String, String)>, Box<dyn std::error::Error + Send + Sync>>;
+
+    /// Delete all branch claims owned by a workflow. Callers should invoke
+    /// this when the workflow transitions to a terminal state (`Completed`,
+    /// `Failed`, `Terminated`) so that the freed `(repo_name, work_branch)`
+    /// pairs become available to subsequent workflows.
+    fn release_workflow_branch_claims(
+        &self,
+        id: &WorkflowId,
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>>;
+
     fn increment_worker_counter(
         &self,
         workflow_id: &WorkflowId,

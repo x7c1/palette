@@ -48,7 +48,7 @@ mod tests {
                 None,
                 None,
                 JobDetail::Craft {
-                    repository: Repository::parse("x7c1/palette-demo", "main").unwrap(),
+                    repository: Repository::parse("x7c1/palette-demo", "main", None).unwrap(),
                 },
             ))
             .unwrap();

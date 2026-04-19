@@ -111,7 +111,9 @@ impl Orchestrator {
             .ok_or_else(|| crate::Error::TaskNotFound {
                 task_id: job.task_id.clone(),
             })?;
-        let plan_loc = self.resolve_plan_location(&task_state.workflow_id, &job.detail)?;
+        // ReviewIntegrator supervisors have no workspace mount, so Plan
+        // references fall back to the Repo-outside-Plan mount path.
+        let plan_loc = self.resolve_plan_location(&task_state.workflow_id, None)?;
         let round = self.current_review_round(&job)?;
         let instruction = crate::orchestrator::handler::job_instruction::format_job_instruction(
             &job,

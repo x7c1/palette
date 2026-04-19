@@ -24,6 +24,15 @@ Plans live under the directory of the [Blueprint](../blueprint/) that references
 
 A Blueprint may declare no `plan_path` on any Task. This is valid and describes a purely mechanical workflow (such as an auto-generated PR review) whose intent is fully captured by the Task tree itself.
 
+## Plan Provenance
+
+A Plan's origin relative to the target repository shapes how it is reviewed and what it may reference:
+
+- **Repo-inside**: the Plan lives under the same repository as the Craft's target code. Plan and code travel together through the same review, and the Plan may reference any file in the repository.
+- **Repo-outside**: the Plan lives in a separate repository that coordinates work across projects. The Plan stays outside the target repository's history, and its relative references are bounded by its own directory.
+
+Both provenances are first-class; Palette infers which one applies from the Blueprint's location and handles the rest without configuration.
+
 ## Splitting work
 
 When a Task turns out to be larger than expected, the [Operator](../operator/) suspends the [Workflow](../workflow/), edits the [Blueprint](../blueprint/) to break the Task into child Tasks, and resumes. Each child Task has its own Plan.

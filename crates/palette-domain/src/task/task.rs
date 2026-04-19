@@ -95,7 +95,7 @@ mod tests {
     #[test]
     fn creates_job_request_from_craft_task() {
         let detail = JobDetail::Craft {
-            repository: Repository::parse("x7c1/palette-demo", "main").unwrap(),
+            repository: Repository::parse("x7c1/palette-demo", "main", None).unwrap(),
         };
         let task = test_task(Some(detail), Some("plans/my-task"));
         let req = task.to_create_job_request().unwrap();
@@ -130,7 +130,7 @@ mod tests {
     #[test]
     fn succeeds_without_plan_path() {
         let detail = JobDetail::Craft {
-            repository: Repository::parse("x7c1/palette-demo", "main").unwrap(),
+            repository: Repository::parse("x7c1/palette-demo", "main", None).unwrap(),
         };
         let task = test_task(Some(detail), None);
         let req = task.to_create_job_request().unwrap();

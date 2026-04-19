@@ -58,7 +58,9 @@ Derive every technical field yourself:
 - `key`: a kebab-case summary of each task (2–4 words), drawn from the vocabulary that surfaced during scope and investigation
 - `type`: always `craft` for concrete work items; each one implicitly owns a `review` child
 - `depends_on`: inferred from the scope's sequencing
-- `repository` / `branch`: reuse the target repository; default the branch to the repository's default branch (inspect the repo if possible)
+- `repository`: reuse the target repository
+- `work_branch`: the branch Palette will commit to. Propose `feature/<craft-key>` and offer it to the Operator for override. The orchestrator creates this branch (it does not need to exist on the remote yet); see `source_branch` below
+- `source_branch`: omit by default so Palette derives the work branch from the repository's default branch. Set it only when the Operator explicitly asks to derive from a non-default branch
 - `priority`: leave unset unless the Operator explicitly flagged priorities
 
 Present the proposed tree as a rendered YAML snippet with a one-line rationale ("single task — scope is self-contained" / "split into N tasks because …") and ask the Operator to confirm or request changes. Only ask follow-ups when a field genuinely cannot be derived (e.g. multi-repo ambiguity).
@@ -116,7 +118,8 @@ task:
       type: craft
       repository:
         name: <owner>/<repo>
-        branch: <branch>
+        work_branch: feature/<craft-key>
+        # Optional: source_branch: <branch>   # omit → repository default branch
       # Optional: depends_on, priority, plan_path
       children:
         - key: <review-key>
@@ -131,7 +134,7 @@ Rules:
 - Non-leaf (composite) tasks must NOT have a `type` field; they group child tasks via their own `children:` list
 - Use `depends_on:` to express ordering between **sibling** tasks (e.g. a later craft that depends on an earlier craft finishing)
 - `priority:` can be `high`, `medium`, or `low`
-- `repository:` takes `name` and `branch` fields
+- `repository:` takes `name`, `work_branch`, and an optional `source_branch` field. `work_branch` is the branch Palette creates and commits to; `source_branch` names the branch to derive it from (omit to fall back to the repository's default branch)
 - `plan_path:` on any task names a plan document **relative to the Blueprint directory**. Absolute paths and `..` are rejected
 
 ## Notes

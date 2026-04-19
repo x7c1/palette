@@ -52,7 +52,7 @@ task:
       plan_path: craft-task/README.md
       repository:
         name: x7c1/palette-demo
-        branch: main
+        work_branch: main
       children:
         - key: review
           type: review
@@ -143,7 +143,7 @@ task:
       type: craft
       repository:
         name: x7c1/palette-demo
-        branch: main
+        work_branch: main
       children:
         - key: review
           type: review
@@ -176,7 +176,7 @@ task:
       plan_path: missing/README.md
       repository:
         name: x7c1/palette-demo
-        branch: main
+        work_branch: main
       children:
         - key: review
           type: review
@@ -210,7 +210,7 @@ task:
       type: craft
       repository:
         name: x7c1/palette-demo
-        branch: main
+        work_branch: main
       children:
         - key: review
           type: review
@@ -240,7 +240,7 @@ task:
       type: craft
       repository:
         name: x7c1/palette-demo
-        branch: main
+        work_branch: main
       children:
         - key: review
           type: review
@@ -259,7 +259,7 @@ task:
       type: craft
       repository:
         name: x7c1/palette-demo
-        branch: main
+        work_branch: main
 "#;
     validate_yaml_and_expect_invalid(yaml, "blueprint/missing_review_child", "bp-no-review").await;
 }
@@ -289,12 +289,13 @@ task:
       type: craft
       repository:
         name: x7c1/palette-demo
-        branch: ""
+        work_branch: ""
       children:
         - key: review
           type: review
 "#;
-    validate_yaml_and_expect_invalid(yaml, "invalid_repository/branch_empty", "bp-bad-repo").await;
+    validate_yaml_and_expect_invalid(yaml, "invalid_repository/work_branch_empty", "bp-bad-repo")
+        .await;
 }
 
 #[tokio::test]
@@ -308,7 +309,7 @@ task:
       depends_on: [craft-task]
       repository:
         name: x7c1/palette-demo
-        branch: main
+        work_branch: main
       children:
         - key: review
           type: review
@@ -326,7 +327,7 @@ task:
       type: craft
       repository:
         name: x7c1/palette-demo
-        branch: main
+        work_branch: main
       children:
         - key: review
           type: review
@@ -335,7 +336,7 @@ task:
       depends_on: [step-a, step-a]
       repository:
         name: x7c1/palette-demo
-        branch: main
+        work_branch: main
       children:
         - key: review
           type: review
@@ -354,7 +355,7 @@ task:
       perspective: rust-review
       repository:
         name: x7c1/palette-demo
-        branch: main
+        work_branch: main
       children:
         - key: review
           type: review
@@ -373,7 +374,7 @@ task:
       type: craft
       repository:
         name: x7c1/palette-demo
-        branch: main
+        work_branch: main
       children:
         - key: review
           type: review
@@ -415,7 +416,7 @@ task:
       plan_path: craft-task/README.md
       repository:
         name: x7c1/palette-demo
-        branch: main
+        work_branch: main
       children:
         - key: review
           type: review
@@ -458,7 +459,7 @@ task:
       plan_path: craft-task/README.md
       repository:
         name: x7c1/palette-demo
-        branch: main
+        work_branch: main
       children:
         - key: review
           type: review

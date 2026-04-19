@@ -25,7 +25,7 @@ task:
           plan_path: test/a-craft
           repository:
             name: x7c1/palette-demo
-            branch: main
+            work_branch: main
           children:
             - key: review
               type: review
@@ -37,7 +37,7 @@ task:
           plan_path: test/b-craft
           repository:
             name: x7c1/palette-demo
-            branch: main
+            work_branch: main
           children:
             - key: review
               type: review

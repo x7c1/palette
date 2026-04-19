@@ -246,11 +246,11 @@ mod tests {
         f.write_all(content.as_bytes()).unwrap();
     }
 
-    const MINIMAL_BLUEPRINT_NO_PLAN: &str = "task:\n  key: test\n  children:\n    - key: task-a\n      type: craft\n      repository:\n        name: x7c1/palette-demo\n        branch: main\n";
+    const MINIMAL_BLUEPRINT_NO_PLAN: &str = "task:\n  key: test\n  children:\n    - key: task-a\n      type: craft\n      repository:\n        name: x7c1/palette-demo\n        work_branch: main\n";
 
-    const BLUEPRINT_WITH_ROOT_PLAN: &str = "task:\n  key: test\n  plan_path: README.md\n  children:\n    - key: task-a\n      type: craft\n      repository:\n        name: x7c1/palette-demo\n        branch: main\n";
+    const BLUEPRINT_WITH_ROOT_PLAN: &str = "task:\n  key: test\n  plan_path: README.md\n  children:\n    - key: task-a\n      type: craft\n      repository:\n        name: x7c1/palette-demo\n        work_branch: main\n";
 
-    const BLUEPRINT_WITH_CHILD_PLAN: &str = "task:\n  key: test\n  children:\n    - key: task-a\n      type: craft\n      plan_path: task-a/README.md\n      repository:\n        name: x7c1/palette-demo\n        branch: main\n";
+    const BLUEPRINT_WITH_CHILD_PLAN: &str = "task:\n  key: test\n  children:\n    - key: task-a\n      type: craft\n      plan_path: task-a/README.md\n      repository:\n        name: x7c1/palette-demo\n        work_branch: main\n";
 
     #[test]
     fn parse_nested_task_tree() {
@@ -266,7 +266,7 @@ task:
           plan_path: planning/api-plan
           repository:
             name: x7c1/palette-demo
-            branch: main
+            work_branch: main
         - key: api-plan-review
           type: review
           depends_on: [api-plan]
@@ -279,7 +279,7 @@ task:
           plan_path: execution/api-impl
           repository:
             name: x7c1/palette-demo
-            branch: feature/x-api-impl
+            work_branch: feature/x-api-impl
         - key: api-impl-review
           type: review
           depends_on: [api-impl]
