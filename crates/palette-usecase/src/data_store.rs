@@ -238,18 +238,30 @@ pub trait DataStore: Send + Sync {
         reason: &str,
     ) -> Result<bool, Box<dyn std::error::Error + Send + Sync>>;
 
-    /// Return the IDs of non-terminal workflows (`Active`, `Suspending`, or
-    /// `Suspended`) whose task tree contains a Craft job targeting the given
-    /// `(repo_name, work_branch)` pair.
+    /// Atomically create a `workflows` row together with its branch claims —
+    /// one `(repo_name, work_branch)` pair per Craft task.
     ///
-    /// Used by workflow start to detect work-branch collisions before creating
-    /// a new workflow row, since two concurrent workflows that fight over the
-    /// same work branch would corrupt their workspaces.
-    fn find_active_workflows_using_work_branch(
+    /// Returns the list of conflicting claims when any incoming pair is
+    /// already held by an active workflow; on conflict the workflow row is
+    /// **not** created. An empty Vec signals the workflow was inserted
+    /// successfully. Two concurrent workflows that fight over the same work
+    /// branch would corrupt each other's workspaces, so this check must be
+    /// atomic with the workflow insert.
+    fn create_workflow_with_branch_claims(
         &self,
-        repo_name: &str,
-        work_branch: &str,
-    ) -> Result<Vec<WorkflowId>, Box<dyn std::error::Error + Send + Sync>>;
+        id: &WorkflowId,
+        blueprint_path: &str,
+        claims: &[(String, String)],
+    ) -> Result<Vec<(String, String)>, Box<dyn std::error::Error + Send + Sync>>;
+
+    /// Delete all branch claims owned by a workflow. Callers should invoke
+    /// this when the workflow transitions to a terminal state (`Completed`,
+    /// `Failed`, `Terminated`) so that the freed `(repo_name, work_branch)`
+    /// pairs become available to subsequent workflows.
+    fn release_workflow_branch_claims(
+        &self,
+        id: &WorkflowId,
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>>;
 
     fn increment_worker_counter(
         &self,
