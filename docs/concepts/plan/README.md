@@ -24,14 +24,14 @@ Plans live under the directory of the [Blueprint](../blueprint/) that references
 
 A Blueprint may declare no `plan_path` on any Task. This is valid and describes a purely mechanical workflow (such as an auto-generated PR review) whose intent is fully captured by the Task tree itself.
 
-## Plan Delivery to Workers
+## Plan Provenance
 
-The orchestrator makes Plans reachable to Workers in one of two modes, picked automatically from the host-side layout:
+A Plan's origin relative to the target repository shapes how it is reviewed and what it may reference:
 
-- **Repo-inside-Plan** (the Blueprint directory is under the target repo): the Blueprint is staged and committed on the work branch during workspace setup, so Plan files sit inside the Crafter's workspace. Plan paths in the instruction message resolve under `/home/agent/workspace/<blueprint-rel>/...`, and relative links inside the Plan can reach anything in the workspace.
-- **Repo-outside-Plan** (the Blueprint lives outside the target repo, e.g. a separate workspace repo): the Blueprint directory is bind-mounted read-only at `/home/agent/plans`. Plan paths resolve under `/home/agent/plans/...`, and relative links resolve only within the Blueprint directory (the mount boundary).
+- **Repo-inside**: the Plan lives under the same repository as the Craft's target code. Plan and code travel together through the same review, and the Plan may reference any file in the repository.
+- **Repo-outside**: the Plan lives in a separate repository that coordinates work across projects. The Plan stays outside the target repository's history, and its relative references are bounded by its own directory.
 
-The `Plan:` line in a Worker's first instruction is already a fully-resolved absolute container path — Workers read it verbatim regardless of mode. Mode detection happens at workspace-creation time by comparing the Blueprint's absolute host path with the workspace's absolute host path.
+Both provenances are first-class; Palette infers which one applies from the Blueprint's location and handles the rest without configuration.
 
 ## Splitting work
 

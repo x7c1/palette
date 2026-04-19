@@ -34,22 +34,15 @@ A Workflow carries one of the following statuses:
 
 `terminated` and `failed` are both terminal but are kept distinct: `terminated` is an operator-driven outcome and is not a fault signal, whereas `failed` indicates the Workflow itself could not proceed.
 
-A failed Workflow carries a **failure reason** that names the cause in a machine-readable form as a `{namespace}/{value}` key. Known reasons today:
+A failed Workflow carries a **failure reason** — a machine-readable key naming the cause — as its only on-Workflow failure metadata. Detailed diagnostics live in operational logs, not on the Workflow itself.
 
-| Reason | Trigger |
-|---|---|
-| `workflow/workspace_setup_failed` | A git step during workspace creation (clone, branch checkout, plan sync) fails for a Craft job. |
-| `workflow/branch_in_use` | Registered as a post-insert fallback when another Workflow claims the same `(repository, branch)` pair. The primary detection path is `POST /workflows/start`, which rejects the start with an `InputError` of the same reason key before any Workflow row is created. |
+## Branch Ownership
 
-The reason is the only failure metadata the Workflow itself retains; detailed diagnostics belong in operational logs rather than on the Workflow.
+Each non-terminal Workflow exclusively owns the `(repository, branch)` pair of every Craft Task in its Blueprint. Starting a Workflow whose Blueprint would collide with a pair already owned by another non-terminal Workflow is refused — the start never partially succeeds, so two Workflows can never share a work branch.
 
-## Branch Collision
+## Publishing
 
-Because two Workflows that commit to the same work branch would corrupt each other's workspaces, `POST /workflows/start` checks every Craft Task in the new Blueprint against all non-terminal Workflows (`active`, `suspending`, `suspended`). If any `(repository, branch)` pair is already claimed, the start is rejected with `workflow/branch_in_use` and no Workflow row is created. The check uses the existing server DB (single-writer, `locking_mode=EXCLUSIVE`) so the rejection is race-free.
-
-## Push Policy
-
-Craft workspaces are configured so `git push` to origin is possible but not executed by any Worker today. Reviewers and PR-review workspaces keep origin read-only (pushurl is disabled). Actual push and PR creation are deferred to a follow-up component (Publisher / PR writer) that runs after a Review approval.
+A Workflow's Craft output lands on the work branch inside its workspace; Palette does not itself push that branch or open a pull request. Publishing the branch to origin and creating the corresponding pull request sit outside the Workflow's scope — a separate component consumes a completed Workflow and carries the work to origin. Until that component is introduced, the landed work stays on the branch and the Operator decides when and how to publish.
 
 ## Domain Rules
 
