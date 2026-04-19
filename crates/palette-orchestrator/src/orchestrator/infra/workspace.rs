@@ -418,6 +418,15 @@ fn resolve_default_branch(cache_path: &Path) -> crate::Result<String> {
 /// Idempotent: returns without committing when `git status --porcelain` is
 /// empty (e.g., resume scenarios where the plan commit is already on the
 /// work branch).
+///
+/// Before committing we verify the workspace can resolve a git identity —
+/// either via the Operator's global `~/.gitconfig` or the workspace's own
+/// repo-local config. When neither is available (CI runners, fresh machines
+/// without gitconfig), a Palette-owned fallback identity is written to the
+/// workspace's repo-local config so the commit can still proceed. The
+/// Operator's identity always wins when present because `git config --get`
+/// reads repo-local before global, and we only write the fallback when both
+/// are absent.
 fn sync_blueprint_into_workspace(ws_abs: &Path, blueprint_dir_abs: &Path) -> crate::Result<()> {
     run_git(
         ws_abs,
@@ -442,11 +451,38 @@ fn sync_blueprint_into_workspace(ws_abs: &Path, blueprint_dir_abs: &Path) -> cra
         );
         return Ok(());
     }
+    ensure_commit_identity(ws_abs)?;
     run_git(
         ws_abs,
         &["commit", "-m", PLAN_IMPORT_COMMIT_MESSAGE],
         "commit blueprint",
     )?;
+    Ok(())
+}
+
+/// Ensure the workspace has a resolvable `user.email` / `user.name` so that
+/// `git commit` succeeds. When the Operator's global `~/.gitconfig` already
+/// provides an identity, this is a no-op; otherwise a Palette-owned default
+/// is written to the workspace's repo-local config so commits can proceed on
+/// CI runners and fresh machines without gitconfig.
+fn ensure_commit_identity(ws_abs: &Path) -> crate::Result<()> {
+    const FALLBACK_EMAIL: &str = "palette-import@localhost";
+    const FALLBACK_NAME: &str = "Palette Plan Import";
+    for (key, fallback) in [("user.email", FALLBACK_EMAIL), ("user.name", FALLBACK_NAME)] {
+        let got = Command::new("git")
+            .args(["config", "--get", key])
+            .current_dir(ws_abs)
+            .output()
+            .map_err(|e| crate::Error::External(Box::new(e)))?;
+        if got.status.success() && !got.stdout.is_empty() {
+            continue;
+        }
+        run_git(
+            ws_abs,
+            &["config", key, fallback],
+            "set fallback git identity",
+        )?;
+    }
     Ok(())
 }
 
