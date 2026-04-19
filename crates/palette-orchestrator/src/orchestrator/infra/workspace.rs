@@ -3,6 +3,8 @@ use std::process::Command;
 
 use palette_domain::job::{PullRequest, Repository};
 
+use super::plan_location;
+
 /// Container-side mount point for the repo cache.
 const CONTAINER_REPO_CACHE: &str = "/home/agent/repo-cache";
 
@@ -181,23 +183,41 @@ impl WorkspaceManager {
         let ws_abs =
             std::fs::canonicalize(&ws_path).map_err(|e| crate::Error::External(Box::new(e)))?;
 
-        // Repo-inside-Plan mode: import the Blueprint directory into the work
-        // branch. `blueprint_path` points at the Blueprint file (README.md);
-        // we stage its parent directory so that `blueprint.yaml` and any
-        // child plan directories are included in the same commit.
+        // Repo-inside-Plan mode: when the Blueprint lives in a host clone of
+        // the same repository that the workspace was just cloned from, copy
+        // the Blueprint directory into the workspace and commit it onto the
+        // work branch so that Plan files travel with the code.
+        //
+        // The host clone is authoritative: if the Operator has uncommitted
+        // edits in their Blueprint directory, those edits end up in the
+        // workspace commit (subject to the usual idempotency — an identical
+        // committed copy already on the branch produces no new commit).
         //
         // This must run before the alternates rewrite below — once alternates
-        // points at the container-side path, host-side git operations can no
-        // longer resolve objects.
+        // points at the container-side path, host-side git operations on the
+        // workspace can no longer resolve objects.
         let blueprint_dir = blueprint_path
             .parent()
             .map(|p| p.to_path_buf())
             .unwrap_or_else(|| PathBuf::from("."));
         if blueprint_dir.exists() {
-            let blueprint_dir_abs = std::fs::canonicalize(&blueprint_dir)
+            let plan_loc = plan_location::resolve(blueprint_path, Some(&ws_abs))
                 .map_err(|e| crate::Error::External(Box::new(e)))?;
-            if blueprint_dir_abs.starts_with(&ws_abs) {
-                sync_blueprint_into_workspace(&ws_abs, &blueprint_dir_abs)?;
+            if let plan_location::PlanLocation::InsideWorkspace {
+                blueprint_rel_to_workspace,
+                ..
+            } = plan_loc
+            {
+                let host_blueprint_dir_abs = std::fs::canonicalize(&blueprint_dir)
+                    .map_err(|e| crate::Error::External(Box::new(e)))?;
+                let target_dir = ws_abs.join(&blueprint_rel_to_workspace);
+                let already_in_place = std::fs::canonicalize(&target_dir)
+                    .map(|c| c == host_blueprint_dir_abs)
+                    .unwrap_or(false);
+                if !already_in_place {
+                    copy_dir_contents(&host_blueprint_dir_abs, &target_dir)?;
+                }
+                sync_blueprint_into_workspace(&ws_abs, &target_dir)?;
             }
         }
 
@@ -427,6 +447,29 @@ fn sync_blueprint_into_workspace(ws_abs: &Path, blueprint_dir_abs: &Path) -> cra
         &["commit", "-m", PLAN_IMPORT_COMMIT_MESSAGE],
         "commit blueprint",
     )?;
+    Ok(())
+}
+
+/// Recursively copy the contents of `src` into `dst`, creating `dst` if it
+/// does not exist. Directories are traversed; regular files are overwritten.
+/// Symlinks and other special entries are skipped to avoid propagating
+/// host-specific filesystem state into the workspace.
+fn copy_dir_contents(src: &Path, dst: &Path) -> crate::Result<()> {
+    std::fs::create_dir_all(dst).map_err(|e| crate::Error::External(Box::new(e)))?;
+    let entries = std::fs::read_dir(src).map_err(|e| crate::Error::External(Box::new(e)))?;
+    for entry in entries {
+        let entry = entry.map_err(|e| crate::Error::External(Box::new(e)))?;
+        let file_type = entry
+            .file_type()
+            .map_err(|e| crate::Error::External(Box::new(e)))?;
+        let src_path = entry.path();
+        let dst_path = dst.join(entry.file_name());
+        if file_type.is_dir() {
+            copy_dir_contents(&src_path, &dst_path)?;
+        } else if file_type.is_file() {
+            std::fs::copy(&src_path, &dst_path).map_err(|e| crate::Error::External(Box::new(e)))?;
+        }
+    }
     Ok(())
 }
 
@@ -798,6 +841,49 @@ mod tests {
             workspace_head_message(&ws, &cache_objects),
             "seed plan",
             "plan sync must be idempotent when Blueprint is already committed"
+        );
+    }
+
+    #[test]
+    fn create_workspace_materialises_blueprint_from_host_clone() {
+        let h = setup_harness("x7c1/demo-g", "main");
+        let repo = make_repo("x7c1/demo-g", "feature/with-host-plan", None);
+
+        // Simulate the Operator's clone of the target repo, authored with a
+        // Blueprint that has NOT yet been committed. This mirrors the
+        // `/palette:plan` output flow where the Blueprint lives on the
+        // Operator's filesystem before the Workflow is ever started.
+        let host_clone = h._tmp.path().join("host-clone-g");
+        run(
+            h._tmp.path(),
+            &[
+                "clone",
+                "-q",
+                h.origin.to_string_lossy().as_ref(),
+                host_clone.to_string_lossy().as_ref(),
+            ],
+        );
+        let bp_dir = host_clone.join("docs/plans/refresh");
+        fs::create_dir_all(&bp_dir).unwrap();
+        fs::write(bp_dir.join("README.md"), "# refresh plan\n").unwrap();
+        fs::write(bp_dir.join("blueprint.yaml"), "task:\n  key: root\n").unwrap();
+        let blueprint_path = bp_dir.join("blueprint.yaml");
+
+        let info = h
+            .manager
+            .create_workspace("C-create-g", &repo, &blueprint_path)
+            .unwrap();
+        let ws = PathBuf::from(&info.host_path);
+
+        // Blueprint files must travel with the work branch.
+        assert!(ws.join("docs/plans/refresh/README.md").exists());
+        assert!(ws.join("docs/plans/refresh/blueprint.yaml").exists());
+
+        // HEAD commit should be the plan import commit.
+        let cache_objects = PathBuf::from(&info.repo_cache_path).join("objects");
+        assert_eq!(
+            workspace_head_message(&ws, &cache_objects),
+            "chore(plan): import workflow plan",
         );
     }
 
