@@ -127,9 +127,7 @@ impl Orchestrator {
             .ok_or_else(|| crate::Error::TaskNotFound {
                 task_id: review_job.task_id.clone(),
             })?;
-        let task_store = self
-            .interactor
-            .create_task_store(&task_state.workflow_id)?;
+        let task_store = self.interactor.create_task_store(&task_state.workflow_id)?;
         let anchor = self
             .find_artifact_anchor(&task_store, &review_job.task_id)
             .ok_or_else(|| {
