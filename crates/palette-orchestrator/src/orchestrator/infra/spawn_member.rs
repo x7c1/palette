@@ -4,7 +4,7 @@ use palette_domain::job::{JobDetail, JobType};
 use palette_domain::task::TaskId;
 use palette_domain::worker::{WorkerId, WorkerRole, WorkerState, WorkerStatus};
 use palette_usecase::{
-    ArtifactsMount, ContainerMounts, PerspectiveMount, PlanDirMount, WorkspaceVolume,
+    ArtifactsMount, ContainerMounts, DiffDirMount, PerspectiveMount, PlanDirMount, WorkspaceVolume,
 };
 
 // Plans are authored by the Operator (via /palette:plan or reconciliation) and
@@ -24,6 +24,7 @@ impl Orchestrator {
         task_id: &TaskId,
         workspace: Option<WorkspaceVolume>,
         artifacts_dir: Option<ArtifactsMount>,
+        diff_dir: Option<DiffDirMount>,
         plan_loc: &PlanLocation,
     ) -> crate::Result<WorkerState> {
         let session_name = &self.session_name;
@@ -69,6 +70,7 @@ impl Orchestrator {
                 plan_dir: plan_dir_mount,
                 artifacts_dir,
                 perspective_dirs,
+                diff_dir,
             },
         )?;
         self.interactor.container.start_container(&container_id)?;
@@ -79,7 +81,10 @@ impl Orchestrator {
         )?;
         let prompt_path = match job_type {
             JobType::Craft => &self.docker_config.crafter_prompt,
-            JobType::Review => &self.docker_config.reviewer_prompt,
+            JobType::Review => match job_detail.review_target() {
+                Some(target) if target.is_pull_request() => &self.docker_config.pr_reviewer_prompt,
+                _ => &self.docker_config.craft_reviewer_prompt,
+            },
             // ReviewIntegrate, Orchestrator, and Operator don't spawn members
             JobType::ReviewIntegrate | JobType::Orchestrator | JobType::Operator => {
                 unreachable!("mechanized job types do not spawn members")

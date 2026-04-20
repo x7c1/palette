@@ -1,5 +1,6 @@
 mod deliver_queued_messages;
 mod deliver_to_all_idle;
+pub(crate) mod diff_gen;
 pub(crate) mod plan_location;
 mod spawn_member;
 mod spawn_readiness_watcher;

@@ -3,7 +3,7 @@ use super::PendingActions;
 use super::job_instruction::format_job_instruction;
 use palette_domain::job::{Job, JobDetail, JobId, JobType};
 use palette_domain::worker::WorkerId;
-use palette_usecase::{ArtifactsMount, InsertWorkerRequest, WorkspaceVolume};
+use palette_usecase::{ArtifactsMount, DiffDirMount, InsertWorkerRequest, WorkspaceVolume};
 
 /// Machine-readable failure reason recorded on the workflow when workspace
 /// creation (clone, branch setup, plan sync) fails.
@@ -77,6 +77,21 @@ impl Orchestrator {
         // Determine artifacts mount for review jobs
         let artifacts_dir = self.resolve_artifacts_mount(&job)?;
 
+        // Determine diff mount for review jobs. Generate the diff synchronously
+        // before spawning the member so the mount is ready at container start.
+        // A failure here must surface, not silently proceed, because diff
+        // scope is what prevents the reviewer from commenting on unrelated
+        // code.
+        let diff_dir = if job_type == JobType::Review {
+            let round = self.current_review_round(&job)?;
+            let diff_path = self.generate_review_diff(&job, round)?;
+            Some(DiffDirMount {
+                host_path: diff_path.to_string_lossy().to_string(),
+            })
+        } else {
+            None
+        };
+
         // Resolve plan location (used both for mount and for the Plan: line).
         // The workspace-aware resolution decides between Repo-inside-Plan and
         // Repo-outside-Plan mode.
@@ -101,6 +116,7 @@ impl Orchestrator {
             &job.task_id,
             workspace,
             artifacts_dir,
+            diff_dir,
             &plan_loc,
         )?;
         // Register in DB

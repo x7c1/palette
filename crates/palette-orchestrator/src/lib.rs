@@ -14,6 +14,7 @@ pub mod github_client;
 
 mod orchestrator;
 pub use orchestrator::Orchestrator;
+pub use orchestrator::infra::diff_gen::cleanup_orphan_diff_gen_containers;
 pub use orchestrator::infra::workspace;
 
 #[cfg(test)]

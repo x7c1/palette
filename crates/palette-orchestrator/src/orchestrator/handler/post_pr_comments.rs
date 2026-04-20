@@ -159,6 +159,11 @@ struct IntegratedReview {
     body: String,
     #[serde(default)]
     comments: Vec<IntegratedReviewComment>,
+    /// Findings the integrator dropped for relevance reasons. Not posted
+    /// to GitHub; consumed by later review rounds via the reviewer prompt.
+    #[serde(default)]
+    #[allow(dead_code)]
+    rejected_findings: Vec<RejectedFinding>,
 }
 
 #[derive(serde::Deserialize)]
@@ -166,4 +171,16 @@ struct IntegratedReviewComment {
     path: String,
     line: u64,
     body: String,
+}
+
+#[derive(serde::Deserialize)]
+#[allow(dead_code)]
+struct RejectedFinding {
+    /// Which reviewer raised this finding (e.g., "R-001").
+    reviewer: String,
+    path: Option<String>,
+    line: Option<u64>,
+    body: String,
+    /// Rationale shown to reviewers on subsequent rounds.
+    rejection_reason: String,
 }

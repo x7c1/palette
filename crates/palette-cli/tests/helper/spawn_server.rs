@@ -23,9 +23,11 @@ fn test_docker_config() -> DockerConfig {
         settings_template: "plugins/worker/settings.json".to_string(),
         approver_prompt: "prompts/approver.md".to_string(),
         review_integrator_image: "palette-supervisor:latest".to_string(),
-        review_integrator_prompt: "prompts/review-integrator.md".to_string(),
+        craft_review_integrator_prompt: "prompts/craft-review-integrator.md".to_string(),
+        pr_review_integrator_prompt: "prompts/pr-review-integrator.md".to_string(),
         crafter_prompt: "prompts/crafter.md".to_string(),
-        reviewer_prompt: "prompts/reviewer.md".to_string(),
+        craft_reviewer_prompt: "prompts/craft-reviewer.md".to_string(),
+        pr_reviewer_prompt: "prompts/pr-reviewer.md".to_string(),
         max_workers: 3,
     }
 }

@@ -40,6 +40,15 @@ impl Orchestrator {
         } else {
             None
         };
+
+        // Regenerate diff for review jobs so the already-mounted diff dir
+        // reflects the crafter's follow-up commits. The container mount is
+        // fixed at spawn time; overwriting host files is how the running
+        // reviewer sees new content.
+        if let Some(round) = round {
+            self.generate_review_diff(&job, round)?;
+        }
+
         let instruction = format_job_instruction(&job, round, &self.perspectives, &plan_loc);
         self.interactor
             .data_store

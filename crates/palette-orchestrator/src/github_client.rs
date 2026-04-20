@@ -1,4 +1,6 @@
-use palette_usecase::{DiffFile, DiffHunk, GitHubReviewPort, ReviewEvent, ReviewFileComment};
+use palette_usecase::{
+    DiffFile, DiffHunk, GitHubReviewPort, PullRequestRefs, ReviewEvent, ReviewFileComment,
+};
 use std::process::Command;
 
 /// GitHub review client that uses the `gh` CLI.
@@ -83,6 +85,44 @@ impl GitHubReviewPort for GhCliReviewClient {
         );
 
         Ok(())
+    }
+
+    fn get_pr_base(
+        &self,
+        owner: &str,
+        repo: &str,
+        number: u64,
+    ) -> Result<PullRequestRefs, Box<dyn std::error::Error + Send + Sync>> {
+        let output = Command::new("gh")
+            .args(["api", &format!("repos/{owner}/{repo}/pulls/{number}")])
+            .output()?;
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            return Err(format!("gh api failed: {stderr}").into());
+        }
+        let pr: serde_json::Value = serde_json::from_slice(&output.stdout)?;
+        let base_ref = pr["base"]["ref"]
+            .as_str()
+            .ok_or("missing base.ref in PR response")?
+            .to_string();
+        let base_sha = pr["base"]["sha"]
+            .as_str()
+            .ok_or("missing base.sha in PR response")?
+            .to_string();
+        let head_ref = pr["head"]["ref"]
+            .as_str()
+            .ok_or("missing head.ref in PR response")?
+            .to_string();
+        let head_sha = pr["head"]["sha"]
+            .as_str()
+            .ok_or("missing head.sha in PR response")?
+            .to_string();
+        Ok(PullRequestRefs {
+            base_ref,
+            base_sha,
+            head_ref,
+            head_sha,
+        })
     }
 
     fn get_diff_files(

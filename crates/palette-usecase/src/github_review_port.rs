@@ -21,6 +21,17 @@ pub trait GitHubReviewPort: Send + Sync {
         repo: &str,
         number: u64,
     ) -> Result<Vec<DiffFile>, Box<dyn std::error::Error + Send + Sync>>;
+
+    /// Return base/head ref metadata for a pull request.
+    ///
+    /// The `base` values reflect the PR's *current* base branch HEAD, not the
+    /// PR's original base at creation time — matching the GitHub UI behavior.
+    fn get_pr_base(
+        &self,
+        owner: &str,
+        repo: &str,
+        number: u64,
+    ) -> Result<PullRequestRefs, Box<dyn std::error::Error + Send + Sync>>;
 }
 
 pub struct ReviewFileComment {
@@ -51,4 +62,13 @@ impl DiffFile {
 pub struct DiffHunk {
     pub start_line: u64,
     pub line_count: u64,
+}
+
+/// Base and head ref information for a pull request.
+#[derive(Debug, Clone)]
+pub struct PullRequestRefs {
+    pub base_ref: String,
+    pub base_sha: String,
+    pub head_ref: String,
+    pub head_sha: String,
 }

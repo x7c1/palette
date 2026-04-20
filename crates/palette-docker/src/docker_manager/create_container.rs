@@ -37,6 +37,14 @@ pub struct PerspectiveMount {
     pub container_path: String,
 }
 
+/// Diff directory bind mount (always read-only).
+///
+/// Mounted at `/home/agent/diff` inside the container.
+pub struct DiffDirMount {
+    /// Absolute path on the host to the diff directory.
+    pub host_path: String,
+}
+
 impl DockerManager {
     /// Create and start a container for a worker.
     /// Returns the container ID.
@@ -51,6 +59,7 @@ impl DockerManager {
         plan_dir: Option<PlanDirMount>,
         artifacts_dir: Option<ArtifactsMount>,
         perspective_dirs: Vec<PerspectiveMount>,
+        diff_dir: Option<DiffDirMount>,
     ) -> crate::Result<ContainerId> {
         let role_str = role.as_str();
         let labels = [
@@ -178,6 +187,12 @@ impl DockerManager {
         for pm in &perspective_dirs {
             args.push("-v".to_string());
             args.push(format!("{}:{}:ro", pm.host_path, pm.container_path));
+        }
+
+        // Diff directory: read-only mount scoping review findings to the PR/change
+        if let Some(dd) = diff_dir {
+            args.push("-v".to_string());
+            args.push(format!("{}:/home/agent/diff:ro", dd.host_path));
         }
 
         args.push(image.to_string());

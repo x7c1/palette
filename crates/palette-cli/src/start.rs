@@ -47,6 +47,7 @@ pub async fn run(config_override: Option<&str>) -> Result<(), Box<dyn std::error
 
     let orchestrator = build_orchestrator(&config, &interactor, validated_perspectives, event_tx)?;
     orchestrator.clean_orphan_containers();
+    palette_orchestrator::cleanup_orphan_diff_gen_containers();
     orchestrator.resume_booting_watchers();
     orchestrator.recover_from_crash();
 

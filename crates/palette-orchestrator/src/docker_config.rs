@@ -16,13 +16,17 @@ pub struct DockerConfig {
     pub approver_prompt: String,
     #[serde(default = "default_review_integrator_image")]
     pub review_integrator_image: String,
-    #[serde(default = "default_review_integrator_prompt")]
-    pub review_integrator_prompt: String,
+    #[serde(default = "default_craft_review_integrator_prompt")]
+    pub craft_review_integrator_prompt: String,
+    #[serde(default = "default_pr_review_integrator_prompt")]
+    pub pr_review_integrator_prompt: String,
     #[serde(default = "default_crafter_prompt")]
     pub crafter_prompt: String,
 
-    #[serde(default = "default_reviewer_prompt")]
-    pub reviewer_prompt: String,
+    #[serde(default = "default_craft_reviewer_prompt")]
+    pub craft_reviewer_prompt: String,
+    #[serde(default = "default_pr_reviewer_prompt")]
+    pub pr_reviewer_prompt: String,
     #[serde(default = "default_max_workers")]
     pub max_workers: usize,
 }
@@ -63,14 +67,22 @@ fn default_review_integrator_image() -> String {
     "palette-supervisor:latest".to_string()
 }
 
-fn default_review_integrator_prompt() -> String {
-    "prompts/review-integrator.md".to_string()
+fn default_craft_review_integrator_prompt() -> String {
+    "prompts/craft-review-integrator.md".to_string()
+}
+
+fn default_pr_review_integrator_prompt() -> String {
+    "prompts/pr-review-integrator.md".to_string()
 }
 
 fn default_crafter_prompt() -> String {
     "prompts/crafter.md".to_string()
 }
 
-fn default_reviewer_prompt() -> String {
-    "prompts/reviewer.md".to_string()
+fn default_craft_reviewer_prompt() -> String {
+    "prompts/craft-reviewer.md".to_string()
+}
+
+fn default_pr_reviewer_prompt() -> String {
+    "prompts/pr-reviewer.md".to_string()
 }

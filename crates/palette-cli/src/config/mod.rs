@@ -78,9 +78,18 @@ worker_callback_url = "http://127.0.0.1:7100"
             "palette-supervisor:latest"
         );
         assert_eq!(
-            config.docker.review_integrator_prompt,
-            "prompts/review-integrator.md"
+            config.docker.craft_review_integrator_prompt,
+            "prompts/craft-review-integrator.md"
         );
+        assert_eq!(
+            config.docker.pr_review_integrator_prompt,
+            "prompts/pr-review-integrator.md"
+        );
+        assert_eq!(
+            config.docker.craft_reviewer_prompt,
+            "prompts/craft-reviewer.md"
+        );
+        assert_eq!(config.docker.pr_reviewer_prompt, "prompts/pr-reviewer.md");
     }
 
     #[test]

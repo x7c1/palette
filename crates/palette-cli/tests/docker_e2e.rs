@@ -142,6 +142,7 @@ fn launch() -> Result<()> {
         None,
         None,
         vec![],
+        None,
     )?;
     guard.track("palette-test-approver");
     docker.start_container(&approver_id)?;
@@ -155,6 +156,7 @@ fn launch() -> Result<()> {
         None,
         None,
         vec![],
+        None,
     )?;
     guard.track("palette-test-member-a");
     docker.start_container(&member_id)?;
@@ -359,6 +361,7 @@ fn claude_responds() -> Result<()> {
         None,
         None,
         vec![],
+        None,
     )?;
     guard.track("palette-test-claude");
     docker.start_container(&container_id)?;
