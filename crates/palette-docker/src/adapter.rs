@@ -33,7 +33,10 @@ impl ContainerRuntime for DockerManager {
                 container_path: p.container_path,
             })
             .collect();
-        Ok(self.create_container(name, image, role, session_name, ws, pd, ad, pm)?)
+        let dd = mounts.diff_dir.map(|d| crate::DiffDirMount {
+            host_path: d.host_path,
+        });
+        Ok(self.create_container(name, image, role, session_name, ws, pd, ad, pm, dd)?)
     }
 
     fn start_container(

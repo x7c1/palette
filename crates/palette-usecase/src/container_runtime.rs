@@ -91,6 +91,7 @@ pub struct ContainerMounts {
     pub plan_dir: Option<PlanDirMount>,
     pub artifacts_dir: Option<ArtifactsMount>,
     pub perspective_dirs: Vec<PerspectiveMount>,
+    pub diff_dir: Option<DiffDirMount>,
 }
 
 /// A single perspective directory mount (read-only).
@@ -137,4 +138,16 @@ pub struct ArtifactsMount {
     pub host_path: String,
     /// If true, mount as read-only.
     pub read_only: bool,
+}
+
+/// Diff directory bind mount configuration for container creation.
+///
+/// Mounted read-only at `/home/agent/diff` inside the container.
+/// Contains `changed_files.txt` and `diff.patch` describing the scope
+/// of the change under review. Populated by the orchestrator before
+/// each review round.
+pub struct DiffDirMount {
+    /// Absolute path on the host to the diff directory
+    /// (e.g., "data/diff/{job_id}/round-{N}").
+    pub host_path: String,
 }

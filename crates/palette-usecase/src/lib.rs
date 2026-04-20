@@ -1,7 +1,7 @@
 mod container_runtime;
 pub use container_runtime::{
-    ArtifactsMount, ContainerMounts, ContainerRuntime, PerspectiveMount, PlanDirMount,
-    WorkspaceVolume,
+    ArtifactsMount, ContainerMounts, ContainerRuntime, DiffDirMount, PerspectiveMount,
+    PlanDirMount, WorkspaceVolume,
 };
 
 mod data_store;
@@ -27,7 +27,7 @@ pub use interactor::Interactor;
 
 mod github_review_port;
 pub use github_review_port::{
-    DiffFile, DiffHunk, GitHubReviewPort, ReviewEvent, ReviewFileComment,
+    DiffFile, DiffHunk, GitHubReviewPort, PullRequestRefs, ReviewEvent, ReviewFileComment,
 };
 
 mod maintenance;

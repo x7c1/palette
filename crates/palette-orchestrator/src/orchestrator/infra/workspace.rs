@@ -338,6 +338,18 @@ impl WorkspaceManager {
             .join(craft_job_id)
     }
 
+    /// Return the host path to the diff directory for a review job.
+    ///
+    /// Diff files are *input* to the review (populated by the orchestrator
+    /// before each round), not a review artifact, so they live outside
+    /// `artifacts/`. The directory is per-job rather than per-round because
+    /// bind mounts are set up once at container spawn; on later rounds we
+    /// overwrite the files in place so the running container sees the
+    /// updated content without a remount.
+    pub fn diff_path(&self, job_id: &str) -> PathBuf {
+        self.data_dir.join("diff").join(job_id)
+    }
+
     /// Remove a workspace directory.
     pub fn remove_workspace(&self, job_id: &str) {
         let ws_path = self.workspace_path(job_id);

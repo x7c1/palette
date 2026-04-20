@@ -48,11 +48,11 @@ fn crafter_prompt_documents_push_is_handled_by_palette() {
 }
 
 #[test]
-fn reviewer_prompt_reads_plan_path_verbatim() {
-    let prompt = fs::read_to_string(palette_root().join("prompts/reviewer.md"))
-        .expect("prompts/reviewer.md must exist");
+fn craft_reviewer_prompt_reads_plan_path_verbatim() {
+    let prompt = fs::read_to_string(palette_root().join("prompts/craft-reviewer.md"))
+        .expect("prompts/craft-reviewer.md must exist");
     assert!(
         prompt.contains("verbatim") || prompt.contains("read the path verbatim"),
-        "reviewer prompt should instruct the Worker to read the Plan: line verbatim"
+        "craft-reviewer prompt should instruct the Worker to read the Plan: line verbatim"
     );
 }

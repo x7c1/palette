@@ -106,15 +106,15 @@ mod tests {
         let cid = ContainerId::new("abc123");
         let cmd = DockerManager::claude_exec_command(
             &cid,
-            "/home/agent/prompts/review-integrator.md",
+            "/home/agent/prompts/craft-review-integrator.md",
             WorkerRole::ReviewIntegrator,
             None,
         );
         assert!(cmd.contains("docker exec -it abc123 claude"));
         assert!(cmd.contains("--dangerously-skip-permissions"));
-        assert!(
-            cmd.contains("--append-system-prompt-file /home/agent/prompts/review-integrator.md")
-        );
+        assert!(cmd.contains(
+            "--append-system-prompt-file /home/agent/prompts/craft-review-integrator.md"
+        ));
     }
 
     #[test]

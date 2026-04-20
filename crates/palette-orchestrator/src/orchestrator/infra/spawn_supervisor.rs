@@ -1,7 +1,7 @@
 use super::Orchestrator;
 use palette_domain::task::TaskId;
 use palette_domain::worker::{ContainerId, WorkerId, WorkerRole, WorkerStatus};
-use palette_usecase::{ArtifactsMount, ContainerMounts, InsertWorkerRequest};
+use palette_usecase::{ArtifactsMount, ContainerMounts, DiffDirMount, InsertWorkerRequest};
 
 impl Orchestrator {
     /// Spawn a dynamic supervisor for a composite task.
@@ -35,10 +35,10 @@ impl Orchestrator {
                 &self.docker_config.approver_image,
                 &self.docker_config.approver_prompt,
             ),
-            WorkerRole::ReviewIntegrator => (
-                &self.docker_config.review_integrator_image,
-                &self.docker_config.review_integrator_prompt,
-            ),
+            WorkerRole::ReviewIntegrator => {
+                let prompt = self.resolve_review_integrator_prompt(task_id)?;
+                (&self.docker_config.review_integrator_image, prompt)
+            }
             WorkerRole::Member => {
                 return Err(crate::Error::InvalidTaskState {
                     task_id: task_id.clone(),
@@ -47,9 +47,15 @@ impl Orchestrator {
             }
         };
 
-        // Review Integrators need artifacts access
+        // Review Integrators need artifacts access and the diff mount so they
+        // can judge finding relevance.
         let artifacts_dir = if role == WorkerRole::ReviewIntegrator {
             self.resolve_supervisor_artifacts(task_id)?
+        } else {
+            None
+        };
+        let diff_dir = if role == WorkerRole::ReviewIntegrator {
+            self.resolve_supervisor_diff(task_id)?
         } else {
             None
         };
@@ -61,6 +67,7 @@ impl Orchestrator {
             &terminal_target,
             role,
             artifacts_dir,
+            diff_dir,
         )?;
 
         // Register in DB
@@ -141,6 +148,46 @@ impl Orchestrator {
         Ok(())
     }
 
+    /// Resolve the integrator prompt path based on the review target.
+    ///
+    /// Craft review and PR review use different prompts because their
+    /// scope-determination logic differs (Plan-based vs diff-based).
+    fn resolve_review_integrator_prompt(&self, task_id: &TaskId) -> crate::Result<&String> {
+        let Some(job) = self.interactor.data_store.get_job_by_task_id(task_id)? else {
+            // No job yet (e.g. early boot); fall back to craft prompt.
+            return Ok(&self.docker_config.craft_review_integrator_prompt);
+        };
+        let is_pr = job
+            .detail
+            .review_target()
+            .map(|t| t.is_pull_request())
+            .unwrap_or(false);
+        Ok(if is_pr {
+            &self.docker_config.pr_review_integrator_prompt
+        } else {
+            &self.docker_config.craft_review_integrator_prompt
+        })
+    }
+
+    /// Resolve the diff mount for a ReviewIntegrator supervisor.
+    ///
+    /// Generates the diff for the ReviewIntegrate job (same PR / craft anchor
+    /// as the sibling Review jobs) at the current round. The integrator reads
+    /// it to judge finding relevance.
+    fn resolve_supervisor_diff(&self, task_id: &TaskId) -> crate::Result<Option<DiffDirMount>> {
+        let Some(job) = self.interactor.data_store.get_job_by_task_id(task_id)? else {
+            return Ok(None);
+        };
+        if job.detail.review_target().is_none() {
+            return Ok(None);
+        }
+        let round = self.current_review_round(&job)?;
+        let diff_path = self.generate_review_diff(&job, round)?;
+        Ok(Some(DiffDirMount {
+            host_path: diff_path.to_string_lossy().to_string(),
+        }))
+    }
+
     /// Resolve the artifacts mount for a ReviewIntegrator supervisor.
     ///
     /// For Craft-parented reviews, the anchor is the parent Craft job.
@@ -171,6 +218,7 @@ impl Orchestrator {
         }))
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn spawn_supervisor_container(
         &self,
         name: &str,
@@ -179,6 +227,7 @@ impl Orchestrator {
         terminal_target: &palette_domain::terminal::TerminalTarget,
         role: WorkerRole,
         artifacts_dir: Option<ArtifactsMount>,
+        diff_dir: Option<DiffDirMount>,
     ) -> crate::Result<ContainerId> {
         let container_id = self.interactor.container.create_container(
             name,
@@ -187,6 +236,7 @@ impl Orchestrator {
             &self.session_name,
             ContainerMounts {
                 artifacts_dir,
+                diff_dir,
                 ..Default::default()
             },
         )?;

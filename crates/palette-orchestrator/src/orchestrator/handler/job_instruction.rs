@@ -8,6 +8,9 @@ pub(crate) const ARTIFACTS_MOUNT: &str = "/home/agent/artifacts";
 /// Container-side mount point for perspective documents.
 const PERSPECTIVE_MOUNT: &str = "/home/agent/perspective";
 
+/// Container-side mount point for the review diff.
+const DIFF_MOUNT: &str = "/home/agent/diff";
+
 /// Format a job into an instruction message for a member.
 ///
 /// `round` is included for review jobs so the reviewer knows which round directory to use.
@@ -53,6 +56,11 @@ pub(crate) fn format_job_instruction(
                 job.id
             ));
         }
+        // Review and ReviewIntegrate both consume the same diff dir,
+        // populated by the orchestrator before the round begins.
+        msg.push_str(&format!(
+            "Diff: {DIFF_MOUNT}/ (changed_files.txt, diff.patch)\n"
+        ));
     }
     if let Some(perspective_name) = job.detail.perspective() {
         msg.push_str(&format!("\nPerspective: {perspective_name}\n"));

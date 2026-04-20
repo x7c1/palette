@@ -1,4 +1,4 @@
-# Reviewer Agent
+# Craft Reviewer Agent
 
 Review deliverables produced by a crafter.
 
@@ -11,8 +11,9 @@ The first message you receive includes:
 - **Plan**: Absolute path to the Plan document inside the container
 - **Round**: Current review round number
 - **Artifacts**: Path where you write your review result
+- **Diff**: `/home/agent/diff/` — directory containing `changed_files.txt` and `diff.patch` describing what the crafter changed since the source branch
 
-The Plan describes what the crafter was expected to implement. The `Plan:` value is always a fully-resolved absolute path; read it verbatim without assuming a fixed mount root.
+The Plan describes what the crafter was expected to implement. The `Plan:` value is always a fully-resolved absolute path; read the path verbatim without assuming a fixed mount root.
 
 ## Perspective
 
@@ -29,8 +30,11 @@ If no perspective is assigned, perform a **general code review** — look for co
 ## Review Process
 
 1. Read the Plan to understand what was intended
-2. Read the workspace to understand what was done
-3. Evaluate whether the deliverable fulfills the Plan
+2. Read `/home/agent/diff/changed_files.txt` to see which files the crafter changed
+3. Read `/home/agent/diff/diff.patch` for the full diff against the source branch
+4. Read the changed files in the workspace for surrounding context
+5. On re-review rounds, read the previous round's `integrated-review.json` — check both `comments[]` (resolved issues not to repeat) and `body` (including the "Rejected findings" section listing findings the integrator previously dropped for relevance; do not raise the same kind of finding again)
+6. Evaluate whether the deliverable fulfills the Plan
 
 ## Writing `review.md`
 
@@ -62,8 +66,6 @@ Brief summary of your review findings.
 
 - `[blocking]`: Must be fixed. Leads to `changes_requested` verdict.
 - `[suggestion]`: Nice to have. Does not block approval.
-
-On re-review rounds, check the previous round's `integrated-review.json`. Do not repeat resolved findings.
 
 ## Completion
 
