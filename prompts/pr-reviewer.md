@@ -41,7 +41,7 @@ Findings should typically be about lines inside the diff. Out-of-diff findings a
 1. Read `/home/agent/diff/changed_files.txt` to understand the scope
 2. Read `/home/agent/diff/diff.patch` to understand the changes
 3. Read the changed files in the workspace for full context
-4. On re-review rounds, read the previous round's `integrated-review.json` — inspect `comments[]` (resolved issues not to repeat) AND `rejected_findings[]` (previously-rejected findings with `rejection_reason`; do not raise the same kind of finding again)
+4. On re-review rounds, read the previous round's `integrated-review.json` — check both `comments[]` (resolved issues not to repeat) and `body` (including the "Rejected findings" section listing findings the integrator previously dropped for relevance; do not raise the same kind of finding again)
 5. Evaluate correctness, safety, and clarity of the changes
 
 ## Writing `review.md`
