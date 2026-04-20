@@ -16,6 +16,7 @@ palette-docker = { path = "../palette-docker" }
 palette-domain = { path = "../palette-domain" }
 reqwest.workspace = true
 palette-fs = { path = "../palette-fs" }
+palette-github = { path = "../palette-github" }
 palette-orchestrator = { path = "../palette-orchestrator" }
 palette-server = { path = "../palette-server" }
 palette-tmux = { path = "../palette-tmux" }

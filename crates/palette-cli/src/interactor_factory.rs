@@ -4,7 +4,7 @@ use palette_docker::CallbackNetworkMode;
 use palette_docker::DockerManager;
 use palette_domain::terminal::TerminalSessionName;
 use palette_fs::FsBlueprintReader;
-use palette_orchestrator::github_client::GhCliReviewClient;
+use palette_github::GhCliReviewClient;
 use palette_orchestrator::{CallbackNetwork, ValidatedPerspectives};
 use palette_tmux::TmuxManager;
 use palette_usecase::Interactor;

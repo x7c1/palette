@@ -1025,6 +1025,7 @@ dependencies = [
  "palette-docker",
  "palette-domain",
  "palette-fs",
+ "palette-github",
  "palette-orchestrator",
  "palette-server",
  "palette-tmux",
@@ -1093,6 +1094,17 @@ dependencies = [
  "serde",
  "serde_yaml",
  "tempfile",
+]
+
+[[package]]
+name = "palette-github"
+version = "0.1.0"
+dependencies = [
+ "palette-domain",
+ "palette-usecase",
+ "serde",
+ "serde_json",
+ "tracing",
 ]
 
 [[package]]
