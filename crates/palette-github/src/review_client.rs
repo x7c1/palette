@@ -1,6 +1,7 @@
 use palette_usecase::{
     DiffFile, DiffHunk, GitHubReviewPort, PullRequestRefs, ReviewEvent, ReviewFileComment,
 };
+use serde::Deserialize;
 use std::process::Command;
 
 /// GitHub review client that uses the `gh` CLI.
@@ -70,16 +71,14 @@ impl GitHubReviewPort for GhCliReviewClient {
             return Err(format!("gh api failed: {stderr}").into());
         }
 
-        let response: serde_json::Value = serde_json::from_slice(&output.stdout)?;
-        let review_id = response["id"].as_u64();
-        let state = response["state"].as_str().unwrap_or("unknown");
+        let response: GhReviewResponse = serde_json::from_slice(&output.stdout)?;
 
         tracing::info!(
             owner,
             repo,
             number,
-            review_id,
-            state,
+            review_id = response.id,
+            state = %response.state,
             comments = comments.len(),
             "created pending review via gh CLI"
         );
@@ -100,28 +99,12 @@ impl GitHubReviewPort for GhCliReviewClient {
             let stderr = String::from_utf8_lossy(&output.stderr);
             return Err(format!("gh api failed: {stderr}").into());
         }
-        let pr: serde_json::Value = serde_json::from_slice(&output.stdout)?;
-        let base_ref = pr["base"]["ref"]
-            .as_str()
-            .ok_or("missing base.ref in PR response")?
-            .to_string();
-        let base_sha = pr["base"]["sha"]
-            .as_str()
-            .ok_or("missing base.sha in PR response")?
-            .to_string();
-        let head_ref = pr["head"]["ref"]
-            .as_str()
-            .ok_or("missing head.ref in PR response")?
-            .to_string();
-        let head_sha = pr["head"]["sha"]
-            .as_str()
-            .ok_or("missing head.sha in PR response")?
-            .to_string();
+        let pr: GhPullRequestResponse = serde_json::from_slice(&output.stdout)?;
         Ok(PullRequestRefs {
-            base_ref,
-            base_sha,
-            head_ref,
-            head_sha,
+            base_ref: pr.base.name,
+            base_sha: pr.base.sha,
+            head_ref: pr.head.name,
+            head_sha: pr.head.sha,
         })
     }
 
@@ -140,20 +123,55 @@ impl GitHubReviewPort for GhCliReviewClient {
             return Err(format!("gh api failed: {stderr}").into());
         }
 
-        let items: Vec<serde_json::Value> = serde_json::from_slice(&output.stdout)?;
-        let diff_files = items
-            .iter()
+        let items: Vec<GhPullFileResponse> = serde_json::from_slice(&output.stdout)?;
+        items
+            .into_iter()
             .map(
                 |item| -> Result<DiffFile, Box<dyn std::error::Error + Send + Sync>> {
-                    let filename = item["filename"].as_str().unwrap_or_default().to_string();
-                    let patch = item["patch"].as_str().unwrap_or_default();
-                    let hunks = parse_hunk_ranges(patch)?;
-                    Ok(DiffFile { filename, hunks })
+                    let hunks = parse_hunk_ranges(item.patch.as_deref().unwrap_or_default())?;
+                    Ok(DiffFile {
+                        filename: item.filename,
+                        hunks,
+                    })
                 },
             )
-            .collect::<Result<Vec<_>, _>>()?;
-        Ok(diff_files)
+            .collect()
     }
+}
+
+/// Subset of the GitHub `GET /repos/{owner}/{repo}/pulls/{number}` response
+/// used to populate [`PullRequestRefs`].
+#[derive(Deserialize)]
+struct GhPullRequestResponse {
+    base: GhRef,
+    head: GhRef,
+}
+
+#[derive(Deserialize)]
+struct GhRef {
+    #[serde(rename = "ref")]
+    name: String,
+    sha: String,
+}
+
+/// Subset of each entry in `GET /repos/{owner}/{repo}/pulls/{number}/files`.
+///
+/// `patch` is `Option<String>` because GitHub omits the field for binary files
+/// and for diffs that exceed the API's size limit. An absent `patch` is
+/// different from an empty patch, so the distinction is preserved at the type
+/// level.
+#[derive(Deserialize)]
+struct GhPullFileResponse {
+    filename: String,
+    patch: Option<String>,
+}
+
+/// Subset of the `POST /repos/{owner}/{repo}/pulls/{number}/reviews` response
+/// used for logging.
+#[derive(Deserialize)]
+struct GhReviewResponse {
+    id: u64,
+    state: String,
 }
 
 fn parse_hunk_ranges(

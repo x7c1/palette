@@ -8,10 +8,11 @@ palette-usecase      → palette-domain (trait definitions + Interactor)
 palette-db           → palette-domain, palette-usecase
 palette-docker       → palette-domain, palette-usecase
 palette-fs           → palette-domain, palette-usecase
+palette-github       → palette-domain, palette-usecase
 palette-tmux         → palette-domain, palette-usecase
 palette-orchestrator → palette-domain, palette-usecase
 palette-server       → palette-domain, palette-usecase
-palette-cli          → palette-db, palette-docker, palette-domain, palette-fs, palette-orchestrator, palette-server, palette-tmux, palette-usecase
+palette-cli          → palette-db, palette-docker, palette-domain, palette-fs, palette-github, palette-orchestrator, palette-server, palette-tmux, palette-usecase
 ```
 
 ```mermaid
@@ -23,6 +24,7 @@ graph TD
     cli --> domain[palette-domain]
     cli --> tmux[palette-tmux]
     cli --> fs[palette-fs]
+    cli --> github[palette-github]
     cli --> usecase[palette-usecase]
 
     server --> domain
@@ -37,6 +39,8 @@ graph TD
     docker --> usecase
     fs --> domain
     fs --> usecase
+    github --> domain
+    github --> usecase
     tmux --> domain
     tmux --> usecase
 
@@ -54,6 +58,7 @@ Note: palette-server depends on palette-orchestrator only as a dev-dependency (f
 | palette-db | Database access. Owns DB-specific types (e.g. TaskRow). Returns domain types (TaskState). Implements DataStore trait. |
 | palette-fs | Filesystem access. Reads Blueprint YAML files and converts to domain types (TaskTree). Owns YAML deserialization types. Implements BlueprintReader trait. |
 | palette-docker | Docker container management. Implements ContainerRuntime trait. |
+| palette-github | GitHub API access via the `gh` CLI. Owns typed response structs for the GitHub REST API and converts them to domain types at the boundary. Implements GitHubReviewPort trait. All GitHub operations (review posting, PR refs, diff files, and future additions such as PR creation, merge, or label management) live here. |
 | palette-tmux | Terminal (tmux) session management. Implements TerminalSession trait. |
 | palette-orchestrator | Orchestration logic. Processes rule engine effects, manages worker lifecycle. Accesses external resources exclusively through Interactor. |
 | palette-server | HTTP API layer. Owns API request/response types. Routes and handlers. Accesses external resources exclusively through Interactor. |

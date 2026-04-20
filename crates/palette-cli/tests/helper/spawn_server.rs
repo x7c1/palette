@@ -2,7 +2,7 @@ use super::StubContainerRuntime;
 use palette_db::Database;
 use palette_domain::terminal::TerminalSessionName;
 use palette_fs::FsBlueprintReader;
-use palette_orchestrator::github_client::GhCliReviewClient;
+use palette_github::GhCliReviewClient;
 use palette_orchestrator::workspace::WorkspaceManager;
 use palette_orchestrator::{CallbackNetwork, DockerConfig, Orchestrator, ValidatedPerspectives};
 use palette_server::{AppState, create_router};
