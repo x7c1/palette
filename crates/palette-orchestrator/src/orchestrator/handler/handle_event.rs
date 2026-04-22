@@ -153,6 +153,24 @@ impl Orchestrator {
                 .review_target()
                 .is_some_and(|t| t.is_pull_request());
 
+            // Escalate when a non-standalone review hits the max-rounds ceiling
+            // with a ChangesRequested verdict: the crafter cannot produce work
+            // the reviewer accepts within the allotted rounds, so the Operator
+            // must decide how to proceed.
+            let should_escalate = matches!(verdict, Verdict::ChangesRequested)
+                && !is_standalone
+                && submissions.len() >= self.max_review_rounds as usize;
+
+            if should_escalate {
+                self.interactor
+                    .data_store
+                    .update_job_status(review_job_id, ReviewTransition::Escalate.to_job_status())?;
+                if let Some(ref assignee) = job.assignee_id {
+                    self.destroy_member(assignee);
+                }
+                return self.handle_review_escalated(review_job_id);
+            }
+
             match verdict {
                 Verdict::ChangesRequested if !is_standalone => {
                     self.interactor.data_store.update_job_status(

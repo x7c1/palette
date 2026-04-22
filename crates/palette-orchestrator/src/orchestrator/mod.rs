@@ -22,6 +22,8 @@ pub struct Orchestrator {
     pub cancel_token: CancellationToken,
     pub workspace_manager: WorkspaceManager,
     pub perspectives: ValidatedPerspectives,
+    /// Maximum number of review rounds before an Escalation is raised.
+    pub max_review_rounds: u32,
     /// Sender for events back to the orchestrator event loop.
     /// Used by orchestrator tasks to report command completion.
     pub event_tx: mpsc::UnboundedSender<ServerEvent>,

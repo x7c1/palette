@@ -40,6 +40,15 @@ pub async fn spawn_server(
     tmux: TmuxManager,
     session_name: &TerminalSessionName,
 ) -> (String, Arc<AppState>, oneshot::Sender<()>) {
+    spawn_server_with_rules(tmux, session_name, 5).await
+}
+
+/// Same as [`spawn_server`] but allows overriding `max_review_rounds`.
+pub async fn spawn_server_with_rules(
+    tmux: TmuxManager,
+    session_name: &TerminalSessionName,
+    max_review_rounds: u32,
+) -> (String, Arc<AppState>, oneshot::Sender<()>) {
     let db = Database::open_in_memory().unwrap();
 
     let interactor = Arc::new(Interactor {
@@ -54,7 +63,7 @@ pub async fn spawn_server(
 
     let state = Arc::new(AppState {
         interactor: Arc::clone(&interactor),
-        max_review_rounds: 5,
+        max_review_rounds,
         data_dir: PathBuf::from("data"),
         event_log: tokio::sync::Mutex::new(Vec::new()),
         pending_permission_events: tokio::sync::Mutex::new(HashMap::new()),
@@ -72,6 +81,7 @@ pub async fn spawn_server(
             dirs: HashMap::new(),
             perspectives: vec![],
         },
+        max_review_rounds,
         event_tx,
     });
     let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel();

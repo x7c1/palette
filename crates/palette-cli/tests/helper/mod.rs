@@ -8,7 +8,7 @@ mod tmux;
 
 pub use fixtures::*;
 pub use session_guard::SessionGuard;
-pub use spawn_server::spawn_server;
+pub use spawn_server::{spawn_server, spawn_server_with_rules};
 pub use stub_container_runtime::StubContainerRuntime;
 pub use tmux::*;
 

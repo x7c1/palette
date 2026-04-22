@@ -2,6 +2,7 @@ use super::Orchestrator;
 use super::PendingActions;
 use palette_domain::job::{CraftStatus, CraftTransition, JobDetail, JobId, JobStatus};
 use palette_domain::review::Verdict;
+use palette_domain::task::TaskStatus;
 
 impl Orchestrator {
     /// Handle a review verdict (Approved or ChangesRequested).
@@ -124,6 +125,55 @@ impl Orchestrator {
             self.destroy_member(assignee);
         }
         self.try_complete_task_by_job(&craft_job.id)
+    }
+
+    /// Escalate a review job whose round count has reached `max_review_rounds`.
+    ///
+    /// The review job has already been transitioned to `Escalated` by the caller.
+    /// This method escalates the parent craft job, suspends the craft task so
+    /// the Orchestrator stops launching new craft rounds, and destroys the
+    /// crafter member. Idempotent against an already-escalated craft job.
+    pub(crate) fn handle_review_escalated(
+        &self,
+        review_job_id: &JobId,
+    ) -> crate::Result<PendingActions> {
+        let Some(review_job) = self.interactor.data_store.get_job(review_job_id)? else {
+            return Ok(PendingActions::new());
+        };
+        let review_task_id = &review_job.task_id;
+        let Some(task_state) = self.interactor.data_store.get_task_state(review_task_id)? else {
+            return Ok(PendingActions::new());
+        };
+
+        let task_store = self.interactor.create_task_store(&task_state.workflow_id)?;
+
+        let Some(craft_job) = self.find_ancestor_craft_job(&task_store, review_task_id) else {
+            tracing::warn!(
+                review_job_id = %review_job_id,
+                "escalation raised but no craft ancestor found"
+            );
+            return Ok(PendingActions::new());
+        };
+
+        if !matches!(craft_job.status, JobStatus::Craft(CraftStatus::Escalated)) {
+            self.interactor
+                .data_store
+                .update_job_status(&craft_job.id, CraftTransition::Escalate.to_job_status())?;
+            if let Some(ref assignee) = craft_job.assignee_id {
+                self.destroy_member(assignee);
+            }
+        }
+
+        task_store.update_task_status(&craft_job.task_id, TaskStatus::Suspended)?;
+
+        tracing::info!(
+            review_job_id = %review_job_id,
+            craft_job_id = %craft_job.id,
+            craft_task_id = %craft_job.task_id,
+            "escalation raised: max_review_rounds reached"
+        );
+
+        Ok(PendingActions::new())
     }
 
     /// Revert a Craft job from InReview back to InProgress and notify the crafter.
