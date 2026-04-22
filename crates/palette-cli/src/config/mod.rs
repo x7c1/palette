@@ -36,6 +36,10 @@ impl Config {
         let content = std::fs::read_to_string(path)?;
         let config: Config = toml::from_str(&content)
             .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
+        config
+            .rules
+            .validate()
+            .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
         Ok(config)
     }
 
@@ -192,6 +196,34 @@ callback_network = "bridge"
         assert_eq!(config.server_bind_addr, "127.0.0.1:7100");
         assert_eq!(config.docker.worker_callback_url, "http://localhost:8080");
         assert_eq!(config.docker.callback_network, CallbackNetwork::Bridge);
+    }
+
+    #[test]
+    fn load_rejects_zero_max_review_rounds() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("config.toml");
+        std::fs::write(
+            &path,
+            r#"
+port = 7100
+operator_api_url = "http://127.0.0.1:7100"
+server_bind_addr = "0.0.0.0:7100"
+
+[tmux]
+session_name = "palette"
+
+[rules]
+max_review_rounds = 0
+
+[docker]
+worker_callback_url = "http://127.0.0.1:7100"
+"#,
+        )
+        .unwrap();
+
+        let err = Config::load(&path).expect_err("max_review_rounds = 0 must be rejected");
+        assert_eq!(err.kind(), std::io::ErrorKind::InvalidData);
+        assert!(err.to_string().contains("max_review_rounds"));
     }
 
     #[test]

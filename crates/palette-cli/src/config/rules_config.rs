@@ -17,3 +17,12 @@ impl Default for RulesConfig {
         }
     }
 }
+
+impl RulesConfig {
+    pub fn validate(&self) -> Result<(), String> {
+        if self.max_review_rounds == 0 {
+            return Err("rules.max_review_rounds must be >= 1".to_string());
+        }
+        Ok(())
+    }
+}

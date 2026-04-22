@@ -533,6 +533,7 @@ mod tests {
                 dirs: HashMap::new(),
                 perspectives: vec![],
             },
+            max_review_rounds: 5,
             event_tx: tokio::sync::mpsc::unbounded_channel().0,
         })
     }

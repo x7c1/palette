@@ -74,6 +74,7 @@ fn build_orchestrator(
         cancel_token: CancellationToken::new(),
         workspace_manager: WorkspaceManager::new(config.data_dir.clone()),
         perspectives,
+        max_review_rounds: config.rules.max_review_rounds,
         event_tx,
     }))
 }
